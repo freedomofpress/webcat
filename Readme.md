@@ -61,7 +61,7 @@ To do so, we can develop a service similar to the HSTS preload list, but more tr
 
 #### Domain setup
 
-![https://raw.githubusercontent.com/lsd-cat/webcat/docs/images/domain_setup.drawio.png](Domain setup chart)
+![Domain setup chart](https://github.com/lsd-cat/webcat/blob/main/docs/images/domain_setup.drawio.png?raw=true)
 
 As depicted in the figure we can imagine a system with the following structure:
  1. Website owner of www.example.com wants to setup code integrity on their website
@@ -81,8 +81,7 @@ As depicted in the figure we can imagine a system with the following structure:
 
 #### User validation
 
-![https://raw.githubusercontent.com/lsd-cat/webcat/docs/images/browser_verification.drawio](Browser verification chart)
-
+![Browser verification chart](https://github.com/lsd-cat/webcat/blob/main/docs/images/browser_verification.drawio.png?raw=true)
 
 1. Users type www.example.com in browser
 2. Browser starts fetching and downloading the website assets
