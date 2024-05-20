@@ -30,5 +30,23 @@ All submissions are public: websites who want to enroll in this service cannot d
   1. Browsers/plugin maintainers
   2. Security community
 
+#### System<sup>LIST_TRANSPRENCY_LOG</sup>:
+
+ - Claim<sup>LIST_TRANSPARENCY_LOG</sup>: - I, log operator, make available:
+  1. A globally consistent, append-only log of Statement<sup>SUBMISSION_SERVER</sup>
+  2. All associated metadata with such statements, including policies.
+
+ - Statement<sup>LIST_TRANSPARENCY_LOG</sup> - log checkpoint ("_Signed tree head_")
+ - Claimant<sup>LIST_TRANSPARENCY_LOG</sup> - List transparency log operator (e.g.: separate entity from the Submission Server)
+ - Believer<sup>LIST_TRANSPARENCY_LOG</sup>
+  1. Believer<sup>SUBMISSION_SERVER</sup>
+  2. Verifier<sup>SUBMISSION_SERVER</sup>
+ - Verifier<sup>LIST_TRANSPARENCY_LOG</sup>
+  1. Other log operators (would be nice to have distributed logs with p2p consensus, wouldn't it?)
+  2. 3rd parties with an interest in monitoring
+ 
+
+
+
 
    
