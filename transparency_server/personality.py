@@ -1,6 +1,9 @@
-from enum import Enum
+from enum import Enum, StrEnum
 from random import randint
 from .trillian import LogRoot, TrillianAdminApi, TrillianApi
+from joserfc.jwk import ECKey
+from joserfc import jws
+from json import loads
 import sqlite3
 import os
 import logging
@@ -13,6 +16,12 @@ class ActionType(Enum):
         ADD = 0
         DELETE = 1
         MODIFY = 2
+
+class ActionTypeValue(StrEnum):
+        ADD = "ADD"
+        DELETE = "MODIFY"
+        MODIFY = "DELETE"
+
 
 # The personality should check:
 # - That the submitter signature is valid
@@ -28,10 +37,14 @@ class WebcatPersonality:
 
         logging.info(f"Starting {__class__}")
 
+        logging.info(f"Loading public key")
+        self.key = ECKey.import_key(publickey)
+
+
         db_exists = os.path.isfile(database)
         logging.info(f"Trying to open sqlite database {database}.")
-        self.db_connection = sqlite3.connect(database)
-        self.db_cursor = self.db_connection.cursor()
+
+        self.database = database
         if not db_exists:
             logging.info(f"Creating new database {database}.")
             self.create_db_schema()
@@ -58,14 +71,20 @@ class WebcatPersonality:
 
 
     def create_db_schema(self) -> None:
-        self.db_cursor.execute("CREATE TABLE domains (fqdn TEXT NOT NULL UNIQUE, last_hash BLOB NOT NULL UNIQUE, last_index INTEGER NOT NULL UNIQUE, last_action INTEGER NOT NULL);")
+        db_connection = sqlite3.connect(self.database)
+        db_cursor = db_connection.cursor()
+        db_cursor.execute("CREATE TABLE domains (fqdn TEXT NOT NULL UNIQUE, last_hash BLOB NOT NULL UNIQUE, last_action INTEGER NOT NULL);")
+        # Let's leave the extra stuff for later
         # If the validator does its job properly, and if there are no attacks, submitted must always be equal to accepted. If not, there is a consistency problem
         # in the state of the system, such as a mismatch in the list between the transparency log and the submission server
-        self.db_cursor.execute("CREATE TABLE stats (tree_id INTEGER NOT NULL, tree_size INTEGER NOT NULL, submitted_count INTEGER NOT NULL, accepted_count INTEGER NOT NULL);")
-        self.db_cursor.execute("INSERT INTO stats (tree_id, tree_size, submitted_count, accepted_count) VALUES (0, 0, 0, 0);")
+        #db_cursor.execute("CREATE TABLE stats (tree_id INTEGER NOT NULL, tree_size INTEGER NOT NULL, submitted_count INTEGER NOT NULL, accepted_count INTEGER NOT NULL);")
+        #db_cursor.execute("INSERT INTO stats (tree_id, tree_size, submitted_count, accepted_count) VALUES (0, 0, 0, 0);")
         # There is no valid reason why a signed submission by the submission server should be rejected at this state. When that happens, something is wrong
         # and better log it somewhere to investigate.
-        self.db_cursor.execute("CREATE TABLE errors (id INTEGER PRIMARY KEY AUTOINCREMENT, fqdn TEXT NOT NULL, error TEXT, input TEXT);")
+        #db_cursor.execute("CREATE TABLE errors (id INTEGER  MARY KEY AUTOINCREMENT, fqdn TEXT NOT NULL, error TEXT, input TEXT);")
+        db_cursor.close()
+        db_connection.commit()
+        db_connection.close()
 
 
     def create_log(self, host, port, secure, credentials):
@@ -76,14 +95,15 @@ class WebcatPersonality:
         self.log_id = tree.tree_id
 
 
-    def validate_submission(self, submission):
-        pass
-
-
     def get_signed_log_root(self, first_tree_size=0) -> LogRoot:
         response = self.trillian_log.get_latest_signed_log_root(first_tree_size)
-        log_root = LogRoot(response.signed_log_root.log_root)
-        return log_root
+        return self.parse_proof_response(response)
+
+
+    def get_tree_size(self):
+        # Always check the tree size from the server, so that we can lookup on the latest tree
+        response = self.get_signed_log_root()
+        return response["log_root"]["tree_size"]
 
 
     def queue_leaf(self, leaf):
@@ -98,27 +118,37 @@ class WebcatPersonality:
         
         # However, this personality should never allow this.
         # Dirty fix to handle both ByHash and ByIndex without conditions
+        proof = None
         try:
             proof = response.proof[0]
         except:
-            proof = response.proof
+            pass
 
+        if not proof:
+            try:
+                proof = response.proof
+            except:
+                pass
+
+        # This is to handle signedlogroot response, can have proof or not depending on first_tree_size
         log_root = LogRoot(response.signed_log_root.log_root)
         
-        proof_hashes = []
-        for hash in proof.hashes:
-            proof_hashes.append(hash.hex())
-        
-        output = dict(proof=dict(hashes=proof_hashes, index=proof.leaf_index), log_root=log_root.to_dict())
+        output = dict(log_root=log_root.to_dict())
+
+        if proof is not None:
+            proof_hashes = []
+            for hash in proof.hashes:
+                proof_hashes.append(hash.hex())
+            output["proof"] = dict(hashes=proof_hashes, index=proof.leaf_index)
 
         if hasattr(response, "leaf"):
             # In this case, every leaf is a JOSE item, so we can dare and just do decode
             output["leaf"] = dict(hash=response.leaf.merkle_leaf_hash.hex(), value=response.leaf.leaf_value.decode("ascii"), timestamp=response.leaf.queue_timestamp.seconds)
-
+            output["decoded_leaf"] = loads(jws.deserialize_compact(response.leaf.leaf_value, self.key).payload)
         return output
 
     def get_proof_by_hash(self, hex_hash):
-        tree_size = 4
+        tree_size = self.get_tree_size()
         leaf_hash = bytes.fromhex(hex_hash)
         try:
             response = self.trillian_log.get_inclusion_proof_by_hash(leaf_hash, tree_size)
@@ -129,16 +159,53 @@ class WebcatPersonality:
 
 
     def get_proof_by_index(self, index):
-        tree_size = 4
-        #try:
-        response = self.trillian_log.get_inclusion_proof(index, tree_size)
-        #except:
-        #    return False
+        tree_size = self.get_tree_size()
+        try:
+            response = self.trillian_log.get_inclusion_proof(index, tree_size)
+        except:
+            return False
 
         return self.parse_proof_response(response)
 
 
     def get_leaf(self, index):
-        tree_size = 4
+        tree_size = self.get_tree_size()
         response = self.trillian_log.get_entry_and_proof(index, tree_size)
         return self.parse_proof_response(response)
+    
+
+    def fqdn_db_lookup(self, fqdn):
+        db_connection = sqlite3.connect(self.database)
+        db_connection.row_factory = sqlite3.Row
+        db_cursor = db_connection.cursor()
+        db_cursor.execute("SELECT fqdn, last_hash, last_index, last_action FROM domains WHERE fqdn = ?", (fqdn, ))
+        res = db_cursor.fetchone()
+        db_cursor.close()
+        db_connection.commit()
+        db_connection.close()
+        return res
+    
+    def update_list(self, fqdn, action, hash):
+        db_connection = sqlite3.connect(self.database)
+        db_connection.row_factory = sqlite3.Row
+        db_cursor = db_connection.cursor()
+        if action == ActionTypeValue.ADD:
+            db_cursor.execute("INSERT INTO domains (fqdn, last_hash, last_action) VALUES (?, ?, ?)", (fqdn, hash, ActionTypeValue.ADD))
+        elif action == ActionTypeValue.MODIFY:
+            db_cursor.execute("UPDATE domains SET last_hash = ?, last_action = ? WHERE fqdn = ?", (hash, ActionTypeValue.MODIFY, fqdn))
+        elif action == ActionTypeValue.DELETE:
+            db_cursor.execute("DELETE FROM domains WHERE fqdn = ?", (fqdn, ))
+        else:
+            raise Exception("Invalid action :/ here this should never happen.")
+        db_cursor.close()
+        db_connection.commit()
+        db_connection.close()
+        return True
+
+    def get_stats(self):
+        tree_size = self.get_tree_size()
+        db_connection = sqlite3.connect(self.database)
+        db_cursor = db_connection.cursor()
+        db_cursor.execute("SELECT count(fqdn) as count FROM domains;")
+        res = db_cursor.fetchone()
+        return dict(tree_size=tree_size, fqdn_count=res[0])
