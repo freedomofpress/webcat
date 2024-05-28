@@ -72,7 +72,7 @@ class LogRoot:
     
     def to_dict(self):
         return dict(version=self.version,
-                    size=self.tree_size,
+                    tree_size=self.tree_size,
                     hash=self.root_hash.hex(),
                     timestamp=self.timestamp_nanos,
                     revision=self.revision,

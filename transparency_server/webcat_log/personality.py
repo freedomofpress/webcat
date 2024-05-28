@@ -32,7 +32,7 @@ class ActionTypeValue(StrEnum):
 # - To get the most recent action for a domain
 
 class WebcatPersonality:
-    def __init__(self, publickey, database, trillian_host, trillian_port, trillian_secure=False, trillian_credentials=None, tree_id=None) -> None:
+    def __init__(self, publickey, database, trillian_host=None, trillian_port=None, trillian_secure=False, trillian_credentials=None, tree_id=None) -> None:
         self.publickey = publickey
 
         logging.info(f"Starting {__class__}")
@@ -45,25 +45,32 @@ class WebcatPersonality:
         logging.info(f"Trying to open sqlite database {database}.")
 
         self.database = database
+        if not db_exists and (trillian_host is None or trillian_port is None):
+            raise Exception("Starting with an empty database requires TRILLIAN_HOST and TRILLIAN_PORT to be set.")
+
         if not db_exists:
             logging.info(f"Creating new database {database}.")
             self.create_db_schema()
-        
-        if tree_id is None and db_exists:
-            raise Exception(f"Cannot start with a Trillian log already initialized but an empty {database}.")
+            self.set_config_value("TRILLIAN_HOST", trillian_host)
+            self.set_config_value("TRILLIAN_PORT", trillian_port)
+            if tree_id is not None:
+                self.set_config_value("TRILLIAN_TREE_ID", tree_id)
+        else:
+            trillian_host = self.load_config_value("TRILLIAN_HOST")
+            trillian_port = self.load_config_value("TRILLIAN_PORT")
+            tree_id = self.load_config_value("TRILLIAN_TREE_ID")
 
         if tree_id is None:
             logging.info(f"tree_id not provided, connecting to the Trillian Admin API at {trillian_host}:{trillian_port}, secure = {trillian_secure}")
-            self.create_log(trillian_host, trillian_port, trillian_secure, trillian_credentials)
-            tree_created = True
+            self.log_id = self.create_log(trillian_host, trillian_port, trillian_secure, trillian_credentials)
+            self.set_config_value("TRILLIAN_TREE_ID", self.log_id)
         else:
             self.log_id = tree_id
-            tree_created = False
             
         logging.info(f"Connecting to the Trillian Log API at {trillian_host}:{trillian_port}, secure = {trillian_secure}")
         self.trillian_log = TrillianApi(trillian_host, trillian_port, self.log_id, "", trillian_secure, trillian_credentials)
 
-        if tree_created:
+        if tree_id is None:
             logging.info(f"Trillian tree_id {self.log_id} has been created, initializing the empty log.")
             self.trillian_log.init_log()
 
@@ -74,6 +81,7 @@ class WebcatPersonality:
         db_connection = sqlite3.connect(self.database)
         db_cursor = db_connection.cursor()
         db_cursor.execute("CREATE TABLE domains (fqdn TEXT NOT NULL UNIQUE, last_hash BLOB NOT NULL UNIQUE, last_action INTEGER NOT NULL);")
+        db_cursor.execute("CREATE TABLE config (key TEXT UNIQUE NOT NULL, value TEXT NOT NULL);")
         # Let's leave the extra stuff for later
         # If the validator does its job properly, and if there are no attacks, submitted must always be equal to accepted. If not, there is a consistency problem
         # in the state of the system, such as a mismatch in the list between the transparency log and the submission server
@@ -86,13 +94,29 @@ class WebcatPersonality:
         db_connection.commit()
         db_connection.close()
 
+    def load_config_value(self, key):
+        db_connection = sqlite3.connect(self.database)
+        db_cursor = db_connection.cursor()
+        db_cursor.execute("SELECT value FROM config WHERE key = ?", (key,))
+        value = db_cursor.fetchone()
+        db_cursor.close()
+        db_connection.close()
+        return value[0]
+
+    def set_config_value(self, key, value):
+        db_connection = sqlite3.connect(self.database)
+        db_cursor = db_connection.cursor()
+        db_cursor.execute("INSERT INTO config (key, value) VALUES (?, ?)", (key, value))
+        db_cursor.close()
+        db_connection.commit()
+        db_connection.close()
 
     def create_log(self, host, port, secure, credentials):
         trillian_admin = TrillianAdminApi(host, port, secure, credentials)
         tree_id=randint(0, 2**32)
         logging.info(f"Creating tree with id = {tree_id}")
         tree = trillian_admin.create_tree(tree_id=tree_id, display_name="WebCat Tree")
-        self.log_id = tree.tree_id
+        return tree.tree_id
 
 
     def get_signed_log_root(self, first_tree_size=0) -> LogRoot:
@@ -178,7 +202,7 @@ class WebcatPersonality:
         db_connection = sqlite3.connect(self.database)
         db_connection.row_factory = sqlite3.Row
         db_cursor = db_connection.cursor()
-        db_cursor.execute("SELECT fqdn, last_hash, last_index, last_action FROM domains WHERE fqdn = ?", (fqdn, ))
+        db_cursor.execute("SELECT fqdn, last_hash, last_action FROM domains WHERE fqdn = ?", (fqdn, ))
         res = db_cursor.fetchone()
         db_cursor.close()
         db_connection.commit()

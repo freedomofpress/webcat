@@ -10,7 +10,7 @@ from .personality import WebcatPersonality, ActionTypeValue
 app = Flask(__name__)
 
 publickey = environ.get("PUBLICKEY")
-database = environ.get("DATABASE_PATH")
+database = environ.get("DATABASE")
 trillian_host = environ.get("TRILLIAN_HOST")
 trillian_port = environ.get("TRILLIAN_PORT")
 trillian_secure = bool(environ.get("TRILLIAN_SECURE"))
@@ -22,8 +22,12 @@ if tree_id is not None:
 
 if publickey is None:
     raise Exception("PUBLICKEY must be set.")
-publickey = publickey.encode("ascii")
 
+try:
+    with open(publickey, "rb") as f:
+        publickey = f.read()
+except:
+    Exception(f"{publickey} not found.")
 
 key = ECKey.import_key(publickey)
 
@@ -136,7 +140,18 @@ def proof(lookup_method, param):
         return jsonify(res)
 
     elif lookup_method == "domain":
-        pass
+        res = personality.fqdn_db_lookup(param)
+        if res is None:
+            return jsonify({"status": "KO", "error": "Proof not found, maybe it has not been merged yet."}), 404
+        
+        res = personality.get_proof_by_hash(res["last_hash"].hex())
+        
+        if not res:
+            return jsonify({"status": "KO", "error": "Proof not found, maybe it has not been merged yet."}), 404
+        
+        res["status"] = "OK"
+        return jsonify(res)
+
     elif lookup_method == "consistency":
         pass
     else:
@@ -159,6 +174,7 @@ def leaf(lookup_method, param):
 
         res["status"] = "OK"
         return jsonify(res)
+
     elif lookup_method == "hash":
         # first get the index with the hash, then lookup the object by index
         # it's silly but it's what trillian offers
