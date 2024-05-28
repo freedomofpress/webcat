@@ -12,11 +12,6 @@ import json
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-class ActionType(Enum):
-        ADD = 0
-        DELETE = 1
-        MODIFY = 2
-
 class ActionTypeValue(StrEnum):
         ADD = "ADD"
         DELETE = "MODIFY"
