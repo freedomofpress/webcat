@@ -11,6 +11,8 @@ from json import dumps
 from joserfc.jwk import ECKey
 from joserfc import jws
 
+from hashlib import sha256
+
 class Submission:
     def __init__(self, submission_row):
         self.id = submission_row["id"]
@@ -77,7 +79,7 @@ class WebcatQueue:
         }
         payload = {
             "iat": int(time()),
-            "type": submission.type_value,
+            "action": submission.type_value,
             "fqdn": submission.fqdn,
         }
 
@@ -99,8 +101,21 @@ class WebcatQueue:
         cursor.close()
 
 
-    def send_leaf(submission_id, leaf):
-        pass
+    def queue_leaf(self, submission_id, leaf):
+        res = requests.post(f"{self.config['transparency_log']}/v1/queue_leaf", json=dict(leaf=leaf)).json()
+        if res["status"] == "OK":
+            cursor = self.pg_connection.cursor()
+            cursor.execute("UPDATE leaves SET hash = %s WHERE submission_id = %s", (bytes.fromhex(res["hash"]), submission_id))
+            self.pg_connection.commit()
+            cursor.close()
+            return True
+        else:
+            return False
+
+
+    def get_proof(self, hash):
+        res = requests.get(f"{self.config['transparency_log']}/v1/proof/hash/{hash.hex()}").json()
+        return res
 
 
 #    def update_submission(self, submission):
@@ -121,6 +136,7 @@ class WebcatQueue:
             raise Exception(f"Submission {submission.id} update failed.")
         cursor.close()
         return True
+
 
     def load_types(self):
         cursor = self.pg_connection.cursor()
@@ -188,6 +204,7 @@ class WebcatQueue:
         cursor.execute("SELECT submissions.id, fqdn, submitted_fqdn, type_id, status_id, types.value as type_value, statuses.value as status_value, timestamp, status_timestamp FROM submissions INNER JOIN statuses ON statuses.id=submissions.status_id INNER JOIN types ON types.id=submissions.type_id WHERE completed = false AND statuses.value = 'SUBMITTED';")
         for row in cursor.fetchall():
             try:
+                print("here")
                 # log the beginning of processing
                 self.set_status_and_log(row["id"], self.statuses["PRELIMINARY_VALIDATION_IN_PROGRESS"], "Preliminary validation started.")
                 submission = Submission(row)
@@ -199,6 +216,9 @@ class WebcatQueue:
                 WebcatHeadersValidator(self.config, submission)
                 
                  # Generate and sign the leaf to submit to the log
+                if submission.type_value != "DELETE":
+                    cursor.execute("UPDATE submissions SET policy = %s WHERE id = %s", (f"{submission.sigstore_issuer}:{submission.sigstore_identity}", row["id"]))
+
                 leaf = self.sign_leaf(submission)
                 self.insert_leaf(submission, leaf)
                 
@@ -219,31 +239,50 @@ class WebcatQueue:
                 # What we really need to do now is just fetching the correspondig signed leaf and attempt to submit it, and store the hash
                 # (we could also calculate the hash here too, but is there any benefit?)
                 cursor.execute("SELECT id, leaf FROM leaves WHERE submission_id = %s;", (row["id"],))
+                leaf_row = cursor.fetchone()
+                leaf = leaf_row["leaf"]
 
-                # Send leaf and also save the hash back
-                self.send_leaf(row["id"], leaf)
+                # TODO: catch real errors from the transparency log such as duplicates or expired leaves here
+                if self.queue_leaf(row["id"], leaf):
+                    self.set_status_and_log(row["id"], self.statuses["SUBMISSION_TO_LOG_OK"], "Submission to log completed.")
 
-                self.set_status_and_log(row["id"], self.statuses["SUBMISSION_TO_LOG_COMPLETED"], "Submission to log started.")
             except Exception as error:
                 self.set_status_and_log(row["id"], self.statuses["SUBMISSION_TO_LOG_ERROR"], error)
 
+        # if SUBMISSION_TO_LOG_OK -> FIRST_PROOF_RECEIVED
+        cursor.execute("SELECT submissions.id, fqdn, type_id, status_id, statuses.value FROM submissions INNER JOIN statuses ON statuses.id=submissions.status_id WHERE completed = false AND value = 'SUBMISSION_TO_LOG_OK';")
+        for row in cursor.fetchall():
 
-        # Now we gotta wait for inclusion
+            # Let's retrieve the proofs and index when the submissions are merge in the log
+            # If there are many submissions, the mergin might not have yet happen, so we ought retry until that has happened
+            cursor.execute("SELECT id, hash FROM leaves WHERE submission_id = %s;", (row["id"],))
+            hash_row = cursor.fetchone()
+            hash = hash_row["hash"]
 
+            res = self.get_proof(hash)
 
-        # TODO: think if a waiting delay is really needed
-        # if SUBMISSION_TO_LOG_OK -> WAITING_DELAY
-        #cursor.execute("SELECT submissions.id, fqdn, type_id, status_id, statuses.value FROM submissions INNER JOIN statuses ON statuses.id=submissions.status_id WHERE completed = false AND value = 'SUBMISSION_TO_LOG_OK';")
-        #self.waiting_delay_queue = cursor.fetchall()
+            inclusion_hashes = []
+            if 'proof' in res and 'index' in res['proof']:
+                for hash in res['proof']['hashes']:
+                    inclusion_hashes.append(bytes.fromhex(hash))
+                cursor.execute("UPDATE leaves SET inclusion_hashes = %s, index = %s WHERE submission_id = %s;", (inclusion_hashes, res['proof']['index'], row['id']))
+                self.set_status_and_log(row["id"], self.statuses["LOG_INCLUSION_OK"], "Proof(s) from transparency log received.")
 
-        # if WAITING_DELAY -> SECOND_SUBMISSION_TO_LOG
-        #cursor.execute("SELECT submissions.id, fqdn, type_id, status_id, statuses.value FROM submissions INNER JOIN statuses ON statuses.id=submissions.status_id WHERE completed = false AND value = 'WAITING_DELAY';")
-        #self.second_submission_to_log_queue = cursor.fetchall()
+        # Let's write this into the list and mark things as completed
+        cursor.execute("SELECT submissions.id, fqdn, type_id, status_id, statuses.value, policy FROM submissions INNER JOIN statuses ON statuses.id=submissions.status_id WHERE completed = false AND value = 'LOG_INCLUSION_OK';")
+        for row in cursor.fetchall():
+            if row['type_id'] == self.types['ADD']:
+                cursor.execute("INSERT INTO list (fqdn, policy, policy_hash) VALUES (%s, %s, %s);", (row['fqdn'], row['policy'], sha256(row['policy'].encode('ascii')).digest()))
+            elif row['type_id'] == self.types['MODIFY']:
+                cursor.execute("UPDATE list SET policy = %s, policy_hash = %s WHERE fqdn = %s;", (row["policy"], sha256(row['policy'].encode('ascii')).digest(), row['fqdn']))
+            elif row['type_id'] == self.types['DELETE']:
+                cursor.execute("DELETE FROM list WHERE fqdn = %s;", (row["fqdn"]))
+            else:
+                raise Exception("At this stage if this happens it's a catastrophic failure.")
 
-        # if SECOND_SUBMISSION_TO_LOG_OK -> COMPLETED
-        #cursor.execute("SELECT submissions.id, fqdn, type_id, status_id, statuses.value FROM submissions INNER JOIN statuses ON statuses.id=submissions.status_id WHERE completed = false AND value = 'SECOND_SUBMISSION_TO_LOG_OK';")
-        #self.completed_queue = cursor.fetchall()
+            self.set_status_and_log(row["id"], self.statuses["COMPLETED"], "Preload list succesfully updated.")
 
+        # TODO: think if a waiting delay and a second submission are really needed
         return count["count"]
 
 
