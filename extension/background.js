@@ -50,9 +50,18 @@ function startupListener() {
 };
 
 async function headersListener(details) {
-    console.log(details);
+    //console.log(details);
+
+    if (isExtensionRequest(details)) {
+        // We will always wonder, is this check reasonable?
+        if (debug) {
+            console.log(`Skipping headers interceptor for ${details.url}`);
+        }
+        return;
+     }
+
     if (details.type == "main_frame") {
-        
+        const tab_id = details.tabId
         var validcsp = false;
         var sigstore_issuer = null;
         var sigstore_identity = null;
@@ -91,7 +100,6 @@ async function headersListener(details) {
         if (validpolicy !== true) {
             console.log("Invalid SigStore policy! EXIT!");
         }
-
     }
 
     if (debug) {
@@ -104,10 +112,20 @@ async function headersListener(details) {
 };
 
 async function requestListener(details) {
+    
     if (debug) {
         console.log(`${requestListener.name}: start`)
         console.log(details)
     }
+
+    if (isExtensionRequest(details)) {
+        // We will always wonder, is this check reasonable?
+        if (debug) {
+            console.log(`Skipping request interceptor for ${details.url}`);
+        }
+        return;
+    }
+
     if (details.type == "main_frame") {
         var is_enrolled = false;
         const fqdn = getFQDN(details.url);
@@ -130,6 +148,11 @@ async function requestListener(details) {
 
         // Fire manifest request in the background, but do not wait for it now
         if (is_enrolled === true) {
+            // So, we cannot directly know that we are the initiator of this request, see
+            // https://stackoverflow.com/questions/31129648/how-to-identify-who-initiated-the-http-request-in-firefox
+            // It's tracked in the dev console, but no luck in extensions https://discourse.mozilla.org/t/access-webrequest-request-initiator-chain-stack-trace/75877
+            // still we do not want to intercept this one :)
+            // More sadness: https://stackoverflow.com/questions/47331875/webrequest-api-how-to-get-the-requestid-of-a-new-request
             var manifest = fetch(`https://${fqdn}/manifest.json`);
         }
     }
@@ -202,13 +225,17 @@ function isRoot(url) {
 async function isFQDNEnrolled(fqdn) {
     const fqdn_hash = SHA256(fqdn);
     //return fqdn_hash;
-    if (fqdn == "testwebsite1.com" || fqdn == "testwebsite2.com") {
+    if (fqdn == "test1.local" || fqdn == "test2.local") {
         return true;
     }
 }
 
+function isExtensionRequest(details) {
+    return (details.originUrl !== undefined && details.documentUrl !== undefined && details.originUrl.substring(0, 16) === "moz-extension://" && details.documentUrl.substring(0, 16) === "moz-extension://" && details.tabId === -1);
+}
+
 async function SHA256(data) {
-    // Soemtimes we hash strings, such as the FQDN, sometimes we hash bytes, such as page contents
+    // Sometimes we hash strings, such as the FQDN, sometimes we hash bytes, such as page content
     if (typeof(data) === "string") {
         var data = new TextEncoder('utf-8').encode(data);
     }
