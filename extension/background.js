@@ -132,7 +132,7 @@ async function headersListener(details) {
                     return;
                 })
             }).catch((error) => {
-                tabs[details.tabId].errors.push("Failed to fetch manifest.json: network error");
+                tabs[details.tabId].errors.push(`Failed to fetch manifest.json: ${error}`);
                 return;
             });
 
@@ -225,9 +225,10 @@ async function requestListener(details) {
 
             if (isTabContextOK(tabs[details.tabId]) === true) {
                 new Blob(source).arrayBuffer().then(function(blob) {
-                    var manifest_hash = new ArrayBuffer(32); 
+                    const pathname = new URL(details.url).pathname;
+                    const manifest_hash = tabs[details.tabId].manifest[pathname];
                     SHA256(blob).then(function(content_hash) {
-                        if (manifest_hash === content_hash) {
+                        if (manifest_hash === arrayBufferToHex(content_hash)) {
                             if (debug) {
                                 console.log(`Resource ${details.url} succesfully verified!`);
                             }
@@ -235,7 +236,8 @@ async function requestListener(details) {
                             filter.write(blob);
                         } else {
                             // This is just "DENIED" already encoded
-                            console.log(`Error: hash mismatch for ${details.url} - expected: ${arrayBufferToHex(manifest_hash)} - found: ${arrayBufferToHex(content_hash)}`);
+                            // This fails just for the single file not in the manifest or with the wrong hash
+                            console.log(`Error: hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`);
                             filter.write(new Uint8Array([68, 69, 78, 73, 69, 68]));
                         }
                         // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
@@ -244,6 +246,7 @@ async function requestListener(details) {
                     });
                 });
             } else {
+                // If headers are wrong we abort everything
                 console.log(`Error: tab context is not valid ${details.url}`);
                 filter.write(new Uint8Array([68, 69, 78, 73, 69, 68]));
                 filter.close()
@@ -311,7 +314,6 @@ async function SHA256(data) {
 function validateCSP(csp) {
     // Here will go the CSP validator of the main_frame
     const res = parseContentSecurityPolicy(csp);
-    console.log(res);
     return true;
 }
 
