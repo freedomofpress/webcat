@@ -1,0 +1,13 @@
+{
+  "manifest_version": 2,
+  "name": "webcat",
+  "version": "1.0",
+  "permissions": ["storage"],
+  "web_accessible_resources": [
+    "assets/1.root.json"
+  ],
+  "background": {
+    "scripts": ["dist/bundle.js"],
+    "persistent": false
+  }
+}

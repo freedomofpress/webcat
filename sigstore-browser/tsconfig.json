@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",  // Or higher if needed (e.g., ES2017, ES2020)
+    "lib": ["DOM", "ES2020"],  // Includes modern JS features like Promise and the browser API
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["firefox-webext-browser"],
+    "outDir": "./dist"
+  },
+  "include": [
+    "./src/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
