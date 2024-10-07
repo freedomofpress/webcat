@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "webcat",
   "version": "1.0",
-  "permissions": ["storage"],
+  "permissions": ["storage", "webRequest", "https://*.sigstore.dev/*"],
   "web_accessible_resources": [
     "assets/1.root.json"
   ],

@@ -27,6 +27,11 @@ export enum SignatureSchemes {
     "ecdsa-sha2-nistp256"
 }
 
+export enum Roles {
+    Root = "root",
+    Timestamp = "timestamp"
+}
+
 export interface Key {
     keyid: string;
     keytype: string;
@@ -65,11 +70,14 @@ export interface Metafile {
     signatures: Signature[];
 }
 
-export interface ImportedKey {
-    [keyId: string]: CryptoKey;
-}
-
 export interface Signature {
     keyId: string,
     sig: string
+}
+
+export interface Root {
+    version: number,
+    expires: Date,
+    keys: Map<string, CryptoKey>,
+    threshold: number
 }

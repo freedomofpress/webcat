@@ -127,11 +127,11 @@ async function verifySignature(key: CryptoKey, signed: Uint8Array, sig: Uint8Arr
     let r = asn1_sig.subs[0].toInteger();
     let s = asn1_sig.subs[1].toInteger();
 
-    const binr = hexToUint8Array(r.toString(16));
-    const bins = hexToUint8Array(s.toString(16));
-  
-    console.log(binr);
-    console.log(bins);
+    // One would think that if you hex encode something by a native function, you get a string with an even number
+    // of characters. Turns out toString omit leading zeros, leading to nasty bugs.
+    const padStringToEvenLength = (str: string): string => str.length % 2 ? '0' + str : str;
+    const binr = hexToUint8Array(padStringToEvenLength(r.toString(16)));
+    const bins = hexToUint8Array(padStringToEvenLength(s.toString(16)));
 
     let raw_signature = new Uint8Array(binr.length + bins.length);
     raw_signature.set(binr, 0);
@@ -143,7 +143,6 @@ async function verifySignature(key: CryptoKey, signed: Uint8Array, sig: Uint8Arr
 }
 
 export async function checkSignatures(keys: Map<string, CryptoKey>, signed: Object, signatures: Signature[], threshold: number = 0): Promise<boolean> {
-    console.log("checkSignatures");
     // If no threshold is provided this is probably a root file, but in any case
     // let's fail safe and expect everybody to sign if the threshold doesnt make sense
     if (threshold < 1) {
@@ -159,12 +158,15 @@ export async function checkSignatures(keys: Map<string, CryptoKey>, signed: Obje
 
     // Let's canonicalize first the body
     const signed_canon = canonicalize(signed);
-    console.log(signed_canon);
 
+    var valid_signatures = 0;
     for (const signature of signatures) {
         // Step 1, check if keyid is in the keyIds array
         if (keyIds.has(signature.keyid) !== true) {
-            throw new Error("Signature has an unknown keyId");
+            continue;
+            // Originally we would throw an error: but it make sense for a new signer to sign the new manifest
+            // we just have to be sure not to count it and hit the threshold
+            //throw new Error("Signature has an unknown keyId");
         }
 
         // Step 2, remove the keyid from the available ones
@@ -180,8 +182,12 @@ export async function checkSignatures(keys: Map<string, CryptoKey>, signed: Obje
         if (await verifySignature(key!, stringToUint8Array(signed_canon), sig) !== true) {
             throw new Error("Failed verifying signature");
         }
+        valid_signatures++;
       }
 
-    return true;
-
+    if (valid_signatures >= threshold) {
+        return true;
+    } else {
+        return false;
+    }
 }
