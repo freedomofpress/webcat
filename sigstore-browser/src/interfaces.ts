@@ -52,6 +52,7 @@ export interface Signed {
     spec_version: string;
     version: number;
     expires: string;
+    consistent_snapshot: boolean;
     keys: {
         [key: string]: Key;
     };
@@ -71,13 +72,17 @@ export interface Metafile {
 }
 
 export interface Signature {
-    keyId: string,
-    sig: string
+    keyId: string;
+    sig: string;
 }
 
 export interface Root {
-    version: number,
-    expires: Date,
-    keys: Map<string, CryptoKey>,
-    threshold: number
+    version: number;
+    expires: Date;
+    keys: Map<string, CryptoKey>;
+    threshold: number;
+    consistent_snapshot: boolean;
+    roles: {
+        [role: string]: Role;
+    };
 }

@@ -5,6 +5,16 @@ import { ASN1Obj } from "./asn1";
 
 import { Signed, Signature, KeyEncodingTypes, EcdsaTypes, HashAlgorithms, KeyTypes } from "./interfaces";
 
+// We use this to remove to select from the root keys only the ones allowed for a specific role
+export function getRoleKeys(keys: Map<string, CryptoKey>, keyids: string[]): Map<string, CryptoKey> {
+    for (let key of keys.keys()) {
+        if (!keyids.includes(key)) {
+            keys.delete(key);
+        }
+    }
+    return keys;
+}
+
 export async function loadKeys(keys: Signed["keys"]): Promise<Map<string, CryptoKey>> {
     var importedKeys: Map<string, CryptoKey> = new Map();
     for (const keyId in keys) {
@@ -142,12 +152,13 @@ async function verifySignature(key: CryptoKey, signed: Uint8Array, sig: Uint8Arr
     return res;
 }
 
-export async function checkSignatures(keys: Map<string, CryptoKey>, signed: Object, signatures: Signature[], threshold: number = 0): Promise<boolean> {
+export async function checkSignatures(keys: Map<string, CryptoKey>, signed: Object, signatures: Signature[], threshold: number): Promise<boolean> {
     // If no threshold is provided this is probably a root file, but in any case
     // let's fail safe and expect everybody to sign if the threshold doesnt make sense
-    if (threshold < 1) {
-        threshold = keys.size;
-    }
+    //if (threshold < 1) {
+    //    threshold = keys.size;
+    //}
+    // This does not work, because it is not granted that all the keys in a root will sign that root
 
     if (threshold > keys.size) {
         throw new Error("Threshold is bigger than the number of keys provided, something is wrong.");
