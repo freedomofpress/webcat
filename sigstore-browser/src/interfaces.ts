@@ -29,7 +29,9 @@ export enum SignatureSchemes {
 
 export enum Roles {
     Root = "root",
-    Timestamp = "timestamp"
+    Timestamp = "timestamp",
+    Snapshot = "snapshot",
+    Targets = "targets"
 }
 
 export interface Key {
@@ -58,6 +60,18 @@ export interface Signed {
     };
     roles: {
         [role: string]: Role;
+    };
+    meta?: Meta
+}
+
+export interface Meta {
+    [filename: string]: {
+        length?: number;
+        version: number;
+        hashes?: {
+            sha256?: string;
+            sha512?: string;
+        };
     };
 }
 

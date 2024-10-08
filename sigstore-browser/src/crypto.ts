@@ -7,12 +7,14 @@ import { Signed, Signature, KeyEncodingTypes, EcdsaTypes, HashAlgorithms, KeyTyp
 
 // We use this to remove to select from the root keys only the ones allowed for a specific role
 export function getRoleKeys(keys: Map<string, CryptoKey>, keyids: string[]): Map<string, CryptoKey> {
+    var roleKeys = new Map(keys);
+
     for (let key of keys.keys()) {
         if (!keyids.includes(key)) {
-            keys.delete(key);
+            roleKeys.delete(key);
         }
     }
-    return keys;
+    return roleKeys;
 }
 
 export async function loadKeys(keys: Signed["keys"]): Promise<Map<string, CryptoKey>> {

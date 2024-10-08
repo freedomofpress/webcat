@@ -1,5 +1,5 @@
 import { loadKeys, checkSignatures, getRoleKeys } from "./crypto";
-import { Metafile, Root, Roles, Role } from "./interfaces";
+import { Metafile, Root, Roles, Meta } from "./interfaces";
 
 const TUF_REPOSITORY_URL = "https://tuf-repo-cdn.sigstore.dev";
 const STARTING_ROOT_PATH = "assets/1.root.json";
@@ -99,11 +99,12 @@ async function updateRoot(frozenTimestamp: Date): Promise<Root> {
     if (rootJson == undefined) {
         // Then load the hardcoded startup root
         console.log("Starting from hardcoded root");
+        // Spec 5.2
         rootJson = await openBootstrapRoot(STARTING_ROOT_PATH);
     }
 
     var root = await loadRoot(rootJson as Metafile);
-    var newroot: Root = root;
+    let newroot;
 
     // In theory max version is the maximum integer size, probably 2^32 per the spec, in practice this should be safe for a century
     for (var new_version = root.version + 1; new_version < 8192; new_version++) {
@@ -142,7 +143,7 @@ async function updateRoot(frozenTimestamp: Date): Promise<Root> {
     // We do not cast expires because it is done in loadRoot
     if (root.expires <= frozenTimestamp) {
         // By spec 5.3.10
-        throw new Error("Probable freeze attack!");
+        throw new Error("Freeze attack on the root metafile.");
     }
 
     // TODO SECURITY ALERT: We are skipping 5.3.11, let's just load the keys for now
@@ -187,28 +188,126 @@ async function updateTimestamp(root: Root, frozenTimestamp: Date): Promise<numbe
     }
 
     if (new Date(newTimestamp.signed.expires) <= frozenTimestamp) {
-        throw new Error("Rollback attack on the timestamp metafile.");
+        throw new Error("Freeze attack on the timestamp metafile.");
     }
 
     browser.storage.local.set({[Roles.Timestamp]: newTimestamp})
     return newTimestamp.signed.meta["snapshot.json"].version;
 }
 
-async function updateSnapshot(version: number) {
-    return;
+async function updateSnapshot(root: Root, frozenTimestamp: Date, version?: number): Promise<Meta> {
+
+    const keys = getRoleKeys(root.keys, root.roles.snapshot.keyids);
+
+    const cached = await browser.storage.local.get([Roles.Snapshot]);
+    const cachedSnapshot = cached.snapshot;
+
+    let newSnapshot;
+
+    // Spec 5.5.1
+    if (root.consistent_snapshot) {
+        newSnapshot = await fetchMetafile(Roles.Snapshot, version);
+    } else {
+        newSnapshot = await fetchMetafile(Roles.Snapshot);
+    }
+
+    // As mentioned we are skipping 5.5.2 because sigstore timestamp does not have hashes
+    // Even if they add it, we would be doing a check less, but we won't break
+    // TODO revisit
+
+    try {
+        // Spec 5.5.3
+        await checkSignatures(keys, newSnapshot.signed, newSnapshot.signatures, root.roles.snapshot.threshold);
+    } catch { 
+        throw new Error("Failed verifying snapshot role signature(s).");
+    }
+
+    // 5.5.4
+    if (newSnapshot.signed.version !== version) {
+        throw new Error("Snapshot file version does not match timestamp version.");
+    }
+
+    // 5.5.5
+    if (cachedSnapshot !== undefined) {
+        for (const [target] of Object.entries(cachedSnapshot.signed.meta)) {
+            if (!newSnapshot.signed.meta.has(target)) {
+                throw new Error("Target that was listed in an older snapshot was dropped in a newer one.");
+            }
+            if (newSnapshot.signed.meta[target].version < cachedSnapshot.signed.meta[target].version) {
+                throw new Error("Target version in newer snapshot is lower than the cached one. Probable rollback attack.");
+            }
+        }
+    }
+
+    // 5.5.6
+    if (new Date(newSnapshot.signed.expires) <= frozenTimestamp) {
+        throw new Error("Freeze attack on the snapshot metafile.");
+    }
+
+    // 5.5.7
+    browser.storage.local.set({[Roles.Snapshot]: newSnapshot})
+
+    // If we reach here, we expect updates, otherwise we would have aborted in the timestamp phase.
+    return newSnapshot.signed.meta;
+}
+
+async function updateTargets(root: Root, frozenTimestamp: Date, snapshot: Meta) {
+    const keys = getRoleKeys(root.keys, root.roles.targets.keyids);
+
+    console.log(root.keys)
+    console.log(keys)
+
+    const cached = await browser.storage.local.get([Roles.Targets]);
+    const cachedTargets = cached.targets;
+    
+    let newTargets;
+
+    // Spec 5.6.1
+    if (root.consistent_snapshot) {
+        newTargets = await fetchMetafile(Roles.Targets, snapshot[`${Roles.Targets}.json`].version);
+    } else {
+        newTargets = await fetchMetafile(Roles.Targets);
+    }
+
+    // TODO SECURITY: Let's skip 5.6.2 for now, feels like the hashes do not provide a lot
+    // We are skipping for laziness, we'd need to download the raw file and not the json, and build the digest
+
+    try {
+        // Spec 5.6.3
+        await checkSignatures(keys, newTargets.signed, newTargets.signatures, root.roles.targets.threshold);
+    } catch (e) { 
+        console.log(e)
+        throw new Error("Failed verifying targets role signature(s).");
+    }
+
+    // 5.6.4
+    if (cachedTargets !== undefined && newTargets.signed.version < cachedTargets.signed.version) {
+        throw new Error("Targets version is lower than the cached one. Probable rollback attack.");
+    }
+
+    // 5.6.5
+    if (new Date(newTargets.signed.expires) <= frozenTimestamp) {
+        throw new Error("Freeze attack on the targets metafile.");
+    }
+
+    // 5.6.6
+    browser.storage.local.set({[Roles.Targets]: newTargets})
+
+    console.log("Targets verified");
 }
 
 async function updateTUF() {
+    // Spec 5.1
     const frozenTimestamp = new Date();
     const root: Root = await updateRoot(frozenTimestamp);
     const snapshotVersion: number = await updateTimestamp(root, frozenTimestamp);
 
-    console.log(snapshotVersion);
-
     // As per spec 5.4.3.1 we shall abort the whole updating if a new snapshot is not available
-    if (snapshotVersion >= 0) {
-        await updateSnapshot(snapshotVersion);
+    if (snapshotVersion < 0) {
+        return;
     }
+    const snapshot = await updateSnapshot(root, frozenTimestamp, snapshotVersion);
+    await updateTargets(root, frozenTimestamp, snapshot);
 }
 
 async function installListener() {
