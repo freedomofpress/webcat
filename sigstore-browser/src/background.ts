@@ -1,5 +1,6 @@
 import { loadKeys, checkSignatures, getRoleKeys } from "./crypto";
-import { Metafile, Root, Roles, Meta } from "./interfaces";
+import { Uint8ArrayToString, Uint8ArrayToHex } from "./encoding";
+import { Metafile, Root, Roles, Meta, HashAlgorithms } from "./interfaces";
 
 const TUF_REPOSITORY_URL = "https://tuf-repo-cdn.sigstore.dev";
 const STARTING_ROOT_PATH = "assets/1.root.json";
@@ -9,7 +10,7 @@ browser.runtime.onInstalled.addListener(installListener);
 
 // Let's keep it simple for now and deal with abstractions later
 
-async function fetchMetafile(role: string, version?: number): Promise<any> {
+async function fetchMetafile(role: string, version?: number|string, json: boolean = true): Promise<any> {
     var url: string = "";
     if (version) {
         url = `${TUF_REPOSITORY_URL}/${version}.${role}.json`;
@@ -25,9 +26,12 @@ async function fetchMetafile(role: string, version?: number): Promise<any> {
             throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
         }
 
-        const json = await response.json();
+        if (json) {
+            return await response.json();
+        } else {
+            return await response.arrayBuffer();
+        }
       
-        return json;
     } catch (error) {
         throw new Error(`Error fetching TUF file: ${error}`);
     }
@@ -292,8 +296,31 @@ async function updateTargets(root: Root, frozenTimestamp: Date, snapshot: Meta) 
 
     // 5.6.6
     browser.storage.local.set({[Roles.Targets]: newTargets})
+}
 
-    console.log("Targets verified");
+async function fetchSigstoreTrustRoot() {
+    const cached = await browser.storage.local.get([Roles.Targets])
+    const cachedTargets = cached[Roles.Targets]
+
+    if (cachedTargets === undefined) {
+        throw new Error("Failed to find the targets metafile when it should have existed.");
+    }
+    // Both sha256 and sha512 works for downloading the file (and verifying of course)
+    const sha256 = cachedTargets.signed.targets["trusted_root.json"].hashes.sha256;
+
+
+    const trusted_root_raw = await fetchMetafile("trusted_root", `targets/${sha256}`, false);
+    const sha256_calculated = Uint8ArrayToHex(new Uint8Array(await crypto.subtle.digest(HashAlgorithms.SHA256, trusted_root_raw)));
+
+    // We can't directly compare uint8array because it's an object, there would be a faster trick
+    // But it's still not great IndexedDB.cmp(a, b)
+
+    if (sha256 !== sha256_calculated) {
+        throw new Error("trusted_root.json hash does not match TUF value.");
+    }
+
+    console.log(JSON.parse(Uint8ArrayToString(trusted_root_raw)));
+    console.log("Success!")
 }
 
 async function updateTUF() {
@@ -312,4 +339,5 @@ async function updateTUF() {
 
 async function installListener() {
     await updateTUF();
+    await fetchSigstoreTrustRoot();
 }
