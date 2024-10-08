@@ -6,6 +6,8 @@ browser.runtime.onInstalled.addListener(installListener);
 
 async function installListener() {
     await updateTUF();
-    await loadSigstoreRoot();
+    const root = await loadSigstoreRoot();
+    console.log(root);
+    console.log(await root.fulcio.publicKeyObj)
 
 }

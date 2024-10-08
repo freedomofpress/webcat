@@ -1,3 +1,5 @@
+import { X509Certificate } from "./x509";
+
 export enum SigstoreRoots {
     certificateAuthorities = "certificateAuthorities",
     ctlogs = "ctlogs",
@@ -6,10 +8,13 @@ export enum SigstoreRoots {
 }
 
 export interface Sigstore {
-    rekor: CryptoKey,
-    ctfe: CryptoKey,
-    fulcio: CryptoKey,
-    tsa: CryptoKey
+    rekor: CryptoKey;
+    ctfe: CryptoKey;
+    fulcio: X509Certificate;
+    // This is theoretically supported, but not implemented in the community sigstore
+    // See https://github.com/sigstore/root-signing/issues/1389
+    // And https://blog.sigstore.dev/trusted-time/
+    tsa?: X509Certificate;
 }
 
 export interface RawLog {

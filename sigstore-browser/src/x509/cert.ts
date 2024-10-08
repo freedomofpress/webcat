@@ -14,8 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import { ASN1Obj } from '../asn1';
-import * as crypto from '../crypto';
-import { ECDSA_SIGNATURE_ALGOS } from '../oid';
+import { importKey, bufferEqual, verifySignature } from '../crypto';
+import { KeyTypes } from '../interfaces';
+import { ECDSA_SIGNATURE_ALGOS, ECDSA_CURVE_NAMES } from '../oid';
+import { Uint8ArrayToBase64 } from '../encoding'
 import * as pem from '../pem';
 import {
   X509AuthorityKeyIDExtension,
@@ -81,6 +83,12 @@ export class X509Certificate {
 
   get publicKey(): Uint8Array {
     return this.subjectPublicKeyInfoObj.toDER();
+  }
+
+  get publicKeyObj(): Promise<CryptoKey> {
+    const publicKey = this.subjectPublicKeyInfoObj.toDER();
+    const curve = ECDSA_CURVE_NAMES[ASN1Obj.parseBuffer(publicKey).subs[0].subs[1].toOID()];
+    return importKey(KeyTypes.Ecdsa, curve, Uint8ArrayToBase64(publicKey));
   }
 
   get signatureAlgorithm(): string {
@@ -155,12 +163,11 @@ export class X509Certificate {
 
   public async verify(issuerCertificate?: X509Certificate): Promise<boolean> {
     // Use the issuer's public key if provided, otherwise use the subject's
-    const publicKey = issuerCertificate?.publicKey || this.publicKey;
-    const key = await crypto.createPublicKey(publicKey);
+    const publicKeyObj = await issuerCertificate?.publicKeyObj || await this.publicKeyObj;
 
-    return await crypto.verify(
+    return await verifySignature(
+      publicKeyObj,
       this.tbsCertificate.toDER(),
-      key,
       this.signatureValue,
       this.signatureAlgorithm
     );
@@ -171,7 +178,7 @@ export class X509Certificate {
   }
 
   public equals(other: X509Certificate): boolean {
-    return crypto.bufferEqual(this.root.toDER(), other.root.toDER());
+    return bufferEqual(this.root.toDER(), other.root.toDER());
   }
 
   // Creates a copy of the certificate with a new buffer

@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import * as crypto from '../crypto';
 import { ByteStream } from '../stream';
 import { readBigInt64BE } from '../encoding';
+import { verifySignature } from '../crypto';
 
 interface SCTOptions {
   version: number;
@@ -80,7 +80,7 @@ export class SignedCertificateTimestamp {
     }
   }
 
-  public async verify(preCert: Uint8Array, key: CryptoKey): boolean {
+  public async verify(preCert: Uint8Array, key: CryptoKey): Promise<boolean> {
     // Assemble the digitally-signed struct (the data over which the signature
     // was generated).
     // https://www.rfc-editor.org/rfc/rfc6962#section-3.2
@@ -97,7 +97,7 @@ export class SignedCertificateTimestamp {
       stream.appendView(this.extensions);
     }
 
-    return await crypto.verify(stream.buffer, key, this.signature, this.algorithm);
+    return await verifySignature(key, stream.buffer, this.signature, this.algorithm);
   }
 
   // Parses a SignedCertificateTimestamp from a buffer. SCTs are encoded using

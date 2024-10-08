@@ -16,7 +16,7 @@ limitations under the License.
 import { ASN1Obj } from '../asn1';
 import { ByteStream } from '../stream';
 import { SignedCertificateTimestamp } from './sct';
-import { uint8ArrayToString } from '../encoding';
+import { Uint8ArrayToString } from '../encoding';
 
 // https://www.rfc-editor.org/rfc/rfc5280#section-4.1
 export class X509Extension {
@@ -97,7 +97,7 @@ export class X509SubjectAlternativeNameExtension extends X509Extension {
     if (rfc822Name === undefined) {
       return undefined;
     } else {
-      return uint8ArrayToString(rfc822Name);
+      return Uint8ArrayToString(rfc822Name);
     }
   }
 
@@ -106,7 +106,7 @@ export class X509SubjectAlternativeNameExtension extends X509Extension {
     if (uri === undefined) { 
       return undefined;
     } else {
-      return uint8ArrayToString(uri);
+      return Uint8ArrayToString(uri);
     }
   }
 
@@ -127,7 +127,7 @@ export class X509SubjectAlternativeNameExtension extends X509Extension {
 
     // The otherNameValue is a sequence containing the actual value.
     const otherNameValue = otherName.subs[1];
-    return uint8ArrayToString(otherNameValue.subs[0].value);
+    return Uint8ArrayToString(otherNameValue.subs[0].value);
   }
 
   private findGeneralName(tag: number): ASN1Obj | undefined {
@@ -177,7 +177,7 @@ export class X509SCTExtension extends X509Extension {
     // is the length of the list in bytes, NOT the number of SCTs in the list
     const end = stream.getUint16() + 2;
 
-    const sctList = [];
+    const sctList: SignedCertificateTimestamp[] = [];
     while (stream.position < end) {
       // Read the length of the next SCT
       const sctLength = stream.getUint16();

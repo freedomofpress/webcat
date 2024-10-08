@@ -1,9 +1,49 @@
-import { Uint8ArrayToHex, stringToUint8Array, hexToUint8Array, base64ToUint8Array } from "./encoding";
+import { Uint8ArrayToHex, stringToUint8Array, hexToUint8Array, base64ToUint8Array, Uint8ArrayToBase64, Uint8ArrayToString } from "./encoding";
 import { canonicalize } from "./canonicalize";
-import { PEMToBytes } from "./pem";
+import { toDER } from "./pem";
 import { ASN1Obj } from "./asn1";
+import { ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS } from "./oid"
+import { X509Certificate } from './x509';
 
 import { Signed, Signature, EcdsaTypes, HashAlgorithms, KeyTypes } from "./interfaces";
+
+export async function validateCert(cert: Uint8Array|string, key?: CryptoKey) {
+    const x509cert = X509Certificate.parse(cert);
+
+    console.log(x509cert.publicKey)
+    console.log(x509cert.notBefore)
+    console.log(x509cert.notAfter)
+    //console.log(Uint8ArrayToString(x509cert.issuer))
+    console.log(Uint8ArrayToString(x509cert.subject))
+    x509cert.verify()
+
+
+
+    // Let's keep this "documentation" for now
+    /*const tbsCertificate = asn1cert.subs[0];
+    const signatureAlgorithm = ECDSA_SIGNATURE_ALGOS[asn1cert.subs[1].subs[0].toOID()];
+    // The verifySignature already does ASN1, so this object is ready
+    
+    // TODO: This is a terrible hack to remove a leading NULL byte that breaks everything
+    // Would be nice to figure out why
+    const signature = hexToUint8Array(Uint8ArrayToHex(asn1cert.subs[2].value).substring(2));
+
+    if (key === undefined) {
+        // Extract the key from the cert
+        const keydata = Uint8ArrayToBase64(tbsCertificate.subs[6].toDER());
+        const keycurve = ECDSA_CURVE_NAMES[tbsCertificate.subs[6].subs[0].subs[1].toOID()];
+
+        key = await importKey(KeyTypes.Ecdsa, keycurve, keydata);
+    }
+
+    try {
+    if (!await verifySignature(key, tbsCertificate.toDER(), signature, signatureAlgorithm)) {
+        throw new Error("Failed to verify certificate signature");
+    }} catch (e) {
+        console.log(e)
+    }*/
+}
+
 
 // We use this to remove to select from the root keys only the ones allowed for a specific role
 export function getRoleKeys(keys: Map<string, CryptoKey>, keyids: string[]): Map<string, CryptoKey> {
@@ -59,13 +99,13 @@ export async function importKey(keytype: string, scheme: string, key: string): P
     if (key.includes("BEGIN")) {
         // If it has a begin then it is a PEM
         params.format = "spki";
-        params.keyData = PEMToBytes(key);
+        params.keyData = toDER(key);
     } else if (/^[0-9A-Fa-f]+$/.test(key)) {
         // Is it hex?
         params.format = "raw";
         params.keyData = hexToUint8Array(key);
     } else {
-        // It might be base64, without the PEM header, as in sigstore tursted_root
+        // It might be base64, without the PEM header, as in sigstore trusted_root
         params.format = "spki";
         params.keyData = base64ToUint8Array(key);
     }
@@ -92,11 +132,11 @@ export async function importKey(keytype: string, scheme: string, key: string): P
         throw new Error(`Unsupported ${keytype}`)
     }
 
-    console.log(params);
+    //console.log(params);
     return await crypto.subtle.importKey(params.format, params.keyData, params.algorithm, params.extractable, params.usage);
 }
 
-async function verifySignature(key: CryptoKey, signed: Uint8Array, sig: Uint8Array, scheme: string = "ecdsa-sha2-nistp256"): Promise<boolean> {
+export async function verifySignature(key: CryptoKey, signed: Uint8Array, sig: Uint8Array, scheme: string = "ecdsa-sha2-nistp256"): Promise<boolean> {
     // TODO
     // Different hash support is fake for now: its the key that defines the supported signing scheme and that info
     // Is lost when we translate those into CryptoKey, we should extend the keys map to include scheme
@@ -152,9 +192,8 @@ async function verifySignature(key: CryptoKey, signed: Uint8Array, sig: Uint8Arr
     raw_signature.set(binr, 0);
     raw_signature.set(bins, binr.length);
   
-    const res = await crypto.subtle.verify(options, key, raw_signature, signed);
-
-    return res;
+    //console.log(options)
+    return await crypto.subtle.verify(options, key, raw_signature, signed);
 }
 
 export async function checkSignatures(keys: Map<string, CryptoKey>, signed: Object, signatures: Signature[], threshold: number): Promise<boolean> {
@@ -207,3 +246,14 @@ export async function checkSignatures(keys: Map<string, CryptoKey>, signed: Obje
         return false;
     }
 }
+
+export function bufferEqual(a: Uint8Array, b: Uint8Array): boolean {
+    if (a.byteLength !== b.byteLength) {
+      return false;
+    }
+    
+    for (let i = 0; i < a.byteLength; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }

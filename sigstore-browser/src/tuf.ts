@@ -274,6 +274,7 @@ async function updateTargets(root: Root, frozenTimestamp: Date, snapshot: Meta) 
     if (snapshot[`${Roles.Targets}.json`].hashes?.sha256) {
         const newTargetsRaw_sha256 = Uint8ArrayToHex(new Uint8Array(await crypto.subtle.digest(HashAlgorithms.SHA256, newTargetsRaw)));
         
+        // TODO replace with crypto.bufferEqual
         if (snapshot[`${Roles.Targets}.json`].hashes?.sha256 !== newTargetsRaw_sha256) {
             throw new Error("Targets hash does not match snapshot hash.");
         }
@@ -320,6 +321,7 @@ export async function fetchSigstoreTrustRoot() {
 
     // We can't directly compare uint8array because it's an object, there would be a faster trick
     // But it's still not great IndexedDB.cmp(a, b)
+    // TODO replace with crypto.bufferEqual
 
     if (sha256 !== sha256_calculated) {
         throw new Error("trusted_root.json hash does not match TUF value.");
