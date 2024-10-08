@@ -1,7 +1,54 @@
-export enum KeyEncodingTypes {
-    Hex,
-    PEM
+export enum SigstoreRoots {
+    certificateAuthorities = "certificateAuthorities",
+    ctlogs = "ctlogs",
+    timestampAuthorities = "timestampAuthorities",
+    tlogs = "tlogs"
 }
+
+export interface Sigstore {
+    rekor: CryptoKey,
+    ctfe: CryptoKey,
+    fulcio: CryptoKey,
+    tsa: CryptoKey
+}
+
+export interface RawLog {
+    baseUrl: string;
+    hashAlgorithm: string;
+    publicKey: {
+        rawBytes: string;
+        keyDetails: string;
+        validFor: {
+            start: string;
+            end?: string;
+        };
+    };
+    logId: {
+        keyId: string;
+    };
+};
+
+export type RawLogs = RawLog[];
+
+export interface RawCA {
+    subject: {
+        organization: string;
+        commonName: string;
+    };
+    uri: string;
+    certChain: {
+        certificates: {
+            rawBytes: string;
+        }[];
+    };
+    validFor: {
+        start: string;
+        end: string;
+    };
+}
+
+export type RawCAs = RawCA[];
+
 
 export enum KeyTypes {
     Ecdsa = "ECDSA",
@@ -31,7 +78,8 @@ export enum Roles {
     Root = "root",
     Timestamp = "timestamp",
     Snapshot = "snapshot",
-    Targets = "targets"
+    Targets = "targets",
+    TrustedRoot = "trusted_root"
 }
 
 export interface Key {

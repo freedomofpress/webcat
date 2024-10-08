@@ -1,9 +1,9 @@
-import { Uint8ArrayToHex, stringToUint8Array, hexToUint8Array } from "./encoding";
+import { Uint8ArrayToHex, stringToUint8Array, hexToUint8Array, base64ToUint8Array } from "./encoding";
 import { canonicalize } from "./canonicalize";
 import { PEMToBytes } from "./pem";
 import { ASN1Obj } from "./asn1";
 
-import { Signed, Signature, KeyEncodingTypes, EcdsaTypes, HashAlgorithms, KeyTypes } from "./interfaces";
+import { Signed, Signature, EcdsaTypes, HashAlgorithms, KeyTypes } from "./interfaces";
 
 // We use this to remove to select from the root keys only the ones allowed for a specific role
 export function getRoleKeys(keys: Map<string, CryptoKey>, keyids: string[]): Map<string, CryptoKey> {
@@ -36,15 +36,14 @@ export async function loadKeys(keys: Signed["keys"]): Promise<Map<string, Crypto
             // Either bug on calculation or foul play, this is a huge problem
             throw new Error("Computed keyId does not match the provided one!");
         }
-        importedKeys.set(verified_keyId, await importKey(key.keyid, key.keytype, key.scheme, key.keyval.public));
+        importedKeys.set(verified_keyId, await importKey(key.keytype, key.scheme, key.keyval.public));
     }
     return importedKeys;
 }
 
-async function importKey(keyid: string, keytype: string, scheme: string, key: string): Promise<CryptoKey> {
+export async function importKey(keytype: string, scheme: string, key: string): Promise<CryptoKey> {
     
     class importParams {
-        encoding: KeyEncodingTypes = KeyEncodingTypes.Hex;
         format: "raw"|"spki" = "spki";
         keyData: ArrayBuffer = new Uint8Array();
         algorithm: {
@@ -58,14 +57,17 @@ async function importKey(keyid: string, keytype: string, scheme: string, key: st
     var params = new importParams();
     // Let's try to detect the encoding
     if (key.includes("BEGIN")) {
-        // TODO remove header and base64 decode
-        params.encoding = KeyEncodingTypes.PEM;
+        // If it has a begin then it is a PEM
         params.format = "spki";
         params.keyData = PEMToBytes(key);
     } else if (/^[0-9A-Fa-f]+$/.test(key)) {
-        params.encoding = KeyEncodingTypes.Hex;
+        // Is it hex?
         params.format = "raw";
         params.keyData = hexToUint8Array(key);
+    } else {
+        // It might be base64, without the PEM header, as in sigstore tursted_root
+        params.format = "spki";
+        params.keyData = base64ToUint8Array(key);
     }
 
     // Let's see supported key types
@@ -90,6 +92,7 @@ async function importKey(keyid: string, keytype: string, scheme: string, key: st
         throw new Error(`Unsupported ${keytype}`)
     }
 
+    console.log(params);
     return await crypto.subtle.importKey(params.format, params.keyData, params.algorithm, params.extractable, params.usage);
 }
 
