@@ -17,23 +17,27 @@ import { ASN1Obj } from '../asn1';
 import { importKey, bufferEqual, verifySignature } from '../crypto';
 import { KeyTypes } from '../interfaces';
 import { ECDSA_SIGNATURE_ALGOS, ECDSA_CURVE_NAMES } from '../oid';
-import { Uint8ArrayToBase64 } from '../encoding'
+import { Uint8ArrayToBase64, Uint8ArrayToString } from '../encoding'
 import * as pem from '../pem';
 import {
   X509AuthorityKeyIDExtension,
   X509BasicConstraintsExtension,
   X509Extension,
+  X509FulcioIssuerV2,
   X509KeyUsageExtension,
   X509SCTExtension,
   X509SubjectAlternativeNameExtension,
   X509SubjectKeyIDExtension,
 } from './ext';
 
+// https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md
 const EXTENSION_OID_SUBJECT_KEY_ID = '2.5.29.14';
 const EXTENSION_OID_KEY_USAGE = '2.5.29.15';
 const EXTENSION_OID_SUBJECT_ALT_NAME = '2.5.29.17';
 const EXTENSION_OID_BASIC_CONSTRAINTS = '2.5.29.19';
 const EXTENSION_OID_AUTHORITY_KEY_ID = '2.5.29.35';
+const EXTENSION_OID_FULCIO_ISSUERV2 = "1.3.6.1.4.1.57264.1.8";
+
 export const EXTENSION_OID_SCT = '1.3.6.1.4.1.11129.2.4.2';
 
 export class X509Certificate {
@@ -143,6 +147,12 @@ export class X509Certificate {
   get extSCT(): X509SCTExtension | undefined {
     const ext = this.findExtension(EXTENSION_OID_SCT);
     return ext ? new X509SCTExtension(ext) : undefined;
+  }
+
+  // TODO, improve this, support v1, do not force undefined
+  get extFulcioIssuerV2(): X509FulcioIssuerV2 | undefined {
+    const ext = this.findExtension(EXTENSION_OID_FULCIO_ISSUERV2);
+    return ext ? new X509FulcioIssuerV2(ext) : undefined;
   }
 
   get isCA(): boolean {

@@ -163,6 +163,13 @@ export class X509SubjectKeyIDExtension extends X509Extension {
   }
 }
 
+export class X509FulcioIssuerV2 extends X509Extension {
+  get issuer(): string {
+    console.log(this.extnValueObj);
+    return Uint8ArrayToString(this.extnValueObj.subs[0].value);
+  }
+}
+
 // https://www.rfc-editor.org/rfc/rfc6962#section-3.3
 export class X509SCTExtension extends X509Extension {
   constructor(asn1: ASN1Obj) {

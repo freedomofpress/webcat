@@ -1,7 +1,5 @@
 import { Roles, RawLogs, RawCAs, SigstoreRoots, Sigstore } from "./interfaces"
-import { importKey, validateCert } from "./crypto"
-import { base64ToUint8Array } from "./encoding";
-import { ASN1Obj } from "./asn1";
+import { importKey } from "./crypto"
 import { X509Certificate } from "./x509";
 
 async function loadLog(frozenTimestamp: Date, logs: RawLogs): Promise<CryptoKey> {
@@ -64,6 +62,6 @@ export async function loadSigstoreRoot(): Promise<Sigstore> {
         rekor: await loadLog(frozenTimestamp, root[SigstoreRoots.tlogs]),
         ctfe: await loadLog(frozenTimestamp, root[SigstoreRoots.ctlogs]),
         fulcio: await loadCA(frozenTimestamp, root[SigstoreRoots.certificateAuthorities])
-        // Sigstore community is not using those
+        // Sigstore community is not using timestampAuthorities for now
     }
 }

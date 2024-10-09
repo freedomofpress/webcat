@@ -1,48 +1,11 @@
-import { Uint8ArrayToHex, stringToUint8Array, hexToUint8Array, base64ToUint8Array, Uint8ArrayToBase64, Uint8ArrayToString } from "./encoding";
+import { Uint8ArrayToHex, stringToUint8Array, hexToUint8Array, base64ToUint8Array } from "./encoding";
 import { canonicalize } from "./canonicalize";
 import { toDER } from "./pem";
 import { ASN1Obj } from "./asn1";
-import { ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS } from "./oid"
-import { X509Certificate } from './x509';
+
 
 import { Signed, Signature, EcdsaTypes, HashAlgorithms, KeyTypes } from "./interfaces";
 
-export async function validateCert(cert: Uint8Array|string, key?: CryptoKey) {
-    const x509cert = X509Certificate.parse(cert);
-
-    console.log(x509cert.publicKey)
-    console.log(x509cert.notBefore)
-    console.log(x509cert.notAfter)
-    //console.log(Uint8ArrayToString(x509cert.issuer))
-    console.log(Uint8ArrayToString(x509cert.subject))
-    x509cert.verify()
-
-
-
-    // Let's keep this "documentation" for now
-    /*const tbsCertificate = asn1cert.subs[0];
-    const signatureAlgorithm = ECDSA_SIGNATURE_ALGOS[asn1cert.subs[1].subs[0].toOID()];
-    // The verifySignature already does ASN1, so this object is ready
-    
-    // TODO: This is a terrible hack to remove a leading NULL byte that breaks everything
-    // Would be nice to figure out why
-    const signature = hexToUint8Array(Uint8ArrayToHex(asn1cert.subs[2].value).substring(2));
-
-    if (key === undefined) {
-        // Extract the key from the cert
-        const keydata = Uint8ArrayToBase64(tbsCertificate.subs[6].toDER());
-        const keycurve = ECDSA_CURVE_NAMES[tbsCertificate.subs[6].subs[0].subs[1].toOID()];
-
-        key = await importKey(KeyTypes.Ecdsa, keycurve, keydata);
-    }
-
-    try {
-    if (!await verifySignature(key, tbsCertificate.toDER(), signature, signatureAlgorithm)) {
-        throw new Error("Failed to verify certificate signature");
-    }} catch (e) {
-        console.log(e)
-    }*/
-}
 
 
 // We use this to remove to select from the root keys only the ones allowed for a specific role
