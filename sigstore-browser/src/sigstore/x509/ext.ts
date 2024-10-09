@@ -165,7 +165,6 @@ export class X509SubjectKeyIDExtension extends X509Extension {
 
 export class X509FulcioIssuerV2 extends X509Extension {
   get issuer(): string {
-    console.log(this.extnValueObj);
     return Uint8ArrayToString(this.extnValueObj.subs[0].value);
   }
 }
