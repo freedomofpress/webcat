@@ -1,8 +1,10 @@
 import { Roles, RawLogs, RawCAs, SigstoreRoots, Sigstore } from "./interfaces"
-import { importKey } from "./crypto"
+import { importKey, verifySignature } from "./crypto"
 import { X509Certificate, X509SCTExtension, EXTENSION_OID_SCT } from "./x509";
 import { SigstoreBundle } from "../../assets/bundle";
 import { ByteStream } from "./stream";
+import { base64ToUint8Array, Uint8ArrayToHex, stringToUint8Array, Uint8ArrayToString } from "./encoding";
+import { canonicalize } from "./canonicalize";
 
 async function loadLog(frozenTimestamp: Date, logs: RawLogs): Promise<CryptoKey> {
     // We will stop at the first valid one
@@ -69,7 +71,7 @@ export async function loadSigstoreRoot(): Promise<Sigstore> {
 }
 
 // Adapted from https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/key/sct.ts
-export async function verifySCT(cert: X509Certificate, issuer: X509Certificate, ctlog: CryptoKey): Promise<boolean> {
+async function verifySCT(cert: X509Certificate, issuer: X509Certificate, ctlog: CryptoKey): Promise<boolean> {
     let extSCT: X509SCTExtension | undefined;
   
     // Verifying the SCT requires that we remove the SCT extension and
@@ -132,13 +134,54 @@ export async function verifySCT(cert: X509Certificate, issuer: X509Certificate, 
     }
     
     throw new Error("SCT verification failed.");
-  }
+}
+
+async function verifyInclusionPromise(cert: X509Certificate, bundle: SigstoreBundle, rekor: CryptoKey): Promise<boolean> {
+    // We support and expect only one entry
+    if (bundle.verificationMaterial.tlogEntries.length < 1) {
+        throw new Error("Failed to find a transparency log entry in the provided bundle.");
+    }
+
+    if (bundle.verificationMaterial.tlogEntries[0].inclusionPromise?.signedEntryTimestamp === undefined) {
+        throw new Error("Failed to find an inclusion promise.");
+    }
+
+    const signature = base64ToUint8Array(bundle.verificationMaterial.tlogEntries[0].inclusionPromise?.signedEntryTimestamp);
+
+    const keyId = Uint8ArrayToHex(base64ToUint8Array(bundle.verificationMaterial.tlogEntries[0].logId.keyId));
+    const integratedTime = Number(bundle.verificationMaterial.tlogEntries[0].integratedTime);
+
+    const signed = stringToUint8Array(canonicalize({
+        body: bundle.verificationMaterial.tlogEntries[0].canonicalizedBody,
+        integratedTime: integratedTime,
+        logIndex: Number(bundle.verificationMaterial.tlogEntries[0].logIndex),
+        logID: keyId,
+    }));
+
+    if (!await verifySignature(rekor, signed, signature)) {
+        throw new Error("Failed to verify the inclusion promise in the provided bundle.");
+    }
+
+    const integratedDate = new Date(integratedTime * 1000);
+
+    if (!cert.validForDate(integratedDate)) {
+        throw new Error("Artifact signing was logged outside of the certificate validity.");
+    }
+
+    // Sigh...
+    const loggedCert = X509Certificate.parse(Uint8ArrayToString(base64ToUint8Array(JSON.parse(Uint8ArrayToString(base64ToUint8Array(bundle.verificationMaterial.tlogEntries[0].canonicalizedBody))).spec.signature.publicKey.content)));
+    if (!cert.equals(loggedCert)) {
+        throw new Error("Certificate in Rekor log does not match the signing certificate.");
+    }
+
+    return true;
+}
 
 export async function verifyArtifact(root: Sigstore, identity: string, issuer: string, bundle: SigstoreBundle, data: Uint8Array): Promise<boolean> {
     // Quick checks first: does the signing certificate have the correct identity?
     const signingCert = X509Certificate.parse(bundle.verificationMaterial.certificate.rawBytes);
 
-    // Basic stuff
+    // # 1 Basic stuff
     if (signingCert.subjectAltName !== identity) {
         throw new Error("Certificate identity (subjectAltName) do not match the verifying one.");
     }
@@ -147,6 +190,7 @@ export async function verifyArtifact(root: Sigstore, identity: string, issuer: s
         throw new Error("Identity issuer is not the verifying one.");
     }
 
+    // # 2 Certificate validity
     if (!signingCert.verify(root.fulcio)) {
         throw new Error("Signing certificate has not been signed by the current Fulcio CA.");
     }
@@ -157,12 +201,22 @@ export async function verifyArtifact(root: Sigstore, identity: string, issuer: s
         throw new Error("Signing cert was signed when the Fulcio CA was not valid.");
     }
 
-    // To verify the SCT we need to build a preCert (because the cert was logged without the SCT)
+    // # 3 To verify the SCT we need to build a preCert (because the cert was logged without the SCT)
     // https://github.com/sigstore/sigstore-js/packages/verify/src/key/sct.ts#L45
-
     if (!await verifySCT(signingCert, root.fulcio, root.ctfe)) {
         throw new Error("SCT validation failed.");
     }
+
+    // # 4 Rekor inclusion promise
+    if (!await verifyInclusionPromise(signingCert, bundle, root.rekor)) {
+        throw new Error("Inclusion promise validation failed.");
+    }
+
+    // # 5 Rekor treehashs
+
+    // # 6 TSA *skipping*, not supported by sigstore community
+
+    // # 7 Revocation *skipping* not really a thing (unsurprisingly)
 
     return true;
 }
