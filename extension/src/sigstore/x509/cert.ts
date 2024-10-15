@@ -173,6 +173,7 @@ export class X509Certificate {
 
   public async verify(issuerCertificate?: X509Certificate): Promise<boolean> {
     // Use the issuer's public key if provided, otherwise use the subject's
+    // We should probably check notbefore/notafter here
     const publicKeyObj = await issuerCertificate?.publicKeyObj || await this.publicKeyObj;
 
     return await verifySignature(

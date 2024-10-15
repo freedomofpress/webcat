@@ -1,0 +1,26 @@
+{
+  "manifest_version": 2,
+  "name": "webcat",
+  "version": "1.0",
+  "permissions": [
+    "storage",
+    "webRequest",
+    "webRequestBlocking",
+    "tabs",
+    "<all_urls>"
+  ],
+  "web_accessible_resources": [
+    "assets/1.root.json"
+  ],
+  "background": {
+    "scripts": ["dist/bundle.js"],
+    "persistent": true
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["hooks/inject.js", "hooks/relay.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

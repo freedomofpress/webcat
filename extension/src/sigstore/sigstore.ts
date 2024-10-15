@@ -3,7 +3,7 @@ import { importKey, verifySignature } from "./crypto"
 import { X509Certificate, X509SCTExtension, EXTENSION_OID_SCT } from "./x509";
 import { SigstoreBundle } from "../../assets/bundle";
 import { ByteStream } from "./stream";
-import { base64ToUint8Array, Uint8ArrayToHex, stringToUint8Array, Uint8ArrayToString } from "./encoding";
+import { base64ToUint8Array, Uint8ArrayToHex, stringToUint8Array, Uint8ArrayToString, hexToUint8Array } from "./encoding";
 import { canonicalize } from "./canonicalize";
 
 async function loadLog(frozenTimestamp: Date, logs: RawLogs): Promise<CryptoKey> {
@@ -180,6 +180,7 @@ async function verifyInclusionPromise(cert: X509Certificate, bundle: SigstoreBun
 export async function verifyArtifact(root: Sigstore, identity: string, issuer: string, bundle: SigstoreBundle, data: Uint8Array): Promise<boolean> {
     // Quick checks first: does the signing certificate have the correct identity?
     const signingCert = X509Certificate.parse(bundle.verificationMaterial.certificate.rawBytes);
+    const signature = base64ToUint8Array(bundle.messageSignature.signature);
 
     // # 1 Basic stuff
     if (signingCert.subjectAltName !== identity) {
@@ -217,6 +218,11 @@ export async function verifyArtifact(root: Sigstore, identity: string, issuer: s
     // # 6 TSA *skipping*, not supported by sigstore community
 
     // # 7 Revocation *skipping* not really a thing (unsurprisingly)
+
+    // # 8 verify the signed data
+    if (!await verifySignature(await signingCert.publicKeyObj, data, signature)) {
+        throw new Error("Error verifying artifact signature.");
+    }
 
     return true;
 }
