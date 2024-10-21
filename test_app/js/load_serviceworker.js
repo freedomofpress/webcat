@@ -4,6 +4,7 @@ if ('serviceWorker' in navigator) {
 
       // Listen for messages from the Service Worker
       navigator.serviceWorker.addEventListener('message', (event) => {
+	      console.log(event.data);
         if (event.data === 'serviceworker: active') {
           console.log('load_serviceworker.js:', true);
         }
