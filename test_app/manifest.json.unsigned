@@ -1,0 +1,25 @@
+{
+    "info": {
+      "app_version": 2,
+      "webcat_version": 1
+    },
+    "files": {
+      "./index.html": "7e72f8a579a41a2ad2aeed49986aacde4d49d89fa35c918ef05eff04f5737df7",
+      "./js/csp.js": "70e0bcb115f28e335748afe41d7cebbdb4c77c14aa72cc8445e5a8480fea34cb",
+      "./js/import.js": "af69ec9c44fc6f828c8894d0b212662845774517d0172ff8938e06978808a6ee",
+      "./js/import_tester.js": "3dde8807987f65f987170d5d0e08c5274290703e1b690189ba2e66ef60941aed",
+      "./js/wasm_fetch.js": "cb2f53877440e57d0202cc79491f437f45c2e231104ea3c70d2b58865f209e92",
+      "./js/load_serviceworker.js": "e4cb9e3ad4fc6ec758fa1fe72795616fcedba98f625d2c25b36a6a351043438c",
+      "./js/alert.js": "eb6d9606b7650b27e2ae5e0884c2df53380d9457689807b21405c9e52d7a1b55",
+      "./js/load_sharedworker.js": "2f0ff10c61ad3d19269c33af6957f4942ed3c5274f702d346e945a5502b392e0",
+      "./js/wasm.js": "898a77a26b49eb2ac3ed4565ffac433ea606d7d3b4dd67cc9636d020ac525d8c",
+      "./js/load_worker.js": "a2ea8b706da382860ea6fb9c0506ec672833a5459a67410d490178062aeba162",
+      "./workers/worker.js": "0d1412471e5ac5ed76f075e770aff104dc24a384ab6c1376bed5d129b6cb2f18",
+      "./workers/sharedworker.js": "b811ee381ca722f4fb0b532ad4f7f5d4978c70765343ea2f2806404f1ea51498",
+      "./workers/serviceworker.js": "56610b80943e3b7cf9e4abae96d4f2b1bedf4410dcb08d7f22d96f25f49e46ab"
+    },
+    "wasm": [
+      "70f56f000fe939f330736d6cf619c4d779112dde3a5c4dc28b9fd36f5a2ca0fe",
+      "f82943be0905ece191cc2f4333861e2846d42c3ec64a7ea24df21a322f1b3013"
+    ]
+}
