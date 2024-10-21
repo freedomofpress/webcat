@@ -13,12 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj } from '../asn1';
-import { importKey, bufferEqual, verifySignature } from '../crypto';
-import { KeyTypes } from '../interfaces';
-import { ECDSA_SIGNATURE_ALGOS, ECDSA_CURVE_NAMES } from '../oid';
-import { Uint8ArrayToBase64, Uint8ArrayToString } from '../encoding'
-import * as pem from '../pem';
+import { ASN1Obj } from "../asn1";
+import { importKey, bufferEqual, verifySignature } from "../crypto";
+import { KeyTypes } from "../interfaces";
+import { ECDSA_SIGNATURE_ALGOS, ECDSA_CURVE_NAMES } from "../oid";
+import { Uint8ArrayToBase64 } from "../encoding";
+import * as pem from "../pem";
 import {
   X509AuthorityKeyIDExtension,
   X509BasicConstraintsExtension,
@@ -28,17 +28,17 @@ import {
   X509SCTExtension,
   X509SubjectAlternativeNameExtension,
   X509SubjectKeyIDExtension,
-} from './ext';
+} from "./ext";
 
 // https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md
-const EXTENSION_OID_SUBJECT_KEY_ID = '2.5.29.14';
-const EXTENSION_OID_KEY_USAGE = '2.5.29.15';
-const EXTENSION_OID_SUBJECT_ALT_NAME = '2.5.29.17';
-const EXTENSION_OID_BASIC_CONSTRAINTS = '2.5.29.19';
-const EXTENSION_OID_AUTHORITY_KEY_ID = '2.5.29.35';
+const EXTENSION_OID_SUBJECT_KEY_ID = "2.5.29.14";
+const EXTENSION_OID_KEY_USAGE = "2.5.29.15";
+const EXTENSION_OID_SUBJECT_ALT_NAME = "2.5.29.17";
+const EXTENSION_OID_BASIC_CONSTRAINTS = "2.5.29.19";
+const EXTENSION_OID_AUTHORITY_KEY_ID = "2.5.29.35";
 const EXTENSION_OID_FULCIO_ISSUERV2 = "1.3.6.1.4.1.57264.1.8";
 
-export const EXTENSION_OID_SCT = '1.3.6.1.4.1.11129.2.4.2';
+export const EXTENSION_OID_SCT = "1.3.6.1.4.1.11129.2.4.2";
 
 export class X509Certificate {
   public root: ASN1Obj;
@@ -48,7 +48,7 @@ export class X509Certificate {
   }
 
   public static parse(cert: Uint8Array | string): X509Certificate {
-    const der = typeof cert === 'string' ? pem.toDER(cert) : cert;
+    const der = typeof cert === "string" ? pem.toDER(cert) : cert;
     const asn1 = ASN1Obj.parseBuffer(der);
     return new X509Certificate(asn1);
   }
@@ -91,7 +91,8 @@ export class X509Certificate {
 
   get publicKeyObj(): Promise<CryptoKey> {
     const publicKey = this.subjectPublicKeyInfoObj.toDER();
-    const curve = ECDSA_CURVE_NAMES[ASN1Obj.parseBuffer(publicKey).subs[0].subs[1].toOID()];
+    const curve =
+      ECDSA_CURVE_NAMES[ASN1Obj.parseBuffer(publicKey).subs[0].subs[1].toOID()];
     return importKey(KeyTypes.Ecdsa, curve, Uint8ArrayToBase64(publicKey));
   }
 
@@ -160,9 +161,11 @@ export class X509Certificate {
 
     // If the KeyUsage extension is present, keyCertSign must be set
     if (this.extKeyUsage) {
-      ca && this.extKeyUsage.keyCertSign;
+      return ca && this.extKeyUsage.keyCertSign;
     }
 
+    // TODO: test coverage for this case
+    /* istanbul ignore next */
     return ca;
   }
 
@@ -174,13 +177,14 @@ export class X509Certificate {
   public async verify(issuerCertificate?: X509Certificate): Promise<boolean> {
     // Use the issuer's public key if provided, otherwise use the subject's
     // We should probably check notbefore/notafter here
-    const publicKeyObj = await issuerCertificate?.publicKeyObj || await this.publicKeyObj;
+    const publicKeyObj =
+      (await issuerCertificate?.publicKeyObj) || (await this.publicKeyObj);
 
     return await verifySignature(
       publicKeyObj,
       this.tbsCertificate.toDER(),
       this.signatureValue,
-      this.signatureAlgorithm
+      this.signatureAlgorithm,
     );
   }
 
@@ -269,7 +273,7 @@ export class X509Certificate {
   // https://www.rfc-editor.org/rfc/rfc5280#section-4.1.2.9
   private get extensionsObj(): ASN1Obj | undefined {
     return this.tbsCertificateObj.subs.find((sub) =>
-      sub.tag.isContextSpecific(0x03)
+      sub.tag.isContextSpecific(0x03),
     );
   }
 }

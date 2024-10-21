@@ -13,21 +13,24 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-const PAE_PREFIX = 'DSSEv1';
+const PAE_PREFIX = "DSSEv1";
 
 // DSSE Pre-Authentication Encoding
-export function preAuthEncoding(payloadType: string, payload: Uint8Array): Uint8Array {
+export function preAuthEncoding(
+  payloadType: string,
+  payload: Uint8Array,
+): Uint8Array {
   const prefix = [
     PAE_PREFIX,
     payloadType.length,
     payloadType,
     payload.length,
-    '',
-  ].join(' ');
+    "",
+  ].join(" ");
 
   // Is using utf-8 a problem? I don't think so but adding this warning
   const encoder = new TextEncoder();
-  const prefixBuffer = encoder.encode(prefix)
+  const prefixBuffer = encoder.encode(prefix);
 
   // Badic Uint8Array concat
   const combinedArray = new Uint8Array(prefixBuffer.length + payload.length);

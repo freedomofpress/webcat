@@ -19,17 +19,17 @@ export function base64ToUint8Array(base64: string): Uint8Array {
   const bytes = new Uint8Array(length);
 
   for (let i = 0; i < length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);  // Convert binary string to byte array
+    bytes[i] = binaryString.charCodeAt(i); // Convert binary string to byte array
   }
 
   return bytes;
 }
 
 export function Uint8ArrayToBase64(uint8Array: Uint8Array): string {
-  let binaryString = '';
-  
+  let binaryString = "";
+
   for (let i = 0; i < uint8Array.length; i++) {
-      binaryString += String.fromCharCode(uint8Array[i]);
+    binaryString += String.fromCharCode(uint8Array[i]);
   }
 
   return btoa(binaryString);
@@ -37,28 +37,28 @@ export function Uint8ArrayToBase64(uint8Array: Uint8Array): string {
 
 export function hexToUint8Array(hex: string): Uint8Array {
   if (hex.length % 2 !== 0) {
-      throw new Error('Hex string must have an even length');
+    throw new Error("Hex string must have an even length");
   }
 
   const length = hex.length / 2;
   const uint8Array = new Uint8Array(length);
 
   for (let i = 0; i < length; i++) {
-      uint8Array[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    uint8Array[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
   }
 
   return uint8Array;
 }
 
- export function Uint8ArrayToHex(uint8Array: Uint8Array): string {
-  let hexString = '';
-  
+export function Uint8ArrayToHex(uint8Array: Uint8Array): string {
+  let hexString = "";
+
   for (let i = 0; i < uint8Array.length; i++) {
-      let hex = uint8Array[i].toString(16);
-      if (hex.length === 1) {
-          hex = '0' + hex;
-      }
-      hexString += hex;
+    let hex = uint8Array[i].toString(16);
+    if (hex.length === 1) {
+      hex = "0" + hex;
+    }
+    hexString += hex;
   }
 
   return hexString;
@@ -76,18 +76,23 @@ export function Uint8ArrayToString(uint8Array: Uint8Array): string {
   return decoder.decode(uint8Array);
 }
 
-export function readBigInt64BE(uint8Array: Uint8Array, offset?: number): bigint {
+export function readBigInt64BE(
+  uint8Array: Uint8Array,
+  offset?: number,
+): bigint {
   if (!offset) {
     offset = 0;
   }
-  const high = uint8Array[offset] << 24 |
-               uint8Array[offset + 1] << 16 |
-               uint8Array[offset + 2] << 8 |
-               uint8Array[offset + 3];
-  const low = uint8Array[offset + 4] << 24 |
-              uint8Array[offset + 5] << 16 |
-              uint8Array[offset + 6] << 8 |
-              uint8Array[offset + 7];
+  const high =
+    (uint8Array[offset] << 24) |
+    (uint8Array[offset + 1] << 16) |
+    (uint8Array[offset + 2] << 8) |
+    uint8Array[offset + 3];
+  const low =
+    (uint8Array[offset + 4] << 24) |
+    (uint8Array[offset + 5] << 16) |
+    (uint8Array[offset + 6] << 8) |
+    uint8Array[offset + 7];
   const value = (BigInt(high) << BigInt(32)) + BigInt(low);
   return value;
 }

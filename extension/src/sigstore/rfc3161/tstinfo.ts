@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj } from '../asn1';
-import * as crypto from '../crypto';
-import { SHA2_HASH_ALGOS } from '../oid';
-import { RFC3161TimestampVerificationError } from './error';
+import { ASN1Obj } from "../asn1";
+import * as crypto from "../crypto";
+import { SHA2_HASH_ALGOS } from "../oid";
+import { RFC3161TimestampVerificationError } from "./error";
 
 export class TSTInfo {
   public root: ASN1Obj;
@@ -50,7 +50,7 @@ export class TSTInfo {
     const digest = await crypto.digest(this.messageImprintHashAlgorithm, data);
     if (!crypto.bufferEqual(digest, this.messageImprintHashedMessage)) {
       throw new RFC3161TimestampVerificationError(
-        'message imprint does not match artifact'
+        "message imprint does not match artifact",
       );
     }
   }

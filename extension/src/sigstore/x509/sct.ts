@@ -13,9 +13,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ByteStream } from '../stream';
-import { readBigInt64BE } from '../encoding';
-import { verifySignature } from '../crypto';
+import { ByteStream } from "../stream";
+import { readBigInt64BE } from "../encoding";
+import { verifySignature } from "../crypto";
 
 interface SCTOptions {
   version: number;
@@ -56,27 +56,27 @@ export class SignedCertificateTimestamp {
     switch (this.hashAlgorithm) {
       /* istanbul ignore next */
       case 0:
-        return 'none';
+        return "none";
       /* istanbul ignore next */
       case 1:
-        return 'md5';
+        return "md5";
       /* istanbul ignore next */
       case 2:
-        return 'sha1';
+        return "sha1";
       /* istanbul ignore next */
       case 3:
-        return 'sha224';
+        return "sha224";
       case 4:
-        return 'sha256';
+        return "sha256";
       /* istanbul ignore next */
       case 5:
-        return 'sha384';
+        return "sha384";
       /* istanbul ignore next */
       case 6:
-        return 'sha512';
+        return "sha512";
       /* istanbul ignore next */
       default:
-        return 'unknown';
+        return "unknown";
     }
   }
 
@@ -97,7 +97,12 @@ export class SignedCertificateTimestamp {
       stream.appendView(this.extensions);
     }
 
-    return await verifySignature(key, stream.buffer, this.signature, this.algorithm);
+    return await verifySignature(
+      key,
+      stream.buffer,
+      this.signature,
+      this.algorithm,
+    );
   }
 
   // Parses a SignedCertificateTimestamp from a buffer. SCTs are encoded using
@@ -133,7 +138,7 @@ export class SignedCertificateTimestamp {
 
     // Check that we read the entire buffer
     if (stream.position !== buf.length) {
-      throw new Error('SCT buffer length mismatch');
+      throw new Error("SCT buffer length mismatch");
     }
 
     return new SignedCertificateTimestamp({

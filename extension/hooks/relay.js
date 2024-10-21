@@ -1,10 +1,10 @@
-window.addEventListener('message', function(event) {
+window.addEventListener("message", function (event) {
   if (event.source !== window) return;
 
-  if (event.data && event.data.type === 'FROM_HOOK') {
+  if (event.data && event.data.type === "FROM_HOOK") {
     browser.runtime.sendMessage({
       type: event.data.hookType,
-      details: event.data.details
+      details: event.data.details,
     });
   }
 });

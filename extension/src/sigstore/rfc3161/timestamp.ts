@@ -13,15 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj } from '../asn1';
-import * as crypto from '../crypto';
-import { ECDSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from '../oid';
-import { RFC3161TimestampVerificationError } from './error';
-import { TSTInfo } from './tstinfo';
+import { ASN1Obj } from "../asn1";
+import * as crypto from "../crypto";
+import { ECDSA_SIGNATURE_ALGOS, SHA2_HASH_ALGOS } from "../oid";
+import { RFC3161TimestampVerificationError } from "./error";
+import { TSTInfo } from "./tstinfo";
 
-const OID_PKCS9_CONTENT_TYPE_SIGNED_DATA = '1.2.840.113549.1.7.2';
-const OID_PKCS9_CONTENT_TYPE_TSTINFO = '1.2.840.113549.1.9.16.1.4';
-const OID_PKCS9_MESSAGE_DIGEST_KEY = '1.2.840.113549.1.9.4';
+const OID_PKCS9_CONTENT_TYPE_SIGNED_DATA = "1.2.840.113549.1.7.2";
+const OID_PKCS9_CONTENT_TYPE_TSTINFO = "1.2.840.113549.1.9.16.1.4";
+const OID_PKCS9_MESSAGE_DIGEST_KEY = "1.2.840.113549.1.9.4";
 
 export class RFC3161Timestamp {
   public root: ASN1Obj;
@@ -80,20 +80,20 @@ export class RFC3161Timestamp {
 
   public async verify(data: Uint8Array, publicKey: CryptoKey): void {
     if (!this.timeStampTokenObj) {
-      throw new RFC3161TimestampVerificationError('timeStampToken is missing');
+      throw new RFC3161TimestampVerificationError("timeStampToken is missing");
     }
 
     // Check for expected ContentInfo content type
     if (this.contentType !== OID_PKCS9_CONTENT_TYPE_SIGNED_DATA) {
       throw new RFC3161TimestampVerificationError(
-        `incorrect content type: ${this.contentType}`
+        `incorrect content type: ${this.contentType}`,
       );
     }
 
     // Check for expected encapsulated content type
     if (this.eContentType !== OID_PKCS9_CONTENT_TYPE_TSTINFO) {
       throw new RFC3161TimestampVerificationError(
-        `incorrect encapsulated content type: ${this.eContentType}`
+        `incorrect encapsulated content type: ${this.eContentType}`,
       );
     }
 
@@ -109,13 +109,13 @@ export class RFC3161Timestamp {
     // Check that the tstInfo matches the signed data
     const tstInfoDigest = await crypto.digest(
       this.signerDigestAlgorithm,
-      this.tstInfo.raw
+      this.tstInfo.raw,
     );
     const expectedDigest = this.messageDigestAttributeObj.subs[1].subs[0].value;
 
     if (!crypto.bufferEqual(tstInfoDigest, expectedDigest)) {
       throw new RFC3161TimestampVerificationError(
-        'signed data does not match tstInfo'
+        "signed data does not match tstInfo",
       );
     }
   }
@@ -130,12 +130,12 @@ export class RFC3161Timestamp {
       signedAttrs,
       key,
       this.signatureValue,
-      this.signatureAlgorithm
+      this.signatureAlgorithm,
     );
 
     if (!verified) {
       throw new RFC3161TimestampVerificationError(
-        'signature verification failed'
+        "signature verification failed",
       );
     }
   }
@@ -159,7 +159,7 @@ export class RFC3161Timestamp {
   // https://www.rfc-editor.org/rfc/rfc5652#section-3
   private get signedDataObj(): ASN1Obj {
     const obj = this.timeStampTokenObj.subs.find((sub) =>
-      sub.tag.isContextSpecific(0x00)
+      sub.tag.isContextSpecific(0x00),
     );
     return obj!.subs[0];
   }
@@ -195,7 +195,7 @@ export class RFC3161Timestamp {
   // https://datatracker.ietf.org/doc/html/rfc5652#section-5.3
   private get signedAttrsObj(): ASN1Obj {
     const signedAttrs = this.signerInfoObj.subs.find((sub) =>
-      sub.tag.isContextSpecific(0x00)
+      sub.tag.isContextSpecific(0x00),
     );
     return signedAttrs!;
   }
@@ -205,7 +205,7 @@ export class RFC3161Timestamp {
     const messageDigest = this.signedAttrsObj.subs.find(
       (sub) =>
         sub.subs[0].tag.isOID() &&
-        sub.subs[0].toOID() === OID_PKCS9_MESSAGE_DIGEST_KEY
+        sub.subs[0].toOID() === OID_PKCS9_MESSAGE_DIGEST_KEY,
     );
     return messageDigest!;
   }

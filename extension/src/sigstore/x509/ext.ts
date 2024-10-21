@@ -13,10 +13,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1Obj } from '../asn1';
-import { ByteStream } from '../stream';
-import { SignedCertificateTimestamp } from './sct';
-import { Uint8ArrayToString } from '../encoding';
+import { ASN1Obj } from "../asn1";
+import { ByteStream } from "../stream";
+import { SignedCertificateTimestamp } from "./sct";
+import { Uint8ArrayToString } from "../encoding";
 
 // https://www.rfc-editor.org/rfc/rfc5280#section-4.1
 export class X509Extension {
@@ -103,7 +103,7 @@ export class X509SubjectAlternativeNameExtension extends X509Extension {
 
   get uri(): string | undefined {
     const uri = this.findGeneralName(0x06)?.value;
-    if (uri === undefined) { 
+    if (uri === undefined) {
       return undefined;
     } else {
       return Uint8ArrayToString(uri);
@@ -194,7 +194,7 @@ export class X509SCTExtension extends X509Extension {
     }
 
     if (stream.position !== end) {
-      throw new Error('SCT list length does not match actual length');
+      throw new Error("SCT list length does not match actual length");
     }
 
     return sctList;

@@ -14,5 +14,5 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-export { EXTENSION_OID_SCT, X509Certificate } from './cert';
-export { X509SCTExtension } from './ext';
+export { EXTENSION_OID_SCT, X509Certificate } from "./cert";
+export { X509SCTExtension } from "./ext";

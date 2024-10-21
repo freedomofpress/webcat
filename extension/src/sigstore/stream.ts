@@ -54,7 +54,7 @@ export class ByteStream {
     const end = start + len;
 
     if (end > this.length) {
-      throw new StreamError('request past end of buffer');
+      throw new StreamError("request past end of buffer");
     }
 
     return this.view.subarray(start, end);
@@ -101,7 +101,7 @@ export class ByteStream {
     }
 
     if (this.start + size > this.view.length) {
-      throw new Error('request past end of buffer');
+      throw new Error("request past end of buffer");
     }
 
     const result = this.view.subarray(this.start, this.start + size);
@@ -139,4 +139,3 @@ export class ByteStream {
     this.view = newView;
   }
 }
-

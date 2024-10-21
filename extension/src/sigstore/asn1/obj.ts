@@ -13,17 +13,17 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ByteStream } from '../stream';
-import { ASN1ParseError, ASN1TypeError } from './error';
-import { decodeLength, encodeLength } from './length';
+import { ByteStream } from "../stream";
+import { ASN1ParseError, ASN1TypeError } from "./error";
+import { decodeLength, encodeLength } from "./length";
 import {
   parseBitString,
   parseBoolean,
   parseInteger,
   parseOID,
   parseTime,
-} from './parse';
-import { ASN1Tag } from './tag';
+} from "./parse";
+import { ASN1Tag } from "./tag";
 
 export class ASN1Obj {
   readonly tag: ASN1Tag;
@@ -70,7 +70,7 @@ export class ASN1Obj {
   // object is not a boolean.
   public toBoolean(): boolean {
     if (!this.tag.isBoolean()) {
-      throw new ASN1TypeError('not a boolean');
+      throw new ASN1TypeError("not a boolean");
     }
 
     return parseBoolean(this.value);
@@ -80,7 +80,7 @@ export class ASN1Obj {
   // object is not an integer.
   public toInteger(): bigint {
     if (!this.tag.isInteger()) {
-      throw new ASN1TypeError('not an integer');
+      throw new ASN1TypeError("not an integer");
     }
 
     return parseInteger(this.value);
@@ -90,7 +90,7 @@ export class ASN1Obj {
   // object is not an OID.
   public toOID(): string {
     if (!this.tag.isOID()) {
-      throw new ASN1TypeError('not an OID');
+      throw new ASN1TypeError("not an OID");
     }
 
     return parseOID(this.value);
@@ -105,7 +105,7 @@ export class ASN1Obj {
       case this.tag.isGeneralizedTime():
         return parseTime(this.value, false);
       default:
-        throw new ASN1TypeError('not a date');
+        throw new ASN1TypeError("not a date");
     }
   }
 
@@ -114,7 +114,7 @@ export class ASN1Obj {
   // bit string.
   public toBitString(): number[] {
     if (!this.tag.isBitString()) {
-      throw new ASN1TypeError('not a bit string');
+      throw new ASN1TypeError("not a bit string");
     }
 
     return parseBitString(this.value);
@@ -143,7 +143,7 @@ function parseStream(stream: ByteStream): ASN1Obj {
     // assume the object is not constructed and treat as primitive.
     try {
       subs = collectSubs(stream, len);
-    } catch (e) {
+    } catch {
       // Fail silently and treat as primitive
     }
   }
@@ -165,7 +165,7 @@ function collectSubs(stream: ByteStream, len: number): ASN1Obj[] {
   // Leaving as an extra check just in case.
   /* istanbul ignore if */
   if (end > stream.length) {
-    throw new ASN1ParseError('invalid length');
+    throw new ASN1ParseError("invalid length");
   }
 
   // Parse all children
@@ -176,7 +176,7 @@ function collectSubs(stream: ByteStream, len: number): ASN1Obj[] {
 
   // When we're done parsing children, we should be at the end of the object
   if (stream.position !== end) {
-    throw new ASN1ParseError('invalid length');
+    throw new ASN1ParseError("invalid length");
   }
 
   return subs;

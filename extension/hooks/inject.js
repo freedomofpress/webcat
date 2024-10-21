@@ -8,8 +8,8 @@
     - Service workers are not tab-scoped, while our sandbox is mostly tab-scoped.
 */
 (function injectHookScript() {
-    const script = document.createElement('script');
-    script.textContent = `
+  const script = document.createElement("script");
+  script.textContent = `
       (function() {
         // Function to send messages to the extension
         function sendMessage(hookType, details) {
@@ -24,7 +24,8 @@
         const originalInstantiate = WebAssembly.instantiate;
         Object.defineProperty(WebAssembly, 'instantiate', {
           value: function(...args) {
-            sendMessage('WebAssembly.instantiate', { arguments: args });
+            //sendMessage('WebAssembly.instantiate', { arguments: args });
+            sendMessage('WebAssembly.instantiate');
             return originalInstantiate.apply(this, args);
           },
           writable: false,
@@ -35,7 +36,8 @@
         const originalInstantiateStreaming = WebAssembly.instantiateStreaming;
         Object.defineProperty(WebAssembly, 'instantiateStreaming', {
           value: function(...args) {
-            sendMessage('WebAssembly.instantiateStreaming', { arguments: args });
+            //sendMessage('WebAssembly.instantiateStreaming', { arguments: args });
+            sendMessage('WebAssembly.instantiateStreaming');
             return originalInstantiateStreaming.apply(this, args);
           },
           writable: false,
@@ -83,6 +85,6 @@
   
       })();
     `;
-    document.documentElement.appendChild(script);
-    script.remove();
-  })();
+  document.documentElement.appendChild(script);
+  script.remove();
+})();

@@ -1,26 +1,26 @@
 // From https://github.com/theupdateframework/tuf-js/blob/38d537ea883e8bb38ee6ab17b5f59ee479d0eab2/packages/canonical-json/lib/index.js
 
-const COMMA = ',';
-const COLON = ':';
-const LEFT_SQUARE_BRACKET = '[';
-const RIGHT_SQUARE_BRACKET = ']';
-const LEFT_CURLY_BRACKET = '{';
-const RIGHT_CURLY_BRACKET = '}';
+const COMMA = ",";
+const COLON = ":";
+const LEFT_SQUARE_BRACKET = "[";
+const RIGHT_SQUARE_BRACKET = "]";
+const LEFT_CURLY_BRACKET = "{";
+const RIGHT_CURLY_BRACKET = "}";
 
 function canonicalizeString(string: string): string {
-    const escapedString = string.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    return '"' + escapedString + '"';
-  }
+  const escapedString = string.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return '"' + escapedString + '"';
+}
 
 // Recursively encodes the supplied object according to the canonical JSON form
 // as specified at http://wiki.laptop.org/go/Canonical_JSON. It's a restricted
 // dialect of JSON in which keys are lexically sorted, floats are not allowed,
 // and only double quotes and backslashes are escaped.
-export function canonicalize(object: Object): string {
+export function canonicalize(object: object): string {
   const buffer: string[] = [];
-  if (typeof object === 'string') {
+  if (typeof object === "string") {
     buffer.push(canonicalizeString(object));
-  } else if (typeof object === 'boolean') {
+  } else if (typeof object === "boolean") {
     buffer.push(JSON.stringify(object));
   } else if (Number.isInteger(object)) {
     buffer.push(JSON.stringify(object));
@@ -37,7 +37,7 @@ export function canonicalize(object: Object): string {
       buffer.push(canonicalize(element));
     });
     buffer.push(RIGHT_SQUARE_BRACKET);
-  } else if (typeof object === 'object') {
+  } else if (typeof object === "object") {
     buffer.push(LEFT_CURLY_BRACKET);
     let first = true;
     Object.keys(object)
@@ -49,12 +49,12 @@ export function canonicalize(object: Object): string {
         first = false;
         buffer.push(canonicalizeString(property));
         buffer.push(COLON);
-        buffer.push(canonicalize((object as any)[property]));  // 'any' as a fallback
+        buffer.push(canonicalize((object as any)[property])); // 'any' as a fallback
       });
     buffer.push(RIGHT_CURLY_BRACKET);
   } else {
-    throw new TypeError('cannot encode ' + object);
+    throw new TypeError("cannot encode " + object);
   }
 
-  return buffer.join('');
+  return buffer.join("");
 }

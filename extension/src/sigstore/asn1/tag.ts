@@ -13,7 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-import { ASN1ParseError } from './error';
+import { ASN1ParseError } from "./error";
 
 const UNIVERSAL_TAG = {
   BOOLEAN: 0x01,
@@ -52,11 +52,11 @@ export class ASN1Tag {
     this.class = enc >> 6;
 
     if (this.number === 0x1f) {
-      throw new ASN1ParseError('long form tags not supported');
+      throw new ASN1ParseError("long form tags not supported");
     }
 
     if (this.class === TAG_CLASS.UNIVERSAL && this.number === 0x00) {
-      throw new ASN1ParseError('unsupported tag 0x00');
+      throw new ASN1ParseError("unsupported tag 0x00");
     }
   }
 

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-import { Uint8ArrayToString } from '../encoding';
+import { Uint8ArrayToString } from "../encoding";
 
 const RE_TIME_SHORT_YEAR =
   /^(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\.\d{3})?Z$/;
@@ -69,7 +69,7 @@ export function parseTime(buf: Uint8Array, shortYear: boolean): Date {
     : RE_TIME_LONG_YEAR.exec(timeStr);
 
   if (!m) {
-    throw new Error('invalid time');
+    throw new Error("invalid time");
   }
 
   // Translate dates with a 2-digit year to 4 digits per the spec
