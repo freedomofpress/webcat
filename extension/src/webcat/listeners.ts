@@ -177,6 +177,12 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   }
   /* END DEVELOPMENT GUARD */
 
+  if (!origins.has(fqdn)) {
+    console.log(`${fqdn} is not enrolled, skipping WASM validation.`)
+    sendResponse(true);
+    return;
+  }
+
   const hash = Uint8ArrayToHex(new Uint8Array(message.details));
   const originState = origins.get(fqdn);
 
