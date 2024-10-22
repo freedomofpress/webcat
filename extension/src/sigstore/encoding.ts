@@ -106,7 +106,7 @@ export function readBigInt64BE(
   if (offset === undefined) {
     offset = 0;
   }
-  const hex = Uint8ArrayToHex(uint8Array.slice(offset, offset+ 8));
+  const hex = Uint8ArrayToHex(uint8Array.slice(offset, offset + 8));
   return BigInt(`0x${hex}`);
 }
 

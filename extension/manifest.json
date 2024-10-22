@@ -18,7 +18,12 @@
     "128": "icons/light/128/webcat.png",
     "256": "icons/light/256/webcat.png"
   },
-  "web_accessible_resources": ["assets/1.root.json"],
+  "web_accessible_resources": [
+    "assets/1.root.json",
+    "pages/error.html",
+    "icons/light/full/webcat.png",
+    "icons/dark/full/webcat.png"
+  ],
   "background": {
     "scripts": ["dist/bundle.js"],
     "persistent": true
@@ -26,7 +31,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["hooks/inject.js", "hooks/relay.js"],
+      "js": ["hooks/inject.js", "hooks/relay.js", "hooks/hook.js"],
       "run_at": "document_start"
     }
   ],

@@ -2,14 +2,13 @@ import { parseContentSecurityPolicy } from "./parsers";
 import { canonicalize } from "../sigstore/canonicalize";
 import { SHA256 } from "./utils";
 import { Policy, DataStructure } from "./interfaces";
-import { bufferEqual } from "../sigstore/crypto";
 import { verifyArtifact } from "../sigstore/sigstore";
 import { Sigstore } from "../sigstore/interfaces";
 import { stringToUint8Array } from "../sigstore/encoding";
 
 export function validateCSP(csp: string) {
   // Here will go the CSP validator of the main_frame
-  const res = parseContentSecurityPolicy(csp);
+  //const res = parseContentSecurityPolicy(csp);
   return true;
 }
 

@@ -1,6 +1,7 @@
 import {
   installListener,
   startupListener,
+  messageListener,
   requestListener,
   headersListener,
   tabCloseListener,
@@ -35,19 +36,10 @@ browser.webRequest.onHeadersReceived.addListener(
   ["blocking", "responseHeaders"],
 );
 
-browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log(
-    "Hooked:",
-    message.type,
-    "with details:",
-    message.details,
-    "sender",
-    sender,
-  );
-});
+browser.runtime.onMessage.addListener(messageListener);
 
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'loading') {
-      setIcon(tabId);
+  if (changeInfo.status === "loading") {
+    setIcon(tabId);
   }
 });

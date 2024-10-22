@@ -5,7 +5,8 @@ import { OriginState } from "./interfaces";
 import { validateResponseHeaders, validateResponseContent } from "./response";
 import { validateMainFrame } from "./request";
 import { getFQDN, isExtensionRequest, isFQDNEnrolled } from "./utils";
-import { setIcon, setErrorIcon } from './ui';
+import { setIcon, setErrorIcon } from "./ui";
+import { Uint8ArrayToHex } from "../sigstore/encoding";
 
 const origins: Map<string, OriginState> = new Map();
 const tabs: Map<number, string> = new Map();
@@ -68,17 +69,16 @@ export async function headersListener(
 ): Promise<browser.webRequest.BlockingResponse> {
   // Skip allowed types, etensions request, and not enrolled tabs
   const fqdn = getFQDN(details.url);
-  
+
   if (
     // Skip extensionr equests
     isExtensionRequest(details) ||
     // Skip allowed file types
     allowed_types.includes(details.type) ||
     // Skip non-enrolled tabs
-    (!tabs.has(details.tabId) && details.tabId > 0 ||
+    (!tabs.has(details.tabId) && details.tabId > 0) ||
     // Skip non-enrolled workers
     (details.tabId < 0 && !origins.has(fqdn))
-  )
   ) {
     console.log(`headersListener: skipping ${details.url}`);
     return {};
@@ -101,7 +101,8 @@ export async function headersListener(
     await validateResponseHeaders(sigstore, origins.get(fqdn)!, details);
   } catch (error) {
     console.log("Error when parsing response headers:", error);
-    return { cancel: true };
+    setErrorIcon(details.tabId);
+    return { redirectUrl: browser.runtime.getURL("pages/error.html") };
   }
 
   return {};
@@ -112,8 +113,9 @@ export async function requestListener(
 ): Promise<browser.webRequest.BlockingResponse> {
   const fqdn = getFQDN(details.url);
 
-  if (isExtensionRequest(details)
-    || allowed_types.includes(details.type) ||
+  if (
+    isExtensionRequest(details) ||
+    allowed_types.includes(details.type) ||
     (details.tabId < 0 && !origins.has(fqdn))
   ) {
     // We will always wonder, is this check reasonable?
@@ -123,11 +125,9 @@ export async function requestListener(
     return {};
   }
 
-
   if (details.type == "main_frame") {
     // User is navigatin to a new context, whether is enrolled or not better to reset
     cleanup(details.tabId);
-
 
     console.log(`Loading main_frame ${details.url}`);
 
@@ -159,4 +159,32 @@ export async function requestListener(
   // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse
   // Returning a response here is a very powerful tool, let's think about it later
   return {};
+}
+
+// sender should be browser.runtime.MessageSender but it's missing things...
+export function messageListener(message: any, sender: any, sendResponse: any) {
+  const fqdn = getFQDN(sender.origin);
+  /* DEVELOPMENT GUARD */
+  if (!origins.has(fqdn) && sender.tab && tabs.has(sender.tab.id!)) {
+    throw new Error(
+      "FATAL: WASM origin is not present but its execution tab is.",
+    );
+  }
+  if (origins.has(fqdn) && !origins.get(fqdn)!.populated) {
+    throw new Error(
+      "FATAL: WASM is being executed before the manifest is populated and verified.",
+    );
+  }
+  /* END DEVELOPMENT GUARD */
+
+  const hash = Uint8ArrayToHex(new Uint8Array(message.details));
+  const originState = origins.get(fqdn);
+
+  if (originState!.manifest.manifest.wasm.includes(hash)) {
+    console.log("Validated WASM", hash);
+    sendResponse(true);
+  } else {
+    console.log("Invalid WASM", hash);
+    sendResponse(false);
+  }
 }
