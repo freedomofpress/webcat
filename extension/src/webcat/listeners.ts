@@ -5,6 +5,7 @@ import { OriginState } from "./interfaces";
 import { validateResponseHeaders, validateResponseContent } from "./response";
 import { validateMainFrame } from "./request";
 import { getFQDN, isExtensionRequest, isFQDNEnrolled } from "./utils";
+import { setIcon, setErrorIcon } from './ui';
 
 const origins: Map<string, OriginState> = new Map();
 const tabs: Map<number, string> = new Map();
@@ -18,6 +19,26 @@ const allowed_types: string[] = [
   "xmlhttprequest",
   "websocket",
 ];
+
+function cleanup(tabId: number) {
+  if (tabs.has(tabId)) {
+    const fqdn = tabs.get(tabId);
+    /* DEVELOPMENT GUARD */
+    /* It's not possible that we have reference for a object that does not exists */
+    if (!origins.has(fqdn!)) {
+      console.error(
+        "When deleting a tab, we found an enrolled tab with no matching origin",
+      );
+    }
+    /* END */
+    const originState = origins.get(fqdn!);
+    originState!.references--;
+    /* Here we could check if references are 0, and delete the origin object too */
+    tabs.delete(tabId);
+    /* Also remove the address bar icon */
+    browser.pageAction.hide(tabId);
+  }
+}
 
 export async function installListener() {
   // Initial list download here
@@ -39,31 +60,25 @@ export function tabCloseListener(
   tabId: number,
   removeInfo?: browser.tabs._OnRemovedRemoveInfo,
 ) {
-  if (tabs.has(tabId)) {
-    const fqdn = tabs.get(tabId);
-    /* DEVELOPMENT GUARD */
-    /* It's not possible that we have reference for a object that does not exists */
-    if (!origins.has(fqdn!)) {
-      console.error(
-        "When deleting a tab, we found an enrolled tab with no matching origin",
-      );
-    }
-    /* END */
-    const originState = origins.get(fqdn!);
-    originState!.references--;
-    /* Here we could check if references are 0, and delete the origin object too */
-    tabs.delete(tabId);
-  }
+  cleanup(tabId);
 }
 
 export async function headersListener(
   details: browser.webRequest._OnHeadersReceivedDetails,
 ): Promise<browser.webRequest.BlockingResponse> {
   // Skip allowed types, etensions request, and not enrolled tabs
+  const fqdn = getFQDN(details.url);
+  
   if (
+    // Skip extensionr equests
     isExtensionRequest(details) ||
+    // Skip allowed file types
     allowed_types.includes(details.type) ||
-    (!tabs.has(details.tabId) && details.tabId > 0)
+    // Skip non-enrolled tabs
+    (!tabs.has(details.tabId) && details.tabId > 0 ||
+    // Skip non-enrolled workers
+    (details.tabId < 0 && !origins.has(fqdn))
+  )
   ) {
     console.log(`headersListener: skipping ${details.url}`);
     return {};
@@ -73,7 +88,6 @@ export async function headersListener(
   // For tabs only we could do this, but for workers nope
   //const fqdn = tabs.get(details.tabId);
   // So instead let's get that again
-  const fqdn = getFQDN(details.url);
 
   /* DEVELOPMENT GUARD */
   if (!origins.has(fqdn)) {
@@ -96,7 +110,12 @@ export async function headersListener(
 export async function requestListener(
   details: browser.webRequest._OnBeforeRequestDetails,
 ): Promise<browser.webRequest.BlockingResponse> {
-  if (isExtensionRequest(details) || allowed_types.includes(details.type)) {
+  const fqdn = getFQDN(details.url);
+
+  if (isExtensionRequest(details)
+    || allowed_types.includes(details.type) ||
+    (details.tabId < 0 && !origins.has(fqdn))
+  ) {
     // We will always wonder, is this check reasonable?
     // Might be redundant anyway if we skip xmlhttprequest
     // But we probably want to also ensure other extensions work
@@ -104,13 +123,13 @@ export async function requestListener(
     return {};
   }
 
-  const fqdn = getFQDN(details.url);
 
   if (details.type == "main_frame") {
+    // User is navigatin to a new context, whether is enrolled or not better to reset
+    cleanup(details.tabId);
+
+
     console.log(`Loading main_frame ${details.url}`);
-    console.log(
-      `documenturl = ${details.documentUrl}; url =  ${details.url}; origin = ${details.originUrl};`,
-    );
 
     try {
       // This just checks some basic stuff, like TLS/Onion usage and populate the cache if it doesnt exists

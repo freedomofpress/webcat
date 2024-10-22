@@ -154,7 +154,9 @@ async function verifySCT(
     const sct = extSCT.signedCertificateTimestamps[logId];
 
     // SCT should be before cert issuance
-    if (sct.datetime > cert.notBefore) {
+    // TODO: it's debatable if this condition is too strict: the log could lag a bit ans this should
+    // still be valid
+    if (sct.datetime < cert.notBefore || sct.datetime > cert.notAfter) {
       throw new Error("SCT timestamp is invalid.");
     }
 

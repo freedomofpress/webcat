@@ -76,7 +76,9 @@ export function Uint8ArrayToString(uint8Array: Uint8Array): string {
   return decoder.decode(uint8Array);
 }
 
-export function readBigInt64BE(
+// TODO Why does this function fails in SCTs?
+// I had to swap it for the one below...
+export function readBigInt64BEold(
   uint8Array: Uint8Array,
   offset?: number,
 ): bigint {
@@ -95,6 +97,17 @@ export function readBigInt64BE(
     uint8Array[offset + 7];
   const value = (BigInt(high) << BigInt(32)) + BigInt(low);
   return value;
+}
+
+export function readBigInt64BE(
+  uint8Array: Uint8Array,
+  offset?: number,
+): bigint {
+  if (offset === undefined) {
+    offset = 0;
+  }
+  const hex = Uint8ArrayToHex(uint8Array.slice(offset, offset+ 8));
+  return BigInt(`0x${hex}`);
 }
 
 export function base64Encode(str: string): string {

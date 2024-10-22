@@ -1,5 +1,6 @@
 import { OriginState } from "./interfaces";
 import { getFQDN, isFQDNEnrolled, isHTTPS, isOnion, isRoot } from "./utils";
+import { setIcon, setErrorIcon } from "./ui";
 
 export async function validateMainFrame(
   tabs: Map<number, string>,
@@ -10,12 +11,14 @@ export async function validateMainFrame(
 ) {
   if ((await isFQDNEnrolled(fqdn)) === false) {
     console.log(`${url} is not enrolled, skipping...`);
+    setIcon(tabId);
     return;
   }
 
   // If the website is enrolled but is loading via HTTP abort anyway
   // Or maybe not if it's an onion website :)
   if (isHTTPS(url) === false && isOnion(url) === false) {
+    setErrorIcon(tabId);
     throw new Error(
       "Attempting to load HTTP resource for a non-onion enrolled FQDN!",
     );
@@ -23,6 +26,7 @@ export async function validateMainFrame(
 
   // Do we care about this? What matters in the end is the main_frame context
   if (isRoot(url) === false) {
+    setErrorIcon(tabId);
     throw new Error("Enrolled applications should be loaded from the root.");
   }
 

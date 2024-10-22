@@ -5,6 +5,7 @@ import {
   headersListener,
   tabCloseListener,
 } from "./webcat/listeners";
+import { setIcon } from "./webcat/ui";
 
 // Let's count references to origin in case we ever need pruning policies
 browser.tabs.onRemoved.addListener(tabCloseListener);
@@ -43,4 +44,10 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     "sender",
     sender,
   );
+});
+
+browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'loading') {
+      setIcon(tabId);
+  }
 });

@@ -3,6 +3,7 @@ import { validate, validateManifest } from "./validators";
 import { parseSigners, parseThreshold } from "./parsers";
 import { SHA256, arrayBufferToHex } from "./utils";
 import { Sigstore } from "../sigstore/interfaces";
+import { setErrorIcon, setOKIcon } from "./ui";
 
 export async function validateResponseHeaders(
   sigstore: Sigstore,
@@ -16,6 +17,7 @@ export async function validateResponseHeaders(
 
   // In both cases, this should not happen
   if (!details.responseHeaders) {
+    setErrorIcon(details.tabId);
     throw new Error("Missing response headers.");
   }
 
@@ -61,6 +63,8 @@ export async function validateResponseHeaders(
     }
 
     if (headers.length !== new Set(headers).size) {
+      originState.locked = false;
+      setErrorIcon(details.tabId);
       throw new Error("Duplicate header keys found!");
     }
 
@@ -68,6 +72,8 @@ export async function validateResponseHeaders(
       originState.policy.threshold < 1 ||
       originState.policy.signers.size < 1
     ) {
+      originState.locked = false;
+      setErrorIcon(details.tabId);
       throw new Error("Failed to find all the necessary policy headers!");
     }
 
@@ -75,6 +81,8 @@ export async function validateResponseHeaders(
     const hash = new Uint8Array();
 
     if ((await validate(originState.policy, originState.csp, hash)) !== true) {
+      originState.locked = false;
+      setErrorIcon(details.tabId);
       throw new Error("Response headers do not match the preload list.");
     }
     // By doing this here we gain a bit of async time: we start processing the request headers
@@ -82,6 +90,8 @@ export async function validateResponseHeaders(
     const manifestResponse = await originState.manifestPromise;
 
     if (manifestResponse.ok !== true) {
+      originState.locked = false;
+      setErrorIcon(details.tabId);
       throw new Error("Failed to fetch manifest.json: server error");
     }
 
@@ -94,6 +104,8 @@ export async function validateResponseHeaders(
     );
 
     if (!originState.valid) {
+      originState.locked = false;
+      setErrorIcon(details.tabId);
       throw new Error("Manifest signature verification failed.");
     }
 
@@ -123,13 +135,16 @@ export async function validateResponseHeaders(
     }
 
     if (headers.length !== new Set(headers).size) {
+      setErrorIcon(details.tabId);
       throw new Error("Duplicate header keys found!");
     }
 
     if (csp !== originState.csp) {
+      setErrorIcon(details.tabId);
       throw new Error("Response CSP does not match the verified one.");
     }
   }
+  setOKIcon(details.tabId);
 }
 
 export async function validateResponseContent(
@@ -160,6 +175,7 @@ export async function validateResponseContent(
         const manifest_hash = originState.manifest.manifest.files[pathname];
 
         if (typeof manifest_hash !== "string") {
+          setErrorIcon(details.tabId);
           throw new Error(`File ${pathname} not found in manifest.`);
         }
         SHA256(blob).then(function (content_hash) {
