@@ -1,4 +1,4 @@
-# Web-based Code Assurance & Trust (WEBCAT)
+# Web-based Code Assurance & Transparency (WEBCAT)
 ## Introduction
 In the past decade, web applications have undergone a significant evolution, marked by a proliferation of features, enhanced functionality, and optimization. Support for WebAssembly in browsers has allowed more low-level options, and application packaging such as Electron has offered easier portability. Services like WhatsApp Web, Wire, ProtonMail, crypto wallets, and encrypted collaboration suites are now commonly used, increasing reliance on web-based platforms.
 
