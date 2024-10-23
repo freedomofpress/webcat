@@ -2,7 +2,11 @@
   const originalModule = WebAssembly.Module;
 
   WebAssembly.Module = function (binarySource) {
-    const module = Reflect.construct(originalModule, [binarySource], WebAssembly.Module);
+    const module = Reflect.construct(
+      originalModule,
+      [binarySource],
+      WebAssembly.Module,
+    );
 
     Object.defineProperty(module, "__originalBytes__", {
       value: binarySource,
@@ -30,7 +34,9 @@
     const awaitedResponse = await response;
     const clonedResponse = awaitedResponse.clone();
     const arrayBuffer = await clonedResponse.arrayBuffer();
-    const module = await originalCompileStreaming.apply(this, [awaitedResponse]);
+    const module = await originalCompileStreaming.apply(this, [
+      awaitedResponse,
+    ]);
     module.__originalBytes__ = arrayBuffer;
     return module;
   };

@@ -37,8 +37,8 @@
   ],
   "page_action": {
     "default_icon": {
-      "16": "icons/light/16/webcat.png",
-      "32": "icons/light/32/webcat.png"
+      "19": "icons/light/32/webcat.png",
+      "38": "icons/light/48/webcat.png"
     }
   }
 }

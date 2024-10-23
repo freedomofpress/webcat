@@ -178,7 +178,7 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   /* END DEVELOPMENT GUARD */
 
   if (!origins.has(fqdn)) {
-    console.log(`${fqdn} is not enrolled, skipping WASM validation.`)
+    console.log(`${fqdn} is not enrolled, skipping WASM validation.`);
     sendResponse(true);
     return;
   }

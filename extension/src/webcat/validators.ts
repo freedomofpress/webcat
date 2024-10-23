@@ -30,6 +30,7 @@ export async function validateManifest(
 ) {
   // TODO: Silly hack to match silly development debugging choice:
   const fixedManifest = { manifest: manifest.manifest };
+  console.log(canonicalize(fixedManifest));
   var validCount = 0;
   for (const signer of policy.signers) {
     if (manifest.signatures[signer[1]]) {
