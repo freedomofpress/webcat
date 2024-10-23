@@ -1,8 +1,6 @@
 # Web-based Code Assurance & Transparency (WEBCAT)
-<div style="text-align: center;">
 ![webcat logo dark](./extension/icons/dark/256/webcat.png#gh-dark-mode-only)
 ![webcat logo light](./extension/icons/light/256/webcat.png#gh-light-mode-only)
-</div>
 
 The purpose of this project is to showcase an architectural framework for providing blocking code signing, integrity and transparency checks for browser-based single page applications.
 
