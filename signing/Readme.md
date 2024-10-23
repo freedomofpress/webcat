@@ -47,7 +47,12 @@ In practice, every "executable" file must be mapped to its sha256 hash. Since We
 `signatures` is a `key: value` object that maps a signing identity to the corresponding Sigstore bundle for the string representation fd the [canonical JSON](https://wiki.laptop.org/go/Canonical_JSON) version of the `manifest` block.
 
 ### Flow
-1. The script will ask for additional WASM hashes to be manually included (for instance in cases of embedding WASM into JS files, see [wasm-pack](https://github.com/rustwasm/wasm-pack/issues/1074))
+1. The script will ask for additional WASM hashes to be manually included (for instance in cases of embedding WASM into JS files, see [wasm-pack](https://github.com/rustwasm/wasm-pack/issues/1074)).
+2. The script will traverse the app path and hash every `html`, `htm`, `js`, `mjs`, `css`, `wasm`.
+3. The script will generate the manifest JSON file and conicalize it
+4. Depending on the numnber of signatures required, is it then possible to sign the manifest via the Sigstore browser interactive flow
+5. The script will ask for the corresponding identities that resulted from the signing flow
+6. The script will write a valid manifest.json ready to be deployed
 
 ### Command line help
 ```
@@ -135,7 +140,7 @@ Transparency log entry created at index: 143035620
 MEUCIDzcy9cN4gl/+SUE4PtisJkcZToMueQ+LDCe+VStEoo2AiEAu6P/uofJKzfBnsb9YEHxQMcKTNpXrJhtaTJfebjHyQs=
 Sigstore bundle written to sigstore_bundle_sig_2.json
 Successfully signed canonicalized_manifest.json and saved the bundle to sigstore_bundle_sig_2.json
-Enter signer identity for bundle sigstore_bundle_sig_1.json (e.g., email): giulio@freedom.press
-Enter signer identity for bundle sigstore_bundle_sig_2.json (e.g., email): github@lsd.cat
+Enter signer identity for bundle sigstore_bundle_sig_1.json (e.g., email): identity1@freedom.press
+Enter signer identity for bundle sigstore_bundle_sig_2.json (e.g., email): identity2@lsd.cat
 
 ```
