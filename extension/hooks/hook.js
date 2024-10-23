@@ -2,7 +2,9 @@
   const originalModule = WebAssembly.Module;
 
   WebAssembly.Module = function (binarySource) {
-    const module = new originalModule(binarySource);
+    // Use Reflect.construct to maintain the prototype chain
+    const module = Reflect.construct(originalModule, [binarySource], WebAssembly.Module);
+
     Object.defineProperty(module, "__originalBytes__", {
       value: binarySource,
       writable: false,
@@ -11,6 +13,8 @@
     });
     return module;
   };
+
+  WebAssembly.Module.prototype = originalModule.prototype;
 
   delete originalModule;
 
@@ -59,29 +63,25 @@
     const hash = await crypto.subtle.digest("SHA-256", arrayBuffer);
     console.log("Hash of streamed ArrayBuffer:", hash);
 
-    // Send hash to be validated
     window.postMessage({ type: "WASM_HASH", payload: hash });
 
-    // Wait for validation response and stop execution if not valid
     const validationResult = await waitForValidation();
     if (!validationResult) {
       throw new Error("Error validating WASM.");
     }
 
-    // Continue execution if validation passes
     return originalInstantiateStreaming.apply(this, arguments);
   };
 
   delete originalInstantiateStreaming;
 
-  // Function to wait for validation response asynchronously
   function waitForValidation() {
     return new Promise((resolve) => {
       const validationListener = (event) => {
         if (event.source !== window) return;
         if (event.data.type === "WASM_RESPONSE") {
-          window.removeEventListener("message", validationListener); // Clean up the listener
-          resolve(event.data.response); // Resolve based on the response
+          window.removeEventListener("message", validationListener);
+          resolve(event.data.response);
         }
       };
       window.addEventListener("message", validationListener, false);
