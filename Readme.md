@@ -1,4 +1,19 @@
 # Web-based Code Assurance & Transparency (WEBCAT)
+<div style="text-align: center;">
+![webcat logo dark](./extension/icons/dark/256/webcat.png#gh-dark-mode-only)
+![webcat logo light](./extension/icons/light/256/webcat.png#gh-light-mode-only)
+</div>
+
+The purpose of this project is to showcase an architectural framework for providing blocking code signing, integrity and transparency checks for browser-based single page applications.
+
+Webcat is:
+ 1. A submission server
+ 2. A checking script
+ 3. A transparency server (as a [Trillian](https://github.com/google/trillian) personality)
+ 4. A browser (v2) extension
+ 5. A signing script
+
+
 ## Introduction
 In the past decade, web applications have undergone a significant evolution, marked by a proliferation of features, enhanced functionality, and optimization. Support for WebAssembly in browsers has allowed more low-level options, and application packaging such as Electron has offered easier portability. Services like WhatsApp Web, Wire, ProtonMail, crypto wallets, and encrypted collaboration suites are now commonly used, increasing reliance on web-based platforms.
 
