@@ -8,7 +8,7 @@ Webcat is:
  1. [A submission server](./submission_server/webcat.lua)
  2. [A processing script](./submission_server/webcat.py)
  3. [A transparency server](./transparency_server/) (as a [Trillian](https://github.com/google/trillian) personality)
- 4. [A browser (v2) extension](./extension/)
+ 4. [A Firefox (v2) extension](./extension/)
  5. [A signing script](./signing/)
 
 
