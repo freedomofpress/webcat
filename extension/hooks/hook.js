@@ -2,7 +2,6 @@
   const originalModule = WebAssembly.Module;
 
   WebAssembly.Module = function (binarySource) {
-    // Use Reflect.construct to maintain the prototype chain
     const module = Reflect.construct(originalModule, [binarySource], WebAssembly.Module);
 
     Object.defineProperty(module, "__originalBytes__", {
@@ -15,8 +14,28 @@
   };
 
   WebAssembly.Module.prototype = originalModule.prototype;
-
   delete originalModule;
+
+  const originalCompile = WebAssembly.compile;
+  WebAssembly.compile = async function (bufferSource) {
+    const module = await originalCompile.apply(this, arguments);
+    module.__originalBytes__ = bufferSource;
+    return module;
+  };
+
+  delete originalCompile;
+
+  const originalCompileStreaming = WebAssembly.compileStreaming;
+  WebAssembly.compileStreaming = async function (response) {
+    const awaitedResponse = await response;
+    const clonedResponse = awaitedResponse.clone();
+    const arrayBuffer = await clonedResponse.arrayBuffer();
+    const module = await originalCompileStreaming.apply(this, [awaitedResponse]);
+    module.__originalBytes__ = arrayBuffer;
+    return module;
+  };
+
+  delete originalCompileStreaming;
 
   const originalInstantiate = WebAssembly.instantiate;
 
@@ -89,6 +108,8 @@
   }
 
   Object.freeze(WebAssembly.Module);
+  Object.freeze(WebAssembly.compile);
+  Object.freeze(WebAssembly.compileStreaming);
   Object.freeze(WebAssembly.instantiate);
   Object.freeze(WebAssembly.instantiateStreaming);
 })();
