@@ -1,0 +1,4 @@
+Flask
+pymysql
+aws-lambda-powertools
+aws_lambda_wsgi
