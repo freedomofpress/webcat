@@ -1,6 +1,7 @@
 import os
 from enum import StrEnum
 import pymysql
+import awsgi
 from flask import Flask, jsonify, request, abort
 from werkzeug.exceptions import MethodNotAllowed, UnsupportedMediaType, HTTPException
 
@@ -120,3 +121,6 @@ def handle_exception(e):
 
 if __name__ == "__main__":
     app.run()
+
+def lambda_handler(event, context):
+    return awsgi.response(app, event, context)
