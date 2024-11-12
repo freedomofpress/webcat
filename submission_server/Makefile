@@ -8,7 +8,7 @@ all: venv install zip cleanup clean
 venv:
 	python3 -m venv $(VENV_DIR)
 
-install: venv
+install:
 	. $(VENV_DIR)/bin/activate && pip install -r requirements.txt -t package
 
 zip:

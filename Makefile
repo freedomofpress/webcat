@@ -1,4 +1,4 @@
-SUBDIRS = extension submission_server
+SUBDIRS = extension submission_server transparency_server
 
 .PHONY: all $(SUBDIRS) clean
 
@@ -9,3 +9,7 @@ $(SUBDIRS):
 
 clean:
 	rm -rf dists/*
+
+deploy: all	
+	cd deploy/infra && terraform init
+	cd deploy/infra && terraform apply -auto-approve

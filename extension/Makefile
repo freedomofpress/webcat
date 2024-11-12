@@ -21,6 +21,4 @@ cleanup:
 	rm -f dist/* $(ZIP_FILE)
 
 clean: cleanup
-	rm -rf node_modules 
-
-
+	rm -rf node_modules
