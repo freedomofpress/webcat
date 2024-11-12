@@ -3,7 +3,7 @@ ZIP_FILE = $(PACKAGE_NAME).zip
 LAMBDA_SRC_DIR = .
 VENV_DIR = .venv
 
-all: clean venv install zip cleanup clean
+all: venv install zip cleanup clean
 
 venv:
 	python3 -m venv $(VENV_DIR)
@@ -16,7 +16,7 @@ zip:
 	cd package && zip -r ../$(ZIP_FILE) .
 	zip -g $(ZIP_FILE) $(LAMBDA_SRC_DIR)/*.py
 	# Let's copy it back to the global dists for the project
-	cp $(ZIP_FILE) ../dists/
+	cp $(ZIP_FILE) ../dist/
 
 clean:
 	rm -rf $(ZIP_FILE) package $(VENV_DIR)
