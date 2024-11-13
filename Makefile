@@ -8,7 +8,7 @@ $(SUBDIRS):
 	$(MAKE) -C $@
 
 clean:
-	rm -rf dists/*
+	rm -rf dist/*
 
 deploy: all	
 	cd deploy/infra && terraform init
