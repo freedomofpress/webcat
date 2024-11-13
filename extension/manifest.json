@@ -10,19 +10,19 @@
     "<all_urls>"
   ],
   "icons": {
-    "16": "icons/light/16/webcat.png",
-    "32": "icons/light/32/webcat.png",
-    "48": "icons/light/48/webcat.png",
-    "64": "icons/light/64/webcat.png",
-    "96": "icons/light/96/webcat.png",
-    "128": "icons/light/128/webcat.png",
-    "256": "icons/light/256/webcat.png"
+    "16": "icons/light/webcat.svg",
+    "32": "icons/light/webcat.svg",
+    "48": "icons/light/webcat.svg",
+    "64": "icons/light/webcat.svg",
+    "96": "icons/light/webcat.svg",
+    "128": "icons/light/webcat.svg",
+    "256": "icons/light/webcat.svg"
   },
   "web_accessible_resources": [
     "assets/1.root.json",
     "pages/error.html",
-    "icons/light/full/webcat.png",
-    "icons/dark/full/webcat.png"
+    "icons/light/webcat.svg",
+    "icons/dark/webcat.svg"
   ],
   "background": {
     "scripts": ["dist/bundle.js"],
@@ -37,8 +37,8 @@
   ],
   "page_action": {
     "default_icon": {
-      "19": "icons/light/32/webcat.png",
-      "38": "icons/light/48/webcat.png"
+      "19": "icons/light/webcat.svg",
+      "38": "icons/light/webcat.svg"
     }
   }
 }
