@@ -10,8 +10,8 @@ resource "aws_db_instance" "log-db" {
   allocated_storage       = 5
   max_allocated_storage   = 100
   engine                  = "mysql"
-  instance_class          = "db.t4g.micro"        # Cheapest instance type
-  username                = "log-db"
+  instance_class          = "db.t4g.micro"
+  username                = var.mysql_user_log_db
   password                = random_password.mysql_password_log_db.result
   publicly_accessible     = false
   vpc_security_group_ids  = [aws_security_group.log-db_sg.id]

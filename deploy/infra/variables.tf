@@ -22,3 +22,14 @@ variable "vpc_range" {
   default     = "172.16.0.0/16"
 }
 
+variable "mysql_user_log_db" {
+  description = "RDS user for log-db"
+  type        = string
+  default     = "loguser"
+}
+
+variable "mysql_user_list_db" {
+  description = "RDS user for list-db"
+  type        = string
+  default     = "listuser"
+}

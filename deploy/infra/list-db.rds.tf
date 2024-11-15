@@ -11,7 +11,7 @@ resource "aws_db_instance" "list-db" {
   max_allocated_storage   = 100
   engine                  = "mysql"
   instance_class          = "db.t4g.micro"
-  username                = "list-db"
+  username                = var.mysql_user_list_db
   password                = random_password.mysql_password_list_db.result
   publicly_accessible     = false
   # TODO personalize and tighten groups

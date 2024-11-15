@@ -11,6 +11,13 @@ resource "random_password" "mysql_password_log_db" {
   override_special = "_%"
 }
 
+# Random password for trillian@log-db
+resource "random_password" "mysql_password_log_db_trillian" {
+  length           = 32
+  special          = true
+  override_special = "_%"
+}
+
 # Random password for list-db
 resource "random_password" "mysql_password_list_db" {
   length           = 32
