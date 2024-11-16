@@ -18,10 +18,44 @@ DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")
 
+def initialize_database():
+    conn = pymysql.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
+    with conn.cursor() as cursor:
+        cursor.execute("SHOW DATABASES LIKE %s;", (DB_NAME,))
+        database_exists = cursor.fetchone() is not None
+
+    if not database_exists:
+        with conn.cursor() as cursor:
+            cursor.execute(f"CREATE DATABASE `{DB_NAME}`;")
+            conn.select_db(DB_NAME)
+            print(f"Database '{DB_NAME}' created.")
+
+            with open("/var/task/schema.sql", "r") as schema_file:
+                schema_sql = schema_file.read()
+                for statement in schema_sql.split(';'):
+                    if statement.strip():
+                        cursor.execute(statement)
+                print("Schema created")
+                conn.commit()
+    else:
+        # Database exists, connect to it directly
+        conn.select_db(DB_NAME)
+    conn.close()
+
+initialize_database()
+
 def get_db_connection():
     return pymysql.connect(
         host=DB_HOST,
         user=DB_USER,
+        port=DB_PORT,
         password=DB_PASSWORD,
         database=DB_NAME,
         cursorclass=pymysql.cursors.DictCursor
@@ -65,6 +99,7 @@ def get_total_submissions():
             result = cursor.fetchone()
         return jsonify({"status": "OK", "total_submissions": result["total_submissions"]}), 200
     except Exception as e:
+        print(e)
         return jsonify({"status": "KO", "message": "A server error as occurred, contact and administrator."}), 500
     finally:
         conn.close()
@@ -99,28 +134,38 @@ def get_submission(submission_id):
             "log": status_log
         }), 200
     except Exception as e:
+        print(e)
         return jsonify({"status": "KO", "message": "A server error as occurred, contact and administrator."}), 500
     finally:
         conn.close()
 
 @app.errorhandler(MethodNotAllowed)
 def method_not_allowed(e):
+    print(e)
     return jsonify({"status": "KO", "error": "Method not allowed."}), 405
 
 @app.errorhandler(UnsupportedMediaType)
 def handle_unsupported_media_type(e):
+    print(e)
     return jsonify({"status": "KO", "error": "Unsupported media type"}), 415
 
 @app.errorhandler(HTTPException)
 def handle_http_exception(e):
+    print(e)
     return jsonify({"status": "KO", "error": "An HTTP exception has occurred, check the response code."}), e.code
 
 @app.errorhandler(Exception)
 def handle_exception(e):
+    print(e)
     return jsonify({"status": "KO", "error": "An unexpected error occurred"}), 500
 
 if __name__ == "__main__":
     app.run()
 
 def lambda_handler(event, context):
+    # See https://github.com/slank/awsgi/issues/73
+    # TODO update to a more modern lib that as payload 2.0 support and is updated
+    event['httpMethod'] = event['requestContext']['http']['method']
+    event['path'] = event['requestContext']['http']['path']
+    event['queryStringParameters'] = event.get('queryStringParameters', {})
     return awsgi.response(app, event, context)

@@ -1,6 +1,3 @@
-CREATE DATABASE list;
-USE list;
-
 -- The content of this database is not secret. The submission API returns some values of it
 -- and ultimately every info here that leads to a change in the list is in the transparency log too.
 -- The integrity of this database is important though: foul play here is an attack, for instance

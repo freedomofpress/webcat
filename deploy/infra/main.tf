@@ -44,10 +44,8 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
-
-
-
-
-
-
-
+# Certificates for custom domains must be in this region
+provider "aws" {
+  region = "us-east-1"
+  alias  = "us_east_1"
+}

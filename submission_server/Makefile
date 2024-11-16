@@ -14,7 +14,7 @@ install:
 zip:
 	rm -f $(ZIP_FILE)
 	cd package && zip -r ../$(ZIP_FILE) .
-	zip -g $(ZIP_FILE) $(LAMBDA_SRC_DIR)/*.py
+	zip -g $(ZIP_FILE) $(LAMBDA_SRC_DIR)/*.py $(LAMBDA_SRC_DIR)/schema.sql
 	# Let's copy it back to the global dists for the project
 	cp $(ZIP_FILE) ../dist/
 
