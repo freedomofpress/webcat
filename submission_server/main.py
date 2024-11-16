@@ -118,7 +118,7 @@ def get_submission(submission_id):
             submission = cursor.fetchone()
             
             if not submission:
-                return jsonify({"status": "KO", "Error": "Submission with ths id provided not found."}), 404
+                return jsonify({"status": "KO", "Error": "Submission with the id provided not found."}), 404
 
             cursor.execute("""
                 SELECT status_id, timestamp FROM status_changes WHERE submission_id = %s
@@ -142,22 +142,22 @@ def get_submission(submission_id):
 @app.errorhandler(MethodNotAllowed)
 def method_not_allowed(e):
     print(e)
-    return jsonify({"status": "KO", "error": "Method not allowed."}), 405
+    return jsonify({"status": "KO", "message": "Method not allowed."}), 405
 
 @app.errorhandler(UnsupportedMediaType)
 def handle_unsupported_media_type(e):
     print(e)
-    return jsonify({"status": "KO", "error": "Unsupported media type"}), 415
+    return jsonify({"status": "KO", "message": "Unsupported media type"}), 415
 
 @app.errorhandler(HTTPException)
 def handle_http_exception(e):
     print(e)
-    return jsonify({"status": "KO", "error": "An HTTP exception has occurred, check the response code."}), e.code
+    return jsonify({"status": "KO", "message": "An HTTP exception has occurred, check the response code."}), e.code
 
 @app.errorhandler(Exception)
 def handle_exception(e):
     print(e)
-    return jsonify({"status": "KO", "error": "An unexpected error occurred"}), 500
+    return jsonify({"status": "KO", "message": "An unexpected error occurred"}), 500
 
 if __name__ == "__main__":
     app.run()
@@ -165,7 +165,8 @@ if __name__ == "__main__":
 def lambda_handler(event, context):
     # See https://github.com/slank/awsgi/issues/73
     # TODO update to a more modern lib that as payload 2.0 support and is updated
-    event['httpMethod'] = event['requestContext']['http']['method']
-    event['path'] = event['requestContext']['http']['path']
-    event['queryStringParameters'] = event.get('queryStringParameters', {})
+    if 'httpMethod' not in event:
+        event['httpMethod'] = event['requestContext']['http']['method']
+        event['path'] = event['requestContext']['http']['path']
+        event['queryStringParameters'] = event.get('queryStringParameters', {})
     return awsgi.response(app, event, context)

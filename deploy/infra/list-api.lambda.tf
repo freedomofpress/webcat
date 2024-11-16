@@ -72,6 +72,12 @@ resource "aws_lambda_function" "list_api" {
 #  description = "The URL endpoint for the Flask Lambda function"
 #}
 
+resource "aws_api_gateway_stage" "prod" {
+  deployment_id = aws_api_gateway_deployment.list_api_deployment.id
+  rest_api_id   = aws_api_gateway_rest_api.list_api.id
+  stage_name    = "prod"
+}
+
 resource "aws_api_gateway_rest_api" "list_api" {
   name        = "list_api"
   description = "API Gateway for the list-api endpoint"
@@ -127,7 +133,7 @@ resource "aws_api_gateway_integration" "submission_get_integration" {
   rest_api_id             = aws_api_gateway_rest_api.list_api.id
   resource_id             = aws_api_gateway_resource.submission.id
   http_method             = aws_api_gateway_method.submission_get.http_method
-  integration_http_method = "GET"
+  integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.list_api.invoke_arn
 }
@@ -137,7 +143,7 @@ resource "aws_api_gateway_integration" "submission_id_get_integration" {
   rest_api_id             = aws_api_gateway_rest_api.list_api.id
   resource_id             = aws_api_gateway_resource.submission_id.id
   http_method             = aws_api_gateway_method.submission_id_get.http_method
-  integration_http_method = "GET"
+  integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.list_api.invoke_arn
 }
@@ -149,7 +155,6 @@ resource "aws_api_gateway_deployment" "list_api_deployment" {
     aws_api_gateway_integration.submission_post_integration
   ]
   rest_api_id = aws_api_gateway_rest_api.list_api.id
-  stage_name  = "prod"
 }
 
 resource "aws_lambda_permission" "allow_api_gateway" {
@@ -197,8 +202,9 @@ resource "aws_api_gateway_domain_name" "list_api" {
 
 resource "aws_api_gateway_base_path_mapping" "api_mapping" {
   api_id      = aws_api_gateway_rest_api.list_api.id
-  stage_name  = aws_api_gateway_deployment.list_api_deployment.stage_name
+  stage_name  = aws_api_gateway_stage.prod.stage_name
   domain_name = aws_api_gateway_domain_name.list_api.domain_name
+  base_path   = "" 
 }
 
 resource "aws_route53_record" "list_api" {
@@ -213,33 +219,6 @@ resource "aws_route53_record" "list_api" {
   }
 }
 
-resource "aws_api_gateway_stage" "prod_stage" {
-  stage_name    = "prod"
-  rest_api_id   = aws_api_gateway_rest_api.list_api.id
-  deployment_id = aws_api_gateway_deployment.list_api_deployment.id
-
-  # Configure Access Logs
-  access_log_settings {
-    destination_arn = aws_cloudwatch_log_group.list_api_logs.arn
-    format          = jsonencode({
-      requestId       = "$context.requestId",
-      ip              = "$context.identity.sourceIp",
-      caller          = "$context.identity.caller",
-      user            = "$context.identity.user",
-      requestTime     = "$context.requestTime",
-      httpMethod      = "$context.httpMethod",
-      resourcePath    = "$context.resourcePath",
-      status          = "$context.status",
-      protocol        = "$context.protocol",
-      responseLength  = "$context.responseLength"
-    })
-  }
-}
-
-resource "aws_cloudwatch_log_group" "list_api_logs" {
-  name = "/aws/api-gateway/submission-api"
-  retention_in_days = 30
-}
 
 output "api_url" {
   value = "${aws_api_gateway_deployment.list_api_deployment.invoke_url}"
