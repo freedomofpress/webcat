@@ -60,7 +60,9 @@ GRANT ALL PRIVILEGES ON \`${trillian_user}\`.* TO '${trillian_db}'@'%';
 FLUSH PRIVILEGES;
 EOF
 
-mysql -u ${trillian_user} -p"${trillian_password}" "${trillian_db}" -h ${host} < storage/mysql/schema/storage.sql
+curl -o storage.sql https://raw.githubusercontent.com/google/trillian/refs/heads/master/storage/mysql/schema/storage.sql
+mysql -u ${trillian_user} -p"${trillian_password}" "${trillian_db}" -h ${host} < < storage.sql
+rm storage.sql
 
 # Create trillian config file
 mkdir /etc/trillian

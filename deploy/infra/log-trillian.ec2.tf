@@ -31,17 +31,18 @@ resource "aws_instance" "log-trillian" {
   }
 }
 
-resource "local_file" "rendered_trillian_setup" {
-  content  = templatefile("${path.module}/trillian_setup.sh.tpl", {
-    host              = "log-db.${var.main_domain}"
-    root_user         = var.mysql_user_log_db
-    root_password     = random_password.mysql_password_log_db.result
-    trillian_user     = "trillian"
-    trillian_password = random_password.mysql_password_log_db_trillian.result
-    trillian_db       = "trillian"
-  })
-  filename = "${path.module}/rendered_trillian_setup.sh"
-}
+# Debug
+#resource "local_file" "rendered_trillian_setup" {
+#  content  = templatefile("${path.module}/trillian_setup.sh.tpl", {
+#    host              = "log-db.${var.main_domain}"
+#    root_user         = var.mysql_user_log_db
+#    root_password     = random_password.mysql_password_log_db.result
+#    trillian_user     = "trillian"
+#    trillian_password = random_password.mysql_password_log_db_trillian.result
+#    trillian_db       = "trillian"
+#  })
+#  filename = "${path.module}/rendered_trillian_setup.sh"
+#}
 
 resource "aws_route53_record" "log-trillian" {
   zone_id = data.aws_route53_zone.main_domain_zone.zone_id

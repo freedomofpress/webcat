@@ -8,6 +8,6 @@ output "mysql_connection_log_db" {
 }
 
 output "mysql_connection_list_db" {
-  value = "${var.mysql_user_list_db}:${random_password.mysql_password_list_db.result}@log-db.${var.main_domain}"
+  value = "${var.mysql_user_list_db}:${random_password.mysql_password_list_db.result}@list-db.${var.main_domain}"
   sensitive = true
 }
