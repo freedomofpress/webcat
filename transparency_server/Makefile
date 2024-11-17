@@ -11,12 +11,12 @@ PRIVATEKEY		:=	build/privkey.pem
 
 PACKAGE_NAME = transparency-lambda
 ZIP_FILE = $(PACKAGE_NAME).zip
-LAMBDA_SRC_DIR = webcat_log
+LAMBDA_SRC_DIR = .
 DEPS_DIR = package
 PROTO_OUT =	$(DEPS_DIR)/trillian_proto
 VENV_DIR = .venv
 
-all: venv install zip cleanup clean
+all: venv install build-proto zip cleanup clean
 
 # Most of this Makefile has been written for debugging and to run the setup locally
 install-deps:
@@ -26,7 +26,8 @@ venv:
 	python3 -m venv $(VENV_DIR);
 
 install:
-	source ${VENV_DIR}/bin/activate && pip3 install -r requirements.txt -t $(DEPS_DIR)
+	source ${VENV_DIR}/bin/activate && pip install --platform manylinux2014_x86_64 --only-binary=:all: -r deploy-requirements.txt -t $(DEPS_DIR)
+	source ${VENV_DIR}/bin/activate && pip install -r build-requirements.txt
 
 generate-key:
 	( \
@@ -44,14 +45,14 @@ start-trillian:
 	@echo Waiting 60 seconds for Trillian to bootstrap
 	sleep 60
 
-build-proto: clean venv get-trillian
+build-proto: venv get-trillian
 	mkdir -p ${PROTO_OUT}
 	( \
 		source ${VENV_DIR}/bin/activate; \
 		PYTHONPATH=package python3 -m grpc_tools.protoc -I${TRILLIAN_HOME} -I${TRILLIAN_HOME}/third_party/googleapis/ --python_out=${PROTO_OUT} --pyi_out=${PROTO_OUT} --grpc_python_out=${PROTO_OUT} google/rpc/status.proto trillian.proto trillian_log_api.proto trillian_admin_api.proto; \
 	)
 	# Silly hack to automatically pack it as a python module
-	sed -i '' 's/^import .*_pb2 as/from . \0/' ${PROTO_OUT}/*.py
+	sed -i '' 's/^import .*_pb2 as/from . &/' ${PROTO_OUT}/*.py
 	sed -i '' 's/from google\.rpc/from \.google\.rpc/g' ${PROTO_OUT}/*.py
 
 	# Create __init__.py and append imports for gRPC files
@@ -69,7 +70,7 @@ run: build-proto start-trillian generate-key
 zip:
 	rm -f $(ZIP_FILE)
 	cd package && zip -r ../$(ZIP_FILE) .
-	zip -g $(ZIP_FILE) $(LAMBDA_SRC_DIR)/*.py
+	zip -g $(ZIP_FILE) $(LAMBDA_SRC_DIR)/*.py $(LAMBDA_SRC_DIR)/schema.sql
 	# Let's copy it back to the global dists for the project
 	cp $(ZIP_FILE) ../dist/
 

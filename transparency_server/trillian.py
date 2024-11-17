@@ -91,10 +91,8 @@ class TrillianAdminApi:
         self.stub = trillian_admin_rpc.TrillianAdminStub(self.channel)
 
 
-    def create_tree(self, tree_id, tree_type=None, tree_state=None, display_name="", description="", max_root_duration=None) -> trillian.Tree:
-        if not isinstance(tree_id, int):
-            raise Exception("tree_id is not an integer.")
-
+    def create_tree(self, tree_type=None, tree_state=None, display_name="", description="", max_root_duration=None) -> trillian.Tree:
+        # Values such as tree_id get ignored anyway, it's the storage that decides them
         if tree_type is None:
             tree_type = trillian.TreeType.LOG
 
@@ -117,7 +115,7 @@ class TrillianAdminApi:
             max_root_duration = Duration()
             max_root_duration.FromSeconds(0)
 
-        tree = trillian.Tree(tree_id=tree_id, tree_type=tree_type, tree_state=tree_state, display_name=display_name, description=description, max_root_duration=max_root_duration)
+        tree = trillian.Tree(tree_id=0, tree_type=tree_type, tree_state=tree_state, display_name=display_name, description=description, max_root_duration=max_root_duration)
         request = trillian_admin.CreateTreeRequest(tree=tree)
         response = self.stub.CreateTree(request)
         return response

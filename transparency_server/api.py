@@ -1,37 +1,35 @@
 from flask import Flask, jsonify, request
-from os import environ
+import os
 from joserfc.jwk import ECKey
 from joserfc import jws
 from json import loads
 from time import time
 from string import hexdigits
-from .personality import WebcatPersonality, ActionTypeValue
+from personality import WebcatPersonality, ActionTypeValue
 
 app = Flask(__name__)
 
-publickey = environ.get("PUBLICKEY")
-database = environ.get("DATABASE")
-trillian_host = environ.get("TRILLIAN_HOST")
-trillian_port = environ.get("TRILLIAN_PORT")
-trillian_secure = bool(environ.get("TRILLIAN_SECURE"))
-trillian_credentials = environ.get("TRILLIAN_CREDENTIALS")
-tree_id = environ.get("TRILLIAN_TREE_ID")
+# Load environment variables
+PUBLIC_KEY = os.getenv("PUBLIC_KEY")
+TRILLIAN_HOST = os.getenv("TRILLIAN_HOST")
+TRILLIAN_PORT = os.getenv("TRILLIAN_PORT")
 
-if tree_id is not None:
-    tree_id = int(tree_id)
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = int(os.getenv("DB_PORT"))
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
 
-if publickey is None:
-    raise Exception("PUBLICKEY must be set.")
-
-try:
-    with open(publickey, "rb") as f:
-        publickey = f.read()
-except:
-    Exception(f"{publickey} not found.")
-
-key = ECKey.import_key(publickey)
-
-personality = WebcatPersonality(publickey, database, trillian_host, trillian_port, trillian_secure, trillian_credentials, tree_id)
+personality = WebcatPersonality(
+    PUBLIC_KEY,
+    DB_HOST,
+    DB_PORT,
+    DB_USER,
+    DB_PASSWORD,
+    DB_NAME,
+    TRILLIAN_HOST,
+    TRILLIAN_PORT
+)
 
 VERSION = 1
 
@@ -52,7 +50,7 @@ def queue_submission():
     leaf = content["leaf"]
 
     try:
-        obj = jws.deserialize_compact(leaf, key)
+        obj = jws.deserialize_compact(leaf, personality.key)
     except:
         return jsonify({"status": "KO", "error": "Invalid signature."}), 400
 
@@ -212,4 +210,4 @@ def root(tree_size):
 @app.route(f"/v{VERSION}/info", methods=["GET"])
 def info():
     stats = personality.get_stats()
-    return jsonify({"status": "OK", "stats": stats, "publickey": publickey.decode("ascii")})
+    return jsonify({"status": "OK", "stats": stats, "publickey": PUBLIC_KEY})

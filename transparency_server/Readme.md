@@ -19,4 +19,7 @@ This command will:
 ### Documentation
 As suggested in the official Trillian documentation, no core modification are needed to Trillian. Instead, a personality is written around it: enforces leaves compliance, offers REST endpoints and so on.
 
-TODO
+### Configuration
+The personality is a web set of REST API that act as an HTTP frontend to the unmodified, backed Trillian.
+
+It should be configured with the following environment variables:
