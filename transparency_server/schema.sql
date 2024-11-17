@@ -5,5 +5,5 @@ CREATE TABLE domains (
 );
 
 CREATE TABLE trillian_config (
-    tree_id INTEGER NOT NULL UNIQUE
+    tree_id BIGINT NOT NULL UNIQUE
 );

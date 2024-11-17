@@ -118,6 +118,7 @@ class TrillianAdminApi:
         tree = trillian.Tree(tree_id=0, tree_type=tree_type, tree_state=tree_state, display_name=display_name, description=description, max_root_duration=max_root_duration)
         request = trillian_admin.CreateTreeRequest(tree=tree)
         response = self.stub.CreateTree(request)
+        print(response)
         return response
 
 

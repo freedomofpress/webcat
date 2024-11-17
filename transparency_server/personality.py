@@ -90,6 +90,8 @@ class WebcatPersonality:
                 with self.connection.cursor() as cursor:
                     cursor.execute("SELECT tree_id FROM trillian_config")
                     self.log_id = cursor.fetchone()["tree_id"]
+                    self.trillian_log = TrillianApi(trillian_host, trillian_port, self.log_id, "", trillian_secure, trillian_credentials)
+                    logging.info(f"Loaded log with tree_id = {self.log_id}")
 
         logging.info("Initialize completed.")
 

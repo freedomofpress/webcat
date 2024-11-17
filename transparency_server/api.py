@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, request
 import os
+import awsgi
 from joserfc.jwk import ECKey
 from joserfc import jws
 from json import loads
@@ -211,3 +212,15 @@ def root(tree_size):
 def info():
     stats = personality.get_stats()
     return jsonify({"status": "OK", "stats": stats, "publickey": PUBLIC_KEY})
+
+if __name__ == "__main__":
+    app.run()
+
+def lambda_handler(event, context):
+    # See https://github.com/slank/awsgi/issues/73
+    # TODO update to a more modern lib that as payload 2.0 support and is updated
+    if 'httpMethod' not in event:
+        event['httpMethod'] = event['requestContext']['http']['method']
+        event['path'] = event['requestContext']['http']['path']
+        event['queryStringParameters'] = event.get('queryStringParameters', {})
+    return awsgi.response(app, event, context)
