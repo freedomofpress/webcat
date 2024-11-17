@@ -31,6 +31,15 @@ resource "aws_security_group" "private_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description     = "Trillian API"
+    from_port       = 8090
+    to_port         = 8090
+    protocol        = "tcp"
+    # can probably be changed to var.vpc_range or directly aws_instance.console.private_ip
+    cidr_blocks = [aws_subnet.main_vpc_private_subnet_a.cidr_block]
+  }
+
   egress {
     description = "All"
     from_port   = 0

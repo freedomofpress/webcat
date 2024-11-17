@@ -43,10 +43,10 @@ resource "aws_lambda_function" "list_api" {
 #  description = "The URL endpoint for the Flask Lambda function"
 #}
 
-resource "aws_api_gateway_stage" "prod" {
+resource "aws_api_gateway_stage" "prod_list_api" {
   deployment_id = aws_api_gateway_deployment.list_api_deployment.id
   rest_api_id   = aws_api_gateway_rest_api.list_api.id
-  stage_name    = "prod"
+  stage_name    = "prod_list"
 }
 
 resource "aws_api_gateway_rest_api" "list_api" {
@@ -171,9 +171,9 @@ resource "aws_api_gateway_domain_name" "list_api" {
   depends_on = [ aws_acm_certificate_validation.list_api, aws_acm_certificate.list_api ]
 }
 
-resource "aws_api_gateway_base_path_mapping" "api_mapping" {
+resource "aws_api_gateway_base_path_mapping" "list_api_mapping" {
   api_id      = aws_api_gateway_rest_api.list_api.id
-  stage_name  = aws_api_gateway_stage.prod.stage_name
+  stage_name  = aws_api_gateway_stage.prod_list_api.stage_name
   domain_name = aws_api_gateway_domain_name.list_api.domain_name
   base_path   = "" 
 }
@@ -191,7 +191,7 @@ resource "aws_route53_record" "list_api" {
 }
 
 
-output "api_url" {
+output "list_api_url" {
   value = "${aws_api_gateway_deployment.list_api_deployment.invoke_url}"
-  description = "The API Gateway endpoint for the /submission Lambda function"
+  description = "The URL endpoint for the list-api API"
 }

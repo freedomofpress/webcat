@@ -61,7 +61,7 @@ FLUSH PRIVILEGES;
 EOF
 
 curl -o storage.sql https://raw.githubusercontent.com/google/trillian/refs/heads/master/storage/mysql/schema/storage.sql
-mysql -u ${trillian_user} -p"${trillian_password}" "${trillian_db}" -h ${host} < < storage.sql
+mysql -u ${trillian_user} -p"${trillian_password}" "${trillian_db}" -h ${host} < storage.sql
 rm storage.sql
 
 # Create trillian config file
