@@ -52,12 +52,10 @@ build-proto: venv get-trillian
 		PYTHONPATH=package python3 -m grpc_tools.protoc -I${TRILLIAN_HOME} -I${TRILLIAN_HOME}/third_party/googleapis/ --python_out=${PROTO_OUT} --pyi_out=${PROTO_OUT} --grpc_python_out=${PROTO_OUT} google/rpc/status.proto trillian.proto trillian_log_api.proto trillian_admin_api.proto; \
 	)
 	# Silly hack to automatically pack it as a python module
-	sed -i '' 's/^import .*_pb2 as/from . &/' ${PROTO_OUT}/*.py
-	sed -i '' 's/from google\.rpc/from \.google\.rpc/g' ${PROTO_OUT}/*.py
-
-	# Create __init__.py and append imports for gRPC files
+	sed -i 's/^import .*_pb2 as/from . \0/' ${PROTO_OUT}/*.py
+	sed -i 's/from google\.rpc/from \.google\.rpc/g' ${PROTO_OUT}/*.py
 	for i in ${PROTO_OUT}/*_grpc.py; do \
-		file=$$(basename "$$i" | cut -d . -f 1); \
+		file=$$(echo "$$i" | cut -d / -f2 | cut -d . -f 1); \
 		echo "from . import $$file" >> ${PROTO_OUT}/__init__.py; \
 	done
 
