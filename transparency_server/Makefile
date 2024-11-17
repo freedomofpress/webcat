@@ -26,7 +26,7 @@ venv:
 	python3 -m venv $(VENV_DIR);
 
 install:
-	source ${VENV_DIR}/bin/activate && pip install --platform manylinux2014_x86_64 --only-binary=:all: -r deploy-requirements.txt -t $(DEPS_DIR)
+	source ${VENV_DIR}/bin/activate && pip install -r deploy-requirements.txt -t $(DEPS_DIR)
 	source ${VENV_DIR}/bin/activate && pip install -r build-requirements.txt
 
 generate-key:
@@ -54,10 +54,6 @@ build-proto: venv get-trillian
 	# Silly hack to automatically pack it as a python module
 	sed -i 's/^import .*_pb2 as/from . \0/' ${PROTO_OUT}/*.py
 	sed -i 's/from google\.rpc/from \.google\.rpc/g' ${PROTO_OUT}/*.py
-	for i in ${PROTO_OUT}/*_grpc.py; do \
-		file=$$(echo "$$i" | cut -d / -f2 | cut -d . -f 1); \
-		echo "from . import $$file" >> ${PROTO_OUT}/__init__.py; \
-	done
 
 run: build-proto start-trillian generate-key
 	( \
