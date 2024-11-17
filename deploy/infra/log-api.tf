@@ -224,35 +224,6 @@ resource "aws_api_gateway_deployment" "log_api" {
   ]
 }
 
-resource "aws_acm_certificate" "log_api" {
-  provider          = aws.us_east_1
-  domain_name       = "log-api.${var.main_domain}"
-  validation_method = "DNS"
-}
-
-resource "aws_route53_record" "log_api_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.log_api.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
-
-  allow_overwrite = true
-  name            = each.value.name
-  records         = [each.value.record]
-  ttl             = 60
-  type            = each.value.type
-  zone_id         = data.aws_route53_zone.main_domain_zone.zone_id
-}
-
-resource "aws_acm_certificate_validation" "log_api" {
-  provider                = aws.us_east_1
-  certificate_arn         = aws_acm_certificate.log_api.arn
-  validation_record_fqdns = [for record in aws_route53_record.log_api_validation : record.fqdn]
-}
-
 resource "aws_api_gateway_domain_name" "log_api" {
   domain_name     = "log-api.${var.main_domain}"
   certificate_arn = aws_acm_certificate.log_api.arn
