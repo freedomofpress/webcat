@@ -1,15 +1,16 @@
 # Web-based Code Assurance & Transparency (WEBCAT)
-![webcat logo dark](./extension/icons/dark/256/webcat.png#gh-dark-mode-only)
-![webcat logo light](./extension/icons/light/256/webcat.png#gh-light-mode-only)
+![webcat logo dark](./extension/icons/webcat.svg#gh-dark-mode-only)
+![webcat logo light](./extension/icons/light/webcat.svg#gh-light-mode-only)
 
 The purpose of this project is to showcase an architectural framework for providing blocking code signing, integrity and transparency checks for browser-based single page applications.
 
 Webcat is:
- 1. [A submission server](./submission_server/webcat.lua)
- 2. [A processing script](./submission_server/webcat.py)
+ 1. [A list server](./list_server/)
+ 2. [A few processing scripts](./jobs/)
  3. [A transparency server](./transparency_server/) (as a [Trillian](https://github.com/google/trillian) personality)
  4. [A Firefox (v2) extension](./extension/)
  5. [A signing script](./signing/)
+ 6. [Deployment infrastructure](./deploy/)
 
 
 ## Introduction

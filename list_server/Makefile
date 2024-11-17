@@ -1,4 +1,4 @@
-PACKAGE_NAME = submission-lambda
+PACKAGE_NAME = list-lambda
 ZIP_FILE = $(PACKAGE_NAME).zip
 LAMBDA_SRC_DIR = .
 VENV_DIR = .venv

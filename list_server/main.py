@@ -34,9 +34,12 @@ def initialize_database():
     if not database_exists:
         with conn.cursor() as cursor:
             cursor.execute(f"CREATE DATABASE `{DB_NAME}`;")
-            conn.select_db(DB_NAME)
             print(f"Database '{DB_NAME}' created.")
+        # Switch to the new database and recreate the cursor
+        conn.select_db(DB_NAME)
 
+        # Recreate the cursor after selecting the database
+        with conn.cursor() as cursor:
             with open("/var/task/schema.sql", "r") as schema_file:
                 schema_sql = schema_file.read()
                 for statement in schema_sql.split(';'):
@@ -47,6 +50,7 @@ def initialize_database():
     else:
         # Database exists, connect to it directly
         conn.select_db(DB_NAME)
+
     conn.close()
 
 initialize_database()
@@ -60,6 +64,10 @@ def get_db_connection():
         database=DB_NAME,
         cursorclass=pymysql.cursors.DictCursor
     )
+
+@app.route("/")
+def index():
+    return jsonify({"status": "OK"})
 
 @app.route('/submission', methods=['POST'])
 def post_submission():

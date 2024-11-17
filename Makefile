@@ -1,4 +1,4 @@
-SUBDIRS = extension submission_server transparency_server
+SUBDIRS = extension list_server transparency_server
 
 .PHONY: all $(SUBDIRS) clean
 
