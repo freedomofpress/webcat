@@ -12,14 +12,6 @@ import json
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-def base64_to_pem(base64_string, pem_type="PUBLIC KEY"):
-    # Insert line breaks every 64 characters
-    wrapped_base64 = "\n".join(base64_string[i:i+64] for i in range(0, len(base64_string), 64))
-    
-    # Construct the PEM formatted string with appropriate headers and wrapped content
-    pem_string = f"-----BEGIN {pem_type}-----\n{wrapped_base64}\n-----END {pem_type}-----"
-    return pem_string
-
 class ActionTypeValue(StrEnum):
         ADD = "ADD"
         DELETE = "MODIFY"
@@ -51,7 +43,7 @@ class WebcatPersonality:
         self.publickey = publickey
 
         logging.info(f"Loading public key")
-        self.key = ECKey.import_key(base64_to_pem(publickey))
+        self.key = ECKey.import_key(publickey)
 
         self.connection = pymysql.connect(
             host=db_host,

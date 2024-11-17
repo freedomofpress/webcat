@@ -1,5 +1,5 @@
 
-resource "aws_instance" "log-trillian" {
+resource "aws_instance" "log_trillian" {
   ami               = data.aws_ami.amazon_linux_2.id
   instance_type     = "t3.small"
   availability_zone = data.aws_availability_zones.available.names[0]
@@ -27,7 +27,7 @@ resource "aws_instance" "log-trillian" {
   })
 
   tags = {
-    "name" = "log-trillian"
+    "name" = "log_trillian"
   }
 }
 
@@ -44,10 +44,10 @@ resource "aws_instance" "log-trillian" {
 #  filename = "${path.module}/rendered_trillian_setup.sh"
 #}
 
-resource "aws_route53_record" "log-trillian" {
+resource "aws_route53_record" "log_trillian" {
   zone_id = data.aws_route53_zone.main_domain_zone.zone_id
   name    = "log-trillian.${var.main_domain}"
   type    = "A"
   ttl     = 300
-  records = [aws_instance.log-trillian.private_ip]
+  records = [aws_instance.log_trillian.private_ip]
 }

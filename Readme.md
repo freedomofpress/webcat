@@ -11,6 +11,7 @@ Webcat is:
  4. [A Firefox (v2) extension](./extension/)
  5. [A signing script](./signing/)
  6. [Deployment infrastructure](./deploy/)
+ 7. [Demo and application examples](./demo/)
 
 
 ## Introduction

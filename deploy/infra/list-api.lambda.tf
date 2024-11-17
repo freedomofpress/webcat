@@ -1,38 +1,9 @@
-resource "aws_iam_role" "lambda_role" {
-  name = "lambda-execution-role"
-
-  assume_role_policy = jsonencode({
-    "Version": "2012-10-17",
-    "Statement": [
-      {
-        "Action": "sts:AssumeRole",
-        "Principal": {
-          "Service": "lambda.amazonaws.com"
-        },
-        "Effect": "Allow",
-        "Sid": ""
-      }
-    ]
-  })
-}
-
-# Attach a policy to allow Lambda to write logs to CloudWatch
-resource "aws_iam_role_policy_attachment" "lambda_logging" {
-  role       = aws_iam_role.lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_vpc_access" {
-  role       = aws_iam_role.lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-}
-
 resource "aws_lambda_function" "list_api" {
   function_name = "list_api"
   handler       = "main.lambda_handler"
   runtime       = "python3.12"
   role          = aws_iam_role.lambda_role.arn
-  filename      = "../../dist/submission-lambda.zip"
+  filename      = "../../dist/list-lambda.zip"
   timeout       = 30
 
   depends_on = [aws_db_instance.list-db]
@@ -47,8 +18,8 @@ resource "aws_lambda_function" "list_api" {
       DB_HOST         = "list-db.${var.main_domain}"
       DB_PORT         = 3306
       # TODO do not run this as the root mysql user, rather create another one and drop privs
-      DB_USER    = var.mysql_user_list_db
-      DB_PASSWORD = random_password.mysql_password_list_db.result
+      DB_USER         = var.mysql_user_list_db
+      DB_PASSWORD     = random_password.mysql_password_list_db.result
       #DB_USER         = "list_api"
       #DB_PASSWORD     = ${}
       DB_NAME         = "list_api"
