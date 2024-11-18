@@ -6,6 +6,7 @@
  - [Standard Notes](https://github.com/standardnotes/app)
  - [Jitsi Meet](https://github.com/jitsi/jitsi-meet)
  - [Telegram Web A](https://github.com/Ajaxy/telegram-tt)
+ - [Proton Web](https://github.com/ProtonMail/WebClients)
 
 ## TODO
 For each app, identify potential limitations in using webcat. For instance, Cryptpad correctly strongly suggests using a sandbox domain, but currently the project does not support that
