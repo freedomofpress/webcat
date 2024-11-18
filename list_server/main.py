@@ -74,13 +74,13 @@ def post_submission():
     data = request.get_json()
     
     if not all(key in data for key in ("fqdn", "action")):
-        return jsonify({"status": "KO", "Error": "Missing the `fqdn` or `action` keys."}), 400
+        return jsonify({"status": "KO", "message": "Missing the `fqdn` or `action` keys."}), 400
     
     fqdn_input = data["fqdn"]
     type_input = data["action"].upper()
 
     if type_input not in ActionTypeValue.__members__.values():
-        return jsonify({"status": "KO", "Error": "`action` value is not in [`ADD`, `MODIFY`, `DELETE`]"}), 400
+        return jsonify({"status": "KO", "message": "`action` value is not in [`ADD`, `MODIFY`, `DELETE`]"}), 400
 
     try:
         conn = get_db_connection()
@@ -126,7 +126,7 @@ def get_submission(submission_id):
             submission = cursor.fetchone()
             
             if not submission:
-                return jsonify({"status": "KO", "Error": "Submission with the id provided not found."}), 404
+                return jsonify({"status": "KO", "message": "Submission with the id provided not found."}), 404
 
             cursor.execute("""
                 SELECT status_id, timestamp FROM status_changes WHERE submission_id = %s
