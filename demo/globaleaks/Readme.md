@@ -1,6 +1,6 @@
 ### How to package/install Globaleaks
 
-1. [Install the debian package.]([https://github.com/element-hq/element-web/blob/develop/docs/install.md#debian-package](https://docs.globaleaks.org/en/stable/setup/))
+1. [Install the debian package.](https://docs.globaleaks.org/en/stable/setup/)
 2. Build and sign the manifest:
 
     1. `python3 signing/main.py /usr/share/globaleaks/client --output manifest.json --canonical_output canonical_manifest.json --app_version 2 --webcat_version 1 --signatures 2 --bundle_output sigstore_bundle `
