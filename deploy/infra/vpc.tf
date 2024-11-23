@@ -139,6 +139,10 @@ subnet_ids = [aws_subnet.main_vpc_private_subnet_a.id]
     to_port    = 0
   }
 
+  lifecycle {
+    ignore_changes = [subnet_ids]
+  }
+
   tags = {
     "name" = "private_subnet_acl"
   }

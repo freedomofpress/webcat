@@ -2,7 +2,8 @@ import os
 from enum import StrEnum
 import pymysql
 import awsgi
-from flask import Flask, jsonify, request, abort
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 from werkzeug.exceptions import MethodNotAllowed, UnsupportedMediaType, HTTPException
 
 app = Flask(__name__)
@@ -17,6 +18,10 @@ DB_PORT = int(os.getenv("DB_PORT"))
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")
+
+MAIN_DOMAIN = os.getenv("MAIN_DOMAIN")
+
+CORS(app, resources={r"/*": {"origins": f"https://list.{MAIN_DOMAIN}"}})
 
 def initialize_database():
     conn = pymysql.connect(

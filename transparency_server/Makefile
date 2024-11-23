@@ -26,7 +26,7 @@ venv:
 	python3 -m venv $(VENV_DIR);
 
 install:
-	source ${VENV_DIR}/bin/activate && pip install -r deploy-requirements.txt -t $(DEPS_DIR)
+	source ${VENV_DIR}/bin/activate && pip install --platform manylinux2014_x86_64 --only-binary=:all: -r deploy-requirements.txt -t $(DEPS_DIR)
 	source ${VENV_DIR}/bin/activate && pip install -r build-requirements.txt
 
 generate-key:

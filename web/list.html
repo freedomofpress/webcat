@@ -8,8 +8,8 @@
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background-color: #282a36; /* Dracula background */
-      color: #f8f8f2; /* Dracula foreground */
+      background-color: #282a36;
+      color: #f8f8f2;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -39,16 +39,16 @@
       border-radius: 4px;
     }
     select, input[type="text"], input[type="number"] {
-      background-color: #44475a; /* Dracula input background */
+      background-color: #44475a;
       color: #f8f8f2;
     }
     button {
-      background-color: #6272a4; /* Dracula accent */
+      background-color: #6272a4;
       color: #f8f8f2;
       cursor: pointer;
     }
     button:hover {
-      background-color: #50fa7b; /* Dracula green */
+      background-color: #50fa7b;
     }
     .results {
       margin-top: 20px;
@@ -61,21 +61,20 @@
       text-align: center;
     }
     footer a {
-      color: #8be9fd; /* Dracula cyan */
+      color: #8be9fd;
       text-decoration: none;
       margin: 0 10px;
     }
     footer a:hover {
       text-decoration: underline;
     }
-    /* Remove number input spinner */
     input[type="number"]::-webkit-inner-spin-button,
     input[type="number"]::-webkit-outer-spin-button {
       -webkit-appearance: none;
       margin: 0;
     }
     input[type="number"] {
-      -moz-appearance: textfield; /* Firefox */
+      -moz-appearance: textfield;
     }
   </style>
 </head>
@@ -105,13 +104,12 @@
 
   <footer>
     <a href="https://github.com/freedomofpress/webcat" _target="blank">Github</a> | 
-    <a href="https://transparency.cat">transparency.cat</a>
+    <a href="https://${main_domain}">${main_domain}</a>
   </footer>
 
   <script>
-    const apiBase = "https://list-api.transparency.cat"; // Replace with your API base URL
+    const apiBase = "https://list-api.${main_domain}";
 
-    // Submit a new domain
     document.getElementById("submitDomainButton").addEventListener("click", async () => {
       const actionType = document.getElementById("actionType").value;
       const domainName = document.getElementById("domainName").value.trim();
@@ -124,7 +122,7 @@
 
       resultsContainer.textContent = "Submitting...";
       try {
-        const response = await fetch(`${apiBase}/submission`, {
+        const response = await fetch(`$${apiBase}/submission`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ fqdn: domainName, action: actionType }),
@@ -132,16 +130,15 @@
 
         const data = await response.json();
         if (response.ok) {
-          resultsContainer.textContent = `Success: Submission ID is ${data.id}`;
+          resultsContainer.textContent = `Success: Submission ID is $${data.id}`;
         } else {
-          resultsContainer.textContent = `Error: ${data.message || "Unknown error"}`;
+          resultsContainer.textContent = `Error: $${data.message || "Unknown error"}`;
         }
       } catch (error) {
         resultsContainer.textContent = "Error: Unable to connect to the server.";
       }
     });
 
-    // Lookup a submission by ID
     document.getElementById("lookupSubmissionButton").addEventListener("click", async () => {
       const submissionId = document.getElementById("submissionId").value.trim();
       const resultsContainer = document.getElementById("results");
@@ -153,13 +150,13 @@
 
       resultsContainer.textContent = "Looking up submission...";
       try {
-        const response = await fetch(`${apiBase}/submission/${encodeURIComponent(submissionId)}`);
+        const response = await fetch(`$${apiBase}/submission/$${encodeURIComponent(submissionId)}`);
         const data = await response.json();
 
         if (response.ok) {
           resultsContainer.textContent = JSON.stringify(data, null, 2);
         } else {
-          resultsContainer.textContent = `Error: ${data.message || "Unknown error"}`;
+          resultsContainer.textContent = `Error: $${data.message || "Unknown error"}`;
         }
       } catch (error) {
         resultsContainer.textContent = "Error: Unable to connect to the server.";

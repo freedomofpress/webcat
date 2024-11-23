@@ -1,7 +1,7 @@
 resource "aws_lambda_function" "list_api" {
   function_name = "list_api"
   handler       = "main.lambda_handler"
-  runtime       = "python3.12"
+  runtime       = var.python_version
   role          = aws_iam_role.lambda_role.arn
   filename      = "../../dist/list-lambda.zip"
   timeout       = 30
@@ -23,6 +23,7 @@ resource "aws_lambda_function" "list_api" {
       #DB_USER         = "list_api"
       #DB_PASSWORD     = ${}
       DB_NAME         = "list_api"
+      MAIN_DOMAIN     = var.main_domain
     }
   }
 }
@@ -53,6 +54,7 @@ resource "aws_api_gateway_rest_api" "list_api" {
   name        = "list_api"
   description = "API Gateway for the list-api endpoint"
 }
+
 
 resource "aws_api_gateway_resource" "submission" {
   rest_api_id = aws_api_gateway_rest_api.list_api.id
@@ -119,6 +121,22 @@ resource "aws_api_gateway_integration" "submission_id_get_integration" {
   uri                     = aws_lambda_function.list_api.invoke_arn
 }
 
+resource "aws_api_gateway_method" "submission_options" {
+  rest_api_id   = aws_api_gateway_rest_api.list_api.id
+  resource_id   = aws_api_gateway_resource.submission.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "submission_options" {
+  rest_api_id             = aws_api_gateway_rest_api.list_api.id
+  resource_id             = aws_api_gateway_resource.submission.id
+  http_method             = aws_api_gateway_method.submission_options.http_method
+  type                    = "AWS_PROXY"
+  integration_http_method = "POST"
+  uri                     = aws_lambda_function.list_api.invoke_arn
+}
+
 resource "aws_api_gateway_deployment" "list_api_deployment" {
   depends_on = [
     aws_api_gateway_integration.submission_id_get_integration,
@@ -160,7 +178,6 @@ resource "aws_route53_record" "list_api" {
     evaluate_target_health = false
   }
 }
-
 
 output "list_api_url" {
   value = "${aws_api_gateway_deployment.list_api_deployment.invoke_url}"

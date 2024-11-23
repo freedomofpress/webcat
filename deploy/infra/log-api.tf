@@ -1,7 +1,7 @@
 resource "aws_lambda_function" "log_api" {
   function_name = "log_api"
   handler       = "api.lambda_handler"
-  runtime       = "python3.11"
+  runtime       = var.python_version
   role          = aws_iam_role.lambda_role.arn
   filename      = "../../dist/transparency-lambda.zip"
   timeout       = 30
@@ -24,6 +24,7 @@ resource "aws_lambda_function" "log_api" {
       TRILLIAN_HOST   = "log-trillian.${var.main_domain}"
       TRILLIAN_PORT   = 8090
       PUBLIC_KEY      = data.aws_kms_public_key.ecc_p384_public_key.public_key_pem
+      MAIN_DOMAIN     = var.main_domain
     }
   }
 }

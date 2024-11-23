@@ -33,3 +33,9 @@ variable "mysql_user_list_db" {
   type        = string
   default     = "listuser"
 }
+
+variable "python_version" {
+  description = "Python runtime version for the Lambda functions"
+  type        = string
+  default     = "python3.11"
+}

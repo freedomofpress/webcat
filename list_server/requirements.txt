@@ -1,3 +1,4 @@
 aws-wsgi
 flask
+flask-cors
 pymysql

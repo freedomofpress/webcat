@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 import os
 import awsgi
 from joserfc.jwk import ECKey
@@ -20,6 +21,10 @@ DB_PORT = int(os.getenv("DB_PORT"))
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")
+
+MAIN_DOMAIN = os.getenv("MAIN_DOMAIN")
+
+CORS(app, resources={r"/*": {"origins": f"https://list.{MAIN_DOMAIN}"}})
 
 personality = WebcatPersonality(
     PUBLIC_KEY,
