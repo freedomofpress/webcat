@@ -161,7 +161,7 @@ resource "aws_route_table" "main_vpc_private_routing_table" {
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_nat_gateway.nat_gw.id
+    nat_gateway_id = aws_nat_gateway.nat_gw.id
   }
 
   tags = {
