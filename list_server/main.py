@@ -3,7 +3,6 @@ from enum import StrEnum
 import pymysql
 import awsgi
 from flask import Flask, jsonify, request
-from flask_cors import CORS
 from werkzeug.exceptions import MethodNotAllowed, UnsupportedMediaType, HTTPException
 
 app = Flask(__name__)
@@ -20,8 +19,6 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")
 
 MAIN_DOMAIN = os.getenv("MAIN_DOMAIN")
-
-CORS(app, resources={r"/*": {"origins": f"https://list.{MAIN_DOMAIN}"}})
 
 def initialize_database():
     conn = pymysql.connect(
@@ -69,6 +66,23 @@ def get_db_connection():
         database=DB_NAME,
         cursorclass=pymysql.cursors.DictCursor
     )
+
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = f"https://list.{MAIN_DOMAIN}"
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
+
+@app.before_request
+def handle_options():
+    if request.method == 'OPTIONS':
+        response = jsonify({"status": "OK", "message": "CORS preflight successful"})
+        response.status_code = 200
+        return add_cors_headers(response)
+
+@app.after_request
+def after_request(response):
+    return add_cors_headers(response)
 
 @app.route("/")
 def index():
@@ -140,11 +154,13 @@ def get_submission(submission_id):
 
         return jsonify({
             "status": "OK",
-            "id": submission["id"],
-            "fqdn": submission["fqdn"],
-            "type": submission["type"],
-            "status": submission["status_value"],
-            "log": status_log
+            "submission": {
+                "id": submission["id"],
+                "fqdn": submission["fqdn"],
+                "type": submission["type"],
+                "status": submission["status_value"],
+                "log": status_log
+            }
         }), 200
     except Exception as e:
         print(e)

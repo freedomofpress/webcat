@@ -1,6 +1,5 @@
 aws-wsgi
 flask
-flask-cors
 joserfc
 grpcio
 protobuf

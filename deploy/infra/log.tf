@@ -7,6 +7,7 @@ resource "aws_s3_object" "log_index" {
   key          = "index.html"
   content      = templatefile("../../web/log.html", {
     main_domain = var.main_domain
+    version     = 1
   })
   content_type = "text/html"
 }

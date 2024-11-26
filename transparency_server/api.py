@@ -1,5 +1,4 @@
 from flask import Flask, jsonify, request
-from flask_cors import CORS
 import os
 import awsgi
 from joserfc.jwk import ECKey
@@ -24,8 +23,6 @@ DB_NAME = os.getenv("DB_NAME")
 
 MAIN_DOMAIN = os.getenv("MAIN_DOMAIN")
 
-CORS(app, resources={r"/*": {"origins": f"https://list.{MAIN_DOMAIN}"}})
-
 personality = WebcatPersonality(
     PUBLIC_KEY,
     DB_HOST,
@@ -39,6 +36,23 @@ personality = WebcatPersonality(
 
 VERSION = 1
 
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = f"https://log.{MAIN_DOMAIN}"
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
+
+@app.before_request
+def handle_options():
+    if request.method == 'OPTIONS':
+        response = jsonify({"status": "OK", "message": "CORS preflight successful"})
+        response.status_code = 200
+        return add_cors_headers(response)
+
+@app.after_request
+def after_request(response):
+    return add_cors_headers(response)
+
 @app.route("/")
 def index():
     return jsonify({"status": "OK"})
@@ -51,48 +65,48 @@ def queue_submission():
     content = request.json
 
     if "leaf" not in content:
-        return jsonify({"status": "KO", "error": "`leaf` not found in JSON body."}), 400
+        return jsonify({"status": "KO", "message": "`leaf` not found in JSON body."}), 400
 
     leaf = content["leaf"]
 
     try:
         obj = jws.deserialize_compact(leaf, personality.key)
     except:
-        return jsonify({"status": "KO", "error": "Invalid signature."}), 400
+        return jsonify({"status": "KO", "message": "Invalid signature."}), 400
 
     # this is probably useless, the lib already enforce this, but I've got JWT PTSD
     if obj.protected["alg"] != "ES256":
-        return jsonify({"status": "KO", "error": "Invalid signature."}), 400
+        return jsonify({"status": "KO", "message": "Invalid signature."}), 400
 
     try:
         payload = loads(obj.payload)
     except:
-        return jsonify({"status": "KO", "error": "Invalid JSON in payload."}), 400
+        return jsonify({"status": "KO", "message": "Invalid JSON in payload."}), 400
 
     if "iat" not in payload:
-        return jsonify({"status": "KO", "error": "`iat` not found in payload body."}), 400
+        return jsonify({"status": "KO", "message": "`iat` not found in payload body."}), 400
 
     # verify freshness
     # TODO: think of a balanced and reasonable time window
     if int(time()) - payload["iat"] > 7200:
-        return jsonify({"status": "KO", "error": "The leaf submitted has expired."}), 400
+        return jsonify({"status": "KO", "message": "The leaf submitted has expired."}), 400
 
     try:
         fqdn = payload["fqdn"]
         action = payload["action"]
     except:
-        return jsonify({"status": "KO", "error": "`fqdn` or `action` not found in payload body."}), 400
+        return jsonify({"status": "KO", "message": "`fqdn` or `action` not found in payload body."}), 400
 
     # TODO add consistency checks about the domain and the type of action (query sqlite)
     res = personality.fqdn_db_lookup(fqdn)
 
     # If the domain already exists and we are trying to add it again, fail
     if res and action == ActionTypeValue.ADD:
-        return jsonify({"status": "KO", "error": "`action` for the requested domain cannot be ADD because it already exists in the list.", "hash": res["last_hash"].hex()}), 400
+        return jsonify({"status": "KO", "message": "`action` for the requested domain cannot be ADD because it already exists in the list.", "hash": res["last_hash"].hex()}), 400
     
     # but if we are doing something else, then the fqdn must exist
     if not res and (action == ActionTypeValue.MODIFY or action == ActionTypeValue.DELETE):
-        return jsonify({"status": "KO", "error": "`action` for the requested domain cannot be DELETE or MODIFY because it does not exist in the list."}), 400
+        return jsonify({"status": "KO", "message": "`action` for the requested domain cannot be DELETE or MODIFY because it does not exist in the list."}), 400
 
     # WARNING 💀💀💀
     # TODO: how to address malleability so that duplicates cannot be accepted? both JSON and base64url have space for malleability
@@ -104,7 +118,7 @@ def queue_submission():
 
     # if leaf already exist return an error and the hash
     if res.queued_leaf.status.code == 6:
-        return jsonify({"status": "KO", "error": "The leaf submitted already exists.", "hash": res.queued_leaf.leaf.leaf_identity_hash.hex()}), 400
+        return jsonify({"status": "KO", "message": "The leaf submitted already exists.", "hash": res.queued_leaf.leaf.leaf_identity_hash.hex()}), 400
 
     # Seems like if we are here everything's proper, let's then update the consistency db
     personality.update_list(fqdn, action, res.queued_leaf.leaf.merkle_leaf_hash)
@@ -120,12 +134,12 @@ def queue_submission():
 def proof(lookup_method, param):
     if lookup_method == "hash":
         if not all(c in hexdigits for c in param) or (len(param) % 2) != 0:
-            return jsonify({"status": "KO", "error": "The hash is not a valid hex string."}), 400
+            return jsonify({"status": "KO", "message": "The hash is not a valid hex string."}), 400
         
         res = personality.get_proof_by_hash(param)
         
         if not res:
-            return jsonify({"status": "KO", "error": "Proof not found, maybe it has not been merged yet."}), 404
+            return jsonify({"status": "KO", "message": "Proof not found, maybe it has not been merged yet."}), 404
         
         res["status"] = "OK"
         return jsonify(res)
@@ -134,11 +148,11 @@ def proof(lookup_method, param):
         try:
             index = int(param)
         except:
-            return jsonify({"status": "KO", "error": "The index is not a valid integer."}), 400
+            return jsonify({"status": "KO", "message": "The index is not a valid integer."}), 400
         res = personality.get_proof_by_index(index)
 
         if not res:
-            return jsonify({"status": "KO", "error": "Proof not found, maybe it has not been merged yet."}), 404
+            return jsonify({"status": "KO", "message": "Proof not found, maybe it has not been merged yet."}), 404
         
         res["status"] = "OK"
         return jsonify(res)
@@ -146,12 +160,12 @@ def proof(lookup_method, param):
     elif lookup_method == "domain":
         res = personality.fqdn_db_lookup(param)
         if res is None:
-            return jsonify({"status": "KO", "error": "Proof not found, maybe it has not been merged yet."}), 404
+            return jsonify({"status": "KO", "message": "Proof not found, maybe it has not been merged yet."}), 404
         
         res = personality.get_proof_by_hash(res["last_hash"].hex())
         
         if not res:
-            return jsonify({"status": "KO", "error": "Proof not found, maybe it has not been merged yet."}), 404
+            return jsonify({"status": "KO", "message": "Proof not found, maybe it has not been merged yet."}), 404
         
         res["status"] = "OK"
         return jsonify(res)
@@ -159,7 +173,7 @@ def proof(lookup_method, param):
     elif lookup_method == "consistency":
         pass
     else:
-        return jsonify({"status":"KO", "error": "Invalid `lookup_method`."}), 400
+        return jsonify({"status":"KO", "message": "Invalid `lookup_method`."}), 400
 
 
 @app.route(f"/v{VERSION}/leaf/<lookup_method>/<param>", methods=["GET"])
@@ -169,12 +183,12 @@ def leaf(lookup_method, param):
         try:
             index = int(param)
         except:
-            return jsonify({"status": "KO", "error": "The index is not a valid integer."}), 400
+            return jsonify({"status": "KO", "message": "The index is not a valid integer."}), 400
         
         try:
             res = personality.get_leaf(index)
         except:
-            return jsonify({"status": "KO", "error": "Leaf not found, maybe it has not been merged yet."}), 404
+            return jsonify({"status": "KO", "message": "Leaf not found, maybe it has not been merged yet."}), 404
 
         res["status"] = "OK"
         return jsonify(res)
@@ -183,20 +197,23 @@ def leaf(lookup_method, param):
         # first get the index with the hash, then lookup the object by index
         # it's silly but it's what trillian offers
         if not all(c in hexdigits for c in param) or (len(param) % 2) != 0:
-            return jsonify({"status": "KO", "error": "The hash is not a valid hex string."}), 400
+            return jsonify({"status": "KO", "message": "The hash is not a valid hex string."}), 400
         
         res = personality.get_proof_by_hash(param)
 
         if not res:
-            return jsonify({"status": "KO", "error": "Leaf not found, maybe it has not been merged yet."}), 404
+            return jsonify({"status": "KO", "message": "Leaf not found, maybe it has not been merged yet."}), 404
 
         index = res["proof"]["index"]
         res = personality.get_leaf(index)
 
         res["status"] = "OK"
         return jsonify(res)
+    elif lookup_method == "domain":
+        ### TODO
+        pass
     else:
-        return jsonify({"status":"KO", "error": "Invalid `lookup_method`."}), 400
+        return jsonify({"status":"KO", "message": "Invalid `lookup_method`."}), 400
 
 
 @app.route(f"/v{VERSION}/root", defaults={'tree_size': 0}, methods=["GET"])
@@ -210,7 +227,7 @@ def root(tree_size):
         output["status"] = "OK"
         return jsonify(output)
     except:
-        return jsonify({"status": "KO", "error": "`tree_size` is too large."}), 400
+        return jsonify({"status": "KO", "message": "`tree_size` is too large."}), 400
 
 
 @app.route(f"/v{VERSION}/info", methods=["GET"])
