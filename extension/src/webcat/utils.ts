@@ -3,29 +3,10 @@ export function getFQDN(url: string): string {
   return urlobj.hostname;
 }
 
-export function isHTTPS(url: string): boolean {
-  const urlobj = new URL(url);
-  if (urlobj.protocol === "https:") {
-    return true;
-  } else {
-    return false;
-  }
-}
-
-export function isOnion(url: string): boolean {
-  const fqdn = getFQDN(url);
-  return fqdn.substring(fqdn.lastIndexOf(".")) === ".onion";
-}
-
-export function isRoot(url: string): boolean {
-  const urlobj = new URL(url);
-  return urlobj.pathname === "/";
-}
-
 export async function isFQDNEnrolled(fqdn: string): Promise<boolean> {
   const fqdn_hash = await SHA256(fqdn);
   //return fqdn_hash;
-  if (fqdn === "nym.re" || fqdn === "lsd.cat") {
+  if (fqdn === "nym.re" || fqdn === "lsd.cat" || fqdn === "globaleaks.nym.re") {
     return true;
   } else {
     return false;

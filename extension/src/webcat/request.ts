@@ -1,5 +1,5 @@
 import { OriginState } from "./interfaces";
-import { getFQDN, isFQDNEnrolled, isHTTPS, isOnion, isRoot } from "./utils";
+import { isFQDNEnrolled } from "./utils";
 import { setIcon, setErrorIcon } from "./ui";
 
 export async function validateMainFrame(
@@ -15,17 +15,28 @@ export async function validateMainFrame(
     return;
   }
 
-  // If the website is enrolled but is loading via HTTP abort anyway
-  // Or maybe not if it's an onion website :)
-  if (isHTTPS(url) === false && isOnion(url) === false) {
+  // See https://github.com/freedomofpress/webcat/issues/1
+  const urlobj = new URL(url);
+  if (
+    !["80", "443", ""].includes(urlobj.port) || // Ports 80, 443, or no port specified.
+    !["http:", "https:"].includes(urlobj.protocol) // Protocol must be HTTP or HTTPS.
+  ) {
     setErrorIcon(tabId);
     throw new Error(
-      "Attempting to load HTTP resource for a non-onion enrolled FQDN!",
+      `Attempting to load an enrolled resource using protocol "${urlobj.protocol}" and port "${urlobj.port || '(default)'}". Only standard protocols (HTTP/HTTPS) and ports (80/443) are allowed.`
     );
   }
 
-  // Do we care about this? What matters in the end is the main_frame context
-  if (isRoot(url) === false) {
+  // If the website is enrolled but is not https force a redirect
+  // Or maybe not if it's an onion website :)
+  if (urlobj.protocol !== "https:" && urlobj.hostname.substring(fqdn.lastIndexOf(".")) !== ".onion") {
+    urlobj.protocol = "https:"
+    // Redirect to HTTPS
+    return { redirectUrl: urlobj.toString() };
+  }
+
+  // We support one enrollment/policy per domain, to enforce SOP isolation
+  if (urlobj.pathname !== "/") {
     setErrorIcon(tabId);
     throw new Error("Enrolled applications should be loaded from the root.");
   }
