@@ -25,24 +25,75 @@ They have different configuration requirements in order to be succesful, but the
  - **Needs Investigation* does not allow retries. However, the failure happened in an unexpected situation (such as, the transparency log personality detected inconsistencies). This should never happen, but if it does, the incident must be investigated,
 
 
-| **Current Phase**       | **Status Code**                   | **Final** | **Needs Investigation** | **Description**                                                                                 | **Next Successful State**         | **Next Error State**                 |
-|--------------------------|-----------------------------------|-----------|--------------------------|-------------------------------------------------------------------------------------------------|------------------------------------|---------------------------------------|
-| Submission              | SUBMITTED                        | No        | No                       | Request received and saved.                                                                     | PRELIMINARY_VALIDATION_IN_PROGRESS | -                                     |
-| Preliminary Validation  | PRELIMINARY_VALIDATION_IN_PROGRESS | No        | No                       | Initial checks in progress.                                                                     | PRELIMINARY_VALIDATION_OK          | PRELIMINARY_VALIDATION_ERROR          |
-| Preliminary Validation  | PRELIMINARY_VALIDATION_OK        | No        | No                       | Initial validation successful.                                                                  | SUBMISSION_TO_LOG_IN_PROGRESS      | -                                     |
-| Preliminary Validation  | PRELIMINARY_VALIDATION_ERROR     | Yes       | No                       | Configuration error during initial validation; change discarded.                                | -                                  | -                                     |
-| Submission to Log       | SUBMISSION_TO_LOG_IN_PROGRESS    | No        | No                       | Sending to Transparency API.                                                                    | SUBMISSION_TO_LOG_OK               | SUBMISSION_TO_LOG_ERROR               |
-| Submission to Log       | SUBMISSION_TO_LOG_OK             | No        | No                       | Submission accepted by Transparency API.                                                       | LOG_INCLUSION_OK                   | -                                     |
-| Submission to Log       | SUBMISSION_TO_LOG_ERROR          | Yes       | Yes                      | Transparency API rejected submission; change discarded.                                         | -                                  | -                                     |
-| Log Inclusion           | LOG_INCLUSION_OK                | No        | No                       | Transparency API returned a valid log inclusion proof; merge successful.                       | WAITING_DELAY                      | -                                     |
-| Log Inclusion           | LOG_INCLUSION_ERROR             | Yes       | Yes                      | Log inclusion proof failed; change discarded.                                                  | -                                  | -                                     |
-| Waiting Period          | WAITING_DELAY                   | No        | No                       | All steps successful; waiting period before secondary validation.                              | SECOND_VALIDATION_IN_PROGRESS      | -                                     |
-| Secondary Validation    | SECOND_VALIDATION_IN_PROGRESS   | No        | No                       | Secondary checks in progress.                                                                   | SECOND_VALIDATION_OK               | SECOND_VALIDATION_ERROR               |
-| Secondary Validation    | SECOND_VALIDATION_OK            | No        | No                       | Secondary validation successful; configuration matches the first validation.                   | SECOND_SUBMISSION_TO_LOG_IN_PROGRESS | -                                     |
-| Secondary Validation    | SECOND_VALIDATION_ERROR         | Yes       | No                       | Secondary validation failed; configuration mismatch or error; change discarded.                | -                                  | -                                     |
-| Second Submission to Log| SECOND_SUBMISSION_TO_LOG_IN_PROGRESS | No        | No                       | Sending results of secondary validation to Transparency API.                                   | SECOND_SUBMISSION_TO_LOG_OK        | SECOND_SUBMISSION_TO_LOG_ERROR        |
-| Second Submission to Log| SECOND_SUBMISSION_TO_LOG_OK      | No        | No                       | Second submission accepted by Transparency API.                                                | SECOND_LOG_INCLUSION_OK            | -                                     |
-| Second Submission to Log| SECOND_SUBMISSION_TO_LOG_ERROR   | Yes       | Yes                      | Transparency API rejected second submission; change discarded.                                 | -                                  | -                                     |
-| Second Log Inclusion    | SECOND_LOG_INCLUSION_OK         | No        | No                       | Transparency API returned a valid log inclusion proof; merge successful.                       | COMPLETED                          | -                                     |
-| Second Log Inclusion    | SECOND_LOG_INCLUSION_ERROR      | Yes       | Yes                      | Log inclusion proof failed during second inclusion; change discarded.                          | -                                  | -                                     |
-| Completion              | COMPLETED                       | Yes       | No                       | Process completed successfully; change included in the next list distribution.                 | -                                  | -                                     |
+| **Current Phase**       | **Status Code**                       | **Final** | **Needs Investigation** | **Description**                                                                                 | **Next Successful State**                 | **Next Error State**                 |
+|--------------------------|---------------------------------------|-----------|--------------------------|-------------------------------------------------------------------------------------------------|------------------------------------------|---------------------------------------|
+| Submission              | SUBMITTED                            | No        | No                       | Submission accepted in the queue.                                                              | PRELIMINARY_VALIDATION_IN_PROGRESS       | -                                     |
+| Preliminary Validation  | PRELIMINARY_VALIDATION_IN_PROGRESS   | No        | No                       | Preliminary validation in progress.                                                            | PRELIMINARY_VALIDATION_OK                | PRELIMINARY_VALIDATION_ERROR          |
+| Preliminary Validation  | PRELIMINARY_VALIDATION_OK            | No        | No                       | Preliminary validation succeeded.                                                              | SUBMISSION_TO_LOG_IN_PROGRESS            | -                                     |
+| Preliminary Validation  | PRELIMINARY_VALIDATION_ERROR         | Yes       | No                       | Preliminary validation failed.                                                                 | -                                        | -                                     |
+| Submission to Log       | SUBMISSION_TO_LOG_IN_PROGRESS        | No        | No                       | Transparency Log submission in progress.                                                      | SUBMISSION_TO_LOG_OK                     | SUBMISSION_TO_LOG_ERROR               |
+| Submission to Log       | SUBMISSION_TO_LOG_OK                 | No        | No                       | Transparency Log submission succeeded.                                                        | LOG_INCLUSION_IN_PROGRESS                | -                                     |
+| Submission to Log       | SUBMISSION_TO_LOG_ERROR              | Yes       | Yes                      | Transparency Log submission failed.                                                           | -                                        | -                                     |
+| Log Inclusion           | LOG_INCLUSION_IN_PROGRESS            | No        | No                       | Waiting for the Transparency API to return the inclusion proof.                               | LOG_INCLUSION_OK                         | LOG_INCLUSION_ERROR                   |
+| Log Inclusion           | LOG_INCLUSION_OK                     | No        | No                       | First inclusion proof received from Transparency Log.                                         | WAITING_DELAY                            | -                                     |
+| Log Inclusion           | LOG_INCLUSION_ERROR                  | No        | Yes                      | The transparency log has failed to merge the leaf.                                            | -                                        | -                                     |
+| Waiting Period          | WAITING_DELAY                        | No        | No                       | Waiting for the set delay before sending again to the Transparency Log.                       | SECOND_VALIDATION_IN_PROGRESS            | -                                     |
+| Secondary Validation    | SECOND_VALIDATION_IN_PROGRESS        | No        | No                       | Second validation in progress.                                                                | SECOND_VALIDATION_OK                     | SECOND_VALIDATION_ERROR               |
+| Secondary Validation    | SECOND_VALIDATION_OK                 | No        | No                       | Second validation succeeded.                                                                  | SECOND_SUBMISSION_TO_LOG_IN_PROGRESS     | -                                     |
+| Secondary Validation    | SECOND_VALIDATION_ERROR              | Yes       | No                       | Second validation failed.                                                                     | -                                        | -                                     |
+| Second Submission to Log| SECOND_SUBMISSION_TO_LOG_IN_PROGRESS | No        | No                       | Second Transparency Log submission in progress.                                               | SECOND_SUBMISSION_TO_LOG_OK              | SECOND_SUBMISSION_TO_LOG_ERROR        |
+| Second Submission to Log| SECOND_SUBMISSION_TO_LOG_OK          | No        | No                       | Second Transparency Log submission succeeded.                                                 | SECOND_LOG_INCLUSION_IN_PROGRESS         | -                                     |
+| Second Submission to Log| SECOND_SUBMISSION_TO_LOG_ERROR       | Yes       | Yes                      | Second Transparency Log submission failed.                                                    | -                                        | -                                     |
+| Second Log Inclusion    | SECOND_LOG_INCLUSION_IN_PROGRESS     | No        | No                       | Waiting for the entry to be inserted into the Transparency Log.                               | SECOND_LOG_INCLUSION_OK                  | SECOND_LOG_INCLUSION_ERROR            |
+| Second Log Inclusion    | SECOND_LOG_INCLUSION_OK              | No        | No                       | Entry successfully inserted into the Transparency Log.                                        | COMPLETED                                | -                                     |
+| Second Log Inclusion    | SECOND_LOG_INCLUSION_ERROR           | No        | Yes                      | The transparency log has failed to merge the leaf.                                            | -                                        | -                                     |
+| Completion              | COMPLETED                            | Yes       | No                       | Procedure successfully completed. The Preload list has been updated.                          | -                                        | -                                     |
+
+#### State diagram
+
+```mermaid
+stateDiagram-v2
+    [*] --> SUBMITTED
+    SUBMITTED --> PRELIMINARY_VALIDATION_IN_PROGRESS
+
+    PRELIMINARY_VALIDATION_IN_PROGRESS --> PRELIMINARY_VALIDATION_OK
+    PRELIMINARY_VALIDATION_IN_PROGRESS --> PRELIMINARY_VALIDATION_ERROR : Soft Failure (Notify Admin)
+
+    PRELIMINARY_VALIDATION_OK --> SUBMISSION_TO_LOG_IN_PROGRESS
+    PRELIMINARY_VALIDATION_ERROR --> [*]
+
+    SUBMISSION_TO_LOG_IN_PROGRESS --> SUBMISSION_TO_LOG_OK
+    SUBMISSION_TO_LOG_IN_PROGRESS --> SUBMISSION_TO_LOG_ERROR : Hard Failure (Notify System Admin)
+
+    SUBMISSION_TO_LOG_OK --> LOG_INCLUSION_IN_PROGRESS
+    SUBMISSION_TO_LOG_ERROR --> [*]
+
+    LOG_INCLUSION_IN_PROGRESS --> LOG_INCLUSION_OK
+    LOG_INCLUSION_IN_PROGRESS --> LOG_INCLUSION_ERROR : Hard Failure (Notify System Admin)
+
+    LOG_INCLUSION_OK --> WAITING_DELAY
+    LOG_INCLUSION_ERROR --> [*]
+
+    WAITING_DELAY --> SECOND_VALIDATION_IN_PROGRESS
+
+    SECOND_VALIDATION_IN_PROGRESS --> SECOND_VALIDATION_OK
+    SECOND_VALIDATION_IN_PROGRESS --> SECOND_VALIDATION_ERROR : Soft Failure (Notify Admin)
+
+    SECOND_VALIDATION_OK --> SECOND_SUBMISSION_TO_LOG_IN_PROGRESS
+    SECOND_VALIDATION_ERROR --> [*]
+
+    SECOND_SUBMISSION_TO_LOG_IN_PROGRESS --> SECOND_SUBMISSION_TO_LOG_OK
+    SECOND_SUBMISSION_TO_LOG_IN_PROGRESS --> SECOND_SUBMISSION_TO_LOG_ERROR : Hard Failure (Notify System Admin)
+
+    SECOND_SUBMISSION_TO_LOG_OK --> SECOND_LOG_INCLUSION_IN_PROGRESS
+    SECOND_SUBMISSION_TO_LOG_ERROR --> [*]
+
+    SECOND_LOG_INCLUSION_IN_PROGRESS --> SECOND_LOG_INCLUSION_OK
+    SECOND_LOG_INCLUSION_IN_PROGRESS --> SECOND_LOG_INCLUSION_ERROR : Hard Failure (Notify System Admin)
+
+    SECOND_LOG_INCLUSION_OK --> COMPLETED : Successful Completion
+    SECOND_LOG_INCLUSION_ERROR --> [*]
+
+    COMPLETED --> [*]
+
+```
