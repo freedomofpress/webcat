@@ -5,7 +5,6 @@ import { OriginState } from "./interfaces";
 import { validateResponseHeaders, validateResponseContent } from "./response";
 import { validateMainFrame } from "./request";
 import { getFQDN, isExtensionRequest, isFQDNEnrolled } from "./utils";
-import { setIcon, setErrorIcon } from "./ui";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
 
 const origins: Map<string, OriginState> = new Map();
@@ -99,7 +98,6 @@ export async function headersListener(
     await validateResponseHeaders(sigstore, origins.get(fqdn)!, details);
   } catch (error) {
     console.log("Error when parsing response headers:", error);
-    setErrorIcon(details.tabId);
     return { redirectUrl: browser.runtime.getURL("pages/error.html") };
   }
 

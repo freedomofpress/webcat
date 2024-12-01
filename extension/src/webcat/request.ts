@@ -1,6 +1,5 @@
 import { OriginState } from "./interfaces";
 import { isFQDNEnrolled } from "./utils";
-import { setIcon, setErrorIcon } from "./ui";
 
 export async function validateMainFrame(
   tabs: Map<number, string>,
@@ -20,7 +19,6 @@ export async function validateMainFrame(
     !["80", "443", ""].includes(urlobj.port) || // Ports 80, 443, or no port specified.
     !["http:", "https:"].includes(urlobj.protocol) // Protocol must be HTTP or HTTPS.
   ) {
-    setErrorIcon(tabId);
     throw new Error(
       `Attempting to load an enrolled resource using protocol "${urlobj.protocol}" and port "${urlobj.port || '(default)'}". Only standard protocols (HTTP/HTTPS) and ports (80/443) are allowed.`
     );
@@ -36,7 +34,6 @@ export async function validateMainFrame(
 
   // We support one enrollment/policy per domain, to enforce SOP isolation
   if (urlobj.pathname !== "/") {
-    setErrorIcon(tabId);
     throw new Error("Enrolled applications should be loaded from the root.");
   }
 
