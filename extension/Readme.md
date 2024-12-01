@@ -23,3 +23,81 @@ Compile the TypeScript and package it into a single file using [Vite](https://vi
 The output will be in `./bundle/bundle.js`. Everything else in the extension folder does not need any action. The extension can be loaded in debug mode by loading the `manifest.json` after the build command.
 
 Alternatively, `make build` will build, package, and clean the extension, saving the archive as `../dist/webcat-extension.zip`.
+
+
+## Validation logic
+*WARNING*: experimental diagrams. Conformity with the code to be verified.
+
+### Decision tree
+```mermaid
+flowchart TD
+    A[User types www.example.com] --> B[Extension intercepts request]
+    B --> C{Is www.example.com enrolled?}
+    C -- No --> D[Allow request to proceed]
+    C -- Yes --> E[Fetch policy hash]
+    E --> F[Fetch manifest.json]
+    F --> G{Headers valid?}
+    G -- No --> H[Abort page load]
+    G -- Yes --> I[Wait for manifest download]
+    I --> J{Manifest downloaded successfully?}
+    J -- No --> H
+    J -- Yes --> K[Verify manifest signatures]
+    K --> L{Signatures valid?}
+    L -- No --> H
+    L -- Yes --> M[Download main page content]
+    M --> N[Check main page hash]
+    N --> O{Main page hash valid?}
+    O -- No --> H
+    O -- Yes --> P[Verify subresources CSP and hashes]
+    P --> Q{Subresources valid?}
+    Q -- No --> H
+    Q -- Yes --> R[Allow page to load]
+```
+
+### Sequence diagram
+```mermaid
+sequenceDiagram
+    participant User
+    participant Browser
+    participant Extension
+    participant Server
+
+    User ->> Browser: Types www.example.com
+    Browser ->> Extension: Sends request to load the page
+    Extension ->> Extension: Checks if www.example.com is in the internal list
+    alt Not Enrolled
+        Extension ->> Browser: Allow request to proceed
+    else Enrolled
+        Extension ->> Server: Fetch policy hash
+        Extension ->> Server: Fire async request to www.example.com/manifest.json
+        Server -->> Extension: Returns headers
+        Extension ->> Extension: Check header conformity
+        alt Header Invalid
+            Extension ->> Browser: Abort page load
+        else Header Valid
+            Extension ->> Extension: Wait for manifest to download
+            alt Manifest Download Fails
+                Extension ->> Browser: Abort page load
+            else Manifest Downloaded
+                Extension ->> Extension: Verify manifest signatures
+                alt Signature Invalid
+                    Extension ->> Browser: Abort page load
+                else Signature Valid
+                    Extension ->> Server: Download main page
+                    Server -->> Extension: Returns main page content
+                    Extension ->> Extension: Check main page hash
+                    alt Main Page Hash Invalid
+                        Extension ->> Browser: Abort page load
+                    else Main Page Hash Valid
+                        Extension ->> Extension: Verify subresources (CSP and hashes)
+                        alt Subresource Verification Fails
+                            Extension ->> Browser: Abort page load
+                        else All Subresources Verified
+                            Extension ->> Browser: Allow page to load
+                        end
+                    end
+                end
+            end
+        end
+    end
+```
