@@ -183,13 +183,12 @@ export async function validateResponseContent(
               `Error: hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
             );
             deny(filter);
-
+            browser.tabs.update(details.tabId, { url: browser.runtime.getURL("pages/error.html") });
           }
           // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
           // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
           filter.close();
           // Redirect the main frame to an error page
-          browser.tabs.update(details.tabId, { url: browser.runtime.getURL("pages/error.html") });
         });
       });
     } else {
