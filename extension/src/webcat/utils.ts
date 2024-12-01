@@ -25,7 +25,7 @@ export function isRoot(url: string): boolean {
 export async function isFQDNEnrolled(fqdn: string): Promise<boolean> {
   const fqdn_hash = await SHA256(fqdn);
   //return fqdn_hash;
-  if (fqdn === "nym.re" || fqdn === "lsd.cat") {
+  if (fqdn.endsWith("nym.re") || fqdn === "lsd.cat") {
     return true;
   } else {
     return false;

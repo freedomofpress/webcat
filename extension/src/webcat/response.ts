@@ -77,6 +77,8 @@ export async function validateResponseHeaders(
       throw new Error("Failed to find all the necessary policy headers!");
     }
 
+    // TODO: free check if threshold > size(signers) then abort
+
     // TODO: here we validate that the hash in the preload lists matches the headers
     const hash = new Uint8Array();
 

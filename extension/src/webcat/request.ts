@@ -1,5 +1,5 @@
 import { OriginState } from "./interfaces";
-import { getFQDN, isFQDNEnrolled, isHTTPS, isOnion, isRoot } from "./utils";
+import { isExtensionRequest, isFQDNEnrolled, isHTTPS, isOnion, isRoot } from "./utils";
 import { setIcon, setErrorIcon } from "./ui";
 
 export async function validateMainFrame(
@@ -11,7 +11,6 @@ export async function validateMainFrame(
 ) {
   if ((await isFQDNEnrolled(fqdn)) === false) {
     console.log(`${url} is not enrolled, skipping...`);
-    setIcon(tabId);
     return;
   }
 

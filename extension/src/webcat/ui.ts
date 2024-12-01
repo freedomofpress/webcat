@@ -8,23 +8,19 @@ export function setIcon(tabId: number) {
 
   const theme = isDarkTheme() ? "dark" : "light";
 
-  browser.pageAction.setIcon({
+  console.log("Setting standard icon")
+  browser.browserAction.setIcon({
     tabId: tabId,
     path: {
-      16: `icons/${theme}/16/webcat.png`,
-      32: `icons/${theme}/32/webcat.png`,
-      48: `icons/${theme}/48/webcat.png`,
-      64: `icons/${theme}/64/webcat.png`,
-      96: `icons/${theme}/96/webcat.png`,
-      128: `icons/${theme}/128/webcat.png`,
-      256: `icons/${theme}/256/webcat.png`,
+      16: `icons/${theme}/webcat.svg`,
+      32: `icons/${theme}/webcat.svg`,
+      48: `icons/${theme}/webcat.svg`,
+      64: `icons/${theme}/webcat.svg`,
+      96: `icons/${theme}/webcat.svg`,
+      128: `icons/${theme}/webcat.svg`,
+      256: `icons/${theme}/webcat.svg`,
     },
   });
-  browser.pageAction.setTitle({
-    tabId: tabId,
-    title: "webcat is running \\0/",
-  });
-  browser.pageAction.show(tabId);
 }
 
 export function setOKIcon(tabId: number) {
@@ -34,23 +30,23 @@ export function setOKIcon(tabId: number) {
 
   const theme = isDarkTheme() ? "dark" : "light";
 
-  browser.pageAction.setIcon({
+  console.log("Setting ok icon")
+  browser.browserAction.setIcon({
     tabId: tabId,
     path: {
-      16: `icons/${theme}/16/webcat-ok.png`,
-      32: `icons/${theme}/32/webcat-ok.png`,
-      48: `icons/${theme}/48/webcat-ok.png`,
-      64: `icons/${theme}/64/webcat-ok.png`,
-      96: `icons/${theme}/96/webcat-ok.png`,
-      128: `icons/${theme}/128/webcat-ok.png`,
-      256: `icons/${theme}/256/webcat-ok.png`,
+      16: `icons/${theme}/webcat-ok.svg`,
+      32: `icons/${theme}/webcat-ok.svg`,
+      48: `icons/${theme}/webcat-ok.svg`,
+      64: `icons/${theme}/webcat-ok.svg`,
+      96: `icons/${theme}/webcat-ok.svg`,
+      128: `icons/${theme}/webcat-ok.svg`,
+      256: `icons/${theme}/webcat-ok.svg`,
     },
   });
-  browser.pageAction.setTitle({
+  browser.browserAction.setTitle({
     tabId: tabId,
-    title: "webcat verification successful!",
+    title: "Webcat verification successful. Click for info!",
   });
-  browser.pageAction.show(tabId);
 }
 
 export function setErrorIcon(tabId: number) {
@@ -60,21 +56,21 @@ export function setErrorIcon(tabId: number) {
 
   const theme = isDarkTheme() ? "dark" : "light";
 
-  browser.pageAction.setIcon({
+  console.log("Setting error icon")
+  browser.browserAction.setIcon({
     tabId: tabId,
     path: {
-      16: `icons/${theme}/16/webcat-error.png`,
-      32: `icons/${theme}/32/webcat-error.png`,
-      48: `icons/${theme}/48/webcat-error.png`,
-      64: `icons/${theme}/64/webcat-error.png`,
-      96: `icons/${theme}/96/webcat-error.png`,
-      128: `icons/${theme}/128/webcat-error.png`,
-      256: `icons/${theme}/256/webcat-error.png`,
+      16: `icons/${theme}/webcat-error.svg`,
+      32: `icons/${theme}/webcat-error.svg`,
+      48: `icons/${theme}/webcat-error.svg`,
+      64: `icons/${theme}/webcat-error.svg`,
+      96: `icons/${theme}/webcat-error.svg`,
+      128: `icons/${theme}/webcat-error.svg`,
+      256: `icons/${theme}/webcat-error.svg`,
     },
   });
-  browser.pageAction.setTitle({
+  browser.browserAction.setTitle({
     tabId: tabId,
-    title: "webcat verification failed :(",
+    title: "Webcat verification failed. Click for info!",
   });
-  browser.pageAction.show(tabId);
 }

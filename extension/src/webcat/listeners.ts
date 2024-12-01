@@ -36,8 +36,6 @@ function cleanup(tabId: number) {
     originState!.references--;
     /* Here we could check if references are 0, and delete the origin object too */
     tabs.delete(tabId);
-    /* Also remove the address bar icon */
-    browser.pageAction.hide(tabId);
   }
 }
 
