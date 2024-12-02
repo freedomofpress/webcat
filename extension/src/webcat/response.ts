@@ -25,11 +25,9 @@ export async function validateResponseHeaders(
      2) TODO: The app has been updated --> not implemented
     */
   console.log(
-    `Validating response headers, populated: ${originState.populated}, locked: ${originState.locked}`,
+    `Validating response headers, populated: ${originState.populated}`,
   );
-  if (originState.populated === false && originState.locked === false) {
-    // There is still a race condition here...
-    originState.locked = true;
+  if (originState.populated === false) {
 
     for (const header of details.responseHeaders.sort()) {
       // This array is just used to detect duplicates
@@ -62,7 +60,6 @@ export async function validateResponseHeaders(
     }
 
     if (headers.length !== new Set(headers).size) {
-      originState.locked = false;
       throw new Error("Duplicate header keys found!");
     }
 
@@ -70,7 +67,6 @@ export async function validateResponseHeaders(
       originState.policy.threshold < 1 ||
       originState.policy.signers.size < 1
     ) {
-      originState.locked = false;
       throw new Error("Failed to find all the necessary policy headers!");
     }
 
@@ -80,7 +76,6 @@ export async function validateResponseHeaders(
     const hash = new Uint8Array();
 
     if ((await validate(originState.policy, originState.csp, hash)) !== true) {
-      originState.locked = false;
       throw new Error("Response headers do not match the preload list.");
     }
     // By doing this here we gain a bit of async time: we start processing the request headers
@@ -88,7 +83,6 @@ export async function validateResponseHeaders(
     const manifestResponse = await originState.manifestPromise;
 
     if (manifestResponse.ok !== true) {
-      originState.locked = false;
       throw new Error("Failed to fetch manifest.json: server error");
     }
 
@@ -101,21 +95,13 @@ export async function validateResponseHeaders(
     );
 
     if (!originState.valid) {
-      originState.locked = false;
       throw new Error("Manifest signature verification failed.");
     }
 
     originState.populated = true;
-    originState.locked = false;
 
     console.log(`Metadata for ${details.url} loaded`);
   } else {
-    // If another request is populating the originState, we should wait
-    while (originState.populated === false && originState.locked === true) {
-      console.log(
-        `Waiting because populated: ${originState.populated} but locked: ${originState.locked}`,
-      );
-    }
 
     // CSP still needs to be evaluated every time
     let csp: string = "";

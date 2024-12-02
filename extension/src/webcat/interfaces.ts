@@ -16,7 +16,6 @@ export interface Policy {
 
 export interface OriginState {
   // The fqdn is the key in the map, so we do not need here too
-  locked: boolean;
   populated: boolean;
   version: number;
   cspHash: Uint8Array;
@@ -33,7 +32,6 @@ export interface OriginState {
 export class OriginState {
   constructor() {
     // Let's start with safe defaults, we assume we are enrolled and nothing is verified
-    this.locked = false;
     this.populated = false;
     this.version = -1;
     this.csp = "";
