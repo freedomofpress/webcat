@@ -1,5 +1,6 @@
 import { OriginState } from "./interfaces";
 import { isFQDNEnrolled } from "./utils";
+import { logger } from "./logger";
 
 export async function validateMainFrame(
   tabs: Map<number, string>,
@@ -9,7 +10,8 @@ export async function validateMainFrame(
   tabId: number,
 ) {
   if ((await isFQDNEnrolled(fqdn)) === false) {
-    console.log(`${url} is not enrolled, skipping...`);
+    // Only for development
+    console.debug(`${url} is not enrolled, skipping...`);
     return;
   }
 
@@ -46,15 +48,15 @@ export async function validateMainFrame(
   }
 
   // Generate a new state for the origin
-  console.log(`${fqdn} is enrolled, but we do not have metadata yet.`);
-  const newOriginState = new OriginState();
+  logger.addLog("info", `${fqdn} is enrolled, but we do not have metadata yet.`, tabId, fqdn);
+  const newOriginState = new OriginState(fqdn);
   origins.set(fqdn, newOriginState);
 
   // So, we cannot directly know that we are the initiator of this request, see
   // https://stackoverflow.com/questions/31129648/how-to-identify-who-initiated-the-http-request-in-firefox
   // It's tracked in the dev console, but no luck in extensions https://discourse.mozilla.org/t/access-webrequest-request-initiator-chain-stack-trace/75877
   // More sadness: https://stackoverflow.com/questions/47331875/webrequest-api-how-to-get-the-requestid-of-a-new-request
-  console.log(`Fetching https://${fqdn}/manifest.json`);
+  logger.addLog("info", `Fetching https://${fqdn}/manifest.json`, tabId, fqdn);
   newOriginState.manifestPromise = fetch(`https://${fqdn}/manifest.json`, {
     cache: "no-store",
   });

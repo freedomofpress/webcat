@@ -5,6 +5,7 @@ import { Policy, DataStructure } from "./interfaces";
 import { verifyArtifact } from "../sigstore/sigstore";
 import { Sigstore } from "../sigstore/interfaces";
 import { stringToUint8Array } from "../sigstore/encoding";
+import { logger } from "./logger";
 
 export function validateCSP(csp: string) {
   // Here will go the CSP validator of the main_frame
@@ -27,10 +28,12 @@ export async function validateManifest(
   sigstore: Sigstore,
   manifest: DataStructure,
   policy: Policy,
+  fqdn: string,
+  tabId: number,
 ) {
   // TODO: Silly hack to match silly development debugging choice:
   const fixedManifest = { manifest: manifest.manifest };
-  console.log(canonicalize(fixedManifest));
+  logger.addLog("debug", canonicalize(fixedManifest), tabId, fqdn);
   var validCount = 0;
   for (const signer of policy.signers) {
     if (manifest.signatures[signer[1]]) {
@@ -43,7 +46,7 @@ export async function validateManifest(
           stringToUint8Array(canonicalize(fixedManifest)),
         );
         if (res) {
-          console.log("Verified", signer[0], signer[1]);
+          logger.addLog("info", `Verified ${signer[0]}, ${signer[1]}`, tabId, fqdn);
           validCount++;
         }
       } catch (e) {
@@ -52,7 +55,7 @@ export async function validateManifest(
     }
   }
 
-  console.log(`threshold: ${policy.threshold}, valid: ${validCount}`);
+  logger.addLog("info", `threshold: ${policy.threshold}, valid: ${validCount}`, tabId, fqdn);
   if (validCount >= policy.threshold) {
     return true;
   } else {

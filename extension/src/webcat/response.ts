@@ -4,6 +4,7 @@ import { parseSigners, parseThreshold } from "./parsers";
 import { SHA256, arrayBufferToHex } from "./utils";
 import { Sigstore } from "../sigstore/interfaces";
 import { setOKIcon } from "./ui";
+import { logger } from "./logger";
 
 export async function validateResponseHeaders(
   sigstore: Sigstore,
@@ -24,8 +25,11 @@ export async function validateResponseHeaders(
      1) It has not been done nefore
      2) TODO: The app has been updated --> not implemented
     */
-  console.log(
-    `Validating response headers, populated: ${originState.populated}`,
+  logger.addLog(
+    "info",
+    `Validating response headers, url: ${details.url} populated: ${originState.populated}`,
+    details.tabId,
+    originState.fqdn
   );
   if (originState.populated === false) {
 
@@ -92,6 +96,8 @@ export async function validateResponseHeaders(
       sigstore,
       originState.manifest,
       originState.policy,
+      originState.fqdn,
+      details.tabId,
     );
 
     if (!originState.valid) {
@@ -100,7 +106,7 @@ export async function validateResponseHeaders(
 
     originState.populated = true;
 
-    console.log(`Metadata for ${details.url} loaded`);
+    logger.addLog("info", `Metadata for ${details.url} loaded`, details.tabId, originState.fqdn);
   } else {
 
     // CSP still needs to be evaluated every time
@@ -160,13 +166,16 @@ export async function validateResponseContent(
         SHA256(blob).then(function (content_hash) {
           if (manifest_hash === arrayBufferToHex(content_hash)) {
             // If everything is OK then we can just write the raw blob back
-            console.log(`${pathname} verified.`);
+            logger.addLog("info", `${pathname} verified.`, details.tabId, originState.fqdn);
             filter.write(blob);
           } else {
             // This is just "DENIED" already encoded
             // This fails just for the single file not in the manifest or with the wrong hash
-            console.log(
+            logger.addLog(
+              "error",
               `Error: hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
+              details.tabId,
+              originState.fqdn
             );
             deny(filter);
             browser.tabs.update(details.tabId, { url: browser.runtime.getURL("pages/error.html") });
@@ -179,7 +188,12 @@ export async function validateResponseContent(
       });
     } else {
       // If headers are wrong we abort everything
-      console.log(`Error: tab context is not valid ${details.url}`);
+      logger.addLog(
+        "error",
+        `Error: tab context is not valid ${details.url}`,
+        details.tabId,
+        originState.fqdn
+      );
       // DENIED
       deny(filter);
       filter.close();

@@ -121,7 +121,6 @@ export async function importKey(
     throw new Error(`Unsupported ${keytype}`);
   }
 
-  //console.log(params);
   return await crypto.subtle.importKey(
     params.format,
     params.keyData,
@@ -193,7 +192,6 @@ export async function verifySignature(
   raw_signature.set(binr, 0);
   raw_signature.set(bins, binr.length);
 
-  //console.log(options)
   return await crypto.subtle.verify(options, key, raw_signature, signed);
 }
 

@@ -15,7 +15,7 @@ export interface Policy {
 }
 
 export interface OriginState {
-  // The fqdn is the key in the map, so we do not need here too
+  fqdn: string;  
   populated: boolean;
   version: number;
   cspHash: Uint8Array;
@@ -30,8 +30,9 @@ export interface OriginState {
 }
 
 export class OriginState {
-  constructor() {
+  constructor(fqdn: string) {
     // Let's start with safe defaults, we assume we are enrolled and nothing is verified
+    this.fqdn = fqdn;
     this.populated = false;
     this.version = -1;
     this.csp = "";
@@ -64,4 +65,20 @@ export interface DataStructure {
   signatures: {
     [identity: string]: SigstoreBundle;
   };
+}
+
+export enum LogType {
+  debug = "debug",
+  info = "info",
+  warning = "warning",
+  error = "error",
+}
+
+export interface LogEntry {
+  timestamp: Date;
+  tabId: number;
+  origin: string;
+  level: keyof Console;
+  message: string;
+  stack?: string;
 }

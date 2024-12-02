@@ -1,3 +1,5 @@
+import {logger } from "./logger";
+
 export function isDarkTheme(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
@@ -8,7 +10,7 @@ export function setIcon(tabId: number) {
 
   const theme = isDarkTheme() ? "dark" : "light";
 
-  console.log("Setting standard icon")
+  logger.addLog("debug", "Setting standard icon", tabId, "")
   browser.browserAction.setIcon({
     tabId: tabId,
     path: {
@@ -30,7 +32,7 @@ export function setOKIcon(tabId: number) {
 
   const theme = isDarkTheme() ? "dark" : "light";
 
-  console.log("Setting ok icon")
+  logger.addLog("debug", "Setting ok icon", tabId, "")
   browser.browserAction.setIcon({
     tabId: tabId,
     path: {
@@ -56,7 +58,7 @@ export function setErrorIcon(tabId: number) {
 
   const theme = isDarkTheme() ? "dark" : "light";
 
-  console.log("Setting error icon")
+  logger.addLog("debug", "Setting error icon", tabId, "")
   browser.browserAction.setIcon({
     tabId: tabId,
     path: {

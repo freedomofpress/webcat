@@ -6,6 +6,7 @@ import { validateResponseHeaders, validateResponseContent } from "./response";
 import { validateMainFrame } from "./request";
 import { getFQDN, isExtensionRequest, isFQDNEnrolled } from "./utils";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
+import { logger } from "./logger";
 
 const origins: Map<string, OriginState> = new Map();
 const tabs: Map<number, string> = new Map();
@@ -15,6 +16,7 @@ const allowed_types: string[] = [
   "image",
   "font",
   "media",
+  // TODO, can we avoid "object"? We are discussing to enforce this in the CSP anyway
   "object",
   "xmlhttprequest",
   "websocket",
@@ -77,7 +79,8 @@ export async function headersListener(
     // Skip non-enrolled workers
     (details.tabId < 0 && !origins.has(fqdn))
   ) {
-    console.log(`headersListener: skipping ${details.url}`);
+    // This is too much noise to really log
+    console.debug(`headersListener: skipping ${details.url}`);
     return {};
   }
 
@@ -97,7 +100,7 @@ export async function headersListener(
   try {
     await validateResponseHeaders(sigstore, origins.get(fqdn)!, details);
   } catch (error) {
-    console.log("Error when parsing response headers:", error);
+    logger.addLog("error", `Error when parsing response headers: ${error}`, details.tabId, fqdn);
     return { redirectUrl: browser.runtime.getURL("pages/error.html") };
   }
 
@@ -117,7 +120,7 @@ export async function requestListener(
     // We will always wonder, is this check reasonable?
     // Might be redundant anyway if we skip xmlhttprequest
     // But we probably want to also ensure other extensions work
-    console.log(`requestListener: skipping ${details.url}`);
+    console.debug(`requestListener: skipping ${details.url}`);
     return {};
   }
 
@@ -125,13 +128,13 @@ export async function requestListener(
     // User is navigatin to a new context, whether is enrolled or not better to reset
     cleanup(details.tabId);
 
-    console.log(`Loading main_frame ${details.url}`);
+    logger.addLog("info", `Loading main_frame ${details.url}`, details.tabId, fqdn);
 
     try {
       // This just checks some basic stuff, like TLS/Onion usage and populate the cache if it doesnt exists
       await validateMainFrame(tabs, origins, fqdn, details.url, details.tabId);
     } catch (error) {
-      console.error("Error loading main_frame: ", error);
+      logger.addLog("error", `Error loading main_frame: ${error}`, details.tabId, fqdn);
       return { cancel: true };
     }
   }
@@ -175,9 +178,10 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
 
   // Removed as we now inject only on enrolled websites anyway, see https://github.com/freedomofpress/webcat/issues/2
   if (!origins.has(fqdn)) {
-  // TODO: this can be abused to detect the extension presence
-    console.log(`${fqdn} is not enrolled, skipping WASM validation.`);
-  //  sendResponse(true);
+  // TODO: this could be abused to detect the extension presence if we sent a response
+  // By not sending it, we disallow non-enrolled wbesite to know if the extension exists
+    logger.addLog("debug", `${fqdn} is not enrolled, skipping WASM validation.`, sender.tabId, fqdn);
+  //sendResponse(true);
     return;
   }
 
@@ -185,10 +189,10 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   const originState = origins.get(fqdn);
 
   if (originState!.manifest.manifest.wasm.includes(hash)) {
-    console.log("Validated WASM", hash);
+    logger.addLog("info", `Validated WASM ${hash}`, sender.tabId, fqdn);
     sendResponse(true);
   } else {
-    console.log("Invalid WASM", hash);
+    logger.addLog("error", `Invalid WASM ${hash}`, sender.tabId, fqdn);
     sendResponse(false);
     browser.tabs.update(sender.tab.id, { url: browser.runtime.getURL("pages/error.html") });
   }
@@ -199,7 +203,7 @@ export function injectorListener(details: browser.webNavigation._OnCommittedDeta
   // population of the origins? Perhaps it would be better to do this on a tabid basis
   const fqdn = getFQDN(details.url);
   if (origins.has(fqdn)) {
-    console.log(`Injecting WASM hooks for ${fqdn} tab ${details.tabId}`)
+    logger.addLog("debug", `Injecting WASM hooks`,details.tabId, fqdn)
     browser.tabs.executeScript(details.tabId, {
       file: "hooks/inject.js",
       runAt: "document_start",
