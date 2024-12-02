@@ -1,4 +1,5 @@
 import {
+  injectorListener,
   installListener,
   startupListener,
   messageListener,
@@ -50,3 +51,5 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     }
   }
 });
+
+browser.webNavigation.onCommitted.addListener(injectorListener);

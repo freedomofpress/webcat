@@ -4,6 +4,7 @@
   "version": "1.0",
   "permissions": [
     "storage",
+    "webNavigation",
     "webRequest",
     "webRequestBlocking",
     "tabs",
@@ -18,10 +19,6 @@
     "128": "icons/light/webcat.svg",
     "256": "icons/light/webcat.svg"
   },
-  "web_accessible_resources": [
-    "assets/1.root.json",
-    "pages/error.html"
-  ],
   "background": {
     "scripts": ["dist/bundle.js"],
     "persistent": true
@@ -29,11 +26,12 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["hooks/inject.js", "hooks/relay.js", "hooks/hook.js"],
+      "js": ["hooks/relay.js"],
       "run_at": "document_start"
     }
   ],
   "browser_action": {
+  "default_popup": "pages/popup.html",
     "default_icon": {
       "48": "icons/light/webcat.svg",
       "128": "icons/light/webcat.svg"

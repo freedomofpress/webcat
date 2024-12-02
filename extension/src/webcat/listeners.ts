@@ -174,6 +174,8 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   /* END DEVELOPMENT GUARD */
 
   if (!origins.has(fqdn)) {
+    // TODO: this can be abused to detect the extension presence
+    // see https://github.com/freedomofpress/webcat/issues/2
     console.log(`${fqdn} is not enrolled, skipping WASM validation.`);
     sendResponse(true);
     return;
@@ -189,5 +191,20 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
     console.log("Invalid WASM", hash);
     sendResponse(false);
     browser.tabs.update(sender.tab.id, { url: browser.runtime.getURL("pages/error.html") });
+  }
+}
+
+export function injectorListener(details: browser.webNavigation._OnCommittedDetails) {
+  // TODO: a security audit should find out if this is bypassable: can an onCommitted even race the
+  // population of the origins? Perhaps it would be better to do this on a tabid basis
+  const fqdn = getFQDN(details.url);
+  if (origins.has(fqdn)) {
+    console.log(`Injecting WASM hooks for ${fqdn} tab ${details.tabId}`)
+    browser.tabs.executeScript(details.tabId, {
+      file: "hooks/inject.js",
+      runAt: "document_start",
+      // We are doing allFrames in the hope of https://github.com/freedomofpress/webcat/issues/3
+      allFrames: true
+    });
   }
 }
