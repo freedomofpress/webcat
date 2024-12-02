@@ -188,5 +188,6 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   } else {
     console.log("Invalid WASM", hash);
     sendResponse(false);
+    browser.tabs.update(sender.tab.id, { url: browser.runtime.getURL("pages/error.html") });
   }
 }
