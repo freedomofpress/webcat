@@ -173,11 +173,11 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   }
   /* END DEVELOPMENT GUARD */
 
+  // Removed as we now inject only on enrolled websites anyway, see https://github.com/freedomofpress/webcat/issues/2
   if (!origins.has(fqdn)) {
-    // TODO: this can be abused to detect the extension presence
-    // see https://github.com/freedomofpress/webcat/issues/2
+  // TODO: this can be abused to detect the extension presence
     console.log(`${fqdn} is not enrolled, skipping WASM validation.`);
-    sendResponse(true);
+  //  sendResponse(true);
     return;
   }
 
