@@ -3,7 +3,11 @@
   - Database Server: PoistgreSQL, manage insertion queue, keeps list info
   - Worker: processes the queue in the Database, does preliminary check + transparency log submission
   - Submission Transparency Log: Trillian
+      - **Scope:** `Content-Security-Policy` + `x-sigstore` metadata + `x-webcat` metadata
+      - **Source:** operator of deployment (≟ developer of application)
   - Artifact Transparency Log: Trillian
+      - **Scope:** manifest
+      - **Source:** developer of application (≟ operator of deployment)
   - List Builder: C?
   - CDN Distirbution
 
