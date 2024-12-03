@@ -180,13 +180,12 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
 
           console.log("sending respoinse");
           sendResponse({ tabId, origin });
-          return true;
         }).catch((error) => {
           console.error("Error getting active tab:", error);
           sendResponse({ error: error.message });
-          return true;
         });
-      }    
+        return true;
+      }
 
     } else if (sender.url?.endsWith("/settings.html")) {
     
