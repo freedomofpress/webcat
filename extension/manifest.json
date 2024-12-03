@@ -19,6 +19,7 @@
     "128": "icons/light/webcat.svg",
     "256": "icons/light/webcat.svg"
   },
+  "content_security_policy": "script-src 'self'; object-src 'none';",
   "background": {
     "scripts": ["dist/bundle.js"],
     "persistent": true

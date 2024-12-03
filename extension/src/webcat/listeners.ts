@@ -160,8 +160,41 @@ export async function requestListener(
   return {};
 }
 
-// sender should be browser.runtime.MessageSender but it's missing things...
+// sender should be of type browser.runtime.MessageSender but it's missing things...
 export function messageListener(message: any, sender: any, sendResponse: any) {
+
+  // First, is this coming from the hooks or the extension?
+  if (sender.id === browser.runtime.id) {
+    // And now see from which component
+    if (sender.url?.endsWith("/popup.html")) {
+      if (message.type === "populatePopup") {
+        browser.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
+          if (tabs.length === 0 || !tabs[0].id || !tabs[0].url) {
+              sendResponse({ error: "This functionality is disabled on this tab." });
+              return;
+          }
+
+          const tabId = tabs[0].id;
+          const url = new URL(tabs[0].url);
+          const origin = url.origin;
+
+          console.log("sending respoinse");
+          sendResponse({ tabId, origin });
+          return true;
+        }).catch((error) => {
+          console.error("Error getting active tab:", error);
+          sendResponse({ error: error.message });
+          return true;
+        });
+      }    
+
+    } else if (sender.url?.endsWith("/settings.html")) {
+    
+    } else if (sender.url?.endsWith("/logs.html")) {
+
+    }
+  }
+
   const fqdn = getFQDN(sender.origin);
   /* DEVELOPMENT GUARD */
   if (!origins.has(fqdn) && sender.tab && tabs.has(sender.tab.id!)) {
