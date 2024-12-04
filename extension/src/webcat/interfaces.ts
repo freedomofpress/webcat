@@ -6,6 +6,12 @@ export enum Issuers {
   gitlab = "https://gitlab.com",
 }
 
+export enum metadataRequestSource {
+  main_frame,
+  sub_frame,
+  worker,
+}
+
 export type Signer = [issuer: Issuers, identity: string];
 
 export interface Policy {

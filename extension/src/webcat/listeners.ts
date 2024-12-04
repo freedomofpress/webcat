@@ -1,9 +1,9 @@
 import { updateTUF } from "../sigstore/tuf";
 import { loadSigstoreRoot } from "../sigstore/sigstore";
 import { Sigstore } from "../sigstore/interfaces";
-import { OriginState } from "./interfaces";
+import { OriginState, metadataRequestSource } from "./interfaces";
 import { validateResponseHeaders, validateResponseContent } from "./response";
-import { validateMainFrame } from "./request";
+import { validateOrigin } from "./request";
 import { getFQDN, isExtensionRequest, isFQDNEnrolled } from "./utils";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { logger } from "./logger";
@@ -90,13 +90,10 @@ export async function headersListener(
   //const fqdn = tabs.get(details.tabId);
   // So instead let's get that again
 
-  /* DEVELOPMENT GUARD */
   if (!origins.has(fqdn)) {
-    console.error(
-      "When validating response headers a tab, we found an enrolled tab with no matching origin",
-    );
+    // We are dealing with a background request, probably a serviceworker
+    validateOrigin(tabs, origins, fqdn, details.url, details.tabId, metadataRequestSource.worker)
   }
-  /* END */
 
   try {
     await validateResponseHeaders(sigstore, origins.get(fqdn)!, details);
@@ -133,7 +130,7 @@ export async function requestListener(
 
     try {
       // This just checks some basic stuff, like TLS/Onion usage and populate the cache if it doesnt exists
-      await validateMainFrame(tabs, origins, fqdn, details.url, details.tabId);
+      await validateOrigin(tabs, origins, fqdn, details.url, details.tabId, metadataRequestSource.main_frame);
     } catch (error) {
       logger.addLog("error", `Error loading main_frame: ${error}`, details.tabId, fqdn);
       return { cancel: true };

@@ -1,21 +1,24 @@
-import { OriginState } from "./interfaces";
+import { OriginState, metadataRequestSource } from "./interfaces";
 import { isFQDNEnrolled } from "./utils";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
 
-export async function validateMainFrame(
+export async function validateOrigin(
   tabs: Map<number, string>,
   origins: Map<string, OriginState>,
   fqdn: string,
   url: string,
   tabId: number,
+  type: metadataRequestSource
 ) {
   if ((await isFQDNEnrolled(fqdn)) === false) {
     console.debug(`${url} is not enrolled, skipping...`);
     return;
   }
 
-  setIcon(tabId);
+  if (type === metadataRequestSource.main_frame) {
+    setIcon(tabId);
+  }
 
   // See https://github.com/freedomofpress/webcat/issues/1
   const urlobj = new URL(url);
@@ -42,7 +45,10 @@ export async function validateMainFrame(
   }
 
   // Nothing can go wrong in this func anynmore hopefully, let's add the reference
-  tabs.set(tabId, fqdn);
+  if (type === metadataRequestSource.main_frame) {
+    tabs.set(tabId, fqdn);
+  }
+
 
   // If origin metadata are already loaded, just skip doing it again and return early
   if (origins.has(fqdn)) {
