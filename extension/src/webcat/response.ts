@@ -1,7 +1,7 @@
 import { OriginState, PopupState } from "./interfaces";
 import { validate, validateManifest } from "./validators";
 import { parseSigners, parseThreshold } from "./parsers";
-import { SHA256, arrayBufferToHex } from "./utils";
+import { SHA256, arrayBufferToHex, getFQDN } from "./utils";
 import { Sigstore } from "../sigstore/interfaces";
 import { setOKIcon } from "./ui";
 import { logger } from "./logger";
@@ -35,7 +35,6 @@ export async function validateResponseHeaders(
   if (originState.populated === false) {
 
     for (const header of details.responseHeaders.sort()) {
-      
       // This array is just used to detect duplicates
       headers.push(header["name"].toLowerCase());
       if (
@@ -68,7 +67,7 @@ export async function validateResponseHeaders(
         }
       }
     }
-
+  
     if (headers.length !== new Set(headers).size) {
       throw new Error("Duplicate header keys found!");
     }
@@ -79,6 +78,8 @@ export async function validateResponseHeaders(
     ) {
       throw new Error("Failed to find all the necessary policy headers!");
     }
+
+    logger.addLog("debug", "Header parsing complete", details.tabId, getFQDN(details.url))
 
     // TODO: free check if threshold > size(signers) then abort
 
@@ -91,6 +92,8 @@ export async function validateResponseHeaders(
     // By doing this here we gain a bit of async time: we start processing the request headers
     // while we download the manifest
     const manifestResponse = await originState.manifestPromise;
+
+    logger.addLog("debug", "manifest request returned", details.tabId, getFQDN(details.url))
 
     if (manifestResponse.ok !== true) {
       throw new Error("Failed to fetch manifest.json: server error");
@@ -112,6 +115,9 @@ export async function validateResponseHeaders(
     );
 
     if (!originState.valid) {
+      if (popupState) {
+        popupState.valid_manifest = false;
+      }
       throw new Error("Manifest signature verification failed.");
     }
 
@@ -200,6 +206,9 @@ export async function validateResponseContent(
               details.tabId,
               originState.fqdn
             );
+            if (pathname === "/" && popupState) {
+              popupState.valid_index = false;
+            }
             deny(filter);
             browser.tabs.update(details.tabId, { url: browser.runtime.getURL("pages/error.html") });
           }

@@ -101,6 +101,10 @@ export async function headersListener(
   try {
     await validateResponseHeaders(sigstore, origins.get(fqdn)!, popups.get(details.tabId), details);
   } catch (error) {
+    if (details.tabId > 0) {
+      // Signal the error for the UI
+      popups.get(details.tabId)!.valid_headers = false;
+    }
     logger.addLog("error", `Error when parsing response headers: ${error}`, details.tabId, fqdn);
     return { redirectUrl: browser.runtime.getURL("pages/error.html") };
   }
