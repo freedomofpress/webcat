@@ -17,7 +17,7 @@ const allowed_types: string[] = [
   "font",
   "media",
   // TODO, can we avoid "object"? We are discussing to enforce this in the CSP anyway
-  "object",
+  //"object",
   "xmlhttprequest",
   "websocket",
 ];
@@ -77,6 +77,8 @@ export async function headersListener(
     // Skip non-enrolled tabs
     (!tabs.has(details.tabId) && details.tabId > 0) ||
     // Skip non-enrolled workers
+    // TODO what at browser restart?
+    // FIXME 
     (details.tabId < 0 && !origins.has(fqdn))
   ) {
     // This is too much noise to really log
@@ -176,10 +178,11 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
 
           const tabId = tabs[0].id;
           const url = new URL(tabs[0].url);
-          const origin = url.origin;
+          const origin = getFQDN(url.origin);
 
           console.log("sending respoinse");
-          sendResponse({ tabId, origin });
+          console.log(origins.get(origin));
+          sendResponse({ tabId: tabId, originState: origins.get(origin)!.manifest});
         }).catch((error) => {
           console.error("Error getting active tab:", error);
           sendResponse({ error: error.message });

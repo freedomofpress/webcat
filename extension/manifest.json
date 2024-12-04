@@ -32,12 +32,11 @@
     }
   ],
   "browser_action": {
-  "default_popup": "pages/popup.html",
     "default_icon": {
       "48": "icons/light/webcat.svg",
       "128": "icons/light/webcat.svg"
     },
-    "default_title": "Webcat is running. Click for info!",
+    "default_title": "Web integrity protections not available on this page.",
     "theme_icons": [
       {
         "light": "icons/dark/webcat.svg",

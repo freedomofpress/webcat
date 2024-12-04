@@ -1,6 +1,7 @@
 import { OriginState } from "./interfaces";
 import { isFQDNEnrolled } from "./utils";
 import { logger } from "./logger";
+import { setIcon } from "./ui";
 
 export async function validateMainFrame(
   tabs: Map<number, string>,
@@ -10,10 +11,11 @@ export async function validateMainFrame(
   tabId: number,
 ) {
   if ((await isFQDNEnrolled(fqdn)) === false) {
-    // Only for development
     console.debug(`${url} is not enrolled, skipping...`);
     return;
   }
+
+  setIcon(tabId);
 
   // See https://github.com/freedomofpress/webcat/issues/1
   const urlobj = new URL(url);

@@ -8,8 +8,8 @@ function getActiveTabInfo() {
         }
 
         const tabId = response.tabId;
-        const origin = response.origin;
-        updatePopup(tabId, origin);
+        const originState = response.originState;
+        updatePopup(tabId, originState.fqdn);
     }).catch((error) => {
         console.error("Error communicating with background script:", error);
     });

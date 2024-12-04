@@ -11,6 +11,8 @@ export function setIcon(tabId: number) {
   const theme = isDarkTheme() ? "dark" : "light";
 
   logger.addLog("debug", "Setting standard icon", tabId, "")
+
+  browser.browserAction.enable(tabId);
   browser.browserAction.setIcon({
     tabId: tabId,
     path: {
@@ -23,6 +25,9 @@ export function setIcon(tabId: number) {
       256: `icons/${theme}/webcat.svg`,
     },
   });
+  browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
+  browser.browserAction.setTitle({ tabId, title: "Click for info!" });
+
 }
 
 export function setOKIcon(tabId: number) {
@@ -33,6 +38,7 @@ export function setOKIcon(tabId: number) {
   const theme = isDarkTheme() ? "dark" : "light";
 
   logger.addLog("debug", "Setting ok icon", tabId, "")
+  browser.browserAction.enable(tabId);
   browser.browserAction.setIcon({
     tabId: tabId,
     path: {
@@ -45,9 +51,10 @@ export function setOKIcon(tabId: number) {
       256: `icons/${theme}/webcat-ok.svg`,
     },
   });
+  browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
   browser.browserAction.setTitle({
     tabId: tabId,
-    title: "Webcat verification successful. Click for info!",
+    title: "Web integrity verification successful. Click for info!",
   });
 }
 
@@ -59,6 +66,7 @@ export function setErrorIcon(tabId: number) {
   const theme = isDarkTheme() ? "dark" : "light";
 
   logger.addLog("debug", "Setting error icon", tabId, "")
+  browser.browserAction.enable(tabId);
   browser.browserAction.setIcon({
     tabId: tabId,
     path: {
@@ -71,8 +79,9 @@ export function setErrorIcon(tabId: number) {
       256: `icons/${theme}/webcat-error.svg`,
     },
   });
+  browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
   browser.browserAction.setTitle({
     tabId: tabId,
-    title: "Webcat verification failed. Click for info!",
+    title: "Web integrity verification failed. Click for info!",
   });
 }
