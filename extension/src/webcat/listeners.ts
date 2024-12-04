@@ -1,7 +1,7 @@
 import { updateTUF } from "../sigstore/tuf";
 import { loadSigstoreRoot } from "../sigstore/sigstore";
 import { Sigstore } from "../sigstore/interfaces";
-import { OriginState, metadataRequestSource } from "./interfaces";
+import { OriginState, PopupState, metadataRequestSource } from "./interfaces";
 import { validateResponseHeaders, validateResponseContent } from "./response";
 import { validateOrigin } from "./request";
 import { getFQDN, isExtensionRequest, isFQDNEnrolled } from "./utils";
@@ -10,13 +10,14 @@ import { logger } from "./logger";
 
 const origins: Map<string, OriginState> = new Map();
 const tabs: Map<number, string> = new Map();
+const popups: Map<number, PopupState> = new Map();
 
 let sigstore: Sigstore;
 const allowed_types: string[] = [
   "image",
   "font",
   "media",
-  // TODO, can we avoid "object"? We are discussing to enforce this in the CSP anyway
+  // Object should not go through. Either they should be verified or completely disallowed by the CSP.
   //"object",
   "xmlhttprequest",
   "websocket",
@@ -37,6 +38,7 @@ function cleanup(tabId: number) {
     originState!.references--;
     /* Here we could check if references are 0, and delete the origin object too */
     tabs.delete(tabId);
+    popups.delete(tabId);
   }
 }
 
@@ -92,11 +94,12 @@ export async function headersListener(
 
   if (!origins.has(fqdn)) {
     // We are dealing with a background request, probably a serviceworker
-    validateOrigin(tabs, origins, fqdn, details.url, details.tabId, metadataRequestSource.worker)
+    logger.addLog("info", `Loading metadata for a background request to ${fqdn}`, details.tabId, fqdn)
+    validateOrigin(tabs, origins, popups, fqdn, details.url, details.tabId, metadataRequestSource.worker)
   }
 
   try {
-    await validateResponseHeaders(sigstore, origins.get(fqdn)!, details);
+    await validateResponseHeaders(sigstore, origins.get(fqdn)!, popups.get(details.tabId), details);
   } catch (error) {
     logger.addLog("error", `Error when parsing response headers: ${error}`, details.tabId, fqdn);
     return { redirectUrl: browser.runtime.getURL("pages/error.html") };
@@ -130,7 +133,7 @@ export async function requestListener(
 
     try {
       // This just checks some basic stuff, like TLS/Onion usage and populate the cache if it doesnt exists
-      await validateOrigin(tabs, origins, fqdn, details.url, details.tabId, metadataRequestSource.main_frame);
+      await validateOrigin(tabs, origins, popups, fqdn, details.url, details.tabId, metadataRequestSource.main_frame);
     } catch (error) {
       logger.addLog("error", `Error loading main_frame: ${error}`, details.tabId, fqdn);
       return { cancel: true };
@@ -150,7 +153,7 @@ export async function requestListener(
 
   // if we know the tab is enrolled, or it is a worker background connction then we should verify
   if (tabs.has(details.tabId) === true || details.tabId < 0) {
-    validateResponseContent(origins.get(fqdn)!, details);
+    validateResponseContent(origins.get(fqdn)!, popups.get(details.tabId), details);
   }
 
   // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse
@@ -173,12 +176,10 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
           }
 
           const tabId = tabs[0].id;
-          const url = new URL(tabs[0].url);
-          const origin = getFQDN(url.origin);
+          const popupState = popups.get(tabId);
 
-          console.log("sending respoinse");
           console.log(origins.get(origin));
-          sendResponse({ tabId: tabId, originState: origins.get(origin)!.manifest});
+          sendResponse({ tabId: tabId, popupState: popupState });
         }).catch((error) => {
           console.error("Error getting active tab:", error);
           sendResponse({ error: error.message });

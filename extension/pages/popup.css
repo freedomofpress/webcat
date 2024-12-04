@@ -124,27 +124,27 @@ h1 {
     justify-content: space-between;
 }
 
-.success-panel {
+.status-panel {
     display: flex;
     align-items: center;
 }
 
-.success-icon {
+.status-icon {
     margin-right: 10px;
 }
 
-.success-icon svg {
+.status-icon svg {
     width: 64px;
     height: 64px;
 }
 
-.success-list {
+.status-list {
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
-.success-list li {
+.status-list li {
     font-size: 12px;
     margin-bottom: 5px;
 }

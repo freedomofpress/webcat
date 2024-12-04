@@ -51,6 +51,30 @@ export class OriginState {
   }
 }
 
+// In OriginState we cache origins. However, if we want to cache more info,
+// such as whether an asset has been loaded or not, that has to happen per tab instead
+// as different tabs may load different assets
+export interface PopupState {
+  fqdn: string;
+  tabId: number;
+  // In the popup, if undefined mark it as loading. False mean a hard failure
+  valid_headers: boolean | undefined;
+  valid_manifest: boolean | undefined;
+  valid_index: boolean | undefined;
+  valid_signers: Signer[];
+  threshold: number | undefined;
+  loaded_assets: string[];
+}
+
+export class PopupState {
+  constructor(fqdn: string, tabId: number) {
+    this.fqdn = fqdn;
+    this.tabId = tabId;    
+    this.valid_signers = [];
+    this.loaded_assets = [];
+  }
+}
+
 interface ManifestInfo {
   app_version: number;
   webcat_version: number;

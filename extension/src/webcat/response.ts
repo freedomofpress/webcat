@@ -1,4 +1,4 @@
-import { OriginState } from "./interfaces";
+import { OriginState, PopupState } from "./interfaces";
 import { validate, validateManifest } from "./validators";
 import { parseSigners, parseThreshold } from "./parsers";
 import { SHA256, arrayBufferToHex } from "./utils";
@@ -9,6 +9,7 @@ import { logger } from "./logger";
 export async function validateResponseHeaders(
   sigstore: Sigstore,
   originState: OriginState,
+  popupState: PopupState | undefined,
   details: browser.webRequest._OnHeadersReceivedDetails,
 ) {
   const headers: string[] = [];
@@ -34,6 +35,7 @@ export async function validateResponseHeaders(
   if (originState.populated === false) {
 
     for (const header of details.responseHeaders.sort()) {
+      
       // This array is just used to detect duplicates
       headers.push(header["name"].toLowerCase());
       if (
@@ -60,6 +62,10 @@ export async function validateResponseHeaders(
           header["value"],
           originState.policy.signers.size,
         );
+        // Copy it for the UI
+        if (popupState) {
+          popupState.threshold = originState.policy.threshold;
+        }
       }
     }
 
@@ -90,6 +96,10 @@ export async function validateResponseHeaders(
       throw new Error("Failed to fetch manifest.json: server error");
     }
 
+    if (popupState) {
+      popupState.valid_headers = true;
+    }
+
     originState.manifest = await manifestResponse.json();
 
     originState.valid = await validateManifest(
@@ -98,12 +108,17 @@ export async function validateResponseHeaders(
       originState.policy,
       originState.fqdn,
       details.tabId,
+      popupState
     );
 
     if (!originState.valid) {
       throw new Error("Manifest signature verification failed.");
     }
 
+    if (popupState) {
+      popupState.valid_manifest = true;
+    }
+  
     originState.populated = true;
 
     logger.addLog("info", `Metadata for ${details.url} loaded`, details.tabId, originState.fqdn);
@@ -135,6 +150,7 @@ export async function validateResponseHeaders(
 
 export async function validateResponseContent(
   originState: OriginState,
+  popupState: PopupState | undefined,
   details: browser.webRequest._OnBeforeRequestDetails,
 ) {
   function deny(filter: browser.webRequest.StreamFilter) {
@@ -167,6 +183,13 @@ export async function validateResponseContent(
           if (manifest_hash === arrayBufferToHex(content_hash)) {
             // If everything is OK then we can just write the raw blob back
             logger.addLog("info", `${pathname} verified.`, details.tabId, originState.fqdn);
+            
+            if (pathname === "/" && popupState) {
+              popupState.valid_index = true;
+            } else if (popupState) {
+              popupState.loaded_assets.push(pathname);
+            }
+
             filter.write(blob);
           } else {
             // This is just "DENIED" already encoded

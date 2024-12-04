@@ -1,7 +1,7 @@
 import { parseContentSecurityPolicy } from "./parsers";
 import { canonicalize } from "../sigstore/canonicalize";
 import { SHA256 } from "./utils";
-import { Policy, DataStructure } from "./interfaces";
+import { Policy, DataStructure, PopupState, Issuers } from "./interfaces";
 import { verifyArtifact } from "../sigstore/sigstore";
 import { Sigstore } from "../sigstore/interfaces";
 import { stringToUint8Array } from "../sigstore/encoding";
@@ -30,6 +30,7 @@ export async function validateManifest(
   policy: Policy,
   fqdn: string,
   tabId: number,
+  popupState: PopupState | undefined
 ) {
   // TODO: Silly hack to match silly development debugging choice:
   const fixedManifest = { manifest: manifest.manifest };
@@ -47,6 +48,9 @@ export async function validateManifest(
         );
         if (res) {
           logger.addLog("info", `Verified ${signer[0]}, ${signer[1]}`, tabId, fqdn);
+          if (popupState) {
+            popupState.valid_signers.push(signer);
+          }
           validCount++;
         }
       } catch (e) {

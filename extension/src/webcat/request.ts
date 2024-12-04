@@ -1,4 +1,4 @@
-import { OriginState, metadataRequestSource } from "./interfaces";
+import { OriginState, PopupState, metadataRequestSource } from "./interfaces";
 import { isFQDNEnrolled } from "./utils";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
@@ -6,6 +6,7 @@ import { setIcon } from "./ui";
 export async function validateOrigin(
   tabs: Map<number, string>,
   origins: Map<string, OriginState>,
+  popups: Map<number, PopupState>,
   fqdn: string,
   url: string,
   tabId: number,
@@ -17,6 +18,8 @@ export async function validateOrigin(
   }
 
   if (type === metadataRequestSource.main_frame) {
+    const newPopupState = new PopupState(fqdn, tabId);
+    popups.set(tabId, newPopupState);
     setIcon(tabId);
   }
 
@@ -48,7 +51,6 @@ export async function validateOrigin(
   if (type === metadataRequestSource.main_frame) {
     tabs.set(tabId, fqdn);
   }
-
 
   // If origin metadata are already loaded, just skip doing it again and return early
   if (origins.has(fqdn)) {
