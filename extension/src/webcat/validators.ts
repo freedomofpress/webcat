@@ -1,11 +1,8 @@
-import { parseContentSecurityPolicy } from "./parsers";
 import { canonicalize } from "../sigstore/canonicalize";
 import { SHA256 } from "./utils";
 import {
   Policy,
-  DataStructure,
   PopupState,
-  Issuers,
   OriginState,
 } from "./interfaces";
 import { verifyArtifact } from "../sigstore/sigstore";
@@ -37,9 +34,12 @@ export async function validateManifest(
   popupState: PopupState | undefined,
 ) {
   // TODO: Silly hack to match silly development debugging choice:
+  if (!originState.manifest) {
+    return false;
+  }
   const fixedManifest = { manifest: originState.manifest.manifest };
   logger.addLog("debug", canonicalize(fixedManifest), tabId, originState.fqdn);
-  var validCount = 0;
+  let validCount = 0;
   for (const signer of originState.policy.signers) {
     if (originState.manifest.signatures[signer[1]]) {
       try {

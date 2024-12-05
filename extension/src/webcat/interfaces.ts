@@ -1,4 +1,5 @@
 import { SigstoreBundle } from "../sigstore/bundle";
+
 export enum Issuers {
   google = "https://accounts.google.com",
   microsoft = "https://login.microsoftonline.com",
@@ -20,46 +21,46 @@ export interface Policy {
   subframes?: string[];
 }
 
-export interface OriginState {
-  fqdn: string;
+// The OriginState class caches origins and assumes safe defaults. We assume we are enrolled and nothing is verified.
+export class OriginState {
+  readonly fqdn: string;
   populated: boolean;
   version: number;
   cspHash: Uint8Array;
   csp: string;
   manifestPromise: Promise<Response>;
-  manifest: DataStructure;
+  manifest: DataStructure | undefined; // Manifest may be undefined until populated
   policy: Policy;
   policyHash: Uint8Array;
   valid_signers: Signer[];
   valid: boolean;
   errors: string[];
   references: number;
-}
 
-export class OriginState {
   constructor(fqdn: string) {
-    // Let's start with safe defaults, we assume we are enrolled and nothing is verified
     this.fqdn = fqdn;
     this.populated = false;
     this.version = -1;
     this.csp = "";
     this.cspHash = new Uint8Array();
     this.policyHash = new Uint8Array();
+    this.manifestPromise = Promise.reject("Manifest not initialized");
+    this.manifest = undefined;
+    this.policy = { signers: new Set(), threshold: 0 };
     this.valid_signers = [];
     this.valid = false;
     this.errors = [];
-    this.policy = { signers: new Set(), threshold: 0 };
     this.references = 1;
   }
 }
 
 // In OriginState we cache origins. However, if we want to cache more info,
 // such as whether an asset has been loaded or not, that has to happen per tab instead
-// as different tabs may load different assets
-export interface PopupState {
-  fqdn: string;
-  tabId: number;
-  // In the popup, if undefined mark it as loading. False mean a hard failure
+// as different tabs may load different assets.
+export class PopupState {
+  readonly fqdn: string;
+  readonly tabId: number;
+  // In the popup, if undefined mark it as loading. False means a hard failure.
   valid_headers: boolean | undefined;
   valid_manifest: boolean | undefined;
   valid_index: boolean | undefined;
@@ -67,15 +68,17 @@ export interface PopupState {
   invalid_assets: string[];
   threshold: number | undefined;
   loaded_assets: string[];
-}
 
-export class PopupState {
   constructor(fqdn: string, tabId: number) {
     this.fqdn = fqdn;
     this.tabId = tabId;
+    this.valid_headers = undefined;
+    this.valid_manifest = undefined;
+    this.valid_index = undefined;
     this.valid_signers = [];
-    this.loaded_assets = [];
     this.invalid_assets = [];
+    this.loaded_assets = [];
+    this.threshold = undefined;
   }
 }
 
@@ -108,11 +111,12 @@ export enum LogType {
   error = "error",
 }
 
+// Log entries help track activities, including errors and warnings, by providing detailed context.
 export interface LogEntry {
   timestamp: Date;
   tabId: number;
   origin: string;
-  level: keyof Console;
+  level: keyof Console; // Ensures valid console log levels
   message: string;
   stack?: string;
 }

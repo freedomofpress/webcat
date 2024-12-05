@@ -60,7 +60,7 @@ export async function startupListener() {
 
 export function tabCloseListener(
   tabId: number,
-  removeInfo?: browser.tabs._OnRemovedRemoveInfo,
+  //removeInfo?: browser.tabs._OnRemovedRemoveInfo,
 ) {
   cleanup(tabId);
 }
@@ -239,8 +239,8 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
           });
         return true;
       }
-    } else if (sender.url?.endsWith("/settings.html")) {
-    } else if (sender.url?.endsWith("/logs.html")) {
+    //} else if (sender.url?.endsWith("/settings.html")) {
+    //} else if (sender.url?.endsWith("/logs.html")) {
     }
   }
 
@@ -275,7 +275,7 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   const hash = Uint8ArrayToHex(new Uint8Array(message.details));
   const originState = origins.get(fqdn);
 
-  if (originState!.manifest.manifest.wasm.includes(hash)) {
+  if (originState!.manifest && originState!.manifest.manifest.wasm.includes(hash)) {
     logger.addLog("info", `Validated WASM ${hash}`, sender.tabId, fqdn);
     sendResponse(true);
   } else {

@@ -11,7 +11,7 @@ beautify:
 	npx prettier . --write
 
 lint:
-	npx eslint .
+	npx eslint . --ignore-pattern "dist/*" --ignore-pattern "hooks/*" --ignore-pattern "pages/*"
 
 package:
 	zip -r $(ZIP_FILE) manifest.json dist/bundle.js assets hooks icons pages

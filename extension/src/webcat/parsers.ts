@@ -6,7 +6,7 @@ export function parseSigners(signers: string): Set<Signer> {
   try {
     parsedHeader = JSON.parse(signers);
   } catch (error) {
-    throw new Error("Error parsing JSON in x-sigstore-signers.");
+    throw new Error(`Error parsing JSON in x-sigstore-signers ${error}`);
   }
 
   if (!Array.isArray(parsedHeader)) {

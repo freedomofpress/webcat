@@ -53,6 +53,6 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 browser.webNavigation.onCommitted.addListener(injectorListener);
 
 // Grey out and make page action unclickable unless a website is enrolled
-browser.tabs.onCreated.addListener((tab) => {
+browser.tabs.onCreated.addListener(() => {
   browser.browserAction.disable();
 });

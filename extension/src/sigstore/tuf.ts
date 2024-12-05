@@ -111,6 +111,7 @@ async function updateRoot(frozenTimestamp: Date): Promise<Root> {
 
   let root = await loadRoot(rootJson as Metafile);
   let newroot;
+  let newrootJson;
 
   // In theory max version is the maximum integer size, probably 2^32 per the spec, in practice this should be safe for a century
   for (
@@ -119,7 +120,7 @@ async function updateRoot(frozenTimestamp: Date): Promise<Root> {
     new_version++
   ) {
     try {
-      var newrootJson = await fetchMetafile(Roles.Root, new_version);
+      newrootJson = await fetchMetafile(Roles.Root, new_version);
     } catch {
       // Fetching failed and we assume there is no new version
       // Maybe we should explicitly check for 404 failures

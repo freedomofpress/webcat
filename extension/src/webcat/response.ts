@@ -192,7 +192,11 @@ export async function validateResponseContent(
   filter.onstop = () => {
     if (originState.valid === true) {
       new Blob(source).arrayBuffer().then(function (blob) {
-        var pathname = new URL(details.url).pathname;
+        const pathname = new URL(details.url).pathname;
+
+        if (!originState.manifest) {
+          throw new Error("Manifest not loaded, and it should never happen here.");
+        }
 
         const manifest_hash = originState.manifest.manifest.files[pathname];
 
