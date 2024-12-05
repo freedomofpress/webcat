@@ -10,7 +10,7 @@ export async function validateOrigin(
   fqdn: string,
   url: string,
   tabId: number,
-  type: metadataRequestSource
+  type: metadataRequestSource,
 ) {
   if ((await isFQDNEnrolled(fqdn)) === false) {
     console.debug(`${url} is not enrolled, skipping...`);
@@ -30,14 +30,17 @@ export async function validateOrigin(
     !["http:", "https:"].includes(urlobj.protocol) // Protocol must be HTTP or HTTPS.
   ) {
     throw new Error(
-      `Attempting to load an enrolled resource using protocol "${urlobj.protocol}" and port "${urlobj.port || '(default)'}". Only standard protocols (HTTP/HTTPS) and ports (80/443) are allowed.`
+      `Attempting to load an enrolled resource using protocol "${urlobj.protocol}" and port "${urlobj.port || "(default)"}". Only standard protocols (HTTP/HTTPS) and ports (80/443) are allowed.`,
     );
   }
 
   // If the website is enrolled but is not https force a redirect
   // Or maybe not if it's an onion website :)
-  if (urlobj.protocol !== "https:" && urlobj.hostname.substring(fqdn.lastIndexOf(".")) !== ".onion") {
-    urlobj.protocol = "https:"
+  if (
+    urlobj.protocol !== "https:" &&
+    urlobj.hostname.substring(fqdn.lastIndexOf(".")) !== ".onion"
+  ) {
+    urlobj.protocol = "https:";
     // Redirect to HTTPS
     return { redirectUrl: urlobj.toString() };
   }
@@ -58,9 +61,11 @@ export async function validateOrigin(
     const popupState = popups.get(tabId);
     if (popupState) {
       // TODO
-      //popupState.valid_headers = 
+      //popupState.valid_headers =
       // We want it undefined, because we have not verified it yet
-      popupState.valid_manifest = origins.get(fqdn)?.valid ? origins.get(fqdn)!.valid : undefined;
+      popupState.valid_manifest = origins.get(fqdn)?.valid
+        ? origins.get(fqdn)!.valid
+        : undefined;
       popupState.threshold = origins.get(fqdn)!.policy.threshold;
       popupState.valid_signers = origins.get(fqdn)!.valid_signers;
     }
@@ -68,7 +73,12 @@ export async function validateOrigin(
   }
 
   // Generate a new state for the origin
-  logger.addLog("info", `${fqdn} is enrolled, but we do not have metadata yet.`, tabId, fqdn);
+  logger.addLog(
+    "info",
+    `${fqdn} is enrolled, but we do not have metadata yet.`,
+    tabId,
+    fqdn,
+  );
   const newOriginState = new OriginState(fqdn);
   origins.set(fqdn, newOriginState);
 

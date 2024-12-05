@@ -1,4 +1,4 @@
-import {logger } from "./logger";
+import { logger } from "./logger";
 
 export function isDarkTheme(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -10,7 +10,7 @@ export function setIcon(tabId: number) {
 
   const theme = isDarkTheme() ? "dark" : "light";
 
-  logger.addLog("debug", "Setting standard icon", tabId, "")
+  logger.addLog("debug", "Setting standard icon", tabId, "");
 
   browser.browserAction.enable(tabId);
   browser.browserAction.setIcon({
@@ -27,7 +27,6 @@ export function setIcon(tabId: number) {
   });
   browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
   browser.browserAction.setTitle({ tabId, title: "Click for info!" });
-
 }
 
 export function setOKIcon(tabId: number) {
@@ -37,7 +36,7 @@ export function setOKIcon(tabId: number) {
 
   const theme = isDarkTheme() ? "dark" : "light";
 
-  logger.addLog("debug", "Setting ok icon", tabId, "")
+  logger.addLog("debug", "Setting ok icon", tabId, "");
   browser.browserAction.enable(tabId);
   browser.browserAction.setIcon({
     tabId: tabId,
@@ -65,7 +64,7 @@ export function setErrorIcon(tabId: number) {
 
   const theme = isDarkTheme() ? "dark" : "light";
 
-  logger.addLog("debug", "Setting error icon", tabId, "")
+  logger.addLog("debug", "Setting error icon", tabId, "");
   browser.browserAction.enable(tabId);
   browser.browserAction.setIcon({
     tabId: tabId,

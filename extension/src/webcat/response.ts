@@ -30,10 +30,9 @@ export async function validateResponseHeaders(
     "info",
     `Validating response headers, url: ${details.url} populated: ${originState.populated}`,
     details.tabId,
-    originState.fqdn
+    originState.fqdn,
   );
   if (originState.populated === false) {
-
     for (const header of details.responseHeaders.sort()) {
       // This array is just used to detect duplicates
       headers.push(header["name"].toLowerCase());
@@ -67,7 +66,7 @@ export async function validateResponseHeaders(
         }
       }
     }
-  
+
     if (headers.length !== new Set(headers).size) {
       throw new Error("Duplicate header keys found!");
     }
@@ -79,7 +78,12 @@ export async function validateResponseHeaders(
       throw new Error("Failed to find all the necessary policy headers!");
     }
 
-    logger.addLog("debug", "Header parsing complete", details.tabId, getFQDN(details.url))
+    logger.addLog(
+      "debug",
+      "Header parsing complete",
+      details.tabId,
+      getFQDN(details.url),
+    );
 
     // TODO: free check if threshold > size(signers) then abort
 
@@ -96,7 +100,12 @@ export async function validateResponseHeaders(
     const manifestResponse = await originState.manifestPromise;
     console.log("After await manifest");
 
-    logger.addLog("debug", "Manifest request returned", details.tabId, getFQDN(details.url))
+    logger.addLog(
+      "debug",
+      "Manifest request returned",
+      details.tabId,
+      getFQDN(details.url),
+    );
 
     if (manifestResponse.ok !== true) {
       throw new Error("Failed to fetch manifest.json: server error");
@@ -112,7 +121,7 @@ export async function validateResponseHeaders(
       sigstore,
       originState,
       details.tabId,
-      popupState
+      popupState,
     );
 
     if (!originState.valid) {
@@ -125,12 +134,16 @@ export async function validateResponseHeaders(
     if (popupState) {
       popupState.valid_manifest = true;
     }
-  
+
     originState.populated = true;
 
-    logger.addLog("info", `Metadata for ${details.url} loaded`, details.tabId, originState.fqdn);
+    logger.addLog(
+      "info",
+      `Metadata for ${details.url} loaded`,
+      details.tabId,
+      originState.fqdn,
+    );
   } else {
-
     // CSP still needs to be evaluated every time
     let csp: string = "";
     for (const header of details.responseHeaders.sort()) {
@@ -189,8 +202,13 @@ export async function validateResponseContent(
         SHA256(blob).then(function (content_hash) {
           if (manifest_hash === arrayBufferToHex(content_hash)) {
             // If everything is OK then we can just write the raw blob back
-            logger.addLog("info", `${pathname} verified.`, details.tabId, originState.fqdn);
-            
+            logger.addLog(
+              "info",
+              `${pathname} verified.`,
+              details.tabId,
+              originState.fqdn,
+            );
+
             if (pathname === "/" && popupState) {
               popupState.valid_index = true;
             } else if (popupState) {
@@ -205,7 +223,7 @@ export async function validateResponseContent(
               "error",
               `Error: hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
               details.tabId,
-              originState.fqdn
+              originState.fqdn,
             );
             if (pathname === "/" && popupState) {
               popupState.valid_index = false;
@@ -213,7 +231,9 @@ export async function validateResponseContent(
               popupState.invalid_assets.push(pathname);
             }
             deny(filter);
-            browser.tabs.update(details.tabId, { url: browser.runtime.getURL("pages/error.html") });
+            browser.tabs.update(details.tabId, {
+              url: browser.runtime.getURL("pages/error.html"),
+            });
           }
           // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
           // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
@@ -227,13 +247,15 @@ export async function validateResponseContent(
         "error",
         `Error: tab context is not valid ${details.url}`,
         details.tabId,
-        originState.fqdn
+        originState.fqdn,
       );
       // DENIED
       deny(filter);
       filter.close();
       // Redirect the main frame to an error page
-      browser.tabs.update(details.tabId, { url: browser.runtime.getURL("pages/error.html") });
+      browser.tabs.update(details.tabId, {
+        url: browser.runtime.getURL("pages/error.html"),
+      });
     }
   };
 }

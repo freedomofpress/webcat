@@ -1,7 +1,13 @@
 import { parseContentSecurityPolicy } from "./parsers";
 import { canonicalize } from "../sigstore/canonicalize";
 import { SHA256 } from "./utils";
-import { Policy, DataStructure, PopupState, Issuers, OriginState } from "./interfaces";
+import {
+  Policy,
+  DataStructure,
+  PopupState,
+  Issuers,
+  OriginState,
+} from "./interfaces";
 import { verifyArtifact } from "../sigstore/sigstore";
 import { Sigstore } from "../sigstore/interfaces";
 import { stringToUint8Array } from "../sigstore/encoding";
@@ -28,7 +34,7 @@ export async function validateManifest(
   sigstore: Sigstore,
   originState: OriginState,
   tabId: number,
-  popupState: PopupState | undefined
+  popupState: PopupState | undefined,
 ) {
   // TODO: Silly hack to match silly development debugging choice:
   const fixedManifest = { manifest: originState.manifest.manifest };
@@ -45,7 +51,12 @@ export async function validateManifest(
           stringToUint8Array(canonicalize(fixedManifest)),
         );
         if (res) {
-          logger.addLog("info", `Verified ${signer[0]}, ${signer[1]}`, tabId, originState.fqdn);
+          logger.addLog(
+            "info",
+            `Verified ${signer[0]}, ${signer[1]}`,
+            tabId,
+            originState.fqdn,
+          );
           if (popupState) {
             originState.valid_signers.push(signer);
           }
@@ -57,7 +68,12 @@ export async function validateManifest(
     }
   }
 
-  logger.addLog("info", `threshold: ${originState.policy.threshold}, valid: ${validCount}`, tabId, originState.fqdn);
+  logger.addLog(
+    "info",
+    `threshold: ${originState.policy.threshold}, valid: ${validCount}`,
+    tabId,
+    originState.fqdn,
+  );
   if (validCount >= originState.policy.threshold) {
     if (popupState) {
       popupState.valid_signers = originState.valid_signers;

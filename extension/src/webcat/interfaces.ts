@@ -21,7 +21,7 @@ export interface Policy {
 }
 
 export interface OriginState {
-  fqdn: string;  
+  fqdn: string;
   populated: boolean;
   version: number;
   cspHash: Uint8Array;
@@ -45,7 +45,7 @@ export class OriginState {
     this.csp = "";
     this.cspHash = new Uint8Array();
     this.policyHash = new Uint8Array();
-    this.valid_signers =[];
+    this.valid_signers = [];
     this.valid = false;
     this.errors = [];
     this.policy = { signers: new Set(), threshold: 0 };
@@ -72,7 +72,7 @@ export interface PopupState {
 export class PopupState {
   constructor(fqdn: string, tabId: number) {
     this.fqdn = fqdn;
-    this.tabId = tabId;    
+    this.tabId = tabId;
     this.valid_signers = [];
     this.loaded_assets = [];
     this.invalid_assets = [];

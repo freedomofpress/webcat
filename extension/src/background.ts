@@ -8,9 +8,7 @@ import {
   tabCloseListener,
 } from "./webcat/listeners";
 
-import {
-  setErrorIcon
-} from "./webcat/ui"
+import { setErrorIcon } from "./webcat/ui";
 
 // Let's count references to origin in case we ever need pruning policies
 browser.tabs.onRemoved.addListener(tabCloseListener);

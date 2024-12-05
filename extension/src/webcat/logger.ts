@@ -22,7 +22,13 @@ class Logger {
    * @param origin - The origin of the log (e.g., URL or script).
    * @param stack - Optional stack trace.
    */
-  public addLog(level: keyof Console, message: string, tabId: number, origin: string, stack?: string): void {
+  public addLog(
+    level: keyof Console,
+    message: string,
+    tabId: number,
+    origin: string,
+    stack?: string,
+  ): void {
     const logEntry: LogEntry = {
       timestamp: new Date(),
       tabId,
@@ -37,12 +43,12 @@ class Logger {
 
     // Conditional console output
     if (this.shouldPrint(level)) {
-        // Cast console[level] to a function type
-        (console[level] as (...args: any[]) => void)(
-          `[${logEntry.timestamp.toISOString()}] [Tab ${logEntry.tabId}] [${logEntry.origin}] ${logEntry.message}`,
-          stack || ""
-        );
-      }
+      // Cast console[level] to a function type
+      (console[level] as (...args: any[]) => void)(
+        `[${logEntry.timestamp.toISOString()}] [Tab ${logEntry.tabId}] [${logEntry.origin}] ${logEntry.message}`,
+        stack || "",
+      );
+    }
   }
 
   /**

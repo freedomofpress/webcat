@@ -94,18 +94,41 @@ export async function headersListener(
 
   if (!origins.has(fqdn)) {
     // We are dealing with a background request, probably a serviceworker
-    logger.addLog("info", `Loading metadata for a background request to ${fqdn}`, details.tabId, fqdn)
-    validateOrigin(tabs, origins, popups, fqdn, details.url, details.tabId, metadataRequestSource.worker)
+    logger.addLog(
+      "info",
+      `Loading metadata for a background request to ${fqdn}`,
+      details.tabId,
+      fqdn,
+    );
+    validateOrigin(
+      tabs,
+      origins,
+      popups,
+      fqdn,
+      details.url,
+      details.tabId,
+      metadataRequestSource.worker,
+    );
   }
 
   try {
-    await validateResponseHeaders(sigstore, origins.get(fqdn)!, popups.get(details.tabId), details);
+    await validateResponseHeaders(
+      sigstore,
+      origins.get(fqdn)!,
+      popups.get(details.tabId),
+      details,
+    );
   } catch (error) {
     if (details.tabId > 0) {
       // Signal the error for the UI
       popups.get(details.tabId)!.valid_headers = false;
     }
-    logger.addLog("error", `Error when parsing response headers: ${error}`, details.tabId, fqdn);
+    logger.addLog(
+      "error",
+      `Error when parsing response headers: ${error}`,
+      details.tabId,
+      fqdn,
+    );
     return { redirectUrl: browser.runtime.getURL("pages/error.html") };
   }
 
@@ -133,13 +156,31 @@ export async function requestListener(
     // User is navigatin to a new context, whether is enrolled or not better to reset
     cleanup(details.tabId);
 
-    logger.addLog("info", `Loading main_frame ${details.url}`, details.tabId, fqdn);
+    logger.addLog(
+      "info",
+      `Loading main_frame ${details.url}`,
+      details.tabId,
+      fqdn,
+    );
 
     try {
       // This just checks some basic stuff, like TLS/Onion usage and populate the cache if it doesnt exists
-      await validateOrigin(tabs, origins, popups, fqdn, details.url, details.tabId, metadataRequestSource.main_frame);
+      await validateOrigin(
+        tabs,
+        origins,
+        popups,
+        fqdn,
+        details.url,
+        details.tabId,
+        metadataRequestSource.main_frame,
+      );
     } catch (error) {
-      logger.addLog("error", `Error loading main_frame: ${error}`, details.tabId, fqdn);
+      logger.addLog(
+        "error",
+        `Error loading main_frame: ${error}`,
+        details.tabId,
+        fqdn,
+      );
       return { cancel: true };
     }
   }
@@ -157,7 +198,11 @@ export async function requestListener(
 
   // if we know the tab is enrolled, or it is a worker background connction then we should verify
   if (tabs.has(details.tabId) === true || details.tabId < 0) {
-    validateResponseContent(origins.get(fqdn)!, popups.get(details.tabId), details);
+    validateResponseContent(
+      origins.get(fqdn)!,
+      popups.get(details.tabId),
+      details,
+    );
   }
 
   // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse
@@ -167,34 +212,35 @@ export async function requestListener(
 
 // sender should be of type browser.runtime.MessageSender but it's missing things...
 export function messageListener(message: any, sender: any, sendResponse: any) {
-
   // First, is this coming from the hooks or the extension?
   if (sender.id === browser.runtime.id) {
     // And now see from which component
     if (sender.url?.endsWith("/popup.html")) {
       if (message.type === "populatePopup") {
-        browser.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
-          if (tabs.length === 0 || !tabs[0].id || !tabs[0].url) {
-              sendResponse({ error: "This functionality is disabled on this tab." });
+        browser.tabs
+          .query({ active: true, currentWindow: true })
+          .then((tabs) => {
+            if (tabs.length === 0 || !tabs[0].id || !tabs[0].url) {
+              sendResponse({
+                error: "This functionality is disabled on this tab.",
+              });
               return;
-          }
+            }
 
-          const tabId = tabs[0].id;
-          const popupState = popups.get(tabId);
+            const tabId = tabs[0].id;
+            const popupState = popups.get(tabId);
 
-          console.log(origins.get(origin));
-          sendResponse({ tabId: tabId, popupState: popupState });
-        }).catch((error) => {
-          console.error("Error getting active tab:", error);
-          sendResponse({ error: error.message });
-        });
+            console.log(origins.get(origin));
+            sendResponse({ tabId: tabId, popupState: popupState });
+          })
+          .catch((error) => {
+            console.error("Error getting active tab:", error);
+            sendResponse({ error: error.message });
+          });
         return true;
       }
-
     } else if (sender.url?.endsWith("/settings.html")) {
-    
     } else if (sender.url?.endsWith("/logs.html")) {
-
     }
   }
 
@@ -214,10 +260,15 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
 
   // Removed as we now inject only on enrolled websites anyway, see https://github.com/freedomofpress/webcat/issues/2
   if (!origins.has(fqdn)) {
-  // TODO: this could be abused to detect the extension presence if we sent a response
-  // By not sending it, we disallow non-enrolled wbesite to know if the extension exists
-    logger.addLog("debug", `${fqdn} is not enrolled, skipping WASM validation.`, sender.tabId, fqdn);
-  //sendResponse(true);
+    // TODO: this could be abused to detect the extension presence if we sent a response
+    // By not sending it, we disallow non-enrolled wbesite to know if the extension exists
+    logger.addLog(
+      "debug",
+      `${fqdn} is not enrolled, skipping WASM validation.`,
+      sender.tabId,
+      fqdn,
+    );
+    //sendResponse(true);
     return;
   }
 
@@ -230,21 +281,25 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   } else {
     logger.addLog("error", `Invalid WASM ${hash}`, sender.tabId, fqdn);
     sendResponse(false);
-    browser.tabs.update(sender.tab.id, { url: browser.runtime.getURL("pages/error.html") });
+    browser.tabs.update(sender.tab.id, {
+      url: browser.runtime.getURL("pages/error.html"),
+    });
   }
 }
 
-export function injectorListener(details: browser.webNavigation._OnCommittedDetails) {
+export function injectorListener(
+  details: browser.webNavigation._OnCommittedDetails,
+) {
   // TODO: a security audit should find out if this is bypassable: can an onCommitted even race the
   // population of the origins? Perhaps it would be better to do this on a tabid basis
   const fqdn = getFQDN(details.url);
   if (origins.has(fqdn)) {
-    logger.addLog("debug", `Injecting WASM hooks`,details.tabId, fqdn)
+    logger.addLog("debug", `Injecting WASM hooks`, details.tabId, fqdn);
     browser.tabs.executeScript(details.tabId, {
       file: "hooks/inject.js",
       runAt: "document_start",
       // We are doing allFrames in the hope of https://github.com/freedomofpress/webcat/issues/3
-      allFrames: true
+      allFrames: true,
     });
   }
 }

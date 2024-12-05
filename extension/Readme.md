@@ -4,11 +4,11 @@ The extension is written mostly in TypeScript, using the Manifest V2 API. It is 
 
 ### Features
 
- - No runtime dependencies: everything has been written from scratch and does not depend on any third-party package (no polyfills)
- - Native crypto: every cryptographic operation, from TUF to Sigstore, to Webcat uses only the native [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API)
- - Small footprint: currently, the compiled code is ~30KB
- - Failsafe: invalid scripts are discarded at the network level
- - Fast: the extension's impact on non-enrolled websites is negligible
+- No runtime dependencies: everything has been written from scratch and does not depend on any third-party package (no polyfills)
+- Native crypto: every cryptographic operation, from TUF to Sigstore, to Webcat uses only the native [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API)
+- Small footprint: currently, the compiled code is ~30KB
+- Failsafe: invalid scripts are discarded at the network level
+- Fast: the extension's impact on non-enrolled websites is negligible
 
 ### Build
 
@@ -24,11 +24,12 @@ The output will be in `./bundle/bundle.js`. Everything else in the extension fol
 
 Alternatively, `make build` will build, package, and clean the extension, saving the archive as `../dist/webcat-extension.zip`.
 
-
 ## Validation logic
-*WARNING*: experimental diagrams. Conformity with the code to be verified.
+
+_WARNING_: experimental diagrams. Conformity with the code to be verified.
 
 ### Decision tree
+
 ```mermaid
 flowchart TD
     A[User types www.example.com] --> B[Extension intercepts request]
@@ -55,6 +56,7 @@ flowchart TD
 ```
 
 ### Sequence diagram
+
 ```mermaid
 sequenceDiagram
     participant User
