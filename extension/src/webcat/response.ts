@@ -107,9 +107,7 @@ export async function validateResponseHeaders(
 
     originState.valid = await validateManifest(
       sigstore,
-      originState.manifest,
-      originState.policy,
-      originState.fqdn,
+      originState,
       details.tabId,
       popupState
     );

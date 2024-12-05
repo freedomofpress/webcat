@@ -1,7 +1,7 @@
 import { parseContentSecurityPolicy } from "./parsers";
 import { canonicalize } from "../sigstore/canonicalize";
 import { SHA256 } from "./utils";
-import { Policy, DataStructure, PopupState, Issuers } from "./interfaces";
+import { Policy, DataStructure, PopupState, Issuers, OriginState } from "./interfaces";
 import { verifyArtifact } from "../sigstore/sigstore";
 import { Sigstore } from "../sigstore/interfaces";
 import { stringToUint8Array } from "../sigstore/encoding";
@@ -26,30 +26,28 @@ export async function validate(policy: Policy, csp: string, hash: Uint8Array) {
 
 export async function validateManifest(
   sigstore: Sigstore,
-  manifest: DataStructure,
-  policy: Policy,
-  fqdn: string,
+  originState: OriginState,
   tabId: number,
   popupState: PopupState | undefined
 ) {
   // TODO: Silly hack to match silly development debugging choice:
-  const fixedManifest = { manifest: manifest.manifest };
-  logger.addLog("debug", canonicalize(fixedManifest), tabId, fqdn);
+  const fixedManifest = { manifest: originState.manifest.manifest };
+  logger.addLog("debug", canonicalize(fixedManifest), tabId, originState.fqdn);
   var validCount = 0;
-  for (const signer of policy.signers) {
-    if (manifest.signatures[signer[1]]) {
+  for (const signer of originState.policy.signers) {
+    if (originState.manifest.signatures[signer[1]]) {
       try {
         const res = await verifyArtifact(
           sigstore,
           signer[1],
           signer[0],
-          manifest.signatures[signer[1]],
+          originState.manifest.signatures[signer[1]],
           stringToUint8Array(canonicalize(fixedManifest)),
         );
         if (res) {
-          logger.addLog("info", `Verified ${signer[0]}, ${signer[1]}`, tabId, fqdn);
+          logger.addLog("info", `Verified ${signer[0]}, ${signer[1]}`, tabId, originState.fqdn);
           if (popupState) {
-            popupState.valid_signers.push(signer);
+            originState.valid_signers.push(signer);
           }
           validCount++;
         }
@@ -59,8 +57,11 @@ export async function validateManifest(
     }
   }
 
-  logger.addLog("info", `threshold: ${policy.threshold}, valid: ${validCount}`, tabId, fqdn);
-  if (validCount >= policy.threshold) {
+  logger.addLog("info", `threshold: ${originState.policy.threshold}, valid: ${validCount}`, tabId, originState.fqdn);
+  if (validCount >= originState.policy.threshold) {
+    if (popupState) {
+      popupState.valid_signers = originState.valid_signers;
+    }
     return true;
   } else {
     return false;

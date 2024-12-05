@@ -30,6 +30,7 @@ export interface OriginState {
   manifest: DataStructure;
   policy: Policy;
   policyHash: Uint8Array;
+  valid_signers: Signer[];
   valid: boolean;
   errors: string[];
   references: number;
@@ -44,6 +45,7 @@ export class OriginState {
     this.csp = "";
     this.cspHash = new Uint8Array();
     this.policyHash = new Uint8Array();
+    this.valid_signers =[];
     this.valid = false;
     this.errors = [];
     this.policy = { signers: new Set(), threshold: 0 };
