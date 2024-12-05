@@ -50,14 +50,14 @@ function updatePopup(popupState) {
         listElement.removeChild(loadingElement);
     }
 
-    if (popupState.valid_manifest === true) {
+    if (popupState.valid_manifest === true && popupState.valid_headers === true) {
         addOrUpdateLi("manifest-status", `✅ Verified manifest`);
     } else if (popupState.valid_manifest === false) {
         addOrUpdateLi("manifest-status", `❌ Failed to verify manifest`);
         listElement.removeChild(loadingElement);
     }
 
-    if (popupState.valid_index === true) {
+    if (popupState.valid_index === true && popupState.valid_manifest === true && popupState.valid_headers === true) {
         addOrUpdateLi("index-status", `✅ Verified index`);
     } else if (popupState.valid_index === false) {
         addOrUpdateLi("index-status", `❌ Failed to verify index`);

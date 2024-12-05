@@ -57,8 +57,10 @@ export async function validateOrigin(
     // Since we use cached info, we should still populate the popup with the cached info
     const popupState = popups.get(tabId);
     if (popupState) {
-      popupState.valid_headers = true;
-      popupState.valid_manifest = true;
+      // TODO
+      //popupState.valid_headers = 
+      // We want it undefined, because we have not verified it yet
+      popupState.valid_manifest = origins.get(fqdn)?.valid ? origins.get(fqdn)!.valid : undefined;
       popupState.threshold = origins.get(fqdn)!.policy.threshold;
       popupState.valid_signers = origins.get(fqdn)!.valid_signers;
     }
