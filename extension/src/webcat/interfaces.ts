@@ -64,6 +64,7 @@ export interface PopupState {
   valid_manifest: boolean | undefined;
   valid_index: boolean | undefined;
   valid_signers: Signer[];
+  invalid_assets: string[];
   threshold: number | undefined;
   loaded_assets: string[];
 }
@@ -74,6 +75,7 @@ export class PopupState {
     this.tabId = tabId;    
     this.valid_signers = [];
     this.loaded_assets = [];
+    this.invalid_assets = [];
   }
 }
 

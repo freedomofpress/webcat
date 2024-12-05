@@ -41,36 +41,41 @@ function updatePopup(popupState) {
     }
 
     // Update verified items
-    addOrUpdateLi("origin-status", `✓ Verified ${popupState.fqdn}`);
+    addOrUpdateLi("origin-status", `✅ Verified ${popupState.fqdn}`);
 
     if (popupState.valid_headers === true) {
-        addOrUpdateLi("headers-status", `✓ Verified headers`);
+        addOrUpdateLi("headers-status", `✅ Verified headers`);
     } else if (popupState.valid_headers === false) {
         addOrUpdateLi("headers-status", `❌ Failed to verify headers`);
         listElement.removeChild(loadingElement);
     }
 
     if (popupState.valid_manifest === true) {
-        addOrUpdateLi("manifest-status", `✓ Verified manifest`);
+        addOrUpdateLi("manifest-status", `✅ Verified manifest`);
     } else if (popupState.valid_manifest === false) {
         addOrUpdateLi("manifest-status", `❌ Failed to verify manifest`);
         listElement.removeChild(loadingElement);
     }
 
     if (popupState.valid_index === true) {
-        addOrUpdateLi("index-status", `✓ Verified index`);
+        addOrUpdateLi("index-status", `✅ Verified index`);
     } else if (popupState.valid_index === false) {
         addOrUpdateLi("index-status", `❌ Failed to verify index`);
         listElement.removeChild(loadingElement);
     }
 
+    if (popupState.invalid_assets.length > 0) {
+        addOrUpdateLi("assets-status", `❌ Runtime error`);
+        listElement.removeChild(loadingElement);
+    }
+
     // If all checks are verified, remove the loading <li>
-    if (popupState.valid_headers && popupState.valid_manifest && popupState.valid_index) {
+    if (popupState.valid_headers && popupState.valid_manifest && popupState.valid_index && popupState.invalid_assets.length === 0) {
         if (loadingElement) {
             listElement.removeChild(loadingElement);
         }
         document.getElementById("status-icon").setAttribute("href", "#icon-ok");
-    } else if (popupState.valid_headers === false || popupState.valid_manifest === false || popupState.valid_index === false) {
+    } else if (popupState.valid_headers === false || popupState.valid_manifest === false || popupState.valid_index === false || popupState.invalid_assets.length > 0) {
         document.getElementById("status-icon").setAttribute("href", "#icon-error");
     }
 
@@ -90,7 +95,20 @@ function updatePopup(popupState) {
             assetNameSpan.textContent = asset;
 
             const statusSpan = document.createElement("span");
-            statusSpan.textContent = "✔ Verified";
+            statusSpan.textContent = "✅ Verified";
+
+            li.appendChild(assetNameSpan);
+            li.appendChild(statusSpan);
+            fileListElement.appendChild(li);
+        });
+        popupState.invalid_assets.forEach((asset) => {
+            const li = document.createElement("li");
+
+            const assetNameSpan = document.createElement("span");
+            assetNameSpan.textContent = asset;
+
+            const statusSpan = document.createElement("span");
+            statusSpan.textContent = "❌ Error";
 
             li.appendChild(assetNameSpan);
             li.appendChild(statusSpan);
@@ -152,7 +170,7 @@ function updatePopup(popupState) {
             // Create the identity status span
             const statusSpan = document.createElement("span");
             statusSpan.className = "identity-status";
-            statusSpan.textContent = "✔ Verified"; // Modify if you have additional status logic
+            statusSpan.textContent = "✅ Verified"; // Modify if you have additional status logic
 
             // Append all elements to the row
             row.appendChild(emailSpan);

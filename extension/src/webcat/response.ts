@@ -91,9 +91,12 @@ export async function validateResponseHeaders(
     }
     // By doing this here we gain a bit of async time: we start processing the request headers
     // while we download the manifest
+    console.log("Before await manifest");
+    console.log(originState.manifestPromise);
     const manifestResponse = await originState.manifestPromise;
+    console.log("After await manifest");
 
-    logger.addLog("debug", "manifest request returned", details.tabId, getFQDN(details.url))
+    logger.addLog("debug", "Manifest request returned", details.tabId, getFQDN(details.url))
 
     if (manifestResponse.ok !== true) {
       throw new Error("Failed to fetch manifest.json: server error");
@@ -206,6 +209,8 @@ export async function validateResponseContent(
             );
             if (pathname === "/" && popupState) {
               popupState.valid_index = false;
+            } else if (popupState) {
+              popupState.invalid_assets.push(pathname);
             }
             deny(filter);
             browser.tabs.update(details.tabId, { url: browser.runtime.getURL("pages/error.html") });
