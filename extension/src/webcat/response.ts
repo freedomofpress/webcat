@@ -164,6 +164,11 @@ export async function validateResponseHeaders(
     if (csp !== originState.csp) {
       throw new Error("Response CSP does not match the verified one.");
     }
+
+    if (popupState) {
+      popupState.valid_headers = true;
+    }
+
   }
   setOKIcon(details.tabId);
 }

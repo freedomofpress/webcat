@@ -16,6 +16,7 @@ function getActiveTabInfo() {
       }
 
       const popupState = response.popupState;
+      console.log(popupState);
       updatePopup(popupState);
     })
     .catch((error) => {
