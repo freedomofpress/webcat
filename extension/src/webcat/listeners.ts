@@ -80,7 +80,7 @@ export async function headersListener(
     (!tabs.has(details.tabId) && details.tabId > 0) ||
     // Skip non-enrolled workers
     // What at browser restart?
-    (details.tabId < 0 && !origins.has(fqdn) && !isFQDNEnrolled(fqdn))
+    (details.tabId < 0 && !origins.has(fqdn) && !await isFQDNEnrolled(fqdn))
   ) {
     // This is too much noise to really log
     console.debug(`headersListener: skipping ${details.url}`);
