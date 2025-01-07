@@ -4,7 +4,8 @@ import { Sigstore } from "../sigstore/interfaces";
 import { OriginState, PopupState, metadataRequestSource } from "./interfaces";
 import { validateResponseHeaders, validateResponseContent } from "./response";
 import { validateOrigin } from "./request";
-import { getFQDN, isExtensionRequest, isFQDNEnrolled } from "./utils";
+import { getFQDN, isExtensionRequest } from "./utils";
+import { openDatabase, isFQDNEnrolled } from "./db";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { logger } from "./logger";
 
@@ -12,6 +13,7 @@ const origins: Map<string, OriginState> = new Map();
 const tabs: Map<number, string> = new Map();
 const popups: Map<number, PopupState> = new Map();
 
+let list_db: IDBDatabase;
 let sigstore: Sigstore;
 const allowed_types: string[] = [
   "image",
@@ -53,9 +55,10 @@ export async function installListener() {
 export async function startupListener() {
   await updateTUF();
   sigstore = await loadSigstoreRoot();
-  // Here we probably want to check for a diff update to the list
-  // Stills needs to check signature and inclusion proof
-  // But db update should be on average very very small
+
+  // Load database connections
+  // We use it only for querying, so we'd rather keep it open but look at db.ts for more info
+  list_db = await openDatabase("webcat");
 }
 
 export function tabCloseListener(
@@ -80,7 +83,7 @@ export async function headersListener(
     (!tabs.has(details.tabId) && details.tabId > 0) ||
     // Skip non-enrolled workers
     // What at browser restart?
-    (details.tabId < 0 && !origins.has(fqdn) && !await isFQDNEnrolled(fqdn))
+    (details.tabId < 0 && !origins.has(fqdn) && !await isFQDNEnrolled(list_db, fqdn))
   ) {
     // This is too much noise to really log
     console.debug(`headersListener: skipping ${details.url}`);
@@ -104,6 +107,7 @@ export async function headersListener(
       tabs,
       origins,
       popups,
+      list_db,
       fqdn,
       details.url,
       details.tabId,
@@ -169,6 +173,7 @@ export async function requestListener(
         tabs,
         origins,
         popups,
+        list_db,
         fqdn,
         details.url,
         details.tabId,
@@ -188,7 +193,7 @@ export async function requestListener(
   /* DEVELOPMENT GUARD */
   /*it's here for development: meaning if we reach this stage
     and the fqdn is enrolled, but a entry in the origin map has nor been created, there is a critical security bug */
-  if ((await isFQDNEnrolled(fqdn)) === true && !origins.has(fqdn)) {
+  if ((await isFQDNEnrolled(list_db, fqdn)) === true && !origins.has(fqdn)) {
     console.error(
       "FATAL: loading from an enrolled origin but the state does not exists.",
     );

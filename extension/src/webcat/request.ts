@@ -1,5 +1,5 @@
 import { OriginState, PopupState, metadataRequestSource } from "./interfaces";
-import { isFQDNEnrolled } from "./utils";
+import { isFQDNEnrolled } from "./db";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
 
@@ -7,12 +7,13 @@ export async function validateOrigin(
   tabs: Map<number, string>,
   origins: Map<string, OriginState>,
   popups: Map<number, PopupState>,
+  list_db: IDBDatabase,
   fqdn: string,
   url: string,
   tabId: number,
   type: metadataRequestSource,
 ) {
-  if ((await isFQDNEnrolled(fqdn)) === false) {
+  if ((await isFQDNEnrolled(list_db, fqdn)) === false) {
     console.debug(`${url} is not enrolled, skipping...`);
     return;
   }

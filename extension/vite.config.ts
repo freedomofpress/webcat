@@ -3,6 +3,7 @@ import { viteSingleFile } from "vite-plugin-singlefile";
 
 export default defineConfig({
   build: {
+    minify: false,
     outDir: "dist",
     target: "esnext",
     rollupOptions: {

@@ -3,16 +3,6 @@ export function getFQDN(url: string): string {
   return urlobj.hostname;
 }
 
-export async function isFQDNEnrolled(fqdn: string): Promise<boolean> {
-  //const fqdn_hash = await SHA256(fqdn);
-  //return fqdn_hash;
-  if (fqdn.endsWith("nym.re") || fqdn === "lsd.cat") {
-    return true;
-  } else {
-    return false;
-  }
-}
-
 export function isExtensionRequest(
   details: browser.webRequest._OnBeforeRequestDetails,
 ): boolean {
