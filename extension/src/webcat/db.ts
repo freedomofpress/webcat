@@ -112,7 +112,7 @@ export async function isFQDNEnrolled(db: IDBDatabase, fqdn: string): Promise<boo
         request.onsuccess = () => {
             if (request.result && request.result["policyhash"]) {
                 logger.addLog("info", `Found policy hash ${arrayBufferToHex(request.result["policyhash"])} for ${fqdn}`, -1, fqdn)
-                resolve(request.result["policyhash"]);
+                resolve(new Uint8Array(request.result["policyhash"]));
             } else {
                 resolve(false);
             }

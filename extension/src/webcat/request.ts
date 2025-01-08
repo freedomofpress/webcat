@@ -92,6 +92,8 @@ export async function validateOrigin(
   newOriginState.manifestPromise = fetch(`https://${fqdn}/manifest.json`, {
     cache: "no-store",
   });
+
+  console.log(policyHash);
   if (policyHash instanceof Uint8Array && policyHash.byteLength == 32) {
     newOriginState.policyHash = policyHash;
   } else {

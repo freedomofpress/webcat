@@ -36,7 +36,14 @@ export function parseSigners(signers: string): Set<Signer> {
     outputSigners.add([signer.issuer, signer.identity.toLowerCase()]);
   }
 
-  return outputSigners;
+  // Sort in a set for consistency
+  const sortedSigners = Array.from(outputSigners).sort(
+    ([issuerA, identityA], [issuerB, identityB]) =>
+      identityA.localeCompare(identityB) || issuerA.localeCompare(issuerB),
+  );
+
+  // Recreate the Set with normalized (sorted) order
+  return new Set(sortedSigners);
 }
 
 export function parseThreshold(

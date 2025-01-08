@@ -1,10 +1,11 @@
 import { OriginState, PopupState } from "./interfaces";
 import { validate, validateManifest } from "./validators";
 import { parseSigners, parseThreshold } from "./parsers";
-import { SHA256, arrayBufferToHex, getFQDN } from "./utils";
+import { SHA256, arrayBufferToHex, getFQDN, arraysEqual } from "./utils";
 import { Sigstore } from "../sigstore/interfaces";
 import { setOKIcon } from "./ui";
 import { logger } from "./logger";
+import { hexToUint8Array, Uint8ArrayToHex } from "../sigstore/encoding";
 
 export async function validateResponseHeaders(
   sigstore: Sigstore,
@@ -78,6 +79,43 @@ export async function validateResponseHeaders(
       throw new Error("Failed to find all the necessary policy headers!");
     }
 
+    const cspRules = originState.csp
+      .split(";")
+      .map((rule) => rule.trim().toLowerCase())
+      .filter((rule) => rule.length > 0);
+    cspRules.sort();
+    const normalizedCsp = cspRules.join("; ");
+
+    const normalizedSigners = Array.from(originState.policy.signers).map(
+      ([issuer, identity]) => ({
+        identity,
+        issuer,
+      }),
+    );
+    
+    // Sort the normalized signers by identity, then issuer
+    normalizedSigners.sort(
+      (a, b) =>
+        a.identity.localeCompare(b.identity) || a.issuer.localeCompare(b.issuer),
+    );
+    
+    // Create the policy object
+    const policyObject = {
+      "x-sigstore-signers": normalizedSigners, // Use array of objects
+      "x-sigstore-threshold": originState.policy.threshold, // Already normalized
+      "content-security-policy": normalizedCsp,
+    };
+
+    // Compute hash of the normalized policy
+    const policyString = JSON.stringify(policyObject);
+    console.log(policyString);
+
+    // Validate policy hash
+    console.log(`Computed policy hash is ${Uint8ArrayToHex(new Uint8Array(await SHA256(policyString)))}`)
+    if (!arraysEqual(originState.policyHash, new Uint8Array(await SHA256(policyString)))) {
+      throw new Error("Response headers do not match the preload list.");
+    }
+
     logger.addLog(
       "debug",
       "Header parsing complete",
@@ -145,6 +183,7 @@ export async function validateResponseHeaders(
     );
   } else {
     // CSP still needs to be evaluated every time
+    //TODODO verify CSP against saved main_frame one
     let csp: string = "";
     for (const header of details.responseHeaders.sort()) {
       // This array is just used to detect duplicates
@@ -209,7 +248,7 @@ export async function validateResponseContent(
           throw new Error(`File ${pathname} not found in manifest.`);
         }
         SHA256(blob).then(function (content_hash) {
-          if (manifest_hash === arrayBufferToHex(content_hash)) {
+          if (arraysEqual(hexToUint8Array(manifest_hash), new Uint8Array(content_hash))) {
             // If everything is OK then we can just write the raw blob back
             logger.addLog(
               "info",
