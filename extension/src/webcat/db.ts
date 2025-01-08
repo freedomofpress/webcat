@@ -1,3 +1,4 @@
+import { hexToUint8Array } from '../sigstore/encoding';
 import { logger } from './logger';
 import { SHA256, arrayBufferToHex, getFQDN } from "./utils";
 
@@ -81,8 +82,8 @@ async function initDatabase(db: IDBDatabase) {
     // and maybe freshness, if we do not delegate that to TUF
     const listElements = [
         [await SHA256("lsd.cat"), await SHA256("policy1")],
-        [await SHA256("nym.re"), await SHA256("policy2")],
-        [await SHA256("globaleaks.nym.re"), await SHA256("policy3")], 
+        [await SHA256("nym.re"), hexToUint8Array("d6c9bee32f85ff71162afd1daa5ce876fd442af4105a08fbd70aa7291ab90ba0")],
+        [await SHA256("globaleaks.nym.re"), hexToUint8Array("17d1f9b10f534d0b256174aea048bcb0b57cf2b9f907e0b3e8ce3b00615a58f4")], 
         [await SHA256("element.nym.re"), await SHA256("policy4")],
         [await SHA256("test.nym.re"), await SHA256("policy5")]
     ]

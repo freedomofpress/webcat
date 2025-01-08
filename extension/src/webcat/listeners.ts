@@ -103,7 +103,7 @@ export async function headersListener(
       details.tabId,
       fqdn,
     );
-    validateOrigin(
+    await validateOrigin(
       tabs,
       origins,
       popups,

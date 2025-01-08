@@ -13,7 +13,8 @@ export async function validateOrigin(
   tabId: number,
   type: metadataRequestSource,
 ) {
-  if ((await isFQDNEnrolled(list_db, fqdn)) === false) {
+  const policyHash = await isFQDNEnrolled(list_db, fqdn);
+  if (policyHash === false) {
     console.debug(`${url} is not enrolled, skipping...`);
     return;
   }
@@ -91,4 +92,9 @@ export async function validateOrigin(
   newOriginState.manifestPromise = fetch(`https://${fqdn}/manifest.json`, {
     cache: "no-store",
   });
+  if (policyHash instanceof Uint8Array && policyHash.byteLength == 32) {
+    newOriginState.policyHash = policyHash;
+  } else {
+    throw new Error("Error retrieving the policy hash.");
+  }
 }
