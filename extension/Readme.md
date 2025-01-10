@@ -32,8 +32,8 @@ _WARNING_: experimental diagrams. Conformity with the code to be verified.
 
 ```mermaid
 flowchart TD
-    A[User types www.example.com] --> B[Extension intercepts request]
-    B --> C{Is www.example.com enrolled?}
+    A[User types example.com] --> B[Extension intercepts request]
+    B --> C{Is example.com enrolled?}
     C -- No --> D[Allow request to proceed]
     C -- Yes --> E[Fetch policy hash]
     E --> F[Fetch manifest.json]
@@ -42,8 +42,9 @@ flowchart TD
     G -- Yes --> I[Wait for manifest download]
     I --> J{Manifest downloaded successfully?}
     J -- No --> H
-    J -- Yes --> K[Verify manifest signatures]
-    K --> L{Signatures valid?}
+    J -- Yes --> K[Verify manifest signatures SigStore]
+    K --> K2[Match manifest signers with policy hash]
+    K2 --> L{Signatures valid?}
     L -- No --> H
     L -- Yes --> M[Download main page content]
     M --> N[Check main page hash]
