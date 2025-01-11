@@ -4,7 +4,7 @@ import { Sigstore } from "../sigstore/interfaces";
 import { OriginState, PopupState, metadataRequestSource } from "./interfaces";
 import { validateResponseHeaders, validateResponseContent } from "./response";
 import { validateOrigin } from "./request";
-import { getFQDN, isExtensionRequest } from "./utils";
+import { getFQDN } from "./utils";
 import { openDatabase, initDatabase, isFQDNEnrolled } from "./db";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { logger } from "./logger";
@@ -15,15 +15,6 @@ const popups: Map<number, PopupState> = new Map();
 
 let list_db: IDBDatabase;
 let sigstore: Sigstore;
-const allowed_types: string[] = [
-  "image",
-  "font",
-  "media",
-  // Object should not go through. Either they should be verified or completely disallowed by the CSP.
-  //"object",
-  "xmlhttprequest",
-  "websocket",
-];
 
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
@@ -77,14 +68,9 @@ export async function headersListener(
   details: browser.webRequest._OnHeadersReceivedDetails,
 ): Promise<browser.webRequest.BlockingResponse> {
   // Skip allowed types, etensions request, and not enrolled tabs
-  console.log(details);
   const fqdn = getFQDN(details.url);
 
   if (
-    // Skip extensionr equests
-    isExtensionRequest(details) ||
-    // Skip allowed file types
-    allowed_types.includes(details.type) ||
     // Skip non-enrolled tabs
     (!tabs.has(details.tabId) && details.tabId > 0) ||
     // Skip non-enrolled workers
@@ -148,12 +134,9 @@ export async function headersListener(
 export async function requestListener(
   details: browser.webRequest._OnBeforeRequestDetails,
 ): Promise<browser.webRequest.BlockingResponse> {
-  console.log(details);
   const fqdn = getFQDN(details.url);
 
   if (
-    isExtensionRequest(details) ||
-    allowed_types.includes(details.type) ||
     (details.tabId < 0 && !origins.has(fqdn))
   ) {
     // We will always wonder, is this check reasonable?
@@ -242,7 +225,6 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
             const tabId = tabs[0].id;
             const popupState = popups.get(tabId);
 
-            console.log(origins.get(origin));
             sendResponse({ tabId: tabId, popupState: popupState });
           })
           .catch((error) => {

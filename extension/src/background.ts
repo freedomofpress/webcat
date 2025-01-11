@@ -35,7 +35,7 @@ browser.webRequest.onHeadersReceived.addListener(
   headersListener,
   // Here HTTP should no longer be a concern, we should have dropped the request before receiving headers anyway
   // However that would not be the case for .onion domains
-  { urls: ["http://*/*", "https://*/*"] },
+  { urls: ["http://*/*", "https://*/*"], types: ["main_frame", "object", "script", "stylesheet", "sub_frame", "xslt", "xml_dtd", "web_manifest", "other"] },
   // Do we want this to be "blocking"? If we detect an anomaly we should stop
   ["blocking", "responseHeaders"],
 );
