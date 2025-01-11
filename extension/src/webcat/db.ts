@@ -73,7 +73,6 @@ async function dbBulkAdd(db: IDBDatabase, storename: string, data: Array<Array<a
         transaction.oncomplete = () => resolve(true);
         transaction.onerror = (event) => {
             console.error("BulkAdd failed");
-            console.log(event);
             reject(false);
         }
     });
@@ -104,7 +103,7 @@ export async function initDatabase(db: IDBDatabase) {
 
 export async function isFQDNEnrolled(db: IDBDatabase, fqdn: string): Promise<boolean|Uint8Array> {
     const fqdn_hash = await SHA256(fqdn);
-    console.log(`Checking ${fqdn}, hash = ${arrayBufferToHex(fqdn_hash)}`)
+    //console.log(`Checking ${fqdn}, hash = ${arrayBufferToHex(fqdn_hash)}`)
     return new Promise((resolve, reject) => {
         const transaction = db.transaction("list", "readonly");
         const store = transaction.objectStore("list");

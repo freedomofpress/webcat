@@ -133,10 +133,7 @@ export async function validateResponseHeaders(
     }
     // By doing this here we gain a bit of async time: we start processing the request headers
     // while we download the manifest
-    console.log("Before await manifest");
-    console.log(originState.manifestPromise);
     const manifestResponse = await originState.manifestPromise;
-    console.log("After await manifest");
 
     logger.addLog(
       "debug",
@@ -217,7 +214,6 @@ export async function validateResponseContent(
   popupState: PopupState | undefined,
   details: browser.webRequest._OnBeforeRequestDetails,
 ) {
-  console.log(details);
   function deny(filter: browser.webRequest.StreamFilter) {
     // DENIED
     filter.write(new Uint8Array([68, 69, 78, 73, 69, 68]));
@@ -235,7 +231,6 @@ export async function validateResponseContent(
   };
 
   filter.onstop = () => {
-    console.log(originState);
     if (originState.valid === true) {
       new Blob(source).arrayBuffer().then(function (blob) {
         const pathname = new URL(details.url).pathname;
@@ -293,7 +288,6 @@ export async function validateResponseContent(
       });
     } else {
       // If headers are wrong we abort everything
-      console.log(details);
       logger.addLog(
         "error",
         `Error: tab context is not valid ${details.url}`,
