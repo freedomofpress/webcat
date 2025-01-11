@@ -23,7 +23,9 @@ browser.runtime.onStartup.addListener(startupListener);
 browser.webRequest.onBeforeRequest.addListener(
   requestListener,
   // We intercept http too because if a website is enrolled but not TLS enabled we want to drop
-  { urls: ["http://*/*", "https://*/*"] },
+  // https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/ResourceType
+  { urls: ["http://*/*", "https://*/*"], types: ["main_frame", "object", "script", "stylesheet", "sub_frame", "xslt", "xml_dtd", "web_manifest", "other"] },
+  // Allowed remaining are beacon, csp_report, font, image, imageset, media, object_subrequest, ping, speculative, websocket, xmlhttprequest
   ["blocking"],
 );
 

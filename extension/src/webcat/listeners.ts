@@ -5,7 +5,7 @@ import { OriginState, PopupState, metadataRequestSource } from "./interfaces";
 import { validateResponseHeaders, validateResponseContent } from "./response";
 import { validateOrigin } from "./request";
 import { getFQDN, isExtensionRequest } from "./utils";
-import { openDatabase, isFQDNEnrolled } from "./db";
+import { openDatabase, initDatabase, isFQDNEnrolled } from "./db";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { logger } from "./logger";
 
@@ -45,14 +45,19 @@ function cleanup(tabId: number) {
 }
 
 export async function installListener() {
+  console.log("Running installListener");
   // Initial list download here
   // We probably want do download the most recent list, verify signature and log inclusion
   // Then index persistently in indexeddb. We do this at every startup anyway, so there is no reason for
   // not just calling the startup listener
   await startupListener();
+  const db = await openDatabase("webcat");
+  await initDatabase(db);
+  db.close();
 }
 
 export async function startupListener() {
+  console.log("Running startupListener");
   await updateTUF();
   sigstore = await loadSigstoreRoot();
 
@@ -72,6 +77,7 @@ export async function headersListener(
   details: browser.webRequest._OnHeadersReceivedDetails,
 ): Promise<browser.webRequest.BlockingResponse> {
   // Skip allowed types, etensions request, and not enrolled tabs
+  console.log(details);
   const fqdn = getFQDN(details.url);
 
   if (
@@ -142,6 +148,7 @@ export async function headersListener(
 export async function requestListener(
   details: browser.webRequest._OnBeforeRequestDetails,
 ): Promise<browser.webRequest.BlockingResponse> {
+  console.log(details);
   const fqdn = getFQDN(details.url);
 
   if (

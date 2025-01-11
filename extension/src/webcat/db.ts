@@ -35,8 +35,6 @@ export async function openDatabase(db_name: string): Promise<IDBDatabase> {
                 liststore.createIndex("list", "fqdnhash", { unique: true });
 
                 logger.addLog("info", "Created new list database", -1, "");
-
-                initDatabase(db);
                 
                 logger.addLog("info", "Populated new database", -1, "");
             } catch (error) {
@@ -73,11 +71,15 @@ async function dbBulkAdd(db: IDBDatabase, storename: string, data: Array<Array<a
         }
 
         transaction.oncomplete = () => resolve(true);
-        transaction.onerror = (event) => reject(false);
+        transaction.onerror = (event) => {
+            console.error("BulkAdd failed");
+            console.log(event);
+            reject(false);
+        }
     });
 }
 
-async function initDatabase(db: IDBDatabase) {
+export async function initDatabase(db: IDBDatabase) {
     // Ideally here we would fetch the list remotelym verify signature and inclusion proof
     // and maybe freshness, if we do not delegate that to TUF
     const listElements = [
