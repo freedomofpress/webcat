@@ -88,12 +88,7 @@ export async function validateOrigin(
   // https://stackoverflow.com/questions/31129648/how-to-identify-who-initiated-the-http-request-in-firefox
   // It's tracked in the dev console, but no luck in extensions https://discourse.mozilla.org/t/access-webrequest-request-initiator-chain-stack-trace/75877
   // More sadness: https://stackoverflow.com/questions/47331875/webrequest-api-how-to-get-the-requestid-of-a-new-request
-  logger.addLog("info", `Fetching https://${fqdn}/manifest.json`, tabId, fqdn);
-  newOriginState.manifestPromise = fetch(`https://${fqdn}/manifest.json`, {
-    cache: "no-store",
-  });
 
-  console.log(policyHash);
   if (policyHash instanceof Uint8Array && policyHash.byteLength == 32) {
     newOriginState.policyHash = policyHash;
   } else {

@@ -4,8 +4,8 @@ import { Sigstore } from "../sigstore/interfaces";
 import { OriginState, PopupState, metadataRequestSource } from "./interfaces";
 import { validateResponseHeaders, validateResponseContent } from "./response";
 import { validateOrigin } from "./request";
-import { getFQDN, isExtensionRequest } from "./utils";
-import { openDatabase, isFQDNEnrolled } from "./db";
+import { getFQDN } from "./utils";
+import { openDatabase, initDatabase, isFQDNEnrolled } from "./db";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { logger } from "./logger";
 
@@ -15,15 +15,6 @@ const popups: Map<number, PopupState> = new Map();
 
 let list_db: IDBDatabase;
 let sigstore: Sigstore;
-const allowed_types: string[] = [
-  "image",
-  "font",
-  "media",
-  // Object should not go through. Either they should be verified or completely disallowed by the CSP.
-  //"object",
-  "xmlhttprequest",
-  "websocket",
-];
 
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
@@ -45,14 +36,19 @@ function cleanup(tabId: number) {
 }
 
 export async function installListener() {
+  console.log("Running installListener");
   // Initial list download here
   // We probably want do download the most recent list, verify signature and log inclusion
   // Then index persistently in indexeddb. We do this at every startup anyway, so there is no reason for
   // not just calling the startup listener
   await startupListener();
+  const db = await openDatabase("webcat");
+  await initDatabase(db);
+  db.close();
 }
 
 export async function startupListener() {
+  console.log("Running startupListener");
   await updateTUF();
   sigstore = await loadSigstoreRoot();
 
@@ -75,10 +71,6 @@ export async function headersListener(
   const fqdn = getFQDN(details.url);
 
   if (
-    // Skip extensionr equests
-    isExtensionRequest(details) ||
-    // Skip allowed file types
-    allowed_types.includes(details.type) ||
     // Skip non-enrolled tabs
     (!tabs.has(details.tabId) && details.tabId > 0) ||
     // Skip non-enrolled workers
@@ -145,8 +137,6 @@ export async function requestListener(
   const fqdn = getFQDN(details.url);
 
   if (
-    isExtensionRequest(details) ||
-    allowed_types.includes(details.type) ||
     (details.tabId < 0 && !origins.has(fqdn))
   ) {
     // We will always wonder, is this check reasonable?
@@ -235,7 +225,6 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
             const tabId = tabs[0].id;
             const popupState = popups.get(tabId);
 
-            console.log(origins.get(origin));
             sendResponse({ tabId: tabId, popupState: popupState });
           })
           .catch((error) => {

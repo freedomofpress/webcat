@@ -108,10 +108,10 @@ export async function validateResponseHeaders(
 
     // Compute hash of the normalized policy
     const policyString = JSON.stringify(policyObject);
-    console.log(policyString);
+    //console.log(policyString);
 
     // Validate policy hash
-    console.log(`Computed policy hash is ${Uint8ArrayToHex(new Uint8Array(await SHA256(policyString)))}`)
+    //console.log(`Computed policy hash is ${Uint8ArrayToHex(new Uint8Array(await SHA256(policyString)))}`)
     if (!arraysEqual(originState.policyHash, new Uint8Array(await SHA256(policyString)))) {
       throw new Error("Response headers do not match the preload list.");
     }
@@ -133,10 +133,7 @@ export async function validateResponseHeaders(
     }
     // By doing this here we gain a bit of async time: we start processing the request headers
     // while we download the manifest
-    console.log("Before await manifest");
-    console.log(originState.manifestPromise);
     const manifestResponse = await originState.manifestPromise;
-    console.log("After await manifest");
 
     logger.addLog(
       "debug",

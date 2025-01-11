@@ -44,7 +44,9 @@ export class OriginState {
     this.csp = "";
     this.cspHash = new Uint8Array();
     this.policyHash = new Uint8Array();
-    this.manifestPromise = Promise.reject("Manifest not initialized");
+    this.manifestPromise = fetch(`https://${fqdn}/manifest.json`, {
+      cache: "no-store",
+    });
     this.manifest = undefined;
     this.policy = { signers: new Set(), threshold: 0 };
     this.valid_signers = [];
