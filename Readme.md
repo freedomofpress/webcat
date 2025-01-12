@@ -11,12 +11,12 @@ Webcat is:
  4. [A Firefox (v2) extension](./extension/)
  5. [A signing script](./signing/)
  6. [Deployment infrastructure](./deploy/)
- 7. [Demo and application examples](./demo/)
+ 7. [Demo and application examples](./apps/testapp)
 
 
 See [The long and winding road to safe browser-based cryptography](https://securedrop.org/news/browser-based-cryptography/) for additional context.
 
-See [apps](https://github.com/freedomofpress/webcat/tree/main/apps) for a list of supported and in-progress apps.
+See [apps](./apps) for a list of supported and in-progress apps.
 
 ## Introduction
 In the past decade, web applications have undergone a significant evolution, marked by a proliferation of features, enhanced functionality, and optimization. Support for WebAssembly in browsers has allowed more low-level options, and application packaging such as Electron has offered easier portability. Services like WhatsApp Web, Wire, ProtonMail, crypto wallets, and encrypted collaboration suites are now commonly used, increasing reliance on web-based platforms.
