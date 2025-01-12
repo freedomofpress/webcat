@@ -4,7 +4,7 @@
  - [MyEtherWallet](https://github.com/MyEtherWallet/MyEtherWallet)
  - [Cryptpad](https://github.com/cryptpad/cryptpad)
  - [Standard Notes](https://github.com/standardnotes/app)
- - [Jitsi Meet](https://github.com/jitsi/jitsi-meet)
+ - [Jitsi Meet](https://github.com/jitsi/jitsi-meet) -> [Issue](https://github.com/freedomofpress/webcat/issues/25)
  - [Telegram Web A](https://github.com/Ajaxy/telegram-tt)
  - [Proton Web](https://github.com/ProtonMail/WebClients)
 
