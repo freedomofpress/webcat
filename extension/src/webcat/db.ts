@@ -85,8 +85,8 @@ export async function initDatabase(db: IDBDatabase) {
         [await SHA256("lsd.cat"), await SHA256("policy1")],
         [await SHA256("nym.re"), hexToUint8Array("d6c9bee32f85ff71162afd1daa5ce876fd442af4105a08fbd70aa7291ab90ba0")],
         [await SHA256("globaleaks.nym.re"), hexToUint8Array("17d1f9b10f534d0b256174aea048bcb0b57cf2b9f907e0b3e8ce3b00615a58f4")], 
-        [await SHA256("element.nym.re"), await SHA256("policy4")],
-        [await SHA256("test.nym.re"), await SHA256("policy5")]
+        [await SHA256("element.nym.re"), hexToUint8Array("a8553696f549d32ed01b1664423ea8adbe468c55557eaf6436cb143a1ad754fd")],
+        [await SHA256("jitsi.nym.re"), hexToUint8Array("6b4b6402a364cdde80f7d54f34939e57e1b6fb94ad489f96d8787eb60fd1bfbe")]
     ]
 
     const settingElements = [
