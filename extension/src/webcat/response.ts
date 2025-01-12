@@ -108,10 +108,10 @@ export async function validateResponseHeaders(
 
     // Compute hash of the normalized policy
     const policyString = JSON.stringify(policyObject);
-    //console.log(policyString);
+    logger.addLog("info", `policy: ${policyString}`, details.tabId, originState.fqdn);
 
     // Validate policy hash
-    //console.log(`Computed policy hash is ${Uint8ArrayToHex(new Uint8Array(await SHA256(policyString)))}`)
+    logger.addLog("info", `Computed policy hash is ${Uint8ArrayToHex(new Uint8Array(await SHA256(policyString)))}`, details.tabId, originState.fqdn);
     if (!arraysEqual(originState.policyHash, new Uint8Array(await SHA256(policyString)))) {
       throw new Error("Response headers do not match the preload list.");
     }
@@ -242,6 +242,7 @@ export async function validateResponseContent(
         const manifest_hash = originState.manifest.manifest.files[pathname];
 
         if (typeof manifest_hash !== "string") {
+          // TODO this condition does not load the file but it does not trigger a block redirect
           throw new Error(`File ${pathname} not found in manifest.`);
         }
         SHA256(blob).then(function (content_hash) {
