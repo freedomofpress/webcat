@@ -4,7 +4,7 @@
  - [Globaleaks](https://globaleaks.org) - [Guide](https://github.com/freedomofpress/webcat/tree/main/demo/globaleaks) - Whistleblowing platform
 
 ### Apps to investigate
- - [Bitwarden](https://github.com/bitwarden/clients)
+ - [Bitwarden](https://github.com/bitwarden/clients) -> [Issue](https://github.com/freedomofpress/webcat/issues/28)
  - [MyMonero](https://github.com/mymonero/mymonero-web-js)
  - [MyEtherWallet](https://github.com/MyEtherWallet/MyEtherWallet)
  - [Cryptpad](https://github.com/cryptpad/cryptpad) -> [Issue](https://github.com/freedomofpress/webcat/issues/26)
