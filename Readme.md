@@ -20,6 +20,8 @@ See [apps](./apps) for a list of supported and in-progress apps.
 
 See [threat model](./docs/ThreatModel.md) for preliminary threat model considerations.
 
+If you are a developer and want to design or port your application, look at the [developer reference](./docs/DeveloperGuide.md) and also at the issues mention the porting of existing apps.
+
 ## Introduction
 In the past decade, web applications have undergone a significant evolution, marked by a proliferation of features, enhanced functionality, and optimization. Support for WebAssembly in browsers has allowed more low-level options, and application packaging such as Electron has offered easier portability. Services like WhatsApp Web, Wire, ProtonMail, crypto wallets, and encrypted collaboration suites are now commonly used, increasing reliance on web-based platforms.
 
