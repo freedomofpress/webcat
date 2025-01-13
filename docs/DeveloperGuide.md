@@ -1,4 +1,4 @@
-# Develepor Guide
+# Developer Guide
 The purpose of this document is to lay out guidelines for compatibility of web-applications with this project.
 
 ## Conent Security Policy
