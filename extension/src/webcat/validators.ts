@@ -9,10 +9,70 @@ import { verifyArtifact } from "../sigstore/sigstore";
 import { Sigstore } from "../sigstore/interfaces";
 import { stringToUint8Array } from "../sigstore/encoding";
 import { logger } from "./logger";
+import { parseContentSecurityPolicy } from './parsers';
+import { isFQDNEnrolled } from "./db";
+import { getFQDN } from "./utils";
 
-export function validateCSP(csp: string) {
-  // Here will go the CSP validator of the main_frame
-  //const res = parseContentSecurityPolicy(csp);
+import { origins, list_db } from "./listeners";
+
+// This functions shouldnt take this many arguments; TODO refactor or import/export global objects
+export async function validateCSP(csp: string, fqdn: string, tabId: number): Promise<boolean> {
+  // See https://github.com/freedomofpress/webcat/issues/9
+  // https://github.com/freedomofpress/webcat/issues/3
+  const required_directives = ["script-src", "style-src", "object-src"];
+
+  const parsedCSP = parseContentSecurityPolicy(csp);
+  logger.addLog("info", `Parsed CSP: ${parsedCSP.values()}`, tabId, fqdn);
+
+  const requiredDirectives = ["script-src", "style-src", "object-src"];
+  const allowedScriptSrc = new Set(["'self'", "'wasm-unsafe-eval'"]);
+  const allowedStyleSrc = new Set(["'self'", "'unsafe-inline'"]);
+
+  // Ensure required directives exist
+  for (const directive of requiredDirectives) {
+    if (!parsedCSP.has(directive)) {
+      throw new Error(`Missing required directive: ${directive}`);
+    }
+  }
+
+  // Validate script-src
+  const scriptSrc = parsedCSP.get("script-src")!;
+  for (const src of scriptSrc) {
+    if (!allowedScriptSrc.has(src) && !src.startsWith("'sha")) {
+      throw new Error(`Invalid source in script-src: ${src}`);
+    }
+  }
+
+  // Validate style-src
+  const styleSrc = parsedCSP.get("style-src")!;
+  for (const src of styleSrc) {
+    if (!allowedStyleSrc.has(src)) {
+      throw new Error(`Invalid source in style-src: ${src}`);
+    }
+  }
+
+  // Validate object-src
+  const objectSrc = parsedCSP.get("object-src")!;
+  if (objectSrc.length !== 1 || objectSrc[0] !== "'none'") {
+    throw new Error(`object-src must be 'none', found: ${objectSrc.join(" ")}`);
+  }
+
+  // Validate child-src and frame-src individually
+  const childSrc = parsedCSP.get("child-src") ?? [];
+  const frameSrc = parsedCSP.get("frame-src") ?? [];
+  const workerSrc = parsedCSP.get("worker-src") ?? [];
+
+  // TODO, you can probably never have an external worker src without an external script-src
+  for (const src of [...childSrc, ...frameSrc, ...workerSrc]) {
+    if (src.includes("*")) {
+      throw new Error(`Wildcards not allowed child-src/frame-src: ${src}`);
+    }
+    if (src != "'none'" && src != "'self'" && !await isFQDNEnrolled(list_db, getFQDN(src), origins, tabId)) {
+      throw new Error(`Invalid source in child-src/frame-src: ${src}`);
+    }
+  }
+  
+  logger.addLog("info", "CSP validation successful!", tabId, fqdn);
   return true;
 }
 

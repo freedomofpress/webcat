@@ -82,6 +82,7 @@ export async function validateOrigin(
     fqdn,
   );
   const newOriginState = new OriginState(fqdn);
+  console.log(`Adding ${fqdn} to origins`);
   origins.set(fqdn, newOriginState);
 
   // So, we cannot directly know that we are the initiator of this request, see

@@ -9,12 +9,12 @@ import { openDatabase, initDatabase, isFQDNEnrolled } from "./db";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { logger } from "./logger";
 
-const origins: Map<string, OriginState> = new Map();
-const tabs: Map<number, string> = new Map();
-const popups: Map<number, PopupState> = new Map();
+export const origins: Map<string, OriginState> = new Map();
+export const tabs: Map<number, string> = new Map();
+export const popups: Map<number, PopupState> = new Map();
 
-let list_db: IDBDatabase;
-let sigstore: Sigstore;
+export let list_db: IDBDatabase;
+export let sigstore: Sigstore;
 
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
@@ -125,6 +125,7 @@ export async function headersListener(
       details.tabId,
       fqdn,
     );
+    origins.delete(fqdn);
     return { redirectUrl: browser.runtime.getURL("pages/error.html") };
   }
 
@@ -146,7 +147,7 @@ export async function requestListener(
     return {};
   }
 
-  if (details.type == "main_frame") {
+  if (details.type === "main_frame") {
     // User is navigatin to a new context, whether is enrolled or not better to reset
     cleanup(details.tabId);
 
@@ -193,8 +194,8 @@ export async function requestListener(
 
   // if we know the tab is enrolled, or it is a worker background connction then we should verify
   if (tabs.has(details.tabId) === true || details.tabId < 0) {
-    validateResponseContent(
-      origins.get(fqdn)!,
+    await validateResponseContent(
+      origins,
       popups.get(details.tabId),
       details,
     );
