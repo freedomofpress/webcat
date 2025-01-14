@@ -13,7 +13,7 @@ export async function validateOrigin(
   tabId: number,
   type: metadataRequestSource,
 ) {
-  const policyHash = await isFQDNEnrolled(list_db, fqdn);
+  const policyHash = await isFQDNEnrolled(list_db, fqdn, tabId);
   if (policyHash === false) {
     console.debug(`${url} is not enrolled, skipping...`);
     return;

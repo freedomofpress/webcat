@@ -44,9 +44,14 @@ class Logger {
     // Conditional console output
     if (this.shouldPrint(level)) {
       // Cast console[level] to a function type
+      let tab: string;
+      if (logEntry.tabId > 0) {
+        tab = `Tab ${logEntry.tabId}`
+      } else {
+        tab = "worker"
+      }
       (console[level] as (...args: any[]) => void)(
-        `[${logEntry.timestamp.toISOString()}] [Tab ${logEntry.tabId}] [${logEntry.origin}] ${logEntry.message}`,
-        stack || "",
+        `[${logEntry.timestamp.toISOString()}] [${tab}] [${logEntry.origin}] ${logEntry.message}`
       );
     }
   }
