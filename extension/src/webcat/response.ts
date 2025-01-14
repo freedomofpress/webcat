@@ -259,7 +259,7 @@ export async function validateResponseContent(
               originState.fqdn,
             );
 
-            if (pathname === "/" && popupState) {
+            if (details.type == "main_frame" && popupState) {
               popupState.valid_index = true;
             } else if (popupState) {
               popupState.loaded_assets.push(pathname);
@@ -275,7 +275,7 @@ export async function validateResponseContent(
               details.tabId,
               originState.fqdn,
             );
-            if (pathname === "/" && popupState) {
+            if (details.type == "main_frame" && popupState) {
               popupState.valid_index = false;
             } else if (popupState) {
               popupState.invalid_assets.push(pathname);
