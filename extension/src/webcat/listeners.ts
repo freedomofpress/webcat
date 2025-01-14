@@ -36,7 +36,7 @@ function cleanup(tabId: number) {
 }
 
 export async function installListener() {
-  console.log("Running installListener");
+  console.log("[webcat] Running installListener");
   // Initial list download here
   // We probably want do download the most recent list, verify signature and log inclusion
   // Then index persistently in indexeddb. We do this at every startup anyway, so there is no reason for
@@ -48,7 +48,7 @@ export async function installListener() {
 }
 
 export async function startupListener() {
-  console.log("Running startupListener");
+  console.log("[webcat] Running startupListener");
   await updateTUF();
   sigstore = await loadSigstoreRoot();
 
@@ -270,10 +270,10 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   const originState = origins.get(fqdn);
 
   if (originState!.manifest && originState!.manifest.manifest.wasm.includes(hash)) {
-    logger.addLog("info", `Validated WASM ${hash}`, sender.tabId, fqdn);
+    logger.addLog("info", `Validated WASM ${hash}`, sender.tab.id, fqdn);
     sendResponse(true);
   } else {
-    logger.addLog("error", `Invalid WASM ${hash}`, sender.tabId, fqdn);
+    logger.addLog("error", `Invalid WASM ${hash}`, sender.tab.id, fqdn);
     sendResponse(false);
     browser.tabs.update(sender.tab.id, {
       url: browser.runtime.getURL("pages/error.html"),
