@@ -13,7 +13,7 @@ beautify:
 lint:
 	npx eslint . --ignore-pattern "dist/*" --ignore-pattern "hooks/*" --ignore-pattern "pages/*"
 
-package:
+package: build
 	zip -r $(ZIP_FILE) manifest.json dist/bundle.js assets hooks icons pages
 	cp $(ZIP_FILE) ../dist/
 
