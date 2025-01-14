@@ -17,7 +17,7 @@ async function fetchMetafile(
     url = `${TUF_REPOSITORY_URL}/${role}.json`;
   }
 
-  console.log("Fetching ", url);
+  console.log("[TUF]", "Fetching", url);
   try {
     const response = await fetch(url);
 
@@ -104,7 +104,7 @@ async function updateRoot(frozenTimestamp: Date): Promise<Root> {
   // Is this the first time we are running the update meaning we have no cached file?
   if (rootJson == undefined) {
     // Then load the hardcoded startup root
-    console.log("Starting from hardcoded root");
+    console.log("[TUF]", "Starting from hardcoded root");
     // Spec 5.2
     rootJson = await openBootstrapRoot(STARTING_ROOT_PATH);
   }
@@ -336,7 +336,7 @@ async function updateTargets(
     ) {
       throw new Error("Targets hash does not match snapshot hash.");
     }
-    console.log("hash verfiied");
+    console.log("[TUF]", "Hash verfiied");
   }
 
   const newTargets = JSON.parse(Uint8ArrayToString(newTargetsRaw));

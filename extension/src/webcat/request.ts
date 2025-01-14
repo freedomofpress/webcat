@@ -13,7 +13,7 @@ export async function validateOrigin(
   tabId: number,
   type: metadataRequestSource,
 ) {
-  const policyHash = await isFQDNEnrolled(list_db, fqdn);
+  const policyHash = await isFQDNEnrolled(list_db, fqdn, origins, tabId);
   if (policyHash === false) {
     console.debug(`${url} is not enrolled, skipping...`);
     return;
@@ -48,9 +48,9 @@ export async function validateOrigin(
   }
 
   // We support one enrollment/policy per domain, to enforce SOP isolation
-  if (urlobj.pathname !== "/") {
-    throw new Error("Enrolled applications should be loaded from the root.");
-  }
+  //if (urlobj.pathname !== "/") {
+  //  throw new Error("Enrolled applications should be loaded from the root.");
+  //}
 
   // Nothing can go wrong in this func anynmore hopefully, let's add the reference
   if (type === metadataRequestSource.main_frame) {

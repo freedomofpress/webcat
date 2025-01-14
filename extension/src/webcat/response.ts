@@ -239,12 +239,16 @@ export async function validateResponseContent(
           throw new Error("Manifest not loaded, and it should never happen here.");
         }
 
-        const manifest_hash = originState.manifest.manifest.files[pathname];
+        let manifest_hash = originState.manifest.manifest.files[pathname];
 
-        if (typeof manifest_hash !== "string") {
-          // TODO this condition does not load the file but it does not trigger a block redirect
-          throw new Error(`File ${pathname} not found in manifest.`);
+        if (!manifest_hash) {
+          manifest_hash = originState.manifest.manifest.files["/"];
         }
+
+        //if (typeof manifest_hash !== "string") {
+        // TODO this condition does not load the file but it does not trigger a block redirect
+        //  throw new Error(`File ${pathname} not found in manifest.`);
+        //}
         SHA256(blob).then(function (content_hash) {
           if (arraysEqual(hexToUint8Array(manifest_hash), new Uint8Array(content_hash))) {
             // If everything is OK then we can just write the raw blob back
@@ -255,7 +259,7 @@ export async function validateResponseContent(
               originState.fqdn,
             );
 
-            if (pathname === "/" && popupState) {
+            if (details.type == "main_frame" && popupState) {
               popupState.valid_index = true;
             } else if (popupState) {
               popupState.loaded_assets.push(pathname);
@@ -271,7 +275,7 @@ export async function validateResponseContent(
               details.tabId,
               originState.fqdn,
             );
-            if (pathname === "/" && popupState) {
+            if (details.type == "main_frame" && popupState) {
               popupState.valid_index = false;
             } else if (popupState) {
               popupState.invalid_assets.push(pathname);

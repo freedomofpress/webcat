@@ -1,6 +1,7 @@
 import { hexToUint8Array } from '../sigstore/encoding';
 import { logger } from './logger';
 import { SHA256, arrayBufferToHex, getFQDN } from "./utils";
+import { OriginState } from './interfaces';
 
 // https://stackoverflow.com/questions/40593260/should-i-open-an-idbdatabase-each-time-or-keep-one-instance-open
 // Someone here claims opening and close is almost the same as keeping it open, performance-wise
@@ -34,9 +35,9 @@ export async function openDatabase(db_name: string): Promise<IDBDatabase> {
                 const liststore = db.createObjectStore("list", { keyPath: "fqdnhash" });
                 liststore.createIndex("list", "fqdnhash", { unique: true });
 
-                logger.addLog("info", "Created new list database", -1, "");
+                console.log("[webcat]", "Created new list database");
                 
-                logger.addLog("info", "Populated new database", -1, "");
+                console.log("[webcat]", "Populated new database");
             } catch (error) {
                 reject(new Error(`Error creating object store: ${error}`));
             }
@@ -44,7 +45,7 @@ export async function openDatabase(db_name: string): Promise<IDBDatabase> {
 
         request.onsuccess = (event) => {
             const db = (event.target as IDBOpenDBRequest).result;
-            logger.addLog("info", "Database opened successfully.", -1, "");
+            console.log("[webcat]", "Database opened successfully.");
             resolve(db);
         };
 
@@ -98,10 +99,18 @@ export async function initDatabase(db: IDBDatabase) {
     // for large numbers of insert, it could be that batching (such as 10k chunks) could be beneficial
     dbBulkAdd(db, "list", listElements, "fqdnhash", "policyhash");
     dbBulkAdd(db, "settings", settingElements, "key", "value");
-
 }
 
-export async function isFQDNEnrolled(db: IDBDatabase, fqdn: string): Promise<boolean|Uint8Array> {
+// TabID is passed only mostly for debugging
+export async function isFQDNEnrolled(db: IDBDatabase, fqdn: string, origins: Map<string, OriginState>, tabId: number): Promise<boolean|Uint8Array> {
+    if (origins.has(fqdn)) {
+        if (!origins.get(fqdn)?.policyHash) {
+            throw new Error("FATAL: we found a cached origin without a policy associated");
+        }
+        logger.addLog("info", `Policy cache hit for ${fqdn}`, tabId, fqdn)
+        return origins.get(fqdn)!.policyHash;
+    }
+
     const fqdn_hash = await SHA256(fqdn);
     //console.log(`Checking ${fqdn}, hash = ${arrayBufferToHex(fqdn_hash)}`)
     return new Promise((resolve, reject) => {
@@ -112,7 +121,7 @@ export async function isFQDNEnrolled(db: IDBDatabase, fqdn: string): Promise<boo
 
         request.onsuccess = () => {
             if (request.result && request.result["policyhash"]) {
-                logger.addLog("info", `Found policy hash ${arrayBufferToHex(request.result["policyhash"])} for ${fqdn}`, -1, fqdn)
+                logger.addLog("info", `Found policy hash ${arrayBufferToHex(request.result["policyhash"])} for ${fqdn}`, tabId, fqdn)
                 resolve(new Uint8Array(request.result["policyhash"]));
             } else {
                 resolve(false);
