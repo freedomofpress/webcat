@@ -46,7 +46,7 @@ export class OriginState {
     this.valid_csp = false;
     this.cspHash = new Uint8Array();
     this.policyHash = new Uint8Array();
-    this.manifestPromise = fetch(`https://${fqdn}/manifest.json`, {
+    this.manifestPromise = fetch(`https://${fqdn}/webcat.json`, {
       cache: "no-store",
     });
     this.manifest = undefined;
