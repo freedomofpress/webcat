@@ -38,7 +38,7 @@ export async function validateCSP(csp: string, fqdn: string, tabId: number): Pro
   // Validate script-src
   const scriptSrc = parsedCSP.get("script-src")!;
   for (const src of scriptSrc) {
-    if (!allowedScriptSrc.has(src) && !src.startsWith("'sha")) {
+    if (!allowedScriptSrc.has(src) && !src.startsWith("'sha") && !await isFQDNEnrolled(list_db, getFQDN(src), origins, tabId)) {
       throw new Error(`Invalid source in script-src: ${src}`);
     }
   }
