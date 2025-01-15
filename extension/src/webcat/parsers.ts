@@ -63,6 +63,15 @@ export function parseThreshold(
   return outputThreshold;
 }
 
+
+// From https://github.com/helmetjs/content-security-policy-parser/blob/main/mod.ts
+
+type ParsedContentSecurityPolicy = Map<string, string[]>;
+
+// "ASCII whitespace is U+0009 TAB, U+000A LF, U+000C FF, U+000D CR, or
+// U+0020 SPACE."
+//
+// See <https://infra.spec.whatwg.org/#ascii-whitespace>.
 const ASCII_WHITESPACE_CHARS = "\t\n\f\r ";
 const ASCII_WHITESPACE = RegExp(`[${ASCII_WHITESPACE_CHARS}]+`);
 const ASCII_WHITESPACE_AT_START = RegExp(`^[${ASCII_WHITESPACE_CHARS}]+`);
@@ -91,12 +100,10 @@ const ASCII = /^[\x00-\x7f]*$/;
  * //      "style-src" => ["styles.example"],
  * //    }
  */
-
 export function parseContentSecurityPolicy(
   policy: string,
-): Map<string, string[]> {
-  policy = policy.toLowerCase();
-  const result = new Map();
+): ParsedContentSecurityPolicy {
+  const result: ParsedContentSecurityPolicy = new Map();
 
   // "For each token returned by strictly splitting serialized on the
   // U+003B SEMICOLON character (;):"
@@ -119,7 +126,7 @@ export function parseContentSecurityPolicy(
 
     // "4. Set directive name to be the result of running ASCII lowercase on
     //     directive name."
-    const directiveName = rawDirectiveName.toLowerCase();
+    const directiveName = rawDirectiveName!.toLowerCase();
 
     // "5. If policy's directive set contains a directive whose name is
     //     directive name, continue."
@@ -130,5 +137,6 @@ export function parseContentSecurityPolicy(
     // "8. Append directive to policy's directive set."
     result.set(directiveName, directiveValue);
   }
+
   return result;
 }

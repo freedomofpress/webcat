@@ -1,5 +1,5 @@
 import { OriginState, PopupState } from "./interfaces";
-import { validate, validateManifest } from "./validators";
+import { validate, validateCSP, validateManifest } from "./validators";
 import { parseSigners, parseThreshold } from "./parsers";
 import { SHA256, arrayBufferToHex, getFQDN, arraysEqual } from "./utils";
 import { Sigstore } from "../sigstore/interfaces";
@@ -78,6 +78,13 @@ export async function validateResponseHeaders(
     ) {
       throw new Error("Failed to find all the necessary policy headers!");
     }
+  
+    originState.valid_csp = await validateCSP(originState.csp, originState.fqdn, details.tabId);
+
+//    if (await validateCSP(originState.csp) !== true) {
+//      throw new Error("CSP provided by the server has non allowed directives!");
+//    }
+
 
     const cspRules = originState.csp
       .split(";")
@@ -162,7 +169,7 @@ export async function validateResponseHeaders(
     if (!originState.valid) {
       if (popupState) {
         popupState.valid_manifest = false;
-      }
+      }      
       throw new Error("Manifest signature verification failed.");
     }
 
@@ -210,7 +217,7 @@ export async function validateResponseHeaders(
 }
 
 export async function validateResponseContent(
-  originState: OriginState,
+  origins: Map<string, OriginState>,
   popupState: PopupState | undefined,
   details: browser.webRequest._OnBeforeRequestDetails,
 ) {
@@ -231,6 +238,10 @@ export async function validateResponseContent(
   };
 
   filter.onstop = () => {
+    if (!origins.has(getFQDN(details.url))) {
+      throw new Error("FATAL: the origin still does not exists while the response content is arriving.");
+    }
+    const originState = origins.get(getFQDN(details.url))!;
     if (originState.valid === true) {
       new Blob(source).arrayBuffer().then(function (blob) {
         const pathname = new URL(details.url).pathname;

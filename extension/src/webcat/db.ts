@@ -85,10 +85,15 @@ export async function initDatabase(db: IDBDatabase) {
     const listElements = [
         [await SHA256("lsd.cat"), await SHA256("policy1")],
         [await SHA256("nym.re"), hexToUint8Array("d6c9bee32f85ff71162afd1daa5ce876fd442af4105a08fbd70aa7291ab90ba0")],
-        [await SHA256("globaleaks.nym.re"), hexToUint8Array("17d1f9b10f534d0b256174aea048bcb0b57cf2b9f907e0b3e8ce3b00615a58f4")], 
-        [await SHA256("element.nym.re"), hexToUint8Array("a8553696f549d32ed01b1664423ea8adbe468c55557eaf6436cb143a1ad754fd")],
-        [await SHA256("jitsi.nym.re"), hexToUint8Array("6b4b6402a364cdde80f7d54f34939e57e1b6fb94ad489f96d8787eb60fd1bfbe")]
+        [await SHA256("globaleaks.nym.re"), hexToUint8Array("02e17c9ff4b43edeff9abc3aada626dcf3488ffd5f566e7c6c24818d8490c26c")], 
+        [await SHA256("element.nym.re"), hexToUint8Array("68f09b59bff0c8642de468a643ee45cd8e60441239b8f6f0797e0af465156526")],
+        [await SHA256("jitsi.nym.re"), hexToUint8Array("6b4b6402a364cdde80f7d54f34939e57e1b6fb94ad489f96d8787eb60fd1bfbe")],
+        [await SHA256("a.nym.re"), hexToUint8Array("dd0e0562d6130566757cc3512efd425380baf25fa0086346a511fa277202c49f")],
+        [await SHA256("b.nym.re"), hexToUint8Array("c0eac7fc18d8b1b3dcba8d48e0468f67e533d013cc24f83ec79828626239392f")],
+        [await SHA256("cryptpad.nym.re"), hexToUint8Array("a772e3a3c671283d7086925ec7ac4af34e88e4d940c87cc205a7413df4d50d5a")],
+        [await SHA256("sandbox.cryptpad.nym.re"), hexToUint8Array("a772e3a3c671283d7086925ec7ac4af34e88e4d940c87cc205a7413df4d50d5a")]
     ]
+
 
     const settingElements = [
         ["version", 1],

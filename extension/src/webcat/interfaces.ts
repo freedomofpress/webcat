@@ -28,6 +28,7 @@ export class OriginState {
   version: number;
   cspHash: Uint8Array;
   csp: string;
+  valid_csp: boolean;
   manifestPromise: Promise<Response>;
   manifest: DataStructure | undefined; // Manifest may be undefined until populated
   policy: Policy;
@@ -42,6 +43,7 @@ export class OriginState {
     this.populated = false;
     this.version = -1;
     this.csp = "";
+    this.valid_csp = false;
     this.cspHash = new Uint8Array();
     this.policyHash = new Uint8Array();
     this.manifestPromise = fetch(`https://${fqdn}/manifest.json`, {
