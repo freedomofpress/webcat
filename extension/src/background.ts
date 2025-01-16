@@ -24,7 +24,20 @@ browser.webRequest.onBeforeRequest.addListener(
   requestListener,
   // We intercept http too because if a website is enrolled but not TLS enabled we want to drop
   // https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/ResourceType
-  { urls: ["http://*/*", "https://*/*"], types: ["main_frame", "object", "script", "stylesheet", "sub_frame", "xslt", "xml_dtd", "web_manifest", "other"] },
+  {
+    urls: ["http://*/*", "https://*/*"],
+    types: [
+      "main_frame",
+      "object",
+      "script",
+      "stylesheet",
+      "sub_frame",
+      "xslt",
+      "xml_dtd",
+      "web_manifest",
+      "other",
+    ],
+  },
   // Allowed remaining are beacon, csp_report, font, image, imageset, media, object_subrequest, ping, speculative, websocket, xmlhttprequest
   ["blocking"],
 );
@@ -35,7 +48,20 @@ browser.webRequest.onHeadersReceived.addListener(
   headersListener,
   // Here HTTP should no longer be a concern, we should have dropped the request before receiving headers anyway
   // However that would not be the case for .onion domains
-  { urls: ["http://*/*", "https://*/*"], types: ["main_frame", "object", "script", "stylesheet", "sub_frame", "xslt", "xml_dtd", "web_manifest", "other"] },
+  {
+    urls: ["http://*/*", "https://*/*"],
+    types: [
+      "main_frame",
+      "object",
+      "script",
+      "stylesheet",
+      "sub_frame",
+      "xslt",
+      "xml_dtd",
+      "web_manifest",
+      "other",
+    ],
+  },
   // Do we want this to be "blocking"? If we detect an anomaly we should stop
   ["blocking", "responseHeaders"],
 );

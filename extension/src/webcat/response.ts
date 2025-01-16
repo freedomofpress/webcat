@@ -79,13 +79,16 @@ export async function validateResponseHeaders(
     ) {
       throw new Error("Failed to find all the necessary policy headers!");
     }
-  
-    originState.valid_csp = await validateCSP(originState.csp, originState.fqdn, details.tabId);
 
-//    if (await validateCSP(originState.csp) !== true) {
-//      throw new Error("CSP provided by the server has non allowed directives!");
-//    }
+    originState.valid_csp = await validateCSP(
+      originState.csp,
+      originState.fqdn,
+      details.tabId,
+    );
 
+    //    if (await validateCSP(originState.csp) !== true) {
+    //      throw new Error("CSP provided by the server has non allowed directives!");
+    //    }
 
     const cspRules = originState.csp
       .split(";")
@@ -100,13 +103,14 @@ export async function validateResponseHeaders(
         issuer,
       }),
     );
-    
+
     // Sort the normalized signers by identity, then issuer
     normalizedSigners.sort(
       (a, b) =>
-        a.identity.localeCompare(b.identity) || a.issuer.localeCompare(b.issuer),
+        a.identity.localeCompare(b.identity) ||
+        a.issuer.localeCompare(b.issuer),
     );
-    
+
     // Create the policy object
     const policyObject = {
       "x-sigstore-signers": normalizedSigners, // Use array of objects
@@ -116,11 +120,26 @@ export async function validateResponseHeaders(
 
     // Compute hash of the normalized policy
     const policyString = JSON.stringify(policyObject);
-    logger.addLog("info", `policy: ${policyString}`, details.tabId, originState.fqdn);
+    logger.addLog(
+      "info",
+      `policy: ${policyString}`,
+      details.tabId,
+      originState.fqdn,
+    );
 
     // Validate policy hash
-    logger.addLog("info", `Computed policy hash is ${Uint8ArrayToHex(new Uint8Array(await SHA256(policyString)))}`, details.tabId, originState.fqdn);
-    if (!arraysEqual(originState.policyHash, new Uint8Array(await SHA256(policyString)))) {
+    logger.addLog(
+      "info",
+      `Computed policy hash is ${Uint8ArrayToHex(new Uint8Array(await SHA256(policyString)))}`,
+      details.tabId,
+      originState.fqdn,
+    );
+    if (
+      !arraysEqual(
+        originState.policyHash,
+        new Uint8Array(await SHA256(policyString)),
+      )
+    ) {
       throw new Error("Response headers do not match the preload list.");
     }
 
@@ -170,7 +189,7 @@ export async function validateResponseHeaders(
     if (!originState.valid) {
       if (popupState) {
         popupState.valid_manifest = false;
-      }      
+      }
       throw new Error("Manifest signature verification failed.");
     }
 
@@ -212,7 +231,6 @@ export async function validateResponseHeaders(
     if (popupState) {
       popupState.valid_headers = true;
     }
-
   }
   setOKIcon(details.tabId);
 }
@@ -239,7 +257,9 @@ export async function validateResponseContent(
 
   filter.onstop = () => {
     if (!origins.has(getFQDN(details.url))) {
-      throw new Error("FATAL: the origin still does not exists while the response content is arriving.");
+      throw new Error(
+        "FATAL: the origin still does not exists while the response content is arriving.",
+      );
     }
     const originState = origins.get(getFQDN(details.url))!;
     if (originState.valid === true) {
@@ -247,7 +267,9 @@ export async function validateResponseContent(
         const pathname = new URL(details.url).pathname;
 
         if (!originState.manifest) {
-          throw new Error("Manifest not loaded, and it should never happen here.");
+          throw new Error(
+            "Manifest not loaded, and it should never happen here.",
+          );
         }
 
         let manifest_hash = originState.manifest.manifest.files[pathname];
@@ -261,7 +283,12 @@ export async function validateResponseContent(
         //  throw new Error(`File ${pathname} not found in manifest.`);
         //}
         SHA256(blob).then(function (content_hash) {
-          if (arraysEqual(hexToUint8Array(manifest_hash), new Uint8Array(content_hash))) {
+          if (
+            arraysEqual(
+              hexToUint8Array(manifest_hash),
+              new Uint8Array(content_hash),
+            )
+          ) {
             // If everything is OK then we can just write the raw blob back
             logger.addLog(
               "info",

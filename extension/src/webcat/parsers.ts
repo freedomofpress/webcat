@@ -63,7 +63,6 @@ export function parseThreshold(
   return outputThreshold;
 }
 
-
 // From https://github.com/helmetjs/content-security-policy-parser/blob/main/mod.ts
 
 type ParsedContentSecurityPolicy = Map<string, string[]>;

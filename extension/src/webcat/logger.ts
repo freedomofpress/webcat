@@ -46,12 +46,12 @@ class Logger {
       // Cast console[level] to a function type
       let tab: string;
       if (logEntry.tabId > 0) {
-        tab = `Tab ${logEntry.tabId}`
+        tab = `Tab ${logEntry.tabId}`;
       } else {
-        tab = "worker"
+        tab = "worker";
       }
       (console[level] as (...args: any[]) => void)(
-        `[${logEntry.timestamp.toISOString()}] [${tab}] [${logEntry.origin}] ${logEntry.message}`
+        `[${logEntry.timestamp.toISOString()}] [${tab}] [${logEntry.origin}] ${logEntry.message}`,
       );
     }
   }

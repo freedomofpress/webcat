@@ -75,7 +75,7 @@ export async function headersListener(
     (!tabs.has(details.tabId) && details.tabId > 0) ||
     // Skip non-enrolled workers
     // What at browser restart?
-    (details.tabId < 0 && !await isFQDNEnrolled(fqdn, details.tabId))
+    (details.tabId < 0 && !(await isFQDNEnrolled(fqdn, details.tabId)))
   ) {
     // This is too much noise to really log
     console.debug(`headersListener: skipping ${details.url}`);
@@ -135,9 +135,7 @@ export async function requestListener(
 ): Promise<browser.webRequest.BlockingResponse> {
   const fqdn = getFQDN(details.url);
 
-  if (
-    (details.tabId < 0 && !origins.has(fqdn))
-  ) {
+  if (details.tabId < 0 && !origins.has(fqdn)) {
     // We will always wonder, is this check reasonable?
     // Might be redundant anyway if we skip xmlhttprequest
     // But we probably want to also ensure other extensions work
@@ -190,10 +188,7 @@ export async function requestListener(
 
   // if we know the tab is enrolled, or it is a worker background connction then we should verify
   if (tabs.has(details.tabId) === true || details.tabId < 0) {
-    await validateResponseContent(
-      popups.get(details.tabId),
-      details,
-    );
+    await validateResponseContent(popups.get(details.tabId), details);
   }
 
   // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse
@@ -229,8 +224,8 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
           });
         return true;
       }
-    //} else if (sender.url?.endsWith("/settings.html")) {
-    //} else if (sender.url?.endsWith("/logs.html")) {
+      //} else if (sender.url?.endsWith("/settings.html")) {
+      //} else if (sender.url?.endsWith("/logs.html")) {
     }
   }
 
@@ -265,7 +260,10 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   const hash = Uint8ArrayToHex(new Uint8Array(message.details));
   const originState = origins.get(fqdn);
 
-  if (originState!.manifest && originState!.manifest.manifest.wasm.includes(hash)) {
+  if (
+    originState!.manifest &&
+    originState!.manifest.manifest.wasm.includes(hash)
+  ) {
     logger.addLog("info", `Validated WASM ${hash}`, sender.tab.id, fqdn);
     sendResponse(true);
   } else {

@@ -1,20 +1,20 @@
 import { canonicalize } from "../sigstore/canonicalize";
 import { SHA256 } from "./utils";
-import {
-  Policy,
-  PopupState,
-  OriginState,
-} from "./interfaces";
+import { Policy, PopupState, OriginState } from "./interfaces";
 import { verifyArtifact } from "../sigstore/sigstore";
 import { Sigstore } from "../sigstore/interfaces";
 import { stringToUint8Array } from "../sigstore/encoding";
 import { logger } from "./logger";
-import { parseContentSecurityPolicy } from './parsers';
+import { parseContentSecurityPolicy } from "./parsers";
 import { isFQDNEnrolled } from "./db";
 import { getFQDN } from "./utils";
 
 // This functions shouldnt take this many arguments; TODO refactor or import/export global objects
-export async function validateCSP(csp: string, fqdn: string, tabId: number): Promise<boolean> {
+export async function validateCSP(
+  csp: string,
+  fqdn: string,
+  tabId: number,
+): Promise<boolean> {
   // See https://github.com/freedomofpress/webcat/issues/9
   // https://github.com/freedomofpress/webcat/issues/3
 
@@ -35,7 +35,11 @@ export async function validateCSP(csp: string, fqdn: string, tabId: number): Pro
   // Validate script-src
   const scriptSrc = parsedCSP.get("script-src")!;
   for (const src of scriptSrc) {
-    if (!allowedScriptSrc.has(src) && !src.startsWith("'sha") && !await isFQDNEnrolled(getFQDN(src), tabId)) {
+    if (
+      !allowedScriptSrc.has(src) &&
+      !src.startsWith("'sha") &&
+      !(await isFQDNEnrolled(getFQDN(src), tabId))
+    ) {
       throw new Error(`Invalid source in script-src: ${src}`);
     }
   }
@@ -64,11 +68,15 @@ export async function validateCSP(csp: string, fqdn: string, tabId: number): Pro
     if (src.includes("*")) {
       throw new Error(`Wildcards not allowed child-src/frame-src: ${src}`);
     }
-    if (src != "'none'" && src != "'self'" && !await isFQDNEnrolled(getFQDN(src), tabId)) {
+    if (
+      src != "'none'" &&
+      src != "'self'" &&
+      !(await isFQDNEnrolled(getFQDN(src), tabId))
+    ) {
       throw new Error(`Invalid source in child-src/frame-src: ${src}`);
     }
   }
-  
+
   logger.addLog("info", "CSP validation successful!", tabId, fqdn);
   return true;
 }
