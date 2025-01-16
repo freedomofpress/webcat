@@ -45,7 +45,7 @@
 
   const originalInstantiate = WebAssembly.instantiate;
 
-  WebAssembly.instantiate = async function (source, importObject) {
+  WebAssembly.instantiate = async function (source, _importObject) {
     let hash;
     if (source instanceof WebAssembly.Module) {
       const originalBytes = source.__originalBytes__;
@@ -81,7 +81,7 @@
 
   const originalInstantiateStreaming = WebAssembly.instantiateStreaming;
 
-  WebAssembly.instantiateStreaming = async function (response, importObject) {
+  WebAssembly.instantiateStreaming = async function (response, _importObject) {
     const awaitedResponse = await response;
     const clonedResponse = awaitedResponse.clone();
     const arrayBuffer = await clonedResponse.arrayBuffer();
