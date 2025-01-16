@@ -22,9 +22,10 @@ describe("getFQDN", () => {
     );
   });
 
-  it("should throw an error for invalid URLs", () => {
-    expect(() => getFQDN("not-a-url")).toThrow();
-  });
+  // This actually should work because we now prepend a scheme, and not-a-url can be a valid hostname
+  //it("should throw an error for invalid URLs", () => {
+  //  expect(() => getFQDN("not-a-url")).toThrow();
+  //});
 });
 
 describe("isExtensionRequest", () => {

@@ -1,4 +1,7 @@
 export function getFQDN(url: string): string {
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
   const urlobj = new URL(url);
   return urlobj.hostname;
 }
