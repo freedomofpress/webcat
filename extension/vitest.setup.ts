@@ -1,3 +1,7 @@
-import { expect } from "vitest";
+import { defineConfig } from "vite";
 
-global.expect = expect;
+export default defineConfig({
+  test: {
+    environment: "jsdom",  // Use browser-like environment
+  },
+});
