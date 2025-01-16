@@ -1,15 +1,15 @@
-import { Roles, RawLogs, RawCAs, SigstoreRoots, Sigstore } from "./interfaces";
-import { importKey, verifySignature } from "./crypto";
-import { X509Certificate, X509SCTExtension, EXTENSION_OID_SCT } from "./x509";
 import { SigstoreBundle } from "./bundle";
-import { ByteStream } from "./stream";
+import { canonicalize } from "./canonicalize";
+import { importKey, verifySignature } from "./crypto";
 import {
   base64ToUint8Array,
-  Uint8ArrayToHex,
   stringToUint8Array,
+  Uint8ArrayToHex,
   Uint8ArrayToString,
 } from "./encoding";
-import { canonicalize } from "./canonicalize";
+import { RawCAs, RawLogs, Roles, Sigstore,SigstoreRoots } from "./interfaces";
+import { ByteStream } from "./stream";
+import { EXTENSION_OID_SCT,X509Certificate, X509SCTExtension } from "./x509";
 
 async function loadLog(
   frozenTimestamp: Date,

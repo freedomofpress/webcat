@@ -1,8 +1,8 @@
-import { OriginState, PopupState, metadataRequestSource } from "./interfaces";
 import { isFQDNEnrolled } from "./db";
+import { metadataRequestSource,OriginState, PopupState } from "./interfaces";
+import { origins } from "./listeners";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
-import { origins } from "./listeners";
 
 export async function validateOrigin(
   tabs: Map<number, string>,

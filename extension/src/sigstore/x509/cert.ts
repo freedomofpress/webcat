@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import { ASN1Obj } from "../asn1";
-import { importKey, bufferEqual, verifySignature } from "../crypto";
-import { KeyTypes } from "../interfaces";
-import { ECDSA_SIGNATURE_ALGOS, ECDSA_CURVE_NAMES } from "../oid";
+import { bufferEqual, importKey, verifySignature } from "../crypto";
 import { Uint8ArrayToBase64 } from "../encoding";
+import { KeyTypes } from "../interfaces";
+import { ECDSA_CURVE_NAMES,ECDSA_SIGNATURE_ALGOS } from "../oid";
 import * as pem from "../pem";
 import {
   X509AuthorityKeyIDExtension,

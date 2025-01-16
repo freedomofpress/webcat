@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 import { ASN1Obj } from "../asn1";
+import { Uint8ArrayToString } from "../encoding";
 import { ByteStream } from "../stream";
 import { SignedCertificateTimestamp } from "./sct";
-import { Uint8ArrayToString } from "../encoding";
 
 // https://www.rfc-editor.org/rfc/rfc5280#section-4.1
 export class X509Extension {

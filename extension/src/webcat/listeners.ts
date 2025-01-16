@@ -1,13 +1,13 @@
-import { updateTUF } from "../sigstore/tuf";
-import { loadSigstoreRoot } from "../sigstore/sigstore";
-import { Sigstore } from "../sigstore/interfaces";
-import { OriginState, PopupState, metadataRequestSource } from "./interfaces";
-import { validateResponseHeaders, validateResponseContent } from "./response";
-import { validateOrigin } from "./request";
-import { getFQDN } from "./utils";
-import { openDatabase, initDatabase, isFQDNEnrolled } from "./db";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
+import { Sigstore } from "../sigstore/interfaces";
+import { loadSigstoreRoot } from "../sigstore/sigstore";
+import { updateTUF } from "../sigstore/tuf";
+import { initDatabase, isFQDNEnrolled,openDatabase } from "./db";
+import { metadataRequestSource,OriginState, PopupState } from "./interfaces";
 import { logger } from "./logger";
+import { validateOrigin } from "./request";
+import { validateResponseContent,validateResponseHeaders } from "./response";
+import { getFQDN } from "./utils";
 
 export const origins: Map<string, OriginState> = new Map();
 export const tabs: Map<number, string> = new Map();

@@ -1,7 +1,7 @@
 import { hexToUint8Array } from "../sigstore/encoding";
+import { list_db,origins } from "./listeners";
 import { logger } from "./logger";
-import { SHA256, arrayBufferToHex } from "./utils";
-import { origins, list_db } from "./listeners";
+import { arrayBufferToHex,SHA256 } from "./utils";
 
 // https://stackoverflow.com/questions/40593260/should-i-open-an-idbdatabase-each-time-or-keep-one-instance-open
 // Someone here claims opening and close is almost the same as keeping it open, performance-wise

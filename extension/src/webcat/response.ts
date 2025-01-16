@@ -1,12 +1,12 @@
-import { OriginState, PopupState } from "./interfaces";
-import { validate, validateCSP, validateManifest } from "./validators";
-import { parseSigners, parseThreshold } from "./parsers";
-import { SHA256, arrayBufferToHex, getFQDN, arraysEqual } from "./utils";
-import { Sigstore } from "../sigstore/interfaces";
-import { setOKIcon } from "./ui";
-import { logger } from "./logger";
 import { hexToUint8Array, Uint8ArrayToHex } from "../sigstore/encoding";
+import { Sigstore } from "../sigstore/interfaces";
+import { OriginState, PopupState } from "./interfaces";
 import { origins } from "./listeners";
+import { logger } from "./logger";
+import { parseSigners, parseThreshold } from "./parsers";
+import { setOKIcon } from "./ui";
+import { arrayBufferToHex, arraysEqual,getFQDN, SHA256 } from "./utils";
+import { validate, validateCSP, validateManifest } from "./validators";
 
 export async function validateResponseHeaders(
   sigstore: Sigstore,

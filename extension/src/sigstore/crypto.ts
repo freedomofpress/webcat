@@ -1,20 +1,19 @@
-import {
-  Uint8ArrayToHex,
-  stringToUint8Array,
-  hexToUint8Array,
-  base64ToUint8Array,
-} from "./encoding";
-import { canonicalize } from "./canonicalize";
-import { toDER } from "./pem";
 import { ASN1Obj } from "./asn1";
-
+import { canonicalize } from "./canonicalize";
 import {
-  Signed,
-  Signature,
+  base64ToUint8Array,
+  hexToUint8Array,
+  stringToUint8Array,
+  Uint8ArrayToHex,
+} from "./encoding";
+import {
   EcdsaTypes,
   HashAlgorithms,
   KeyTypes,
+  Signature,
+  Signed,
 } from "./interfaces";
+import { toDER } from "./pem";
 
 // We use this to remove to select from the root keys only the ones allowed for a specific role
 export function getRoleKeys(

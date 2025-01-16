@@ -1,13 +1,12 @@
 import {
+  headersListener,
   injectorListener,
   installListener,
-  startupListener,
   messageListener,
   requestListener,
-  headersListener,
+  startupListener,
   tabCloseListener,
 } from "./webcat/listeners";
-
 import { setErrorIcon } from "./webcat/ui";
 
 // Let's count references to origin in case we ever need pruning policies

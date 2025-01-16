@@ -1,12 +1,12 @@
 import { canonicalize } from "../sigstore/canonicalize";
-import { SHA256 } from "./utils";
-import { Policy, PopupState, OriginState } from "./interfaces";
-import { verifyArtifact } from "../sigstore/sigstore";
-import { Sigstore } from "../sigstore/interfaces";
 import { stringToUint8Array } from "../sigstore/encoding";
+import { Sigstore } from "../sigstore/interfaces";
+import { verifyArtifact } from "../sigstore/sigstore";
+import { isFQDNEnrolled } from "./db";
+import { OriginState,Policy, PopupState } from "./interfaces";
 import { logger } from "./logger";
 import { parseContentSecurityPolicy } from "./parsers";
-import { isFQDNEnrolled } from "./db";
+import { SHA256 } from "./utils";
 import { getFQDN } from "./utils";
 
 // This functions shouldnt take this many arguments; TODO refactor or import/export global objects

@@ -1,6 +1,6 @@
-import { loadKeys, checkSignatures, getRoleKeys } from "./crypto";
-import { Uint8ArrayToString, Uint8ArrayToHex } from "./encoding";
-import { Metafile, Root, Roles, Meta, HashAlgorithms } from "./interfaces";
+import { checkSignatures, getRoleKeys,loadKeys } from "./crypto";
+import { Uint8ArrayToHex,Uint8ArrayToString } from "./encoding";
+import { HashAlgorithms,Meta, Metafile, Roles, Root } from "./interfaces";
 
 const TUF_REPOSITORY_URL = "https://tuf-repo-cdn.sigstore.dev";
 const STARTING_ROOT_PATH = "assets/1.root.json";
