@@ -59,7 +59,7 @@ export async function validateResponseHeaders(
         }
 
         normalizedHeaders.set(lowerName, header.value);
-        headers.push(lowerName); // For tracking if needed elsewhere
+        headers.push(lowerName);
       }
     }
 
@@ -165,8 +165,6 @@ export async function validateResponseHeaders(
       getFQDN(details.url),
     );
 
-    // TODO: free check if threshold > size(signers) then abort
-
     // By doing this here we gain a bit of async time: we start processing the request headers
     // while we download the manifest
     const manifestResponse = await originState.manifestPromise;
@@ -216,7 +214,6 @@ export async function validateResponseHeaders(
     );
   } else {
     // CSP still needs to be evaluated every time
-    //TODODO verify CSP against saved main_frame one
     let csp: string = "";
     for (const header of details.responseHeaders.sort()) {
       // This array is just used to detect duplicates
@@ -288,9 +285,9 @@ export async function validateResponseContent(
         }
 
         //if (typeof manifest_hash !== "string") {
-        // TODO this condition does not load the file but it does not trigger a block redirect
         //  throw new Error(`File ${pathname} not found in manifest.`);
         //}
+
         SHA256(blob).then(function (content_hash) {
           if (
             arraysEqual(

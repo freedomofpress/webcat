@@ -68,7 +68,6 @@ browser.webRequest.onHeadersReceived.addListener(
 browser.runtime.onMessage.addListener(messageListener);
 
 // Not the best performance idea to act on all tab just for this
-// TODO
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete") {
     if (tab.url === browser.runtime.getURL("pages/error.html")) {

@@ -8,7 +8,6 @@ import { logger } from "./logger";
 import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDN } from "./utils";
 
-// This functions shouldnt take this many arguments; TODO refactor or import/export global objects
 export async function validateCSP(
   csp: string,
   fqdn: string,
@@ -86,10 +85,16 @@ export async function validateManifest(
   tabId: number,
   popupState: PopupState | undefined,
 ) {
-  // TODO: Silly hack to match silly development debugging choice:
-  if (!originState.manifest) {
+  if (
+    !originState.manifest ||
+    !originState.manifest.signatures ||
+    !originState.manifest.manifest ||
+    Object.keys(originState.manifest.signatures).length <
+      originState.policy.threshold
+  ) {
     return false;
   }
+
   const fixedManifest = { manifest: originState.manifest.manifest };
   logger.addLog("debug", canonicalize(fixedManifest), tabId, originState.fqdn);
   let validCount = 0;
