@@ -8,18 +8,16 @@ export default defineConfig({
     target: "esnext",
     rollupOptions: {
       input: {
-        main: "src/background.ts"
+        main: "src/background.ts",
       },
       output: {
         entryFileNames: "bundle.js",
-        format: "iife"
+        format: "iife",
       },
     },
   },
-  plugins: [
-    viteSingleFile()
-  ],
+  plugins: [viteSingleFile()],
   test: {
-    globals: true
-  }
+    globals: true,
+  },
 });
