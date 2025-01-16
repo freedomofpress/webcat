@@ -35,42 +35,57 @@ export async function validateResponseHeaders(
     originState.fqdn,
   );
   if (originState.populated === false) {
-    for (const header of details.responseHeaders.sort()) {
-      // This array is just used to detect duplicates
-      headers.push(header["name"].toLowerCase());
-      if (
-        header["name"].toLowerCase() === "content-security-policy" &&
-        header["value"]
-      ) {
-        originState.csp = header["value"];
-      }
+    // Headers we care about (normalized to lowercase)
+    const criticalHeaders = new Set([
+      "content-security-policy",
+      "x-sigstore-signers",
+      "x-sigstore-threshold",
+    ]);
 
-      // As we are iterating through the sorted array, signers should always come before threshold
-      // Unless people did mixedcases... TODO
-      if (
-        header["name"].toLowerCase() == "x-sigstore-signers" &&
-        header["value"]
-      ) {
-        originState.policy.signers = parseSigners(header["value"]);
-      }
+    // Track seen critical headers to detect duplicates
+    const seenCriticalHeaders = new Set<string>();
+    const normalizedHeaders = new Map<string, string>();
 
-      if (
-        header["name"].toLowerCase() == "x-sigstore-threshold" &&
-        header["value"]
-      ) {
-        originState.policy.threshold = parseThreshold(
-          header["value"],
-          originState.policy.signers.size,
-        );
-        // Copy it for the UI
-        if (popupState) {
-          popupState.threshold = originState.policy.threshold;
+    for (const header of details.responseHeaders) {
+      if (header.name && header.value) {
+        const lowerName = header.name.toLowerCase();
+
+        // Check for duplicates only among critical headers
+        if (criticalHeaders.has(lowerName)) {
+          if (seenCriticalHeaders.has(lowerName)) {
+            throw new Error(`Duplicate critical header detected: ${lowerName}`);
+          }
+          seenCriticalHeaders.add(lowerName);
         }
+
+        normalizedHeaders.set(lowerName, header.value);
+        headers.push(lowerName); // For tracking if needed elsewhere
       }
     }
 
-    if (headers.length !== new Set(headers).size) {
-      throw new Error("Duplicate header keys found!");
+    // Extract Content-Security-Policy
+    if (normalizedHeaders.has("content-security-policy")) {
+      originState.csp = normalizedHeaders.get("content-security-policy")!;
+    }
+
+    // Extract X-Sigstore-Signers
+    if (normalizedHeaders.has("x-sigstore-signers")) {
+      const signersHeader = normalizedHeaders.get("x-sigstore-signers")!;
+      originState.policy.signers = parseSigners(signersHeader);
+    }
+
+    // Extract X-Sigstore-Threshold
+    if (normalizedHeaders.has("x-sigstore-threshold")) {
+      const thresholdHeader = normalizedHeaders.get("x-sigstore-threshold")!;
+      originState.policy.threshold = parseThreshold(
+        thresholdHeader,
+        originState.policy.signers.size,
+      );
+
+      // Update popup state if it exists
+      if (popupState) {
+        popupState.threshold = originState.policy.threshold;
+      }
     }
 
     if (
@@ -86,9 +101,9 @@ export async function validateResponseHeaders(
       details.tabId,
     );
 
-    //    if (await validateCSP(originState.csp) !== true) {
-    //      throw new Error("CSP provided by the server has non allowed directives!");
-    //    }
+    if (originState.valid_csp !== true) {
+      throw new Error("CSP provided by the server has non allowed directives!");
+    }
 
     const cspRules = originState.csp
       .split(";")
