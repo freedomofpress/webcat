@@ -3,6 +3,9 @@ import { list_db,origins } from "./listeners";
 import { logger } from "./logger";
 import { arrayBufferToHex,SHA256 } from "./utils";
 
+type ListElement = [ArrayBuffer, Uint8Array];
+type SettingElement = [string, string|number|Date];
+
 // https://stackoverflow.com/questions/40593260/should-i-open-an-idbdatabase-each-time-or-keep-one-instance-open
 // Someone here claims opening and close is almost the same as keeping it open, performance-wise
 // But it is also true that most reccomendations suggest to do that for apps that do multiple operations
@@ -71,7 +74,7 @@ export async function openDatabase(db_name: string): Promise<IDBDatabase> {
 async function dbBulkAdd(
   db: IDBDatabase,
   storename: string,
-  data: Array<Array<any>>,
+  data: ListElement[] | SettingElement[],
   keyname: string,
   valuename: string,
 ): Promise<boolean> {
@@ -94,8 +97,13 @@ async function dbBulkAdd(
 export async function initDatabase(db: IDBDatabase) {
   // Ideally here we would fetch the list remotelym verify signature and inclusion proof
   // and maybe freshness, if we do not delegate that to TUF
-  const listElements = [
-    [await SHA256("lsd.cat"), await SHA256("policy1")],
+  const listElements: ListElement[] = [
+    [
+      await SHA256("lsd.cat"),
+      hexToUint8Array(
+        "aa",
+      ),
+    ],
     [
       await SHA256("nym.re"),
       hexToUint8Array(
@@ -146,7 +154,7 @@ export async function initDatabase(db: IDBDatabase) {
     ],
   ];
 
-  const settingElements = [
+  const settingElements: SettingElement[] = [
     ["version", 1],
     ["last_update", Date.now()],
   ];

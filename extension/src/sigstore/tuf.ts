@@ -5,39 +5,43 @@ import { HashAlgorithms,Meta, Metafile, Roles, Root } from "./interfaces";
 const TUF_REPOSITORY_URL = "https://tuf-repo-cdn.sigstore.dev";
 const STARTING_ROOT_PATH = "assets/1.root.json";
 
-async function fetchMetafile(
+async function fetchMetafileBase(
   role: string,
-  version: number | string = -1,
-  json: boolean = true,
-): Promise<any> {
-  let url: string = "";
-  if (version != -1) {
-    url = `${TUF_REPOSITORY_URL}/${version}.${role}.json`;
-  } else {
-    url = `${TUF_REPOSITORY_URL}/${role}.json`;
-  }
+  version: number | string
+): Promise<Response> {
+  const url =
+    version !== -1
+      ? `${TUF_REPOSITORY_URL}/${version}.${role}.json`
+      : `${TUF_REPOSITORY_URL}/${role}.json`;
 
   console.log("[TUF]", "Fetching", url);
-  try {
-    const response = await fetch(url);
 
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch file: ${response.status} ${response.statusText}`,
-      );
-    }
+  const response = await fetch(url);
 
-    if (json) {
-      return await response.json();
-    } else {
-      return await response.arrayBuffer();
-    }
-  } catch (error) {
-    throw new Error(`Error fetching TUF file: ${error}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
   }
+
+  return response;
 }
 
-async function openBootstrapRoot(file: string): Promise<any> {
+async function fetchMetafileJson(
+  role: string,
+  version: number | string = -1
+): Promise<Metafile> {
+  const response = await fetchMetafileBase(role, version);
+  return await response.json() as Metafile;
+}
+
+async function fetchMetafileBinary(
+  role: string,
+  version: number | string = -1
+): Promise<Uint8Array> {
+  const response = await fetchMetafileBase(role, version);
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+async function openBootstrapRoot(file: string): Promise<Metafile> {
   try {
     const response = await fetch(browser.runtime.getURL(file));
     const json = await response.json();
@@ -120,7 +124,7 @@ async function updateRoot(frozenTimestamp: Date): Promise<Root> {
     new_version++
   ) {
     try {
-      newrootJson = await fetchMetafile(Roles.Root, new_version);
+      newrootJson = await fetchMetafileJson(Roles.Root, new_version);
     } catch {
       // Fetching failed and we assume there is no new version
       // Maybe we should explicitly check for 404 failures
@@ -177,7 +181,7 @@ async function updateTimestamp(
   const cachedTimestamp = cached.timestamp;
 
   // Spec 5.4.1
-  const newTimestamp = await fetchMetafile(Roles.Timestamp);
+  const newTimestamp = await fetchMetafileJson(Roles.Timestamp);
 
   try {
     // Spec 5.4.2
@@ -237,9 +241,9 @@ async function updateSnapshot(
 
   // Spec 5.5.1
   if (root.consistent_snapshot) {
-    newSnapshotRaw = await fetchMetafile(Roles.Snapshot, version, false);
+    newSnapshotRaw = await fetchMetafileBinary(Roles.Snapshot, version);
   } else {
-    newSnapshotRaw = await fetchMetafile(Roles.Snapshot, -1, false);
+    newSnapshotRaw = await fetchMetafileBinary(Roles.Snapshot, -1);
   }
 
   // As mentioned we are skipping 5.5.2 because sigstore timestamp does not have hashes
@@ -311,13 +315,12 @@ async function updateTargets(
 
   // Spec 5.6.1, sigstore targets.json does not even have hases for now
   if (root.consistent_snapshot) {
-    newTargetsRaw = await fetchMetafile(
+    newTargetsRaw = await fetchMetafileBinary(
       Roles.Targets,
-      snapshot[`${Roles.Targets}.json`].version,
-      false,
+      snapshot[`${Roles.Targets}.json`].version
     );
   } else {
-    newTargetsRaw = await fetchMetafile(Roles.Targets, -1, false);
+    newTargetsRaw = await fetchMetafileBinary(Roles.Targets, -1);
   }
 
   // Spec 5.6.2 verfy hashes only if there is any specified
@@ -386,10 +389,9 @@ export async function fetchSigstoreTrustRoot() {
   const sha256 =
     cachedTargets.signed.targets["trusted_root.json"].hashes.sha256;
 
-  const trusted_root_raw = await fetchMetafile(
+  const trusted_root_raw = await fetchMetafileBinary(
     "trusted_root",
-    `targets/${sha256}`,
-    false,
+    `targets/${sha256}`
   );
   const sha256_calculated = Uint8ArrayToHex(
     new Uint8Array(

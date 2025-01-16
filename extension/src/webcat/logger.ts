@@ -1,5 +1,6 @@
 import { LogEntry } from "./interfaces";
 
+type ConsoleLevel = 'log' | 'warn' | 'error' | 'info' | 'debug';
 const globalLogs: LogEntry[] = [];
 
 // Logger Class
@@ -23,7 +24,7 @@ class Logger {
    * @param stack - Optional stack trace.
    */
   public addLog(
-    level: keyof Console,
+    level: ConsoleLevel,
     message: string,
     tabId: number,
     origin: string,
@@ -50,8 +51,8 @@ class Logger {
       } else {
         tab = "worker";
       }
-      (console[level] as (...args: any[]) => void)(
-        `[${logEntry.timestamp.toISOString()}] [${tab}] [${logEntry.origin}] ${logEntry.message}`,
+      console[level](
+        `[${logEntry.timestamp.toISOString()}] [${tab}] [${logEntry.origin}] ${logEntry.message}`
       );
     }
   }
@@ -60,7 +61,7 @@ class Logger {
    * Determine if a log should be printed based on the debug mode and log level.
    * @param level - Log level to check.
    */
-  private shouldPrint(level: keyof Console): boolean {
+  private shouldPrint(level: ConsoleLevel): boolean {
     if (level === "warn" || level === "error") {
       return true; // Always print warnings and errors
     }
@@ -78,7 +79,7 @@ class Logger {
    * Get logs filtered by level.
    * @param level - Log level to filter by (debug, info, warn, error).
    */
-  public getLogsByLevel(level: keyof Console): LogEntry[] {
+  public getLogsByLevel(level: ConsoleLevel): LogEntry[] {
     return globalLogs.filter((log) => log.level === level);
   }
 

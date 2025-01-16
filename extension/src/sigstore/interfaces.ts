@@ -113,7 +113,7 @@ export interface Signed {
   roles: {
     [role: string]: Role;
   };
-  meta?: Meta;
+  meta: Meta;
 }
 
 export interface Meta {

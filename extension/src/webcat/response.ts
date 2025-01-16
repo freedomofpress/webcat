@@ -6,7 +6,7 @@ import { logger } from "./logger";
 import { parseSigners, parseThreshold } from "./parsers";
 import { setOKIcon } from "./ui";
 import { arrayBufferToHex, arraysEqual,getFQDN, SHA256 } from "./utils";
-import { validate, validateCSP, validateManifest } from "./validators";
+import { validateCSP, validateManifest } from "./validators";
 
 export async function validateResponseHeaders(
   sigstore: Sigstore,
@@ -152,12 +152,6 @@ export async function validateResponseHeaders(
 
     // TODO: free check if threshold > size(signers) then abort
 
-    // TODO: here we validate that the hash in the preload lists matches the headers
-    const hash = new Uint8Array();
-
-    if ((await validate(originState.policy, originState.csp, hash)) !== true) {
-      throw new Error("Response headers do not match the preload list.");
-    }
     // By doing this here we gain a bit of async time: we start processing the request headers
     // while we download the manifest
     const manifestResponse = await originState.manifestPromise;

@@ -3,10 +3,9 @@ import { stringToUint8Array } from "../sigstore/encoding";
 import { Sigstore } from "../sigstore/interfaces";
 import { verifyArtifact } from "../sigstore/sigstore";
 import { isFQDNEnrolled } from "./db";
-import { OriginState,Policy, PopupState } from "./interfaces";
+import { OriginState, PopupState } from "./interfaces";
 import { logger } from "./logger";
 import { parseContentSecurityPolicy } from "./parsers";
-import { SHA256 } from "./utils";
 import { getFQDN } from "./utils";
 
 // This functions shouldnt take this many arguments; TODO refactor or import/export global objects
@@ -78,17 +77,6 @@ export async function validateCSP(
   }
 
   logger.addLog("info", "CSP validation successful!", tabId, fqdn);
-  return true;
-}
-
-export async function validate(policy: Policy, csp: string, hash: Uint8Array) {
-  // Basic functionality is lookup the policy hash (with a single issuer and identity)
-  const canonicalizedPolicy = canonicalize({
-    signers: policy.signers,
-    threshold: policy.threshold,
-  });
-  const calculatedHash = new Uint8Array(await SHA256(canonicalizedPolicy));
-  //return bufferEqual(calculatedHash, hash);
   return true;
 }
 
