@@ -51,6 +51,13 @@ export function parseThreshold(
   signersLength: number,
 ): number {
   const outputThreshold = Number(threshold);
+  if (
+    threshold.trim() === "" ||
+    isNaN(Number(threshold)) ||
+    !Number.isInteger(outputThreshold)
+  ) {
+    throw new Error("Signing threshold must be an integer.");
+  }
   if (outputThreshold < 1) {
     throw new Error("Signing threshold is less than 1.");
   }
