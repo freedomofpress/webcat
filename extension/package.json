@@ -6,6 +6,7 @@
   "main": "src/background.ts",
   "scripts": {
     "build": "tsc && vite build",
+    "test": "vitest",
     "lint": "npx eslint . --fix && npx prettier --write ."
   },
   "author": "Your Name",
@@ -23,7 +24,8 @@
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.9.0",
     "vite": "^5.3.1",
-    "vite-plugin-singlefile": "^2.0.2"
+    "vite-plugin-singlefile": "^2.0.2",
+    "vitest": "^3.0.1"
   },
   "dependencies": {
     "vite-plugin-web-extension": "^4.2.0"
