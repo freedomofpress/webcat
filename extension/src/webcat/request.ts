@@ -2,18 +2,17 @@ import { OriginState, PopupState, metadataRequestSource } from "./interfaces";
 import { isFQDNEnrolled } from "./db";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
+import { origins } from "./listeners";
 
 export async function validateOrigin(
   tabs: Map<number, string>,
-  origins: Map<string, OriginState>,
   popups: Map<number, PopupState>,
-  list_db: IDBDatabase,
   fqdn: string,
   url: string,
   tabId: number,
   type: metadataRequestSource,
 ) {
-  const policyHash = await isFQDNEnrolled(list_db, fqdn, origins, tabId);
+  const policyHash = await isFQDNEnrolled(fqdn, tabId);
   if (policyHash === false) {
     console.debug(`${url} is not enrolled, skipping...`);
     return;

@@ -6,6 +6,7 @@ import { Sigstore } from "../sigstore/interfaces";
 import { setOKIcon } from "./ui";
 import { logger } from "./logger";
 import { hexToUint8Array, Uint8ArrayToHex } from "../sigstore/encoding";
+import { origins } from "./listeners";
 
 export async function validateResponseHeaders(
   sigstore: Sigstore,
@@ -217,7 +218,6 @@ export async function validateResponseHeaders(
 }
 
 export async function validateResponseContent(
-  origins: Map<string, OriginState>,
   popupState: PopupState | undefined,
   details: browser.webRequest._OnBeforeRequestDetails,
 ) {

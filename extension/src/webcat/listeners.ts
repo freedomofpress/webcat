@@ -75,7 +75,7 @@ export async function headersListener(
     (!tabs.has(details.tabId) && details.tabId > 0) ||
     // Skip non-enrolled workers
     // What at browser restart?
-    (details.tabId < 0 && !await isFQDNEnrolled(list_db, fqdn, origins, details.tabId))
+    (details.tabId < 0 && !await isFQDNEnrolled(fqdn, details.tabId))
   ) {
     // This is too much noise to really log
     console.debug(`headersListener: skipping ${details.url}`);
@@ -97,9 +97,7 @@ export async function headersListener(
     );
     await validateOrigin(
       tabs,
-      origins,
       popups,
-      list_db,
       fqdn,
       details.url,
       details.tabId,
@@ -162,9 +160,7 @@ export async function requestListener(
       // This just checks some basic stuff, like TLS/Onion usage and populate the cache if it doesnt exists
       await validateOrigin(
         tabs,
-        origins,
         popups,
-        list_db,
         fqdn,
         details.url,
         details.tabId,
@@ -184,7 +180,7 @@ export async function requestListener(
   /* DEVELOPMENT GUARD */
   /*it's here for development: meaning if we reach this stage
     and the fqdn is enrolled, but a entry in the origin map has nor been created, there is a critical security bug */
-  if ((await isFQDNEnrolled(list_db, fqdn, origins, details.tabId)) === true) {
+  if ((await isFQDNEnrolled(fqdn, details.tabId)) === true) {
     console.error(
       "FATAL: loading from an enrolled origin but the state does not exists.",
     );
@@ -195,7 +191,6 @@ export async function requestListener(
   // if we know the tab is enrolled, or it is a worker background connction then we should verify
   if (tabs.has(details.tabId) === true || details.tabId < 0) {
     await validateResponseContent(
-      origins,
       popups.get(details.tabId),
       details,
     );

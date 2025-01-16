@@ -1,7 +1,7 @@
 import { hexToUint8Array } from '../sigstore/encoding';
 import { logger } from './logger';
 import { SHA256, arrayBufferToHex, getFQDN } from "./utils";
-import { OriginState } from './interfaces';
+import { origins, list_db } from './listeners';
 
 // https://stackoverflow.com/questions/40593260/should-i-open-an-idbdatabase-each-time-or-keep-one-instance-open
 // Someone here claims opening and close is almost the same as keeping it open, performance-wise
@@ -107,7 +107,7 @@ export async function initDatabase(db: IDBDatabase) {
 }
 
 // TabID is passed only mostly for debugging
-export async function isFQDNEnrolled(db: IDBDatabase, fqdn: string, origins: Map<string, OriginState>, tabId: number): Promise<boolean|Uint8Array> {
+export async function isFQDNEnrolled( fqdn: string, tabId: number): Promise<boolean|Uint8Array> {
     if (origins.has(fqdn)) {
         if (!origins.get(fqdn)?.policyHash) {
             throw new Error("FATAL: we found a cached origin without a policy associated");
@@ -119,7 +119,7 @@ export async function isFQDNEnrolled(db: IDBDatabase, fqdn: string, origins: Map
     const fqdn_hash = await SHA256(fqdn);
     //console.log(`Checking ${fqdn}, hash = ${arrayBufferToHex(fqdn_hash)}`)
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction("list", "readonly");
+        const transaction = list_db.transaction("list", "readonly");
         const store = transaction.objectStore("list");
         const index = store.index("list");
         const request = index.get(fqdn_hash);

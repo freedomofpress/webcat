@@ -13,13 +13,10 @@ import { parseContentSecurityPolicy } from './parsers';
 import { isFQDNEnrolled } from "./db";
 import { getFQDN } from "./utils";
 
-import { origins, list_db } from "./listeners";
-
 // This functions shouldnt take this many arguments; TODO refactor or import/export global objects
 export async function validateCSP(csp: string, fqdn: string, tabId: number): Promise<boolean> {
   // See https://github.com/freedomofpress/webcat/issues/9
   // https://github.com/freedomofpress/webcat/issues/3
-  const required_directives = ["script-src", "style-src", "object-src"];
 
   const parsedCSP = parseContentSecurityPolicy(csp);
   logger.addLog("info", `Parsed CSP: ${parsedCSP.values()}`, tabId, fqdn);
@@ -38,7 +35,7 @@ export async function validateCSP(csp: string, fqdn: string, tabId: number): Pro
   // Validate script-src
   const scriptSrc = parsedCSP.get("script-src")!;
   for (const src of scriptSrc) {
-    if (!allowedScriptSrc.has(src) && !src.startsWith("'sha") && !await isFQDNEnrolled(list_db, getFQDN(src), origins, tabId)) {
+    if (!allowedScriptSrc.has(src) && !src.startsWith("'sha") && !await isFQDNEnrolled(getFQDN(src), tabId)) {
       throw new Error(`Invalid source in script-src: ${src}`);
     }
   }
@@ -67,7 +64,7 @@ export async function validateCSP(csp: string, fqdn: string, tabId: number): Pro
     if (src.includes("*")) {
       throw new Error(`Wildcards not allowed child-src/frame-src: ${src}`);
     }
-    if (src != "'none'" && src != "'self'" && !await isFQDNEnrolled(list_db, getFQDN(src), origins, tabId)) {
+    if (src != "'none'" && src != "'self'" && !await isFQDNEnrolled(getFQDN(src), tabId)) {
       throw new Error(`Invalid source in child-src/frame-src: ${src}`);
     }
   }
