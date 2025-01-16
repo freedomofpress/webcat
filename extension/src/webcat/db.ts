@@ -1,10 +1,10 @@
 import { hexToUint8Array } from "../sigstore/encoding";
-import { list_db,origins } from "./listeners";
+import { list_db, origins } from "./listeners";
 import { logger } from "./logger";
-import { arrayBufferToHex,SHA256 } from "./utils";
+import { arrayBufferToHex, SHA256 } from "./utils";
 
 type ListElement = [ArrayBuffer, Uint8Array];
-type SettingElement = [string, string|number|Date];
+type SettingElement = [string, string | number | Date];
 
 // https://stackoverflow.com/questions/40593260/should-i-open-an-idbdatabase-each-time-or-keep-one-instance-open
 // Someone here claims opening and close is almost the same as keeping it open, performance-wise
@@ -98,12 +98,7 @@ export async function initDatabase(db: IDBDatabase) {
   // Ideally here we would fetch the list remotelym verify signature and inclusion proof
   // and maybe freshness, if we do not delegate that to TUF
   const listElements: ListElement[] = [
-    [
-      await SHA256("lsd.cat"),
-      hexToUint8Array(
-        "aa",
-      ),
-    ],
+    [await SHA256("lsd.cat"), hexToUint8Array("aa")],
     [
       await SHA256("nym.re"),
       hexToUint8Array(

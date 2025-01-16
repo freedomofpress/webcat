@@ -7,9 +7,9 @@ import {
   Uint8ArrayToHex,
   Uint8ArrayToString,
 } from "./encoding";
-import { RawCAs, RawLogs, Roles, Sigstore,SigstoreRoots } from "./interfaces";
+import { RawCAs, RawLogs, Roles, Sigstore, SigstoreRoots } from "./interfaces";
 import { ByteStream } from "./stream";
-import { EXTENSION_OID_SCT,X509Certificate, X509SCTExtension } from "./x509";
+import { EXTENSION_OID_SCT, X509Certificate, X509SCTExtension } from "./x509";
 
 async function loadLog(
   frozenTimestamp: Date,

@@ -2,11 +2,11 @@ import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { Sigstore } from "../sigstore/interfaces";
 import { loadSigstoreRoot } from "../sigstore/sigstore";
 import { updateTUF } from "../sigstore/tuf";
-import { initDatabase, isFQDNEnrolled,openDatabase } from "./db";
-import { metadataRequestSource,OriginState, PopupState } from "./interfaces";
+import { initDatabase, isFQDNEnrolled, openDatabase } from "./db";
+import { metadataRequestSource, OriginState, PopupState } from "./interfaces";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
-import { validateResponseContent,validateResponseHeaders } from "./response";
+import { validateResponseContent, validateResponseHeaders } from "./response";
 import { getFQDN } from "./utils";
 
 export const origins: Map<string, OriginState> = new Map();

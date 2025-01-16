@@ -49,6 +49,7 @@ export function canonicalize(object: object): string {
         first = false;
         buffer.push(canonicalizeString(property));
         buffer.push(COLON);
+        // eslint-disable-next-line
         buffer.push(canonicalize((object as any)[property])); // 'any' as a fallback
       });
     buffer.push(RIGHT_CURLY_BRACKET);

@@ -17,7 +17,7 @@ import { ASN1Obj } from "../asn1";
 import { bufferEqual, importKey, verifySignature } from "../crypto";
 import { Uint8ArrayToBase64 } from "../encoding";
 import { KeyTypes } from "../interfaces";
-import { ECDSA_CURVE_NAMES,ECDSA_SIGNATURE_ALGOS } from "../oid";
+import { ECDSA_CURVE_NAMES, ECDSA_SIGNATURE_ALGOS } from "../oid";
 import * as pem from "../pem";
 import {
   X509AuthorityKeyIDExtension,

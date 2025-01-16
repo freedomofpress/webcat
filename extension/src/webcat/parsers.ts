@@ -1,4 +1,4 @@
-import { Issuers,Signer } from "./interfaces";
+import { Issuers, Signer } from "./interfaces";
 
 export function parseSigners(signers: string): Set<Signer> {
   const outputSigners: Set<Signer> = new Set();

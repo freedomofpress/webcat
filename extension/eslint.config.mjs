@@ -11,11 +11,11 @@ export default [
       ecmaVersion: 2022,
       sourceType: "module",
       globals: {
-        ...globals.browser
-      }
+        ...globals.browser,
+      },
     },
     plugins: {
-      "simple-import-sort": simpleImportSort
+      "simple-import-sort": simpleImportSort,
     },
     rules: {
       "simple-import-sort/imports": "error",
@@ -24,12 +24,12 @@ export default [
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
-          "argsIgnorePattern": "^_",
-          "varsIgnorePattern": "^_"
-        }
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+        },
       ],
 
-      "no-delete-var": "off"
-    }
-  }
+      "no-delete-var": "off",
+    },
+  },
 ];

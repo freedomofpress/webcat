@@ -1,13 +1,13 @@
-import { checkSignatures, getRoleKeys,loadKeys } from "./crypto";
-import { Uint8ArrayToHex,Uint8ArrayToString } from "./encoding";
-import { HashAlgorithms,Meta, Metafile, Roles, Root } from "./interfaces";
+import { checkSignatures, getRoleKeys, loadKeys } from "./crypto";
+import { Uint8ArrayToHex, Uint8ArrayToString } from "./encoding";
+import { HashAlgorithms, Meta, Metafile, Roles, Root } from "./interfaces";
 
 const TUF_REPOSITORY_URL = "https://tuf-repo-cdn.sigstore.dev";
 const STARTING_ROOT_PATH = "assets/1.root.json";
 
 async function fetchMetafileBase(
   role: string,
-  version: number | string
+  version: number | string,
 ): Promise<Response> {
   const url =
     version !== -1
@@ -19,7 +19,9 @@ async function fetchMetafileBase(
   const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `Failed to fetch file: ${response.status} ${response.statusText}`,
+    );
   }
 
   return response;
@@ -27,15 +29,15 @@ async function fetchMetafileBase(
 
 async function fetchMetafileJson(
   role: string,
-  version: number | string = -1
+  version: number | string = -1,
 ): Promise<Metafile> {
   const response = await fetchMetafileBase(role, version);
-  return await response.json() as Metafile;
+  return (await response.json()) as Metafile;
 }
 
 async function fetchMetafileBinary(
   role: string,
-  version: number | string = -1
+  version: number | string = -1,
 ): Promise<Uint8Array> {
   const response = await fetchMetafileBase(role, version);
   return new Uint8Array(await response.arrayBuffer());
@@ -317,7 +319,7 @@ async function updateTargets(
   if (root.consistent_snapshot) {
     newTargetsRaw = await fetchMetafileBinary(
       Roles.Targets,
-      snapshot[`${Roles.Targets}.json`].version
+      snapshot[`${Roles.Targets}.json`].version,
     );
   } else {
     newTargetsRaw = await fetchMetafileBinary(Roles.Targets, -1);
@@ -391,7 +393,7 @@ export async function fetchSigstoreTrustRoot() {
 
   const trusted_root_raw = await fetchMetafileBinary(
     "trusted_root",
-    `targets/${sha256}`
+    `targets/${sha256}`,
   );
   const sha256_calculated = Uint8ArrayToHex(
     new Uint8Array(

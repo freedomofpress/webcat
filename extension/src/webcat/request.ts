@@ -1,5 +1,5 @@
 import { isFQDNEnrolled } from "./db";
-import { metadataRequestSource,OriginState, PopupState } from "./interfaces";
+import { metadataRequestSource, OriginState, PopupState } from "./interfaces";
 import { origins } from "./listeners";
 import { logger } from "./logger";
 import { setIcon } from "./ui";

@@ -5,7 +5,7 @@ import { origins } from "./listeners";
 import { logger } from "./logger";
 import { parseSigners, parseThreshold } from "./parsers";
 import { setOKIcon } from "./ui";
-import { arrayBufferToHex, arraysEqual,getFQDN, SHA256 } from "./utils";
+import { arrayBufferToHex, arraysEqual, getFQDN, SHA256 } from "./utils";
 import { validateCSP, validateManifest } from "./validators";
 
 export async function validateResponseHeaders(

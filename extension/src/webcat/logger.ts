@@ -1,6 +1,6 @@
 import { LogEntry } from "./interfaces";
 
-type ConsoleLevel = 'log' | 'warn' | 'error' | 'info' | 'debug';
+type ConsoleLevel = "log" | "warn" | "error" | "info" | "debug";
 const globalLogs: LogEntry[] = [];
 
 // Logger Class
@@ -52,7 +52,7 @@ class Logger {
         tab = "worker";
       }
       console[level](
-        `[${logEntry.timestamp.toISOString()}] [${tab}] [${logEntry.origin}] ${logEntry.message}`
+        `[${logEntry.timestamp.toISOString()}] [${tab}] [${logEntry.origin}] ${logEntry.message}`,
       );
     }
   }
