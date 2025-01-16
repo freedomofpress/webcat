@@ -5,7 +5,8 @@
   "description": "",
   "main": "src/background.ts",
   "scripts": {
-    "build": "tsc && vite build"
+    "build": "tsc && vite build",
+    "lint": "npx eslint . --fix && npx prettier --write ."
   },
   "author": "Your Name",
   "license": "MIT",
