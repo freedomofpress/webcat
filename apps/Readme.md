@@ -8,7 +8,7 @@
 
 ### Apps to investigate
  - [Bitwarden](https://github.com/bitwarden/clients) -> [Issue](https://github.com/freedomofpress/webcat/issues/28)
- - [MyMonero](https://github.com/mymonero/mymonero-web-js)
+ - [MyMonero](https://github.com/mymonero/mymonero-web-js) -> [Issue](https://github.com/freedomofpress/webcat/issues/35)
  - [MyEtherWallet](https://github.com/MyEtherWallet/MyEtherWallet)
  - [Cryptpad](https://github.com/cryptpad/cryptpad) -> [Issue](https://github.com/freedomofpress/webcat/issues/26)
  - [Telegram Web A](https://github.com/Ajaxy/telegram-tt)
