@@ -6,7 +6,7 @@ import { isFQDNEnrolled } from "./db";
 import { OriginState, PopupState } from "./interfaces";
 import { logger } from "./logger";
 import { parseContentSecurityPolicy } from "./parsers";
-import { getFQDN } from "./utils";
+import { getFQDNSafe } from "./utils";
 
 export async function validateCSP(
   csp: string,
@@ -21,7 +21,11 @@ export async function validateCSP(
 
   const requiredDirectives = ["script-src", "style-src", "object-src"];
   const allowedScriptSrc = new Set(["'self'", "'wasm-unsafe-eval'"]);
-  const allowedStyleSrc = new Set(["'self'", "'unsafe-inline'", "'unsafe-hashes'"]);
+  const allowedStyleSrc = new Set([
+    "'self'",
+    "'unsafe-inline'",
+    "'unsafe-hashes'",
+  ]);
 
   // Ensure required directives exist
   for (const directive of requiredDirectives) {
@@ -36,7 +40,7 @@ export async function validateCSP(
     if (
       !allowedScriptSrc.has(src) &&
       !src.startsWith("'sha") &&
-      !(await isFQDNEnrolled(getFQDN(src), tabId))
+      !(await isFQDNEnrolled(getFQDNSafe(src), tabId))
     ) {
       throw new Error(`Invalid source in script-src: ${src}`);
     }
@@ -69,7 +73,7 @@ export async function validateCSP(
     if (
       src != "'none'" &&
       src != "'self'" &&
-      !(await isFQDNEnrolled(getFQDN(src), tabId))
+      !(await isFQDNEnrolled(getFQDNSafe(src), tabId))
     ) {
       throw new Error(`Invalid source in child-src/frame-src: ${src}`);
     }

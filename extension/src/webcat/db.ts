@@ -98,7 +98,12 @@ export async function initDatabase(db: IDBDatabase) {
   // Ideally here we would fetch the list remotelym verify signature and inclusion proof
   // and maybe freshness, if we do not delegate that to TUF
   const listElements: ListElement[] = [
-    [await SHA256("lsd.cat"), hexToUint8Array("aa")],
+    [
+      await SHA256("lsd.cat"),
+      hexToUint8Array(
+        "d6c9bee32f85ff71162afd1daa5ce876fd442af4105a08fbd70aa7291ab90ba0",
+      ),
+    ],
     [
       await SHA256("nym.re"),
       hexToUint8Array(

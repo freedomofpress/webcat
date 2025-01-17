@@ -1,9 +1,13 @@
 export function getFQDN(url: string): string {
+  const urlobj = new URL(url);
+  return urlobj.hostname;
+}
+
+export function getFQDNSafe(url: string): string {
   if (!/^https?:\/\//i.test(url)) {
     url = `https://${url}`;
   }
-  const urlobj = new URL(url);
-  return urlobj.hostname;
+  return getFQDN(url);
 }
 
 export function isExtensionRequest(
