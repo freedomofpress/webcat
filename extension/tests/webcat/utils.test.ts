@@ -4,6 +4,7 @@ import {
   arrayBufferToHex,
   arraysEqual,
   getFQDN,
+  getFQDNSafe,
   isExtensionRequest,
   SHA256,
 } from "./../../src/webcat/utils";
@@ -22,10 +23,39 @@ describe("getFQDN", () => {
     );
   });
 
-  // This actually should work because we now prepend a scheme, and not-a-url can be a valid hostname
-  //it("should throw an error for invalid URLs", () => {
-  //  expect(() => getFQDN("not-a-url")).toThrow();
-  //});
+  it("should throw an error for invalid URLs", () => {
+    expect(() => getFQDN("not-a-url")).toThrow();
+  });
+});
+
+describe("getFQDNSafe", () => {
+  it("should extract the hostname from a valid URL with a scheme", () => {
+    expect(getFQDNSafe("https://example.com/path")).toBe("example.com");
+    expect(getFQDNSafe("http://sub.domain.example.com:8080/test")).toBe(
+      "sub.domain.example.com",
+    );
+  });
+
+  it("should prepend https and extract hostname for URLs without a scheme", () => {
+    expect(getFQDNSafe("example.com")).toBe("example.com");
+    expect(getFQDNSafe("sub.domain.example.com")).toBe(
+      "sub.domain.example.com",
+    );
+  });
+
+  it("should handle URLs with query parameters and fragments", () => {
+    expect(getFQDNSafe("example.com?query=123#fragment")).toBe("example.com");
+    expect(getFQDNSafe("https://example.com?query=123#fragment")).toBe(
+      "example.com",
+    );
+  });
+
+  it("should throw an error for clearly invalid URLs", () => {
+    expect(() => getFQDNSafe("not a valid url")).toThrow();
+    expect(() => getFQDNSafe("http://")).toThrow();
+    expect(() => getFQDNSafe("https://")).toThrow();
+    expect(() => getFQDNSafe("")).toThrow();
+  });
 });
 
 describe("isExtensionRequest", () => {
