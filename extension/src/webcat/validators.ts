@@ -21,7 +21,7 @@ export async function validateCSP(
 
   const requiredDirectives = ["script-src", "style-src", "object-src"];
   const allowedScriptSrc = new Set(["'self'", "'wasm-unsafe-eval'"]);
-  const allowedStyleSrc = new Set(["'self'", "'unsafe-inline'"]);
+  const allowedStyleSrc = new Set(["'self'", "'unsafe-inline'", "'unsafe-hashes'"]);
 
   // Ensure required directives exist
   for (const directive of requiredDirectives) {
