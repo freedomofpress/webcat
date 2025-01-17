@@ -143,13 +143,13 @@ export async function initDatabase(db: IDBDatabase) {
     [
       await SHA256("cryptpad.nym.re"),
       hexToUint8Array(
-        "a772e3a3c671283d7086925ec7ac4af34e88e4d940c87cc205a7413df4d50d5a",
+        "20741627d2e4399183d61de5274ec2fdf078fecd1b68ff0b1fb9bbe0321a36da",
       ),
     ],
     [
       await SHA256("sandbox.cryptpad.nym.re"),
       hexToUint8Array(
-        "a772e3a3c671283d7086925ec7ac4af34e88e4d940c87cc205a7413df4d50d5a",
+        "20741627d2e4399183d61de5274ec2fdf078fecd1b68ff0b1fb9bbe0321a36da",
       ),
     ],
   ];

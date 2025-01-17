@@ -5,7 +5,13 @@ import { origins } from "./listeners";
 import { logger } from "./logger";
 import { parseSigners, parseThreshold } from "./parsers";
 import { setOKIcon } from "./ui";
-import { arrayBufferToHex, arraysEqual, getFQDN, SHA256 } from "./utils";
+import {
+  arrayBufferToHex,
+  arraysEqual,
+  errorpage,
+  getFQDN,
+  SHA256,
+} from "./utils";
 import { validateCSP, validateManifest } from "./validators";
 
 export async function validateResponseHeaders(
@@ -90,7 +96,8 @@ export async function validateResponseHeaders(
 
     if (
       originState.policy.threshold < 1 ||
-      originState.policy.signers.size < 1
+      originState.policy.signers.size < 1 ||
+      originState.policy.threshold > originState.policy.signers.size
     ) {
       throw new Error("Failed to find all the necessary policy headers!");
     }
@@ -264,7 +271,7 @@ export async function validateResponseContent(
   filter.onstop = () => {
     if (!origins.has(getFQDN(details.url))) {
       throw new Error(
-        "FATAL: the origin still does not exists while the response content is arriving.",
+        "The origin still does not exists while the response content is arriving.",
       );
     }
     const originState = origins.get(getFQDN(details.url))!;
@@ -278,10 +285,12 @@ export async function validateResponseContent(
           );
         }
 
-        let manifest_hash = originState.manifest.manifest.files[pathname];
+        const manifest_hash =
+          originState.manifest.manifest.files[pathname] ||
+          originState.manifest.manifest.files["/"];
 
         if (!manifest_hash) {
-          manifest_hash = originState.manifest.manifest.files["/"];
+          throw new Error("Manifest does not contain a hash for the root.");
         }
 
         //if (typeof manifest_hash !== "string") {
@@ -325,9 +334,7 @@ export async function validateResponseContent(
               popupState.invalid_assets.push(pathname);
             }
             deny(filter);
-            browser.tabs.update(details.tabId, {
-              url: browser.runtime.getURL("pages/error.html"),
-            });
+            errorpage(details.tabId);
           }
           // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
           // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
@@ -347,9 +354,7 @@ export async function validateResponseContent(
       deny(filter);
       filter.close();
       // Redirect the main frame to an error page
-      browser.tabs.update(details.tabId, {
-        url: browser.runtime.getURL("pages/error.html"),
-      });
+      errorpage(details.tabId);
     }
   };
 }

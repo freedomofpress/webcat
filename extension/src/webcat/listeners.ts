@@ -7,7 +7,7 @@ import { metadataRequestSource, OriginState, PopupState } from "./interfaces";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { validateResponseContent, validateResponseHeaders } from "./response";
-import { getFQDN } from "./utils";
+import { errorpage, getFQDN } from "./utils";
 
 export const origins: Map<string, OriginState> = new Map();
 export const tabs: Map<number, string> = new Map();
@@ -124,6 +124,8 @@ export async function headersListener(
       fqdn,
     );
     origins.delete(fqdn);
+    tabs.delete(details.tabId);
+    errorpage(details.tabId);
     return { redirectUrl: browser.runtime.getURL("pages/error.html") };
   }
 
@@ -171,6 +173,7 @@ export async function requestListener(
         details.tabId,
         fqdn,
       );
+      errorpage(details.tabId);
       return { cancel: true };
     }
   }
@@ -270,9 +273,7 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   } else {
     logger.addLog("error", `Invalid WASM ${hash}`, sender.tab.id, fqdn);
     sendResponse(false);
-    browser.tabs.update(sender.tab.id, {
-      url: browser.runtime.getURL("pages/error.html"),
-    });
+    errorpage(sender.tab.id);
   }
 }
 
