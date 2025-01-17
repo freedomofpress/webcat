@@ -4,6 +4,7 @@ import json
 import argparse
 import glob
 import subprocess
+import tempfile
 
 def compute_sha256(file_path):
     """Computes the SHA-256 hash of a file."""
@@ -27,22 +28,27 @@ def build_manifest(directory, app_version, webcat_version):
     # File extensions to scan
     extensions = ['.htm', '.html', '.css', '.js', '.mjs', '.wasm']
 
+    # Ensure the directory is a folder
+    if not os.path.isdir(directory):
+        print(f"Error: {directory} is not a directory.")
+        exit(1)
+
     # Scan for all matching files in the directory
     for ext in extensions:
         for file_path in glob.glob(os.path.join(directory, f'**/*{ext}'), recursive=True):
-            # Get relative path
-            relative_path = os.path.relpath(file_path, directory).replace("\\", "/")
-            
-            # If it's index.html or index.htm, set the path to the folder path
-            if os.path.basename(file_path) in ['index.html', 'index.htm']:
-                relative_path = f"/{os.path.dirname(relative_path)}" if os.path.dirname(relative_path) else "/"
-            else:
-                relative_path = f"/{relative_path}"  # Ensure path starts with a "/"
+            if not os.path.isfile(file_path):
+                continue  # Skip directories
 
-            # Compute hash
+            relative_path = os.path.relpath(file_path, directory).replace("\\", "/")
+
+            if os.path.basename(file_path) in ['index.html', 'index.htm']:
+                folder_path = os.path.dirname(relative_path)
+                relative_path = f"/{folder_path}/" if folder_path else "/"
+            else:
+                relative_path = f"/{relative_path}"
+
             file_hash = compute_sha256(file_path)
 
-            # Handle .wasm files separately
             if ext == '.wasm':
                 manifest["wasm"].append(file_hash)
             else:
@@ -71,11 +77,9 @@ def canonicalize_manifest(manifest):
 def sign_manifest_with_sigstore(canonicalized_manifest_path, output_bundle_path):
     """Signs the canonicalized manifest using the Sigstore CLI."""
     try:
-        # Run the sigstore CLI command to sign the canonicalized manifest
-        subprocess.run(
-            ["sigstore", "sign", "--bundle", output_bundle_path, canonicalized_manifest_path],
-            check=True
-        )
+        subprocess.run([
+            "sigstore", "sign", "--bundle", output_bundle_path, "--overwrite", canonicalized_manifest_path
+        ], check=True)
         print(f"Successfully signed {canonicalized_manifest_path} and saved the bundle to {output_bundle_path}")
     except subprocess.CalledProcessError as e:
         print(f"Error during signing: {e}")
@@ -86,11 +90,7 @@ def collect_sigstore_bundles(bundle_paths):
     for bundle_path in bundle_paths:
         with open(bundle_path, 'r') as f:
             bundle = json.load(f)
-        
-        # Ask for the identity of the signer (e.g., email)
         signer_identity = input(f"Enter signer identity for bundle {bundle_path} (e.g., email): ")
-        
-        # Use the signer identity as the key and the bundle as the value
         signatures[signer_identity] = bundle
     return signatures
 
@@ -100,55 +100,41 @@ def write_final_manifest(manifest, signatures, output_file):
         "manifest": manifest["manifest"],
         "signatures": signatures
     }
-    # Write the final JSON to the output file
     with open(output_file, 'w') as f:
         json.dump(final_output, f, indent=4)
 
-def write_canonicalized_manifest(canonicalized_manifest_str, canonical_output_file):
-    """Writes the canonicalized manifest string to a file."""
-    with open(canonical_output_file, 'w') as f:
-        f.write(canonicalized_manifest_str)
-
 def main():
-    # Command line argument parsing
     parser = argparse.ArgumentParser(description="Generate a manifest JSON for web files.")
     parser.add_argument('directory', type=str, help='Directory to scan')
     parser.add_argument('--output', type=str, required=True, help='Output final manifest JSON file with signatures')
-    parser.add_argument('--canonical_output', type=str, required=True, help='Output canonical manifest JSON file')
     parser.add_argument('--app_version', type=int, default=1, help='Application version (default: 1)')
     parser.add_argument('--webcat_version', type=int, default=1, help='Webcat version (default: 1)')
     parser.add_argument('--signatures', type=int, default=1, help='Number of required Sigstore signatures (default: 1)')
-    parser.add_argument('--bundle_output', type=str, required=True, help='Path to save Sigstore bundles')
-    
+
     args = parser.parse_args()
 
-    # Build manifest
     manifest = build_manifest(args.directory, args.app_version, args.webcat_version)
-
-    # Allow user to add more WASM hashes manually
     manifest["manifest"]["wasm"] = prompt_additional_wasm_hashes(manifest["manifest"]["wasm"])
 
-    # Canonicalize the manifest
     canonicalized_manifest_str = canonicalize_manifest(manifest)
 
-    # Write the canonicalized manifest to a file (this version will be signed)
-    canonicalized_manifest_path = "canonicalized_manifest.json"
-    write_canonicalized_manifest(canonicalized_manifest_str, canonicalized_manifest_path)
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.json') as temp_manifest_file:
+        canonicalized_manifest_path = temp_manifest_file.name
+        temp_manifest_file.write(canonicalized_manifest_str.encode())
 
-    # List to collect bundle paths
     bundle_paths = []
-
-    # Sign the canonicalized manifest using Sigstore CLI for each required signature
     for i in range(args.signatures):
-        output_bundle_path = f"{args.bundle_output}_sig_{i+1}.json"
-        sign_manifest_with_sigstore(canonicalized_manifest_path, output_bundle_path)
-        bundle_paths.append(output_bundle_path)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f'_sig_{i+1}.json') as temp_bundle_file:
+            output_bundle_path = temp_bundle_file.name
+            sign_manifest_with_sigstore(canonicalized_manifest_path, output_bundle_path)
+            bundle_paths.append(output_bundle_path)
 
-    # Collect all Sigstore bundles and their associated signer identities
     signatures = collect_sigstore_bundles(bundle_paths)
-
-    # Write the final manifest including the manifest and the signatures
     write_final_manifest(manifest, signatures, args.output)
+
+    os.remove(canonicalized_manifest_path)
+    for bundle_path in bundle_paths:
+        os.remove(bundle_path)
 
 if __name__ == "__main__":
     main()
