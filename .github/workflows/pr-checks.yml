@@ -1,4 +1,3 @@
-# .github/workflows/pr-checks.yml
 name: PR Checks
 
 on:
@@ -9,6 +8,10 @@ jobs:
   lint:
     name: Linter
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: extension
 
     steps:
       - name: Checkout repository
@@ -29,6 +32,10 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: extension
 
     steps:
       - name: Checkout repository
