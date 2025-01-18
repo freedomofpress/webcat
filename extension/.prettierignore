@@ -1,3 +1,5 @@
 # Ignore artifacts:
 build
 coverage
+# Ignore broken test files
+tests/webcat/test_files/**/*.json
