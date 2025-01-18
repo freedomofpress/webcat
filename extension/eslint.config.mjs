@@ -20,7 +20,7 @@ export default [
     rules: {
       "simple-import-sort/imports": "error",
       "simple-import-sort/exports": "error",
-
+      "@typescript-eslint/no-non-null-assertion": "warn",
       "@typescript-eslint/no-unused-vars": [
         "error",
         {
