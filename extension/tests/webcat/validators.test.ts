@@ -29,6 +29,22 @@ describe("validateCSP", () => {
     );
   });
 
+  it("should throw an error if a object-src is not 'none'", async () => {
+    const csp =
+      "script-src 'self' 'sha256-abc'; style-src 'self'; object-src 'self'";
+    await expect(validateCSP(csp, "trusted.com", 1)).rejects.toThrow(
+      "object-src must be 'none'",
+    );
+  });
+
+  it("should throw an error if a object-src is not 'none'", async () => {
+    const csp =
+      "script-src 'self' 'sha256-abc' 'unsafe-inline'; style-src 'self'; object-src 'self'";
+    await expect(validateCSP(csp, "trusted.com", 1)).rejects.toThrow(
+      "Invalid source in script-src: 'unsafe-inline'",
+    );
+  });
+
   it("should throw an error for invalid script-src sources", async () => {
     const csp = "script-src evil.com; style-src 'self'; object-src 'none'";
     await expect(validateCSP(csp, "trusted.com", 1)).rejects.toThrow(
