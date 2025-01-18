@@ -167,7 +167,7 @@ describe("validateResponseHeaders", () => {
     );
   });
 
-  // TODO enable this test. ValidateCSP is tested se[arately, but this test serve the purpose of ensuring it's being called
+  // TODO enable this test. ValidateCSP is tested separately, but this test serve the purpose of ensuring it's being called
   // at the right moment. I can't get it to work because I fail at doing a partial mock of the validators module
   /*it("throws error if CSP validation fails with non non allowed CSP", async () => {
     details.responseHeaders = [
