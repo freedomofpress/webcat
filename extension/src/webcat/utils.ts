@@ -49,7 +49,11 @@ export function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 export function errorpage(tabId: number) {
-  browser.tabs.update(tabId, {
-    url: browser.runtime.getURL("pages/error.html"),
-  });
+  // TODO, what if the error happens in the background? We should probably hunt all tabs with
+  // that main frame or subframe and error them
+  if (tabId > 0) {
+    browser.tabs.update(tabId, {
+      url: browser.runtime.getURL("pages/error.html"),
+    });
+  }
 }

@@ -39,8 +39,9 @@ export async function validateCSP(
   for (const src of scriptSrc) {
     if (
       !allowedScriptSrc.has(src) &&
-      !src.startsWith("'sha") &&
-      !(await isFQDNEnrolled(getFQDNSafe(src), tabId))
+      !src.startsWith("'sha") /*&&
+      TODO: we will eventually decide if we want to source scripts/styles from third parties, i'd say no
+      !(await isFQDNEnrolled(getFQDNSafe(src), tabId))*/
     ) {
       throw new Error(`Invalid source in script-src: ${src}`);
     }

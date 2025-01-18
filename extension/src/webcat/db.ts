@@ -143,15 +143,21 @@ export async function initDatabase(db: IDBDatabase) {
     [
       await SHA256("cryptpad.nym.re"),
       hexToUint8Array(
-        "20741627d2e4399183d61de5274ec2fdf078fecd1b68ff0b1fb9bbe0321a36da",
+        "b96b4939a3507be18ddcc799f7fc2b37f1acafcbb0734e90d3703259f57b4579",
       ),
     ],
     [
       await SHA256("sandbox.cryptpad.nym.re"),
       hexToUint8Array(
-        "20741627d2e4399183d61de5274ec2fdf078fecd1b68ff0b1fb9bbe0321a36da",
+        "b96b4939a3507be18ddcc799f7fc2b37f1acafcbb0734e90d3703259f57b4579",
       ),
     ],
+    [
+    await SHA256("bitwarden.nym.re"),
+    hexToUint8Array(
+        "6e17ccb0d244a5cfaaf8e878a430010c83f81b5fef3ad83394155c43b7702213",
+    ),
+    ]
   ];
 
   const settingElements: SettingElement[] = [
