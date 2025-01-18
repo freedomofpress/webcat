@@ -9,7 +9,7 @@ import {
 } from "./webcat/listeners";
 import { setErrorIcon } from "./webcat/ui";
 
-console.log("PR test update 2");
+console.log("PR test update 3");
 
 // Let's count references to origin in case we ever need pruning policies
 browser.tabs.onRemoved.addListener(tabCloseListener);
