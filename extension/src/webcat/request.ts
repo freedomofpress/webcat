@@ -57,18 +57,20 @@ export async function validateOrigin(
   }
 
   // If origin metadata are already loaded, just skip doing it again and return early
-  if (origins.has(fqdn)) {
+  const originState = origins.get(fqdn);
+  if (originState) {
     // Since we use cached info, we should still populate the popup with the cached info
     const popupState = popups.get(tabId);
+
     if (popupState) {
       // TODO
       //popupState.valid_headers =
       // We want it undefined, because we have not verified it yet
-      popupState.valid_manifest = origins.get(fqdn)?.valid
-        ? origins.get(fqdn)!.valid
+      popupState.valid_manifest = originState.valid
+        ? originState.valid
         : undefined;
-      popupState.threshold = origins.get(fqdn)!.policy.threshold;
-      popupState.valid_signers = origins.get(fqdn)!.valid_signers;
+      popupState.threshold = originState.policy.threshold;
+      popupState.valid_signers = originState.valid_signers;
     }
     return;
   }

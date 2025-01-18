@@ -161,7 +161,12 @@ export class RFC3161Timestamp {
     const obj = this.timeStampTokenObj.subs.find((sub) =>
       sub.tag.isContextSpecific(0x00),
     );
-    return obj!.subs[0];
+    if (!obj) {
+      throw new RFC3161TimestampVerificationError(
+        "Missing timeStampTokenObj sub.",
+      );
+    }
+    return obj.subs[0];
   }
 
   // https://datatracker.ietf.org/doc/html/rfc5652#section-5.1
@@ -197,7 +202,10 @@ export class RFC3161Timestamp {
     const signedAttrs = this.signerInfoObj.subs.find((sub) =>
       sub.tag.isContextSpecific(0x00),
     );
-    return signedAttrs!;
+    if (!signedAttrs) {
+      throw new RFC3161TimestampVerificationError("Missing signedAttrsObj.");
+    }
+    return signedAttrs;
   }
 
   // https://datatracker.ietf.org/doc/html/rfc5652#section-5.3
@@ -207,7 +215,10 @@ export class RFC3161Timestamp {
         sub.subs[0].tag.isOID() &&
         sub.subs[0].toOID() === OID_PKCS9_MESSAGE_DIGEST_KEY,
     );
-    return messageDigest!;
+    if (!messageDigest) {
+      throw new RFC3161TimestampVerificationError("Missing messageDigest.");
+    }
+    return messageDigest;
   }
 
   // https://datatracker.ietf.org/doc/html/rfc5652#section-5.3

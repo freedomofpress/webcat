@@ -132,7 +132,7 @@ export function parseContentSecurityPolicy(
 
     // "4. Set directive name to be the result of running ASCII lowercase on
     //     directive name."
-    const directiveName = rawDirectiveName!.toLowerCase();
+    const directiveName = rawDirectiveName.toLowerCase();
 
     // "5. If policy's directive set contains a directive whose name is
     //     directive name, continue."

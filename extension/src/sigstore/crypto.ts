@@ -238,9 +238,13 @@ export async function checkSignatures(
     const key = keys.get(signature.keyid);
     const sig = hexToUint8Array(signature.sig);
 
+    if (!key) {
+      throw new Error("Keyid was empty.");
+    }
+
     // We checked before that the key exists
     if (
-      (await verifySignature(key!, stringToUint8Array(signed_canon), sig)) !==
+      (await verifySignature(key, stringToUint8Array(signed_canon), sig)) !==
       true
     ) {
       throw new Error("Failed verifying signature");

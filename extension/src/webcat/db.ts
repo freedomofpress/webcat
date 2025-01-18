@@ -176,14 +176,16 @@ export async function isFQDNEnrolled(
   fqdn: string,
   tabId: number,
 ): Promise<boolean | Uint8Array> {
+  const originState = origins.get(fqdn);
   if (origins.has(fqdn)) {
-    if (!origins.get(fqdn)?.policyHash) {
+    if (!originState || originState.policyHash) {
       throw new Error(
         "FATAL: we found a cached origin without a policy associated",
       );
     }
     logger.addLog("info", `Policy cache hit for ${fqdn}`, tabId, fqdn);
-    return origins.get(fqdn)!.policyHash;
+
+    return originState.policyHash;
   }
 
   const fqdn_hash = await SHA256(fqdn);

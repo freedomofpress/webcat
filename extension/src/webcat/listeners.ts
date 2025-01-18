@@ -19,16 +19,21 @@ export let sigstore: Sigstore;
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
     const fqdn = tabs.get(tabId);
-    /* DEVELOPMENT GUARD */
+    /* DEVELOPMENT GUARDS */
     /* It's not possible that we have reference for a object that does not exists */
-    if (!origins.has(fqdn!)) {
-      console.error(
-        "When deleting a tab, we found an enrolled tab with no matching origin",
+    if (!fqdn) {
+      throw new Error(
+        "When deleting a tab, we found an enrolled tab with fqdn",
+      );
+    }
+    const originState = origins.get(fqdn);
+    if (!originState) {
+      throw new Error(
+        "When deleting a tab, we found an enrolled tab with no associated originState",
       );
     }
     /* END */
-    const originState = origins.get(fqdn!);
-    originState!.references--;
+    originState.references--;
     /* Here we could check if references are 0, and delete the origin object too */
     tabs.delete(tabId);
     popups.delete(tabId);
@@ -105,17 +110,27 @@ export async function headersListener(
     );
   }
 
+  /* DEVELOPMENT GUARD */
+  const originState = origins.get(fqdn);
+  if (!originState) {
+    throw new Error("No originState while starting to pass response.");
+  }
+
   try {
     await validateResponseHeaders(
       sigstore,
-      origins.get(fqdn)!,
+      originState,
       popups.get(details.tabId),
       details,
     );
   } catch (error) {
     if (details.tabId > 0) {
       // Signal the error for the UI
-      popups.get(details.tabId)!.valid_headers = false;
+      const popupState = popups.get(details.tabId);
+      if (!popupState) {
+        throw new Error("popupState does not exists when it should have");
+      }
+      popupState.valid_headers = false;
     }
     logger.addLog(
       "error",
@@ -235,12 +250,13 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
 
   const fqdn = getFQDN(sender.origin);
   /* DEVELOPMENT GUARD */
-  if (!origins.has(fqdn) && sender.tab && tabs.has(sender.tab.id!)) {
+  if (!origins.has(fqdn) && sender.tab && tabs.has(sender.tab.id)) {
     throw new Error(
       "FATAL: WASM origin is not present but its execution tab is.",
     );
   }
-  if (origins.has(fqdn) && !origins.get(fqdn)!.populated) {
+  const originStateCheck = origins.get(fqdn);
+  if (originStateCheck && !originStateCheck.populated) {
     throw new Error(
       "FATAL: WASM is being executed before the manifest is populated and verified.",
     );
@@ -265,8 +281,9 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   const originState = origins.get(fqdn);
 
   if (
-    originState!.manifest &&
-    originState!.manifest.manifest.wasm.includes(hash)
+    originState &&
+    originState.manifest &&
+    originState.manifest.manifest.wasm.includes(hash)
   ) {
     logger.addLog("info", `Validated WASM ${hash}`, sender.tab.id, fqdn);
     sendResponse(true);

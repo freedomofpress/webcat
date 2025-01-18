@@ -35,6 +35,8 @@ export async function validateCSP(
   }
 
   // Validate script-src
+  // We can ignore, the check of existance is done in the loop above
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const scriptSrc = parsedCSP.get("script-src")!;
   for (const src of scriptSrc) {
     if (
@@ -48,6 +50,7 @@ export async function validateCSP(
   }
 
   // Validate style-src
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const styleSrc = parsedCSP.get("style-src")!;
   for (const src of styleSrc) {
     if (!allowedStyleSrc.has(src)) {
@@ -56,6 +59,7 @@ export async function validateCSP(
   }
 
   // Validate object-src
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const objectSrc = parsedCSP.get("object-src")!;
   if (objectSrc.length !== 1 || objectSrc[0] !== "'none'") {
     throw new Error(`object-src must be 'none', found: ${objectSrc.join(" ")}`);

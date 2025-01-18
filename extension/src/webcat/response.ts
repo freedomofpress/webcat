@@ -69,29 +69,33 @@ export async function validateResponseHeaders(
       }
     }
 
-    // Extract Content-Security-Policy
-    if (normalizedHeaders.has("content-security-policy")) {
-      originState.csp = normalizedHeaders.get("content-security-policy")!;
+    for (const criticalHeader of criticalHeaders) {
+      if (!normalizedHeaders.has(criticalHeader)) {
+        throw new Error(`Missing critical header: ${criticalHeader}`);
+      }
     }
+
+    // The null assertion is checked in the loop above
+    // Extract Content-Security-Policy
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    originState.csp = normalizedHeaders.get("content-security-policy")!;
 
     // Extract X-Sigstore-Signers
-    if (normalizedHeaders.has("x-sigstore-signers")) {
-      const signersHeader = normalizedHeaders.get("x-sigstore-signers")!;
-      originState.policy.signers = parseSigners(signersHeader);
-    }
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const signersHeader = normalizedHeaders.get("x-sigstore-signers")!;
+    originState.policy.signers = parseSigners(signersHeader);
 
     // Extract X-Sigstore-Threshold
-    if (normalizedHeaders.has("x-sigstore-threshold")) {
-      const thresholdHeader = normalizedHeaders.get("x-sigstore-threshold")!;
-      originState.policy.threshold = parseThreshold(
-        thresholdHeader,
-        originState.policy.signers.size,
-      );
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const thresholdHeader = normalizedHeaders.get("x-sigstore-threshold")!;
+    originState.policy.threshold = parseThreshold(
+      thresholdHeader,
+      originState.policy.signers.size,
+    );
 
-      // Update popup state if it exists
-      if (popupState) {
-        popupState.threshold = originState.policy.threshold;
-      }
+    // Update popup state if it exists
+    if (popupState) {
+      popupState.threshold = originState.policy.threshold;
     }
 
     if (
@@ -274,8 +278,8 @@ export async function validateResponseContent(
         "The origin still does not exists while the response content is arriving.",
       );
     }
-    const originState = origins.get(getFQDN(details.url))!;
-    if (originState.valid === true) {
+    const originState = origins.get(getFQDN(details.url));
+    if (originState && originState.valid === true) {
       new Blob(source).arrayBuffer().then(function (blob) {
         const pathname = new URL(details.url).pathname;
 
@@ -348,7 +352,7 @@ export async function validateResponseContent(
         "error",
         `Error: tab context is not valid ${details.url}`,
         details.tabId,
-        originState.fqdn,
+        originState?.fqdn ? originState.fqdn : "undefined",
       );
       // DENIED
       deny(filter);

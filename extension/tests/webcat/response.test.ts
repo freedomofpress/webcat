@@ -128,6 +128,7 @@ describe("validateResponseHeaders", () => {
 
   it("throws error for duplicate critical headers", async () => {
     originState.policyHash = await generatePolicyHash(details.responseHeaders);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     details.responseHeaders!.push({
       name: "X-Sigstore-Threshold",
       value: `${defaultThreshold}`,

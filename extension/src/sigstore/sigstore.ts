@@ -47,12 +47,12 @@ async function loadCA(
       frozenTimestamp > new Date(ca.validFor.start) &&
       (!ca.validFor.end || new Date(ca.validFor.end) > frozenTimestamp)
     ) {
-      let parentCert: X509Certificate;
-      let currentCert: X509Certificate;
+      let parentCert: X509Certificate | undefined = undefined;
+      let currentCert: X509Certificate | undefined = undefined;
       for (const cert of ca.certChain.certificates.reverse()) {
         currentCert = X509Certificate.parse(cert.rawBytes);
 
-        if (parentCert! == undefined) {
+        if (parentCert == undefined) {
           parentCert = currentCert;
 
           // So we are expecting a root here, so it has to be self sigend
@@ -70,7 +70,10 @@ async function loadCA(
           );
         }
       }
-      return currentCert!;
+      if (!currentCert) {
+        throw new Error("Could not find a valid certificate.");
+      }
+      return currentCert;
     }
   }
   throw new Error("Could not find a valid CA in sigstore root.");
