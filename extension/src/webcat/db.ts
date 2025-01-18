@@ -153,11 +153,11 @@ export async function initDatabase(db: IDBDatabase) {
       ),
     ],
     [
-    await SHA256("bitwarden.nym.re"),
-    hexToUint8Array(
+      await SHA256("bitwarden.nym.re"),
+      hexToUint8Array(
         "6e17ccb0d244a5cfaaf8e878a430010c83f81b5fef3ad83394155c43b7702213",
-    ),
-    ]
+      ),
+    ],
   ];
 
   const settingElements: SettingElement[] = [
