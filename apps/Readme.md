@@ -1,18 +1,17 @@
-### Supported apps
- - Testapp - [Guide](https://github.com/freedomofpress/webcat/tree/main/apps/testapp) - Test application showcasing WASM, Webworkers, Workers, Sharedworkers and other features support.
- - [Element](https://element.io/) - [Guide](https://github.com/freedomofpress/webcat/tree/main/apps/element) - The Matrix client.
- - [Globaleaks](https://globaleaks.org) - [Guide](https://github.com/freedomofpress/webcat/tree/main/apps/globaleaks) - Whistleblowing platform.
- - [Jitsi Meet](https://github.com/jitsi/jitsi-meet) - [Guide](https://github.com/freedomofpress/webcat/tree/main/apps/jitsi) - [Issue](https://github.com/freedomofpress/webcat/issues/25) - Video conferencing software.
- - [Standard Notes](https://github.com/standardnotes/app) - [Guide](https://github.com/freedomofpress/webcat/tree/main/apps/standardnotes) - A secure and private notes app.
+### Tested apps
 
+| **App** | **Guide** | **Description** | **Issue** |
+|---------|-----------|-----------------|-----------|
+| [**Testapp**](https://github.com/freedomofpress/webcat/tree/main/apps/testapp) | [Guide](./testapp) | Showcases WASM, Webworkers, Workers, and Sharedworkers support. | - |
+| [**Element**](https://github.com/element-hq/element-web) | [Guide](./element) | The Matrix client. | - |
+| [**Globaleaks**](https://github.com/globaleaks/globaleaks-whistleblowing-software) | [Guide](./globaleaks) | Whistleblowing platform. | - |
+| [**Jitsi Meet**](https://github.com/jitsi/jitsi-meet) | [Guide](./jitsi) | Video conferencing software. | [Issue #25](https://github.com/freedomofpress/webcat/issues/25) |
+| [**Standard Notes**](https://github.com/standardnotes/app) | [Guide](./standardnotes) | A secure and private notes app. | - |
+| [**Bitwarden**](https://github.com/bitwarden/clients) | [Guide](./bitwarden) | Cloud password manager. | [Issue #28](https://github.com/freedomofpress/webcat/issues/28) |
+| [**CryptPad**](https://github.com/cryptpad/cryptpad) | [Guide](./cryptpad) | End-to-end encrypted collaboration suite. | [Issue #26](https://github.com/freedomofpress/webcat/issues/26) |
 
-### Apps to investigate
- - [Bitwarden](https://github.com/bitwarden/clients) -> [Issue](https://github.com/freedomofpress/webcat/issues/28)
- - [MyMonero](https://github.com/mymonero/mymonero-web-js) -> [Issue](https://github.com/freedomofpress/webcat/issues/35)
- - [MyEtherWallet](https://github.com/MyEtherWallet/MyEtherWallet)
- - [Cryptpad](https://github.com/cryptpad/cryptpad) -> [Issue](https://github.com/freedomofpress/webcat/issues/26)
- - [Telegram Web A](https://github.com/Ajaxy/telegram-tt)
- - [Proton Web](https://github.com/ProtonMail/WebClients)
+### Tracked apps
+ - [MyMonero](https://github.com/mymonero/mymonero-web-js) -> [Issue](https://github.com/freedomofpress/webcat/issues/35) -> Reason: calls eval in a WASM blob.
 
-## TODO
-For each app, attempt a basic porting. If it works, insert it, if it does not investigate briefly and open an issue with some info.
+### For more apps
+Take a look at the [developer guide](https://github.com/freedomofpress/webcat/blob/main/docs/DeveloperGuide.md) and at the guides in this folder and attempt a port. If a simple procedure does not work, feel free to open an issue. If you are a developer wishing to easily integrate your app, open an issue and get in touch!
