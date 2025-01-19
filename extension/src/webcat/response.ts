@@ -302,11 +302,13 @@ export async function validateResponseContent(
         //}
 
         SHA256(blob).then(function (content_hash) {
+          // Sometimes answers gets cached and we get an empty result, we shouldnt mark those as a hash mismatch
           if (
             arraysEqual(
               hexToUint8Array(manifest_hash),
               new Uint8Array(content_hash),
-            )
+            ) ||
+            blob.byteLength === 0
           ) {
             // If everything is OK then we can just write the raw blob back
             logger.addLog(
