@@ -177,8 +177,8 @@ export async function isFQDNEnrolled(
   tabId: number,
 ): Promise<boolean | Uint8Array> {
   const originState = origins.get(fqdn);
-  if (origins.has(fqdn)) {
-    if (!originState || originState.policyHash) {
+  if (originState) {
+    if (!originState.policyHash) {
       throw new Error(
         "FATAL: we found a cached origin without a policy associated",
       );
