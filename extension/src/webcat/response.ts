@@ -249,6 +249,9 @@ export async function validateResponseHeaders(
       popupState.valid_headers = true;
     }
   }
+  // TODO (perfomance): significant amount of time is spent calling this function
+  // at every loadef ile, without added benefit. It should be enough to call it if
+  // details.type == "main_frame", but then the icon change does not work...
   setOKIcon(details.tabId);
 }
 
