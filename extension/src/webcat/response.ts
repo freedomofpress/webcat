@@ -294,6 +294,9 @@ export async function validateResponseContent(
 
         const manifest_hash =
           originState.manifest.manifest.files[pathname] ||
+          originState.manifest.manifest.files[
+            pathname.substring(0, pathname.lastIndexOf("/")) + "/"
+          ] ||
           originState.manifest.manifest.files["/"];
 
         if (!manifest_hash) {
