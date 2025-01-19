@@ -22,6 +22,25 @@ See [threat model](./docs/ThreatModel.md) for preliminary threat model considera
 
 If you are a developer and want to design or port your application, look at the [developer reference](./docs/DeveloperGuide.md) and also at the issues mentioning the porting of existing apps (such as: https://github.com/freedomofpress/webcat/issues/28, https://github.com/freedomofpress/webcat/issues/26, https://github.com/freedomofpress/webcat/issues/25).
 
+## Demo
+The unsigned extension, to use exclusively for testing, development, and debugging, is built via GitHub Actions at every commit. [Download the artifact from the latest run](https://github.com/freedomofpress/webcat/actions/workflows/build-extension.yml). Once unzipped, it can be installed temporarily in Firefox via `about:debugging#/runtime/this-firefox` and then choosing _"Load Temporary Add-on..."_ and selecting the extracted `manifest.json`.
+
+The following test domains are available, keeping in mind that their only purpose is for demoing and showcasing. As such, they are **not secure**, **well-maintained**, or guarantee any kind of **data retention**.
+
+| **Domain**                                      | **App**                                                                                     | **Description**                                       |
+|-------------------------------------------------|---------------------------------------------------------------------------------------------|-------------------------------------------------------|
+| [testapp.nym.re](https://testapp.nym.re)       | [**Testapp**](https://github.com/freedomofpress/webcat/tree/main/apps/testapp)              | Showcases WASM, Webworkers, Workers, and Sharedworkers support. |
+| [element.nym.re](https://element.nym.re)       | [**Element**](https://github.com/element-hq/element-web)                                   | The Matrix client.                                   |
+| [globaleaks.nym.re](https://globaleaks.nym.re) | [**Globaleaks**](https://github.com/globaleaks/globaleaks-whistleblowing-software)         | Whistleblowing platform.                             |
+| [jitsi.nym.re](https://jitsi.nym.re)           | [**Jitsi Meet**](https://github.com/jitsi/jitsi-meet)                                      | Video conferencing software.                         |
+| [standardnotes.nym.re](https://standardnotes.nym.re) | [**Standard Notes**](https://github.com/standardnotes/app)                                | A secure and private notes app.                     |
+| [bitwarden.nym.re](https://bitwarden.nym.re)   | [**Bitwarden**](https://github.com/bitwarden/clients)                                      | Cloud password manager.                              |
+| [cryptpad.nym.re](https://cryptpad.nym.re)     | [**CryptPad**](https://github.com/cryptpad/cryptpad)                                       | End-to-end encrypted collaboration suite.            |
+
+
+## Development and testing
+The major component is the [browser extension](./extension) and instructions for build development and testing are in the relative folder. Other components, such as the list server are more of a stub.
+
 ## Introduction
 In the past decade, web applications have undergone a significant evolution, marked by a proliferation of features, enhanced functionality, and optimization. Support for WebAssembly in browsers has allowed more low-level options, and application packaging such as Electron has offered easier portability. Services like WhatsApp Web, Wire, ProtonMail, crypto wallets, and encrypted collaboration suites are now commonly used, increasing reliance on web-based platforms.
 
