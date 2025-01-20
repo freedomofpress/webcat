@@ -216,31 +216,37 @@ export async function requestListener(
 
 // sender should be of type browser.runtime.MessageSender but it's missing things... like origin
 // eslint-disable-next-line
-export function messageListener(message: any, sender: any, sendResponse: any) {
+export async function messageListener(
+  message: any,
+  sender: any,
+  sendResponse: any,
+) {
   // First, is this coming from the hooks or the extension?
   if (sender.id === browser.runtime.id) {
     // And now see from which component
     if (sender.url?.endsWith("/popup.html")) {
       if (message.type === "populatePopup") {
-        browser.tabs
-          .query({ active: true, currentWindow: true })
-          .then((tabs) => {
-            if (tabs.length === 0 || !tabs[0].id || !tabs[0].url) {
-              sendResponse({
-                error: "This functionality is disabled on this tab.",
-              });
-              return;
-            }
-
-            const tabId = tabs[0].id;
-            const popupState = popups.get(tabId);
-
-            sendResponse({ tabId: tabId, popupState: popupState });
-          })
-          .catch((error) => {
-            console.error("Error getting active tab:", error);
-            sendResponse({ error: error.message });
+        try {
+          const tabs = await browser.tabs.query({
+            active: true,
+            currentWindow: true,
           });
+
+          if (tabs.length === 0 || !tabs[0].id || !tabs[0].url) {
+            sendResponse({
+              error: "This functionality is disabled on this tab.",
+            });
+            return;
+          }
+
+          const tabId = tabs[0].id;
+          const popupState = popups.get(tabId);
+
+          sendResponse({ tabId: tabId, popupState: popupState });
+        } catch (error) {
+          console.error("Error getting active tab:", error);
+          //sendResponse({ error: error.message });
+        }
         return true;
       }
       //} else if (sender.url?.endsWith("/settings.html")) {

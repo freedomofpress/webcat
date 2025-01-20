@@ -275,7 +275,7 @@ export async function validateResponseContent(
     source.push(event.data);
   };
 
-  filter.onstop = () => {
+  filter.onstop = async () => {
     if (!origins.has(getFQDN(details.url))) {
       throw new Error(
         "The origin still does not exists while the response content is arriving.",
@@ -283,77 +283,75 @@ export async function validateResponseContent(
     }
     const originState = origins.get(getFQDN(details.url));
     if (originState && originState.valid === true) {
-      new Blob(source).arrayBuffer().then(function (blob) {
-        const pathname = new URL(details.url).pathname;
+      const blob = await new Blob(source).arrayBuffer();
+      const pathname = new URL(details.url).pathname;
 
-        if (!originState.manifest) {
-          throw new Error(
-            "Manifest not loaded, and it should never happen here.",
-          );
+      if (!originState.manifest) {
+        throw new Error(
+          "Manifest not loaded, and it should never happen here.",
+        );
+      }
+
+      const manifest_hash =
+        originState.manifest.manifest.files[pathname] ||
+        originState.manifest.manifest.files[
+          pathname.substring(0, pathname.lastIndexOf("/")) + "/"
+        ] ||
+        originState.manifest.manifest.files["/"];
+
+      if (!manifest_hash) {
+        throw new Error("Manifest does not contain a hash for the root.");
+      }
+
+      //if (typeof manifest_hash !== "string") {
+      //  throw new Error(`File ${pathname} not found in manifest.`);
+      //}
+
+      const content_hash = await SHA256(blob);
+      // Sometimes answers gets cached and we get an empty result, we shouldnt mark those as a hash mismatch
+      if (
+        arraysEqual(
+          hexToUint8Array(manifest_hash),
+          new Uint8Array(content_hash),
+        ) ||
+        blob.byteLength === 0
+      ) {
+        // If everything is OK then we can just write the raw blob back
+        logger.addLog(
+          "info",
+          `${pathname} verified.`,
+          details.tabId,
+          originState.fqdn,
+        );
+
+        if (details.type == "main_frame" && popupState) {
+          popupState.valid_index = true;
+        } else if (popupState) {
+          popupState.loaded_assets.push(pathname);
         }
 
-        const manifest_hash =
-          originState.manifest.manifest.files[pathname] ||
-          originState.manifest.manifest.files[
-            pathname.substring(0, pathname.lastIndexOf("/")) + "/"
-          ] ||
-          originState.manifest.manifest.files["/"];
-
-        if (!manifest_hash) {
-          throw new Error("Manifest does not contain a hash for the root.");
+        filter.write(blob);
+      } else {
+        // This is just "DENIED" already encoded
+        // This fails just for the single file not in the manifest or with the wrong hash
+        logger.addLog(
+          "error",
+          `Error: hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
+          details.tabId,
+          originState.fqdn,
+        );
+        if (details.type == "main_frame" && popupState) {
+          popupState.valid_index = false;
+        } else if (popupState) {
+          popupState.invalid_assets.push(pathname);
         }
-
-        //if (typeof manifest_hash !== "string") {
-        //  throw new Error(`File ${pathname} not found in manifest.`);
-        //}
-
-        SHA256(blob).then(function (content_hash) {
-          // Sometimes answers gets cached and we get an empty result, we shouldnt mark those as a hash mismatch
-          if (
-            arraysEqual(
-              hexToUint8Array(manifest_hash),
-              new Uint8Array(content_hash),
-            ) ||
-            blob.byteLength === 0
-          ) {
-            // If everything is OK then we can just write the raw blob back
-            logger.addLog(
-              "info",
-              `${pathname} verified.`,
-              details.tabId,
-              originState.fqdn,
-            );
-
-            if (details.type == "main_frame" && popupState) {
-              popupState.valid_index = true;
-            } else if (popupState) {
-              popupState.loaded_assets.push(pathname);
-            }
-
-            filter.write(blob);
-          } else {
-            // This is just "DENIED" already encoded
-            // This fails just for the single file not in the manifest or with the wrong hash
-            logger.addLog(
-              "error",
-              `Error: hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
-              details.tabId,
-              originState.fqdn,
-            );
-            if (details.type == "main_frame" && popupState) {
-              popupState.valid_index = false;
-            } else if (popupState) {
-              popupState.invalid_assets.push(pathname);
-            }
-            deny(filter);
-            errorpage(details.tabId);
-          }
-          // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
-          // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
-          filter.close();
-          // Redirect the main frame to an error page
-        });
-      });
+        deny(filter);
+        errorpage(details.tabId);
+      }
+      // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
+      // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
+      filter.close();
+      // Redirect the main frame to an error page
     } else {
       // If headers are wrong we abort everything
       logger.addLog(
