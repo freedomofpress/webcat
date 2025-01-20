@@ -1,5 +1,6 @@
 import { hexToUint8Array } from "../sigstore/encoding";
-import { list_db, origins } from "./listeners";
+import { nonOrigins, origins } from "./../globals";
+import { list_db } from "./listeners";
 import { logger } from "./logger";
 import { arrayBufferToHex, SHA256 } from "./utils";
 
@@ -94,6 +95,41 @@ async function dbBulkAdd(
   });
 }
 
+// Used for benchmarking
+async function generateRandomListElements(
+  count: number,
+): Promise<ListElement[]> {
+  const randomElements: ListElement[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const randomFQDN = new Uint8Array(32);
+    const randomPolicyHash = new Uint8Array(32);
+    randomElements.push([
+      crypto.getRandomValues(randomFQDN),
+      crypto.getRandomValues(randomPolicyHash),
+    ]);
+  }
+
+  return randomElements;
+}
+
+// To be used in the UI
+async function getCount(db: IDBDatabase, storeName: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, "readonly");
+    const store = transaction.objectStore(storeName);
+    const countRequest = store.count();
+
+    countRequest.onsuccess = () => {
+      resolve(countRequest.result);
+    };
+
+    countRequest.onerror = () => {
+      reject(new Error(`Failed to count elements in ${storeName}`));
+    };
+  });
+}
+
 export async function initDatabase(db: IDBDatabase) {
   // Ideally here we would fetch the list remotelym verify signature and inclusion proof
   // and maybe freshness, if we do not delegate that to TUF
@@ -165,19 +201,29 @@ export async function initDatabase(db: IDBDatabase) {
     ["last_update", Date.now()],
   ];
 
+  // TODO: delete
+  const randomEntries = await generateRandomListElements(100);
+  listElements.push(...randomEntries);
+
   // Here we attempt a bulk insert, and to do everything in a single transaction
   // for large numbers of insert, it could be that batching (such as 10k chunks) could be beneficial
   dbBulkAdd(db, "list", listElements, "fqdnhash", "policyhash");
   dbBulkAdd(db, "settings", settingElements, "key", "value");
+
+  const listCount = await getCount(db, "list");
+  console.log(`[webcat] Total elements in 'list': ${listCount}`);
 }
 
 // TabID is passed only mostly for debugging
+// TODO, restructure so we do all object creation and caching and checking in the same function?
 export async function isFQDNEnrolled(
   fqdn: string,
   tabId: number,
 ): Promise<boolean | Uint8Array> {
+  // Caching of hits
   const originState = origins.get(fqdn);
   if (originState) {
+    // This can't happen AFAIK
     if (!originState.policyHash) {
       throw new Error(
         "FATAL: we found a cached origin without a policy associated",
@@ -186,6 +232,12 @@ export async function isFQDNEnrolled(
     logger.addLog("info", `Policy cache hit for ${fqdn}`, tabId, fqdn);
 
     return originState.policyHash;
+  }
+
+  // Caching of misses
+  if (nonOrigins.has(fqdn)) {
+    logger.addLog("info", `Non enrolled cache hit for ${fqdn}`, tabId, fqdn);
+    return false;
   }
 
   const fqdn_hash = await SHA256(fqdn);
@@ -206,6 +258,9 @@ export async function isFQDNEnrolled(
         );
         resolve(new Uint8Array(request.result["policyhash"]));
       } else {
+        // Insert in cache
+        logger.addLog("info", `${fqdn} non-enrolled, caching`, tabId, fqdn);
+        nonOrigins.add(fqdn);
         resolve(false);
       }
     };

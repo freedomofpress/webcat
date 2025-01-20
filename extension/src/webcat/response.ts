@@ -1,7 +1,7 @@
 import { hexToUint8Array, Uint8ArrayToHex } from "../sigstore/encoding";
 import { Sigstore } from "../sigstore/interfaces";
+import { origins } from "./../globals";
 import { OriginState, PopupState } from "./interfaces";
-import { origins } from "./listeners";
 import { logger } from "./logger";
 import { parseSigners, parseThreshold } from "./parsers";
 import { setOKIcon } from "./ui";

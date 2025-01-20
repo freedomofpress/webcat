@@ -79,9 +79,13 @@ async function loadCA(
   throw new Error("Could not find a valid CA in sigstore root.");
 }
 
-export async function loadSigstoreRoot(): Promise<Sigstore> {
-  const cached = await browser.storage.local.get([Roles.TrustedRoot]);
-  const root = cached[Roles.TrustedRoot];
+export async function loadSigstoreRoot(namespace: string): Promise<Sigstore> {
+  const namespacedKey = `${namespace}:${Roles.TrustedRoot}`;
+  const result = await browser.storage.local.get(namespacedKey);
+  if (!result) {
+    throw new Error("[Sigstore] Failed to load cached root!");
+  }
+  const root = result[namespacedKey];
 
   // Let's learn from TUF and load all pieces relative from a single point in time
   const frozenTimestamp = new Date();
@@ -225,7 +229,7 @@ async function verifyInclusionPromise(
     );
   }
 
-  // Sigh...
+  // TODO: Sigh...
   const loggedCert = X509Certificate.parse(
     Uint8ArrayToString(
       base64ToUint8Array(

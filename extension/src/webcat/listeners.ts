@@ -1,17 +1,19 @@
+import {
+  tuf_sigstore_namespace,
+  tuf_sigstore_root,
+  tuf_sigstore_url,
+} from "../config";
+import { origins, popups, tabs } from "../globals";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { Sigstore } from "../sigstore/interfaces";
 import { loadSigstoreRoot } from "../sigstore/sigstore";
-import { updateTUF } from "../sigstore/tuf";
+import { TUFClient } from "../sigstore/tuf";
 import { initDatabase, isFQDNEnrolled, openDatabase } from "./db";
-import { metadataRequestSource, OriginState, PopupState } from "./interfaces";
+import { metadataRequestSource } from "./interfaces";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { validateResponseContent, validateResponseHeaders } from "./response";
 import { errorpage, getFQDN } from "./utils";
-
-export const origins: Map<string, OriginState> = new Map();
-export const tabs: Map<number, string> = new Map();
-export const popups: Map<number, PopupState> = new Map();
 
 export let list_db: IDBDatabase;
 export let sigstore: Sigstore;
@@ -54,8 +56,13 @@ export async function installListener() {
 
 export async function startupListener() {
   console.log("[webcat] Running startupListener");
-  await updateTUF();
-  sigstore = await loadSigstoreRoot();
+  const tuf_client = await new TUFClient(
+    tuf_sigstore_url,
+    tuf_sigstore_root,
+    tuf_sigstore_namespace,
+  );
+  await tuf_client.updateTUF();
+  sigstore = await loadSigstoreRoot(tuf_sigstore_namespace);
 
   // Load database connections
   // We use it only for querying, so we'd rather keep it open but look at db.ts for more info

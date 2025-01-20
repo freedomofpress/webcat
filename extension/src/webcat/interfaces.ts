@@ -1,3 +1,4 @@
+import { manifest_name } from "../config";
 import { SigstoreBundle } from "../sigstore/bundle";
 
 export enum Issuers {
@@ -46,7 +47,7 @@ export class OriginState {
     this.valid_csp = false;
     this.cspHash = new Uint8Array();
     this.policyHash = new Uint8Array();
-    this.manifestPromise = fetch(`https://${fqdn}/webcat.json`, {
+    this.manifestPromise = fetch(`https://${fqdn}/${manifest_name}`, {
       cache: "no-store",
     });
     this.manifest = undefined;

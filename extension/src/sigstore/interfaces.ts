@@ -101,6 +101,21 @@ export interface Role {
   threshold: number;
 }
 
+export interface Target {
+  custom?: {
+    sigstore?: {
+      status: string;
+      uri?: string;
+      usage: string;
+    };
+  };
+  hashes: {
+    sha256: string;
+    sha512: string;
+  };
+  length: number;
+}
+
 export interface Signed {
   _type: string;
   spec_version: string;
@@ -114,6 +129,9 @@ export interface Signed {
     [role: string]: Role;
   };
   meta: Meta;
+  targets: {
+    [targetName: string]: Target;
+  };
 }
 
 export interface Meta {
