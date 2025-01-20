@@ -215,10 +215,12 @@ export async function requestListener(
 }
 
 // sender should be of type browser.runtime.MessageSender but it's missing things... like origin
-// eslint-disable-next-line
 export async function messageListener(
+  // eslint-disable-next-line
   message: any,
+  // eslint-disable-next-line
   sender: any,
+  // eslint-disable-next-line
   sendResponse: any,
 ) {
   // First, is this coming from the hooks or the extension?
