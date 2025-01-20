@@ -215,40 +215,33 @@ export async function requestListener(
 }
 
 // sender should be of type browser.runtime.MessageSender but it's missing things... like origin
-export async function messageListener(
-  // eslint-disable-next-line
-  message: any,
-  // eslint-disable-next-line
-  sender: any,
-  // eslint-disable-next-line
-  sendResponse: any,
-) {
+// eslint-disable-next-line
+export function messageListener(message: any, sender: any, sendResponse: any) {
   // First, is this coming from the hooks or the extension?
   if (sender.id === browser.runtime.id) {
     // And now see from which component
     if (sender.url?.endsWith("/popup.html")) {
       if (message.type === "populatePopup") {
-        try {
-          const tabs = await browser.tabs.query({
-            active: true,
-            currentWindow: true,
+        // NOTE: for some reason using async/await here breaks the functionality
+        browser.tabs
+          .query({ active: true, currentWindow: true })
+          .then((tabs) => {
+            if (tabs.length === 0 || !tabs[0].id || !tabs[0].url) {
+              sendResponse({
+                error: "This functionality is disabled on this tab.",
+              });
+              return;
+            }
+
+            const tabId = tabs[0].id;
+            const popupState = popups.get(tabId);
+
+            sendResponse({ tabId: tabId, popupState: popupState });
+          })
+          .catch((error) => {
+            console.error("Error getting active tab:", error);
+            sendResponse({ error: error.message });
           });
-
-          if (tabs.length === 0 || !tabs[0].id || !tabs[0].url) {
-            sendResponse({
-              error: "This functionality is disabled on this tab.",
-            });
-            return;
-          }
-
-          const tabId = tabs[0].id;
-          const popupState = popups.get(tabId);
-
-          sendResponse({ tabId: tabId, popupState: popupState });
-        } catch (error) {
-          console.error("Error getting active tab:", error);
-          //sendResponse({ error: error.message });
-        }
         return true;
       }
       //} else if (sender.url?.endsWith("/settings.html")) {
