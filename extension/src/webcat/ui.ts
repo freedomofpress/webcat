@@ -15,15 +15,7 @@ export function setIcon(tabId: number) {
   browser.browserAction.enable(tabId);
   browser.browserAction.setIcon({
     tabId: tabId,
-    path: {
-      16: `icons/${theme}/webcat.svg`,
-      32: `icons/${theme}/webcat.svg`,
-      48: `icons/${theme}/webcat.svg`,
-      64: `icons/${theme}/webcat.svg`,
-      96: `icons/${theme}/webcat.svg`,
-      128: `icons/${theme}/webcat.svg`,
-      256: `icons/${theme}/webcat.svg`,
-    },
+    path: `icons/${theme}/webcat.svg`,
   });
   browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
   browser.browserAction.setTitle({ tabId, title: "Click for info!" });
@@ -40,15 +32,7 @@ export function setOKIcon(tabId: number) {
   browser.browserAction.enable(tabId);
   browser.browserAction.setIcon({
     tabId: tabId,
-    path: {
-      16: `icons/${theme}/webcat-ok.svg`,
-      32: `icons/${theme}/webcat-ok.svg`,
-      48: `icons/${theme}/webcat-ok.svg`,
-      64: `icons/${theme}/webcat-ok.svg`,
-      96: `icons/${theme}/webcat-ok.svg`,
-      128: `icons/${theme}/webcat-ok.svg`,
-      256: `icons/${theme}/webcat-ok.svg`,
-    },
+    path: `icons/${theme}/webcat-ok.svg`,
   });
   browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
   browser.browserAction.setTitle({
@@ -68,15 +52,7 @@ export function setErrorIcon(tabId: number) {
   browser.browserAction.enable(tabId);
   browser.browserAction.setIcon({
     tabId: tabId,
-    path: {
-      16: `icons/${theme}/webcat-error.svg`,
-      32: `icons/${theme}/webcat-error.svg`,
-      48: `icons/${theme}/webcat-error.svg`,
-      64: `icons/${theme}/webcat-error.svg`,
-      96: `icons/${theme}/webcat-error.svg`,
-      128: `icons/${theme}/webcat-error.svg`,
-      256: `icons/${theme}/webcat-error.svg`,
-    },
+    path: `icons/${theme}/webcat-error.svg`,
   });
   browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
   browser.browserAction.setTitle({
