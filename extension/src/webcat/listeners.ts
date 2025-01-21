@@ -247,13 +247,10 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
 
             const originState = origins.get(popupState.fqdn);
 
-            if (!originState) {
-              throw new Error(
-                "popupState exists but not corresponding origin?",
-              );
+            if (originState) {
+              popupState.valid_sources = originState.valid_sources;
             }
 
-            popupState.valid_sources = originState.valid_sources;
             sendResponse({ tabId: tabId, popupState: popupState });
           })
           .catch((error) => {
