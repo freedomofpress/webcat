@@ -7,6 +7,32 @@ export enum SigstoreRoots {
   tlogs = "tlogs",
 }
 
+export type RawTimestampAuthorities = RawTimestampAuthority[];
+
+export interface TrustedRoot {
+  mediaType: string;
+  tlogs: RawLogs;
+  certificateAuthorities: RawCAs;
+  ctlogs: RawLogs;
+  timestampAuthorities: RawTimestampAuthorities;
+}
+
+export interface RawTimestampAuthority {
+  subject: {
+    organization: string;
+    commonName: string;
+  };
+  certChain: {
+    certificates: {
+      rawBytes: string;
+    }[];
+  };
+  validFor: {
+    start: string;
+    end?: string;
+  };
+}
+
 export interface Sigstore {
   rekor: CryptoKey;
   ctfe: CryptoKey;
@@ -101,6 +127,21 @@ export interface Role {
   threshold: number;
 }
 
+export interface Target {
+  custom?: {
+    sigstore?: {
+      status: string;
+      uri?: string;
+      usage: string;
+    };
+  };
+  hashes: {
+    sha256: string;
+    sha512: string;
+  };
+  length: number;
+}
+
 export interface Signed {
   _type: string;
   spec_version: string;
@@ -114,6 +155,9 @@ export interface Signed {
     [role: string]: Role;
   };
   meta: Meta;
+  targets: {
+    [targetName: string]: Target;
+  };
 }
 
 export interface Meta {

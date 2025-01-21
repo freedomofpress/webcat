@@ -1,7 +1,6 @@
 import { canonicalize } from "../sigstore/canonicalize";
 import { stringToUint8Array } from "../sigstore/encoding";
-import { Sigstore } from "../sigstore/interfaces";
-import { verifyArtifact } from "../sigstore/sigstore";
+import { SigstoreVerifier } from "../sigstore/sigstore";
 import { isFQDNEnrolled } from "./db";
 import { OriginState, PopupState } from "./interfaces";
 import { logger } from "./logger";
@@ -89,7 +88,7 @@ export async function validateCSP(
 }
 
 export async function validateManifest(
-  sigstore: Sigstore,
+  sigstore: SigstoreVerifier,
   originState: OriginState,
   tabId: number,
   popupState: PopupState | undefined,
@@ -110,8 +109,7 @@ export async function validateManifest(
   for (const signer of originState.policy.signers) {
     if (originState.manifest.signatures[signer[1]]) {
       try {
-        const res = await verifyArtifact(
-          sigstore,
+        const res = await sigstore.verifyArtifact(
           signer[1],
           signer[0],
           originState.manifest.signatures[signer[1]],
