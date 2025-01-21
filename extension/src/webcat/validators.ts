@@ -84,8 +84,12 @@ export async function validateCSP(
         popupState.invalid_sources.add(getFQDNSafe(src));
       }
       throw new Error(`Invalid source in child-src/frame-src: ${src}`);
-    }
-    if (popupState) {
+    } else if (
+      popupState &&
+      src != "'none'" &&
+      src != "'self'" &&
+      getFQDNSafe(src) != fqdn
+    ) {
       popupState.valid_sources.add(getFQDNSafe(src));
     }
   }

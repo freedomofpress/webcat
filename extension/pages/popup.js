@@ -101,6 +101,32 @@ function updatePopup(popupState) {
     document.getElementById("status-icon").setAttribute("href", "#icon-error");
   }
 
+  if (popupState.valid_sources.size > 0) {
+    // Get the source element from the DOM
+    const sourceElement = document.getElementById("sources-list");
+
+    // Clear the current list
+    sourceElement.innerHTML = "";
+
+    // Create and append the section header
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = `External Sources (${popupState.valid_sources.size})`;
+    sourceElement.appendChild(header);
+
+    // Populate the list with valid_sources
+    popupState.valid_sources.forEach((source) => {
+      const sourceContainer = document.createElement("div");
+      sourceContainer.className = "source-item";
+
+      const sourceNameSpan = document.createElement("span");
+      sourceNameSpan.textContent = source; // Use the source value from the Set
+
+      sourceContainer.appendChild(sourceNameSpan);
+      sourceElement.appendChild(sourceContainer);
+    });
+  }
+
   // Now if we are at valid_index, means loading is proceeding. Populate loaded assets
   const assetsElement = document.getElementById("file-list");
   const fileListElement = document.getElementById("file-list-ul");
