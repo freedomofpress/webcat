@@ -4,6 +4,8 @@ import { list_db } from "./listeners";
 import { logger } from "./logger";
 import { arrayBufferToHex, SHA256 } from "./utils";
 
+export let list_count: number = 0;
+
 type ListElement = [ArrayBuffer, Uint8Array];
 type SettingElement = [string, string | number | Date];
 
@@ -210,8 +212,8 @@ export async function initDatabase(db: IDBDatabase) {
   dbBulkAdd(db, "list", listElements, "fqdnhash", "policyhash");
   dbBulkAdd(db, "settings", settingElements, "key", "value");
 
-  const listCount = await getCount("list");
-  console.log(`[webcat] Total elements in 'list': ${listCount}`);
+  list_count = await getCount("list");
+  console.log(`[webcat] Total elements in 'list': ${list_count}`);
 }
 
 // TabID is passed only mostly for debugging

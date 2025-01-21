@@ -1,6 +1,6 @@
 import { origins } from "./../globals";
 import { isFQDNEnrolled } from "./db";
-import { getCount } from "./db";
+import { list_count } from "./db";
 import { metadataRequestSource, OriginState, PopupState } from "./interfaces";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
@@ -21,7 +21,7 @@ export async function validateOrigin(
 
   if (type === metadataRequestSource.main_frame) {
     const newPopupState = new PopupState(fqdn, tabId);
-    newPopupState.webcat.list_count = await getCount("list");
+    newPopupState.webcat.list_count = list_count;
     popups.set(tabId, newPopupState);
     setIcon(tabId);
   }
