@@ -1,6 +1,13 @@
 import { checkSignatures, getRoleKeys, loadKeys } from "./crypto";
 import { Uint8ArrayToHex, Uint8ArrayToString } from "./encoding";
-import { HashAlgorithms, Meta, Metafile, Roles, Root } from "./interfaces";
+import {
+  HashAlgorithms,
+  Meta,
+  Metafile,
+  Roles,
+  Root,
+  TrustedRoot,
+} from "./interfaces";
 
 export class TUFClient {
   private repositoryUrl: string;
@@ -459,5 +466,14 @@ export class TUFClient {
     await this.updateTargets(root, frozenTimestamp, snapshot);
     // We should fetch the root again only if TUF says so
     await this.fetchTrustRoot();
+  }
+
+  async getTrustedRoot(): Promise<TrustedRoot> {
+    const namespacedKey = this.getCacheKey(Roles.TrustedRoot);
+    const result = await browser.storage.local.get(namespacedKey);
+    if (!result) {
+      throw new Error("Trusted root not available!");
+    }
+    return result[namespacedKey];
   }
 }

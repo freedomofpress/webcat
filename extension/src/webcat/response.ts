@@ -1,5 +1,4 @@
 import { hexToUint8Array, Uint8ArrayToHex } from "../sigstore/encoding";
-import { Sigstore } from "../sigstore/interfaces";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { origins } from "./../globals";
 import { OriginState, PopupState } from "./interfaces";

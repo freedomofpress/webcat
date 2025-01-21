@@ -5,7 +5,6 @@ import {
 } from "../config";
 import { origins, popups, tabs } from "../globals";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
-import { Sigstore } from "../sigstore/interfaces";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { TUFClient } from "../sigstore/tuf";
 import { initDatabase, isFQDNEnrolled, openDatabase } from "./db";
@@ -62,7 +61,7 @@ export async function startupListener() {
     tuf_sigstore_namespace,
   );
   await tuf_client.updateTUF();
-  sigstore = new SigstoreVerifier(tuf_sigstore_namespace);
+  sigstore = new SigstoreVerifier(await tuf_client.getTrustedRoot());
 
   // Load database connections
   // We use it only for querying, so we'd rather keep it open but look at db.ts for more info

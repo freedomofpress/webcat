@@ -1,6 +1,5 @@
 import { canonicalize } from "../sigstore/canonicalize";
 import { stringToUint8Array } from "../sigstore/encoding";
-import { Sigstore } from "../sigstore/interfaces";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { isFQDNEnrolled } from "./db";
 import { OriginState, PopupState } from "./interfaces";

@@ -7,6 +7,32 @@ export enum SigstoreRoots {
   tlogs = "tlogs",
 }
 
+export type RawTimestampAuthorities = RawTimestampAuthority[];
+
+export interface TrustedRoot {
+  mediaType: string;
+  tlogs: RawLogs;
+  certificateAuthorities: RawCAs;
+  ctlogs: RawLogs;
+  timestampAuthorities: RawTimestampAuthorities;
+}
+
+export interface RawTimestampAuthority {
+  subject: {
+    organization: string;
+    commonName: string;
+  };
+  certChain: {
+    certificates: {
+      rawBytes: string;
+    }[];
+  };
+  validFor: {
+    start: string;
+    end?: string;
+  };
+}
+
 export interface Sigstore {
   rekor: CryptoKey;
   ctfe: CryptoKey;
