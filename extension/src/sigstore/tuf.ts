@@ -157,7 +157,7 @@ export class TUFClient {
         // Fetching failed and we assume there is no new version
         // Maybe we should explicitly check for 404 failures
         // Cause a network failure may be an attempt to a freeze attack,
-        // We will check expiration anyway, but surely this camn be done better
+        // We will check expiration anyway, but surely this can be done better
         break;
       }
 

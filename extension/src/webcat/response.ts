@@ -1,5 +1,6 @@
 import { hexToUint8Array, Uint8ArrayToHex } from "../sigstore/encoding";
 import { Sigstore } from "../sigstore/interfaces";
+import { SigstoreVerifier } from "../sigstore/sigstore";
 import { origins } from "./../globals";
 import { OriginState, PopupState } from "./interfaces";
 import { logger } from "./logger";
@@ -15,7 +16,7 @@ import {
 import { validateCSP, validateManifest } from "./validators";
 
 export async function validateResponseHeaders(
-  sigstore: Sigstore,
+  sigstore: SigstoreVerifier,
   originState: OriginState,
   popupState: PopupState | undefined,
   details: browser.webRequest._OnHeadersReceivedDetails,

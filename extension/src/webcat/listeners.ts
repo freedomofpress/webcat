@@ -6,7 +6,7 @@ import {
 import { origins, popups, tabs } from "../globals";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { Sigstore } from "../sigstore/interfaces";
-import { loadSigstoreRoot } from "../sigstore/sigstore";
+import { SigstoreVerifier } from "../sigstore/sigstore";
 import { TUFClient } from "../sigstore/tuf";
 import { initDatabase, isFQDNEnrolled, openDatabase } from "./db";
 import { metadataRequestSource } from "./interfaces";
@@ -16,7 +16,7 @@ import { validateResponseContent, validateResponseHeaders } from "./response";
 import { errorpage, getFQDN } from "./utils";
 
 export let list_db: IDBDatabase;
-export let sigstore: Sigstore;
+export let sigstore: SigstoreVerifier;
 
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
@@ -62,7 +62,7 @@ export async function startupListener() {
     tuf_sigstore_namespace,
   );
   await tuf_client.updateTUF();
-  sigstore = await loadSigstoreRoot(tuf_sigstore_namespace);
+  sigstore = new SigstoreVerifier(tuf_sigstore_namespace);
 
   // Load database connections
   // We use it only for querying, so we'd rather keep it open but look at db.ts for more info

@@ -7,11 +7,24 @@ import {
   Uint8ArrayToHex,
   Uint8ArrayToString,
 } from "./encoding";
-import { RawCAs, RawLogs, Roles, Sigstore, SigstoreRoots } from "./interfaces";
+import { Metafile, RawCAs, RawLogs, Roles, Sigstore, SigstoreRoots } from "./interfaces";
 import { ByteStream } from "./stream";
 import { EXTENSION_OID_SCT, X509Certificate, X509SCTExtension } from "./x509";
 
-async function loadLog(
+export class SigstoreVerifier {
+  private root: Sigstore | undefined;
+  private namespace: string;
+
+  //constructor(root: Metafile) {
+  constructor(namespace: string) {
+    this.namespace = namespace;
+    this.loadSigstoreRoot().then((root) => {
+      this.root = root;
+    });
+
+  }
+
+async loadLog(
   frozenTimestamp: Date,
   logs: RawLogs,
 ): Promise<CryptoKey> {
@@ -37,7 +50,7 @@ async function loadLog(
   throw new Error("Could not find a valid key in sigstore root.");
 }
 
-async function loadCA(
+async loadCA(
   frozenTimestamp: Date,
   cas: RawCAs,
 ): Promise<X509Certificate> {
@@ -78,9 +91,8 @@ async function loadCA(
   }
   throw new Error("Could not find a valid CA in sigstore root.");
 }
-
-export async function loadSigstoreRoot(namespace: string): Promise<Sigstore> {
-  const namespacedKey = `${namespace}:${Roles.TrustedRoot}`;
+ async loadSigstoreRoot(): Promise<Sigstore> {
+  const namespacedKey = `${this.namespace}:${Roles.TrustedRoot}`;
   const result = await browser.storage.local.get(namespacedKey);
   if (!result) {
     throw new Error("[Sigstore] Failed to load cached root!");
@@ -91,9 +103,9 @@ export async function loadSigstoreRoot(namespace: string): Promise<Sigstore> {
   const frozenTimestamp = new Date();
 
   return {
-    rekor: await loadLog(frozenTimestamp, root[SigstoreRoots.tlogs]),
-    ctfe: await loadLog(frozenTimestamp, root[SigstoreRoots.ctlogs]),
-    fulcio: await loadCA(
+    rekor: await this.loadLog(frozenTimestamp, root[SigstoreRoots.tlogs]),
+    ctfe: await this.loadLog(frozenTimestamp, root[SigstoreRoots.ctlogs]),
+    fulcio: await this.loadCA(
       frozenTimestamp,
       root[SigstoreRoots.certificateAuthorities],
     ),
@@ -102,7 +114,7 @@ export async function loadSigstoreRoot(namespace: string): Promise<Sigstore> {
 }
 
 // Adapted from https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/key/sct.ts
-async function verifySCT(
+async verifySCT(
   cert: X509Certificate,
   issuer: X509Certificate,
   ctlog: CryptoKey,
@@ -175,7 +187,7 @@ async function verifySCT(
   throw new Error("SCT verification failed.");
 }
 
-async function verifyInclusionPromise(
+async verifyInclusionPromise(
   cert: X509Certificate,
   bundle: SigstoreBundle,
   rekor: CryptoKey,
@@ -252,14 +264,18 @@ async function verifyInclusionPromise(
   return true;
 }
 
-export async function verifyArtifact(
-  root: Sigstore,
+public async verifyArtifact(
   identity: string,
   issuer: string,
   bundle: SigstoreBundle,
   data: Uint8Array,
 ): Promise<boolean> {
   // Quick checks first: does the signing certificate have the correct identity?
+
+  if (!this.root) {
+    throw new Error("Sigstore root is undefined");
+  }
+
   const signingCert = X509Certificate.parse(
     bundle.verificationMaterial.certificate.rawBytes,
   );
@@ -277,7 +293,7 @@ export async function verifyArtifact(
   }
 
   // # 2 Certificate validity
-  if (!signingCert.verify(root.fulcio)) {
+  if (!signingCert.verify(this.root.fulcio)) {
     throw new Error(
       "Signing certificate has not been signed by the current Fulcio CA.",
     );
@@ -286,8 +302,8 @@ export async function verifyArtifact(
   // This check is not complete, we should check every ca in the chain. This is silly we know they are long lived
   // and we need performance
   if (
-    signingCert.notBefore < root.fulcio.notBefore ||
-    signingCert.notBefore > root.fulcio.notAfter
+    signingCert.notBefore < this.root.fulcio.notBefore ||
+    signingCert.notBefore > this.root.fulcio.notAfter
   ) {
     throw new Error(
       "Signing cert was signed when the Fulcio CA was not valid.",
@@ -296,12 +312,12 @@ export async function verifyArtifact(
 
   // # 3 To verify the SCT we need to build a preCert (because the cert was logged without the SCT)
   // https://github.com/sigstore/sigstore-js/packages/verify/src/key/sct.ts#L45
-  if (!(await verifySCT(signingCert, root.fulcio, root.ctfe))) {
+  if (!(await this.verifySCT(signingCert, this.root.fulcio, this.root.ctfe))) {
     throw new Error("SCT validation failed.");
   }
 
   // # 4 Rekor inclusion promise
-  if (!(await verifyInclusionPromise(signingCert, bundle, root.rekor))) {
+  if (!(await this.verifyInclusionPromise(signingCert, bundle, this.root.rekor))) {
     throw new Error("Inclusion promise validation failed.");
   }
 
@@ -319,4 +335,5 @@ export async function verifyArtifact(
   }
 
   return true;
+}
 }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Sigstore } from "../../src/sigstore/interfaces";
+import { SigstoreVerifier } from "../../src/sigstore/sigstore";
 import {
   Issuers,
   OriginState,
@@ -113,7 +113,7 @@ describe("validateResponseHeaders", () => {
   it("validates correct headers successfully", async () => {
     originState.policyHash = await generatePolicyHash(details.responseHeaders);
     await expect(
-      validateResponseHeaders({} as Sigstore, originState, popupState, details),
+      validateResponseHeaders({} as SigstoreVerifier, originState, popupState, details),
     ).resolves.not.toThrow();
     expect(popupState.valid_headers).toBe(true);
   });
@@ -122,7 +122,7 @@ describe("validateResponseHeaders", () => {
     originState.policyHash = await generatePolicyHash(details.responseHeaders);
     details.responseHeaders = undefined;
     await expect(
-      validateResponseHeaders({} as Sigstore, originState, popupState, details),
+      validateResponseHeaders({} as SigstoreVerifier, originState, popupState, details),
     ).rejects.toThrow("Missing response headers.");
   });
 
@@ -134,7 +134,7 @@ describe("validateResponseHeaders", () => {
       value: `${defaultThreshold}`,
     });
     await expect(
-      validateResponseHeaders({} as Sigstore, originState, popupState, details),
+      validateResponseHeaders({} as SigstoreVerifier, originState, popupState, details),
     ).rejects.toThrow(
       "Duplicate critical header detected: x-sigstore-threshold",
     );
@@ -148,7 +148,7 @@ describe("validateResponseHeaders", () => {
       { name: "X-Sigstore-Threshold", value: `${defaultThreshold}` },
     ];
     await expect(
-      validateResponseHeaders({} as Sigstore, originState, popupState, details),
+      validateResponseHeaders({} as SigstoreVerifier, originState, popupState, details),
     ).rejects.toThrow("Error parsing JSON in x-sigstore-signers SyntaxError:");
   });
   it("throws error for threshold > signers", async () => {
@@ -162,7 +162,7 @@ describe("validateResponseHeaders", () => {
     ];
     originState.policyHash = await generatePolicyHash(details.responseHeaders);
     await expect(
-      validateResponseHeaders({} as Sigstore, originState, popupState, details),
+      validateResponseHeaders({} as SigstoreVerifier, originState, popupState, details),
     ).rejects.toThrow(
       "Signing threshold is greater than the number of possible signers.",
     );
@@ -205,7 +205,7 @@ describe("validateResponseHeaders", () => {
     ];
 
     await expect(
-      validateResponseHeaders({} as Sigstore, originState, popupState, details),
+      validateResponseHeaders({} as SigstoreVerifier, originState, popupState, details),
     ).rejects.toThrow("Response headers do not match the preload list.");
   });
 
@@ -219,7 +219,7 @@ describe("validateResponseHeaders", () => {
       { name: "X-Sigstore-Threshold", value: `${defaultThreshold}` },
     ];
     await expect(
-      validateResponseHeaders({} as Sigstore, originState, popupState, details),
+      validateResponseHeaders({} as SigstoreVerifier, originState, popupState, details),
     ).rejects.toThrow("Response headers do not match the preload list.");
   });
 });
