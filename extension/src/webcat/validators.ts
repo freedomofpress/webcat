@@ -11,7 +11,7 @@ export async function validateCSP(
   csp: string,
   fqdn: string,
   tabId: number,
-  popupState: PopupState | undefined,
+  originState: OriginState,
 ): Promise<boolean> {
   // See https://github.com/freedomofpress/webcat/issues/9
   // https://github.com/freedomofpress/webcat/issues/3
@@ -80,17 +80,11 @@ export async function validateCSP(
       src != "'self'" &&
       !(await isFQDNEnrolled(getFQDNSafe(src), tabId))
     ) {
-      if (popupState) {
-        popupState.invalid_sources.add(getFQDNSafe(src));
-      }
-      throw new Error(`Invalid source in child-src/frame-src: ${src}`);
-    } else if (
-      popupState &&
-      src != "'none'" &&
-      src != "'self'" &&
-      getFQDNSafe(src) != fqdn
-    ) {
-      popupState.valid_sources.add(getFQDNSafe(src));
+      throw new Error(
+        `Invalid source in child-src/frame-src/worker-src: ${src}`,
+      );
+    } else if (src != "'none'" && src != "'self'" && getFQDNSafe(src) != fqdn) {
+      originState.valid_sources.add(getFQDNSafe(src));
     }
   }
 

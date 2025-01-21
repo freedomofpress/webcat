@@ -34,6 +34,7 @@ export class OriginState {
   manifest: DataStructure | undefined; // Manifest may be undefined until populated
   policy: Policy;
   policyHash: Uint8Array;
+  valid_sources: Set<string>;
   valid_signers: Signer[];
   valid: boolean;
   errors: string[];
@@ -52,6 +53,7 @@ export class OriginState {
     });
     this.manifest = undefined;
     this.policy = { signers: new Set(), threshold: 0 };
+    this.valid_sources = new Set();
     this.valid_signers = [];
     this.valid = false;
     this.errors = [];

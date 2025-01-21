@@ -110,7 +110,7 @@ export async function validateResponseHeaders(
       originState.csp,
       originState.fqdn,
       details.tabId,
-      popupState,
+      originState,
     );
 
     if (originState.valid_csp !== true) {

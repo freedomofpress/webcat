@@ -245,6 +245,15 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
               throw new Error("Missing popupState");
             }
 
+            const originState = origins.get(popupState.fqdn);
+
+            if (!originState) {
+              throw new Error(
+                "popupState exists but not corresponding origin?",
+              );
+            }
+
+            popupState.valid_sources = originState.valid_sources;
             sendResponse({ tabId: tabId, popupState: popupState });
           })
           .catch((error) => {
