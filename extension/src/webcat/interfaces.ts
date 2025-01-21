@@ -1,4 +1,4 @@
-import { manifest_name } from "../config";
+import { manifest_name, version } from "../config";
 import { SigstoreBundle } from "../sigstore/bundle";
 
 export enum Issuers {
@@ -70,20 +70,36 @@ export class PopupState {
   valid_manifest: boolean | undefined;
   valid_index: boolean | undefined;
   valid_signers: Signer[];
+  valid_sources: Set<string>;
+  invalid_sources: Set<string>;
   invalid_assets: string[];
   threshold: number | undefined;
   loaded_assets: string[];
+  webcat: {
+    version: number;
+    list_count: number;
+    list_last_update: string;
+  };
 
   constructor(fqdn: string, tabId: number) {
+    // TODO these should all probably be sets
     this.fqdn = fqdn;
     this.tabId = tabId;
     this.valid_headers = undefined;
     this.valid_manifest = undefined;
     this.valid_index = undefined;
     this.valid_signers = [];
+    this.valid_sources = new Set();
+    this.invalid_sources = new Set();
     this.invalid_assets = [];
     this.loaded_assets = [];
     this.threshold = undefined;
+    this.webcat = {
+      version: version,
+      list_count: 0,
+      // TODO
+      list_last_update: new Date().toISOString(),
+    };
   }
 }
 

@@ -114,9 +114,9 @@ async function generateRandomListElements(
 }
 
 // To be used in the UI
-async function getCount(db: IDBDatabase, storeName: string): Promise<number> {
+export async function getCount(storeName: string): Promise<number> {
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, "readonly");
+    const transaction = list_db.transaction(storeName, "readonly");
     const store = transaction.objectStore(storeName);
     const countRequest = store.count();
 
@@ -210,7 +210,7 @@ export async function initDatabase(db: IDBDatabase) {
   dbBulkAdd(db, "list", listElements, "fqdnhash", "policyhash");
   dbBulkAdd(db, "settings", settingElements, "key", "value");
 
-  const listCount = await getCount(db, "list");
+  const listCount = await getCount("list");
   console.log(`[webcat] Total elements in 'list': ${listCount}`);
 }
 

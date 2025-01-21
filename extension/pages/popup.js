@@ -27,6 +27,11 @@ function getActiveTabInfo() {
 // Function to update the popup UI
 function updatePopup(popupState) {
   document.getElementById("tabId").textContent = popupState.tabId;
+  document.getElementById("version").textContent = popupState.webcat.version;
+  document.getElementById("totalEntries").textContent =
+    popupState.webcat.list_count;
+  document.getElementById("lastUpdated").textContent =
+    popupState.webcat.list_last_update;
 
   const listElement = document.getElementById("status-list"); // The parent <ul>
   const loadingElement = document.getElementById("loading-status"); // The loading <li>
