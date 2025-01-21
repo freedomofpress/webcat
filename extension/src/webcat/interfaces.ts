@@ -1,5 +1,6 @@
 import { manifest_name, version } from "../config";
 import { SigstoreBundle } from "../sigstore/bundle";
+import { list_count } from "./db";
 
 export enum Issuers {
   google = "https://accounts.google.com",
@@ -98,7 +99,7 @@ export class PopupState {
     this.threshold = undefined;
     this.webcat = {
       version: version,
-      list_count: 0,
+      list_count: list_count,
       // TODO
       list_last_update: new Date().toISOString(),
     };
