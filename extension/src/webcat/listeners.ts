@@ -241,6 +241,9 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
 
             const tabId = tabs[0].id;
             const popupState = popups.get(tabId);
+            if (!popupState) {
+              throw new Error("Missing popupState");
+            }
 
             sendResponse({ tabId: tabId, popupState: popupState });
           })
