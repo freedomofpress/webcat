@@ -241,14 +241,39 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
 
             const tabId = tabs[0].id;
             const popupState = popups.get(tabId);
+
             if (!popupState) {
               throw new Error("Missing popupState");
             }
 
             const originState = origins.get(popupState.fqdn);
+            popupState.valid_sources.add(popupState.fqdn);
 
-            if (originState) {
-              popupState.valid_sources = originState.valid_sources;
+            if (!originState) {
+              throw new Error("FATAL: Missing originState");
+            }
+
+            function traverseValidSources(
+              source: string,
+              valid_sources: Set<string>,
+            ) {
+              valid_sources.add(source);
+
+              const sourceState = origins.get(source);
+              if (!sourceState) {
+                return;
+              }
+              const newValidSources = sourceState.valid_sources || [];
+
+              for (const newSource of newValidSources) {
+                if (!valid_sources.has(newSource)) {
+                  traverseValidSources(newSource, valid_sources);
+                }
+              }
+            }
+
+            for (const source of originState.valid_sources) {
+              traverseValidSources(source, popupState.valid_sources);
             }
 
             sendResponse({ tabId: tabId, popupState: popupState });

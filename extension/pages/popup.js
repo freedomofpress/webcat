@@ -111,7 +111,7 @@ function updatePopup(popupState) {
     // Create and append the section header
     const header = document.createElement("div");
     header.className = "section-header";
-    header.textContent = `External Sources (${popupState.valid_sources.size})`;
+    header.textContent = `Sources (${popupState.valid_sources.size})`;
     sourceElement.appendChild(header);
 
     // Populate the list with valid_sources
