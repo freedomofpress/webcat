@@ -7,15 +7,26 @@ import { origins, popups, tabs } from "../globals";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { TUFClient } from "../sigstore/tuf";
-import { initDatabase, isFQDNEnrolled, openDatabase } from "./db";
+import { ensureDBOpen, isFQDNEnrolled } from "./db";
 import { metadataRequestSource } from "./interfaces";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { validateResponseContent, validateResponseHeaders } from "./response";
 import { errorpage, getFQDN } from "./utils";
 
-export let list_db: IDBDatabase;
 export let sigstore: SigstoreVerifier;
+
+async function getSigstore(update: boolean = false): Promise<SigstoreVerifier> {
+  const tuf_client = await new TUFClient(
+    tuf_sigstore_url,
+    tuf_sigstore_root,
+    tuf_sigstore_namespace,
+  );
+  if (update) {
+    await tuf_client.updateTUF();
+  }
+  return new SigstoreVerifier(await tuf_client.getTrustedRoot());
+}
 
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
@@ -48,24 +59,15 @@ export async function installListener() {
   // Then index persistently in indexeddb. We do this at every startup anyway, so there is no reason for
   // not just calling the startup listener
   await startupListener();
-  const db = await openDatabase("webcat");
-  await initDatabase(db);
-  db.close();
 }
 
 export async function startupListener() {
   console.log("[webcat] Running startupListener");
-  const tuf_client = await new TUFClient(
-    tuf_sigstore_url,
-    tuf_sigstore_root,
-    tuf_sigstore_namespace,
-  );
-  await tuf_client.updateTUF();
-  sigstore = new SigstoreVerifier(await tuf_client.getTrustedRoot());
 
-  // Load database connections
-  // We use it only for querying, so we'd rather keep it open but look at db.ts for more info
-  list_db = await openDatabase("webcat");
+  // Force the database to be initialized if it isn
+  await ensureDBOpen();
+  // Update TUF only at startup
+  sigstore = await getSigstore(true);
 }
 
 export function tabCloseListener(
@@ -80,6 +82,11 @@ export async function headersListener(
 ): Promise<browser.webRequest.BlockingResponse> {
   // Skip allowed types, etensions request, and not enrolled tabs
   const fqdn = getFQDN(details.url);
+
+  // ensure sigstore exists, this can happen at extension enable/disable
+  if (!sigstore) {
+    sigstore = await getSigstore(false);
+  }
 
   if (
     // Skip non-enrolled tabs
