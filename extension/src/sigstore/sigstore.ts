@@ -20,10 +20,10 @@ import { EXTENSION_OID_SCT, X509Certificate, X509SCTExtension } from "./x509";
 export class SigstoreVerifier {
   private root: Sigstore | undefined;
 
-  constructor(rawRoot: TrustedRoot) {
-    this.loadSigstoreRoot(rawRoot).then((root) => {
-      this.root = root;
-    });
+  constructor() {
+    // Previously we had the call to loadSigstoreRoot()
+    // But we cannot have async constructors, and that causes nasty race conditions
+    this.root = undefined;
   }
 
   async loadLog(frozenTimestamp: Date, logs: RawLogs): Promise<CryptoKey> {
@@ -87,11 +87,12 @@ export class SigstoreVerifier {
     }
     throw new Error("Could not find a valid CA in sigstore root.");
   }
-  async loadSigstoreRoot(rawRoot: TrustedRoot): Promise<Sigstore> {
+
+  async loadSigstoreRoot(rawRoot: TrustedRoot) {
     // Let's learn from TUF and load all pieces relative from a single point in time
     const frozenTimestamp = new Date();
 
-    return {
+    this.root = {
       rekor: await this.loadLog(frozenTimestamp, rawRoot[SigstoreRoots.tlogs]),
       ctfe: await this.loadLog(frozenTimestamp, rawRoot[SigstoreRoots.ctlogs]),
       fulcio: await this.loadCA(

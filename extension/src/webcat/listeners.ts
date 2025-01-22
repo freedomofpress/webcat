@@ -25,7 +25,9 @@ async function getSigstore(update: boolean = false): Promise<SigstoreVerifier> {
   if (update) {
     await tuf_client.updateTUF();
   }
-  return new SigstoreVerifier(await tuf_client.getTrustedRoot());
+  const newSigstore = new SigstoreVerifier();
+  await newSigstore.loadSigstoreRoot(await tuf_client.getTrustedRoot());
+  return newSigstore;
 }
 
 function cleanup(tabId: number) {
@@ -83,7 +85,6 @@ export async function headersListener(
   // Skip allowed types, etensions request, and not enrolled tabs
   const fqdn = getFQDN(details.url);
 
-  // ensure sigstore exists, this can happen at extension enable/disable
   if (!sigstore) {
     sigstore = await getSigstore(false);
   }
@@ -130,6 +131,8 @@ export async function headersListener(
   }
 
   try {
+    // ensure sigstore exists, this can happen at extension enable/disable
+
     await validateResponseHeaders(
       sigstore,
       originState,
