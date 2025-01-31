@@ -93,6 +93,7 @@ export class X509Certificate {
     const publicKey = this.subjectPublicKeyInfoObj.toDER();
     const curve =
       ECDSA_CURVE_NAMES[ASN1Obj.parseBuffer(publicKey).subs[0].subs[1].toOID()];
+
     return importKey(KeyTypes.Ecdsa, curve, Uint8ArrayToBase64(publicKey));
   }
 

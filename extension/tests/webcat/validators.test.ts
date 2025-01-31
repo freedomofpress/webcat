@@ -1,21 +1,21 @@
+// validateCSP.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OriginState } from "../../src/webcat/interfaces";
-import { logger } from "./../../src/webcat/logger";
-import { validateCSP } from "./../../src/webcat/validators";
+import { validateCSP } from "../../src/webcat/validators";
 
-vi.mock("./../../src/webcat/logger", () => ({
+// We already have mocks set up in your project as follows:
+vi.mock("../../src/webcat/logger", () => ({
   logger: {
     addLog: vi.fn(),
   },
 }));
 
-// Mock isFQDNEnrolled from the correct module
 vi.mock("../../src/webcat/db", () => ({
   isFQDNEnrolled: vi.fn(async (fqdn: string) => fqdn === "trusted.com"),
   getCount: vi.fn(async (storeName: string) => {
     if (storeName === "list") {
-      return 42; // Mocked count value
+      return 42;
     }
     return 0;
   }),
@@ -23,102 +23,355 @@ vi.mock("../../src/webcat/db", () => ({
 
 describe("validateCSP", () => {
   let originState: OriginState;
+  const tabId = 1;
+  const trustedFQDN = "trusted.com";
 
   beforeEach(() => {
     originState = new OriginState("example.com");
   });
 
-  it("should pass for a valid CSP configuration", async () => {
-    const csp =
-      "script-src 'self' 'sha256-abc'; style-src 'self'; object-src 'none'";
-    const result = await validateCSP(csp, "trusted.com", 1, originState);
-    expect(result).toBe(true);
+  // Test 1: Pass when default-src is 'none' (other directives are not required)
+  it("should pass when default-src is 'none' even if no other directives are provided", async () => {
+    const csp = "default-src 'none'";
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).resolves.toBeUndefined();
   });
 
-  it("should throw an error if a required directive is missing", async () => {
-    const csp = "script-src 'self'; style-src 'self'";
+  // Test 2: Pass with default-src 'self' and all required directives valid
+  it("should pass with default-src 'self' and valid script-src, style-src, object-src, child-src/frame-src, and worker-src", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'sha256-abc'",
+      "style-src 'self' 'sha256-def'",
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
     await expect(
-      validateCSP(csp, "trusted.com", 1, originState),
-    ).rejects.toThrow("Missing required directive: object-src");
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).resolves.toBeUndefined();
   });
 
-  it("should throw an error if a object-src is not 'none'", async () => {
-    const csp =
-      "script-src 'self' 'sha256-abc'; style-src 'self'; object-src 'self'";
+  // Test 3: Missing object-src when default-src is not 'none'
+  it("should throw an error if object-src is missing when default-src is not 'none'", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self'",
+      // object-src missing
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
     await expect(
-      validateCSP(csp, "trusted.com", 1, originState),
-    ).rejects.toThrow("object-src must be 'none'");
-  });
-
-  it("should throw an error if a object-src is not 'none'", async () => {
-    const csp =
-      "script-src 'self' 'sha256-abc' 'unsafe-inline'; style-src 'self'; object-src 'self'";
-    await expect(
-      validateCSP(csp, "trusted.com", 1, originState),
-    ).rejects.toThrow("Invalid source in script-src: 'unsafe-inline'");
-  });
-
-  it("should throw an error for invalid script-src sources", async () => {
-    const csp = "script-src evil.com; style-src 'self'; object-src 'none'";
-    await expect(
-      validateCSP(csp, "trusted.com", 1, originState),
-    ).rejects.toThrow("Invalid source in script-src: evil.com");
-  });
-
-  it("should throw an error for invalid style-src sources", async () => {
-    const csp = "script-src 'self'; style-src evil.com; object-src 'none'";
-    await expect(
-      validateCSP(csp, "trusted.com", 1, originState),
-    ).rejects.toThrow("Invalid source in style-src: evil.com");
-  });
-
-  it("should throw an error if object-src is not 'none'", async () => {
-    const csp = "script-src 'self'; style-src 'self'; object-src 'self'";
-    await expect(
-      validateCSP(csp, "trusted.com", 1, originState),
-    ).rejects.toThrow("object-src must be 'none'");
-  });
-
-  it("should throw an error for wildcard in child-src", async () => {
-    const csp =
-      "script-src 'self'; style-src 'self'; object-src 'none'; child-src *";
-    await expect(
-      validateCSP(csp, "trusted.com", 1, originState),
-    ).rejects.toThrow("Wildcards not allowed child-src/frame-src: *");
-  });
-
-  it("should throw an error for untrusted child-src URLs", async () => {
-    const csp =
-      "script-src 'self'; style-src 'self'; object-src 'none'; child-src evil.com";
-    await expect(
-      validateCSP(csp, "trusted.com", 1, originState),
+      validateCSP(csp, trustedFQDN, tabId, originState),
     ).rejects.toThrow(
-      "Invalid source in child-src/frame-src/worker-src: evil.com",
+      "default-src is not none, and object-src is not defined.",
     );
   });
 
-  // Nope it should not for now :)
-  /*it("should pass with enrolled FQDNs in script-src", async () => {
-    const csp =
-      "script-src https://trusted.com; style-src 'self'; object-src 'none'";
-    const result = await validateCSP(csp, "trusted.com", 1);
-    expect(result).toBe(true);
-  });*/
+  // Test 4: object-src is defined but not 'none'
+  it("should throw an error if object-src is not 'none'", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'sha256-abc'",
+      "style-src 'self'",
+      "object-src 'self'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow("Non-allowed object-src directive 'self'");
+  });
 
-  it("should log parsing and validation success", async () => {
-    const csp = "script-src 'self'; style-src 'self'; object-src 'none'";
-    await validateCSP(csp, "trusted.com", 1, originState);
-    expect(logger.addLog).toHaveBeenCalledWith(
-      "info",
-      expect.stringContaining("Parsed CSP"),
-      1,
-      "trusted.com",
+  // Test 5: Missing script-src when default-src is not 'none'
+  it("should throw an error if script-src is missing", async () => {
+    const csp = [
+      "default-src 'self'",
+      // script-src missing
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow(
+      "default-src is not none, and script-src is not defined.",
     );
-    expect(logger.addLog).toHaveBeenCalledWith(
-      "info",
-      "CSP validation successful!",
-      1,
-      "trusted.com",
+  });
+
+  // Test 6: Missing style-src when default-src is not 'none'
+  it("should throw an error if style-src is missing", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self'",
+      // style-src missing
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow("default-src is not none, and style-src is not defined.");
+  });
+
+  // Test 7: Missing worker-src when default-src is not 'none'
+  it("should throw an error if worker-src is missing", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      // worker-src missing
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow(
+      "default-src is not none, and worker-src is not defined.",
     );
+  });
+
+  // Test 8: Missing both child-src and frame-src when default-src is not 'none'
+  it("should throw an error if both child-src and frame-src are missing", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self'",
+      "object-src 'none'",
+      "worker-src 'self'",
+      // child-src and frame-src missing
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow(
+      "default-src is not none, and neither frame-src or child-src are defined.",
+    );
+  });
+
+  // Test 9: Invalid script-src source (unallowed host without enrollment)
+  it("should throw an error for an invalid script-src source", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src evil.com", // Not a valid keyword, hash, or enrolled origin
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow(
+      "script-src value evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed.",
+    );
+  });
+
+  // Test 10: Valid script-src with an enrolled origin (simulate enrolled since isFQDNEnrolled returns true only for "trusted.com")
+  it("should pass for script-src with an enrolled origin", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src trusted.com", // will be allowed because isFQDNEnrolled returns true
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).resolves.toBeUndefined();
+  });
+
+  // Test 11: Invalid style-src source (non-enrolled and not a valid keyword/hash)
+  it("should throw an error for an invalid style-src source", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'sha256-abc'",
+      "style-src evil.com", // invalid
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow(
+      "style-src value evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed",
+    );
+  });
+
+  // Test 12: Valid style-src with an enrolled origin
+  it("should pass for style-src with an enrolled origin", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'sha256-abc'",
+      "style-src trusted.com", // allowed via enrollment
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).resolves.toBeUndefined();
+  });
+
+  // Test 13: Invalid child-src with an http: scheme (if your logic forbids http:)
+  it("should throw an error for child-src containing an http: source", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'sha256-abc'",
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src http://evil.com",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow(
+      "child-src value http://evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed.",
+    );
+  });
+
+  // Test 14: Valid child-src with a blob: source
+  it("should pass for child-src with a blob: source", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'sha256-abc'",
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src blob:myblob",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).resolves.toBeUndefined();
+  });
+
+  // Test 15: Invalid frame-src with a wildcard "*"
+  it("should throw an error for frame-src containing a wildcard", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'sha256-abc'",
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src *",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow("frame-src cannot contain * which is unsupported.");
+  });
+
+  // Test 16: Invalid script-src containing 'unsafe-inline'
+  it("should throw an error for script-src containing 'unsafe-inline'", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'sha256-abc'",
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow(
+      "script-src cannot contain 'unsafe-inline' which is unsupported.",
+    );
+  });
+
+  // Test 17: Valid style-src containing 'unsafe-inline' (if your logic allows it)
+  it("should pass for style-src containing 'unsafe-inline'", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'sha256-abc'",
+      "style-src 'self' 'unsafe-inline'",
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).resolves.toBeUndefined();
+  });
+
+  // Test 18: Valid script-src containing 'wasm-unsafe-eval'
+  it("should pass for script-src containing 'wasm-unsafe-eval'", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'wasm-unsafe-eval'",
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).resolves.toBeUndefined();
+  });
+
+  // Test 19: Valid script-src with a valid hash source
+  it("should pass for script-src containing a valid hash", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'sha256-validhash'",
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).resolves.toBeUndefined();
+  });
+
+  // Test 20: Non-enrolled child-src should throw (simulate non-enrollment)
+  it("should throw an error for child-src with a non-enrolled origin", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src 'self' 'sha256-abc'",
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src evil.com",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow(
+      "child-src value evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed.",
+    );
+  });
+
+  // Test 21: Blob in script-src
+  it("should throw an error for a blob: in script-src", async () => {
+    const csp = [
+      "default-src 'self'",
+      "script-src blob:",
+      "style-src 'self'",
+      "object-src 'none'",
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+    await expect(
+      validateCSP(csp, trustedFQDN, tabId, originState),
+    ).rejects.toThrow("script-src cannot contain blob: which is unsupported.");
   });
 });

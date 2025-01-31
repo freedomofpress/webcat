@@ -29,8 +29,6 @@ export class OriginState {
   populated: boolean;
   version: number;
   cspHash: Uint8Array;
-  csp: string;
-  valid_csp: boolean;
   manifestPromise: Promise<Response>;
   manifest: DataStructure | undefined; // Manifest may be undefined until populated
   policy: Policy;
@@ -45,8 +43,6 @@ export class OriginState {
     this.fqdn = fqdn;
     this.populated = false;
     this.version = -1;
-    this.csp = "";
-    this.valid_csp = false;
     this.cspHash = new Uint8Array();
     this.policyHash = new Uint8Array();
     this.manifestPromise = fetch(`https://${fqdn}/${manifest_name}`, {
@@ -71,6 +67,7 @@ export class PopupState {
   // In the popup, if undefined mark it as loading. False means a hard failure.
   valid_headers: boolean | undefined;
   valid_manifest: boolean | undefined;
+  valid_csp: boolean | undefined;
   valid_index: boolean | undefined;
   valid_signers: Signer[];
   valid_sources: Set<string>;
@@ -90,6 +87,7 @@ export class PopupState {
     this.tabId = tabId;
     this.valid_headers = undefined;
     this.valid_manifest = undefined;
+    this.valid_csp = undefined;
     this.valid_index = undefined;
     this.valid_signers = [];
     this.valid_sources = new Set();
@@ -106,17 +104,20 @@ export class PopupState {
   }
 }
 
-interface ManifestInfo {
-  app_version: number;
-  webcat_version: number;
-}
-
 interface ManifestFiles {
   [filePath: string]: string;
 }
 
+interface ManifestExtraCSP {
+  [matchPrefix: string]: string;
+}
+
 interface Manifest {
-  info: ManifestInfo;
+  app_name: string;
+  app_version: string;
+  comment: string;
+  default_csp: string;
+  extra_csp: ManifestExtraCSP;
   files: ManifestFiles;
   wasm: string[];
 }

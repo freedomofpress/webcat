@@ -15,9 +15,16 @@ vi.stubGlobal(
       ok: true,
       json: () =>
         Promise.resolve({
-          info: { app_version: 1, webcat_version: 1 },
-          files: {},
-          wasm: [],
+          manifest: {
+            app_name: "testapp",
+            app_version: "1.0",
+            comment: "",
+            files: {},
+            wasm: [],
+            default_csp:
+              "default-src: 'none', script-src 'self'; style-src 'self'; object-src 'none'",
+            extra_csp: {},
+          },
         }),
     }),
   ),
@@ -58,21 +65,12 @@ async function generatePolicyHash(responseHeadersArray) {
         a.issuer.localeCompare(b.issuer),
     );
 
-  const cspRules = responseHeaders["content-security-policy"]
-    .split(";")
-    .map((rule) => rule.trim().toLowerCase())
-    .filter((rule) => rule.length > 0)
-    .sort();
-
-  const normalizedCsp = cspRules.join("; ");
-
   const policyObject = {
     "x-sigstore-signers": normalizedSigners,
     "x-sigstore-threshold": parseInt(
       responseHeaders["x-sigstore-threshold"],
       10,
     ),
-    "content-security-policy": normalizedCsp,
   };
 
   const policyString = JSON.stringify(policyObject);
@@ -86,12 +84,15 @@ describe("validateResponseHeaders", () => {
   let popupState: PopupState;
   let details: browser.webRequest._OnHeadersReceivedDetails;
 
-  const defaultCSP = "script-src 'self'; style-src 'self'; object-src 'none'";
+  const defaultCSP =
+    "default-src: 'none', script-src 'self'; style-src 'self'; object-src 'none'";
   const defaultThreshold = 2;
   const defaultSigners = `[{"identity": "demo@web.cat", "issuer": "${Issuers.google}"}, {"identity": "test@example.com", "issuer": "${Issuers.microsoft}"}, {"identity": "identity@domain.com", "issuer": "${Issuers.github}"}]`;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     originState = new OriginState("example.com");
+    const manifestResponse = await originState.manifestPromise;
+    originState.manifest = await manifestResponse.json();
     popupState = new PopupState("example.com", 1);
     details = {
       url: "https://example.com",
@@ -193,27 +194,6 @@ describe("validateResponseHeaders", () => {
     );
   });
 
-  // TODO enable this test. ValidateCSP is tested separately, but this test serve the purpose of ensuring it's being called
-  // at the right moment. I can't get it to work because I fail at doing a partial mock of the validators module
-  /*it("throws error if CSP validation fails with non non allowed CSP", async () => {
-    details.responseHeaders = [
-      {
-        name: "Content-Security-Policy",
-        value:
-          "script-src 'none' 'unsafe-inline'; style-src 'self'; object-src 'none'",
-      },
-      {
-        name: "X-Sigstore-Signers", value: defaultSigners
-      },
-      { name: "X-Sigstore-Threshold", value: `${defaultThreshold}` },
-    ];
-    originState.policyHash = await generatePolicyHash(details.responseHeaders);
-
-    await expect(
-      validateResponseHeaders({} as Sigstore, originState, popupState, details),
-    ).rejects.toThrow("CSP provided by the server has non allowed directives!");
-  });*/
-
   it("throws error for mismatched Sigstore signers header", async () => {
     originState.policyHash = await generatePolicyHash(details.responseHeaders);
 
@@ -240,10 +220,11 @@ describe("validateResponseHeaders", () => {
   });
 
   it("throws error for mismatched CSP header", async () => {
+    originState.policyHash = await generatePolicyHash(details.responseHeaders);
     details.responseHeaders = [
       {
         name: "Content-Security-Policy",
-        value: "script-src 'self'; style-src: 'self'; object-src 'none",
+        value: "default-src: 'self'",
       },
       { name: "X-Sigstore-Signers", value: defaultSigners },
       { name: "X-Sigstore-Threshold", value: `${defaultThreshold}` },
@@ -255,6 +236,8 @@ describe("validateResponseHeaders", () => {
         popupState,
         details,
       ),
-    ).rejects.toThrow("Response headers do not match the preload list.");
+    ).rejects.toThrow(
+      "Server returned CSP does not match the one defined in the manifest.",
+    );
   });
 });

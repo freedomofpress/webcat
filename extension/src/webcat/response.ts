@@ -12,7 +12,7 @@ import {
   getFQDN,
   SHA256,
 } from "./utils";
-import { validateCSP, validateManifest } from "./validators";
+import { validateManifest } from "./validators";
 
 export async function validateResponseHeaders(
   sigstore: SigstoreVerifier,
@@ -40,46 +40,50 @@ export async function validateResponseHeaders(
     details.tabId,
     originState.fqdn,
   );
-  if (originState.populated === false) {
-    // Headers we care about (normalized to lowercase)
-    const criticalHeaders = new Set([
-      "content-security-policy",
-      "x-sigstore-signers",
-      "x-sigstore-threshold",
-    ]);
 
-    // Track seen critical headers to detect duplicates
-    const seenCriticalHeaders = new Set<string>();
-    const normalizedHeaders = new Map<string, string>();
+  // Headers we care about (normalized to lowercase)
+  const criticalHeaders = new Set([
+    "content-security-policy",
+    "x-sigstore-signers",
+    "x-sigstore-threshold",
+  ]);
 
-    for (const header of details.responseHeaders) {
-      if (header.name && header.value) {
-        const lowerName = header.name.toLowerCase();
+  // Track seen critical headers to detect duplicates
+  const seenCriticalHeaders = new Set<string>();
+  const normalizedHeaders = new Map<string, string>();
 
-        // Check for duplicates only among critical headers
-        if (criticalHeaders.has(lowerName)) {
-          if (seenCriticalHeaders.has(lowerName)) {
-            throw new Error(`Duplicate critical header detected: ${lowerName}`);
-          }
-          seenCriticalHeaders.add(lowerName);
+  for (const header of details.responseHeaders) {
+    if (header.name && header.value) {
+      const lowerName = header.name.toLowerCase();
+
+      // Check for duplicates only among critical headers
+      if (criticalHeaders.has(lowerName)) {
+        if (seenCriticalHeaders.has(lowerName)) {
+          throw new Error(`Duplicate critical header detected: ${lowerName}`);
         }
-
-        normalizedHeaders.set(lowerName, header.value);
-        headers.push(lowerName);
+        seenCriticalHeaders.add(lowerName);
       }
-    }
 
-    for (const criticalHeader of criticalHeaders) {
-      if (!normalizedHeaders.has(criticalHeader)) {
-        throw new Error(`Missing critical header: ${criticalHeader}`);
+      normalizedHeaders.set(lowerName, header.value);
+      headers.push(lowerName);
+    }
+  }
+
+  for (const criticalHeader of criticalHeaders) {
+    if (!normalizedHeaders.has(criticalHeader)) {
+      if (popupState) {
+        popupState.valid_headers = false;
       }
+      throw new Error(`Missing critical header: ${criticalHeader}`);
     }
+  }
 
-    // The null assertion is checked in the loop above
-    // Extract Content-Security-Policy
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    originState.csp = normalizedHeaders.get("content-security-policy")!;
+  // The null assertion is checked in the loop above
+  // Extract Content-Security-Policy
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const csp = normalizedHeaders.get("content-security-policy")!;
 
+  if (originState.populated === false) {
     // Extract X-Sigstore-Signers
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const signersHeader = normalizedHeaders.get("x-sigstore-signers")!;
@@ -103,26 +107,11 @@ export async function validateResponseHeaders(
       originState.policy.signers.size < 1 ||
       originState.policy.threshold > originState.policy.signers.size
     ) {
+      if (popupState) {
+        popupState.valid_headers = false;
+      }
       throw new Error("Failed to find all the necessary policy headers!");
     }
-
-    originState.valid_csp = await validateCSP(
-      originState.csp,
-      originState.fqdn,
-      details.tabId,
-      originState,
-    );
-
-    if (originState.valid_csp !== true) {
-      throw new Error("CSP provided by the server has non allowed directives!");
-    }
-
-    const cspRules = originState.csp
-      .split(";")
-      .map((rule) => rule.trim().toLowerCase())
-      .filter((rule) => rule.length > 0);
-    cspRules.sort();
-    const normalizedCsp = cspRules.join("; ");
 
     const normalizedSigners = Array.from(originState.policy.signers).map(
       ([issuer, identity]) => ({
@@ -142,7 +131,6 @@ export async function validateResponseHeaders(
     const policyObject = {
       "x-sigstore-signers": normalizedSigners, // Use array of objects
       "x-sigstore-threshold": originState.policy.threshold, // Already normalized
-      "content-security-policy": normalizedCsp,
     };
 
     // Compute hash of the normalized policy
@@ -167,6 +155,9 @@ export async function validateResponseHeaders(
         new Uint8Array(await SHA256(policyString)),
       )
     ) {
+      if (popupState) {
+        popupState.valid_headers = false;
+      }
       throw new Error("Response headers do not match the preload list.");
     }
 
@@ -177,8 +168,10 @@ export async function validateResponseHeaders(
       getFQDN(details.url),
     );
 
-    // By doing this here we gain a bit of async time: we start processing the request headers
-    // while we download the manifest
+    if (popupState) {
+      popupState.valid_headers = true;
+    }
+
     const manifestResponse = await originState.manifestPromise;
 
     logger.addLog(
@@ -191,25 +184,20 @@ export async function validateResponseHeaders(
     if (manifestResponse.ok !== true) {
       throw new Error("Failed to fetch manifest.json: server error");
     }
-
-    if (popupState) {
-      popupState.valid_headers = true;
-    }
-
     originState.manifest = await manifestResponse.json();
 
-    originState.valid = await validateManifest(
-      sigstore,
-      originState,
-      details.tabId,
-      popupState,
-    );
-
-    if (!originState.valid) {
+    try {
+      originState.valid = await validateManifest(
+        sigstore,
+        originState,
+        details.tabId,
+        popupState,
+      );
+    } catch (e) {
       if (popupState) {
         popupState.valid_manifest = false;
       }
-      throw new Error("Manifest signature verification failed.");
+      throw new Error(`Manifest validation failed: ${e}`);
     }
 
     if (popupState) {
@@ -224,32 +212,81 @@ export async function validateResponseHeaders(
       details.tabId,
       originState.fqdn,
     );
-  } else {
-    // CSP still needs to be evaluated every time
-    let csp: string = "";
-    for (const header of details.responseHeaders.sort()) {
-      // This array is just used to detect duplicates
-      headers.push(header["name"].toLowerCase());
+  } else if (popupState && originState.populated) {
+    popupState.valid_headers = true;
+  }
+
+  // Now, we should have the manifest, and can validate the CSP based on path
+  if (!originState.manifest || originState.valid !== true) {
+    throw new Error(
+      "Validating CSP, but no valid manifest for the origin has been found.",
+    );
+  }
+
+  const extraCSP = originState.manifest.manifest.extra_csp || {};
+  const defaultCSP = originState.manifest.manifest.default_csp;
+
+  const pathname = new URL(details.url).pathname;
+  let correctCSP = "";
+
+  // Sigh
+  if (
+    pathname === "/index.html" ||
+    pathname === "/index.htm" ||
+    pathname === "/"
+  ) {
+    correctCSP =
+      extraCSP["/"] || extraCSP["/index.htm"] || extraCSP["/index.html"];
+    logger.addLog(
+      "debug",
+      `CSP expecting ${correctCSP}, server returned ${csp}`,
+      details.tabId,
+      originState.fqdn,
+    );
+  }
+
+  if (!correctCSP) {
+    let bestMatch: string | null = null;
+    let bestMatchLength = 0;
+
+    for (const prefix in extraCSP) {
       if (
-        header["name"].toLowerCase() === "content-security-policy" &&
-        header["value"]
+        prefix !== "/" &&
+        pathname.startsWith(prefix) &&
+        prefix.length > bestMatchLength
       ) {
-        csp = header["value"];
+        bestMatch = prefix;
+        bestMatchLength = prefix.length;
       }
     }
 
-    if (headers.length !== new Set(headers).size) {
-      throw new Error("Duplicate header keys found!");
-    }
-
-    if (csp !== originState.csp) {
-      throw new Error("Response CSP does not match the verified one.");
-    }
-
-    if (popupState) {
-      popupState.valid_headers = true;
-    }
+    // Return the most specific match, or fallback to default CSP
+    correctCSP = bestMatch ? extraCSP[bestMatch] : defaultCSP;
+    logger.addLog(
+      "debug",
+      `CSP path best match is ${bestMatch ? bestMatch : "default_csp"} for ${pathname}, expecting ${correctCSP}, server returned ${csp}`,
+      details.tabId,
+      originState.fqdn,
+    );
   }
+
+  if (csp !== correctCSP) {
+    throw new Error(
+      "Server returned CSP does not match the one defined in the manifest.",
+    );
+  }
+
+  logger.addLog(
+    "info",
+    `CSP validated for path ${pathname}`,
+    details.tabId,
+    originState.fqdn,
+  );
+
+  if (popupState) {
+    popupState.valid_csp = true;
+  }
+
   // TODO (perfomance): significant amount of time is spent calling this function
   // at every loadef ile, without added benefit. It should be enough to call it if
   // details.type == "main_frame", but then the icon change does not work...
