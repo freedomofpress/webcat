@@ -66,7 +66,19 @@ function updatePopup(popupState) {
   }
 
   if (
+    popupState.valid_csp === true &&
+    popupState.valid_manifest === true &&
+    popupState.valid_headers === true
+  ) {
+    addOrUpdateLi("csp-status", `✅ Verified CSP`);
+  } else if (popupState.valid_csp === false) {
+    addOrUpdateLi("csp-status", `❌ Failed to verify CSP`);
+    listElement.removeChild(loadingElement);
+  }
+
+  if (
     popupState.valid_index === true &&
+    popupState.valid_csp === true &&
     popupState.valid_manifest === true &&
     popupState.valid_headers === true
   ) {

@@ -1,1 +1,4 @@
 sigstore
+pytest
+pytest-cov
+content_security_policy

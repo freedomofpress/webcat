@@ -173,7 +173,6 @@ export class SigstoreVerifier {
         return true;
       }
     }
-
     throw new Error("SCT verification failed.");
   }
 
@@ -290,7 +289,6 @@ export class SigstoreVerifier {
         "Signing certificate has not been signed by the current Fulcio CA.",
       );
     }
-
     // This check is not complete, we should check every ca in the chain. This is silly we know they are long lived
     // and we need performance
     if (

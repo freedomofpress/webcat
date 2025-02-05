@@ -55,11 +55,19 @@ export async function loadKeys(
       throw new Error("Duplicate keyId found!");
     }
     if (verified_keyId !== keyId) {
+      console.warn(
+        `KeyId ${keyId} does not match the expected ${verified_keyId}, importing anyway the provided one for proper referencing.`,
+      );
       // Either bug on calculation or foul play, this is a huge problem
-      throw new Error("Computed keyId does not match the provided one!");
+      //throw new Error("Computed keyId does not match the provided one!");
     }
+
+    // We used to import on the computed one, however see
+    // https://github.com/sigstore/root-signing/issues/1431
+    // https://github.com/sigstore/root-signing/issues/1387
+    // Spec wise the code was correct, but security wise it does not matter and reality wise it tends to break...
     importedKeys.set(
-      verified_keyId,
+      keyId,
       await importKey(key.keytype, key.scheme, key.keyval.public),
     );
   }
@@ -133,13 +141,8 @@ export async function verifySignature(
   key: CryptoKey,
   signed: Uint8Array,
   sig: Uint8Array,
-  scheme: string = "ecdsa-sha2-nistp256",
+  hash: string = "sha256",
 ): Promise<boolean> {
-  // TODO
-  // Different hash support is fake for now: its the key that defines the supported signing scheme and that info
-  // Is lost when we translate those into CryptoKey, we should extend the keys map to include scheme
-
-  // https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/verify
   const options: {
     name: string;
     hash?: {
@@ -150,48 +153,60 @@ export async function verifySignature(
   };
 
   if (key.algorithm.name === KeyTypes.Ecdsa) {
+    // Later we need to supply exactly sized R and R dependingont he curve for sig verification
+    const namedCurve = (key.algorithm as EcKeyAlgorithm).namedCurve;
+    let sig_size = 32;
+
+    if (namedCurve === "P-256") {
+      sig_size = 32;
+    } else if (namedCurve === "P-384") {
+      sig_size = 48;
+    } else if (namedCurve === "P-521") {
+      sig_size = 66;
+    }
+
     options.hash = { name: "" };
     // Then we need to select an hashing algorithm
-    if (scheme.includes("256")) {
+    if (hash.includes("256")) {
       options.hash.name = HashAlgorithms.SHA256;
-    } else if (scheme.includes("384")) {
+    } else if (hash.includes("384")) {
       options.hash.name = HashAlgorithms.SHA384;
-    } else if (scheme.includes("512")) {
+    } else if (hash.includes("512")) {
       options.hash.name = HashAlgorithms.SHA512;
     } else {
       throw new Error("Cannot determine hashing algorithm;");
     }
+
+    // For posterity: this mess is because the web crypto API supports only
+    // IEEE P1363, so we etract r and s from the DER sig and manually ancode
+    // big endian and append them one after each other
+
+    // The verify option will do hashing internally
+    // const signed_digest = await crypto.subtle.digest(hash_alg, signed)
+    const asn1_sig = ASN1Obj.parseBuffer(sig);
+    const r = asn1_sig.subs[0].toInteger();
+    const s = asn1_sig.subs[1].toInteger();
+
+    // Sometimes the integers can be less than the average, and we would miss bytes. The functione expects a finxed
+    // input in bytes depending on the curve, or it fails early.
+    const binr = hexToUint8Array(r.toString(16).padStart(sig_size * 2, "0"));
+    const bins = hexToUint8Array(s.toString(16).padStart(sig_size * 2, "0"));
+
+    const raw_signature = new Uint8Array(binr.length + bins.length);
+    raw_signature.set(binr, 0);
+    raw_signature.set(bins, binr.length);
+
+    return await crypto.subtle.verify(options, key, raw_signature, signed);
   } else if (key.algorithm.name === KeyTypes.Ed25519) {
     // No need to specify hash in this case, the crypto API does not take it as input for this key type
+    throw new Error(
+      "This is untested but could likely work, but not for prod usage :)",
+    );
   } else if (key.algorithm.name === KeyTypes.RSA) {
     throw new Error("RSA could work, if only someone coded the support :)");
   } else {
     throw new Error("Unsupported key type!");
   }
-
-  // For posterity: this mess is because the web crypto API supports only
-  // IEEE P1363, so we etract r and s from the DER sig and manually ancode
-  // big endian and append them one after each other
-
-  // The verify option will do hashing internally
-  // const signed_digest = await crypto.subtle.digest(hash_alg, signed)
-
-  const asn1_sig = ASN1Obj.parseBuffer(sig);
-  const r = asn1_sig.subs[0].toInteger();
-  const s = asn1_sig.subs[1].toInteger();
-
-  // One would think that if you hex encode something by a native function, you get a string with an even number
-  // of characters. Turns out toString omit leading zeros, leading to nasty bugs.
-  const padStringToEvenLength = (str: string): string =>
-    str.length % 2 ? "0" + str : str;
-  const binr = hexToUint8Array(padStringToEvenLength(r.toString(16)));
-  const bins = hexToUint8Array(padStringToEvenLength(s.toString(16)));
-
-  const raw_signature = new Uint8Array(binr.length + bins.length);
-  raw_signature.set(binr, 0);
-  raw_signature.set(bins, binr.length);
-
-  return await crypto.subtle.verify(options, key, raw_signature, signed);
 }
 
 export async function checkSignatures(

@@ -211,6 +211,11 @@ export class TUFClient {
 
     // Always remember to select only the keys delegated to a specific role
     const keys = getRoleKeys(root.keys, root.roles.timestamp.keyids);
+
+    if (keys.size < 1) {
+      throw new Error("No valid keys found for the timestamp role.");
+    }
+
     const cachedTimestamp = await this.getFromCache(Roles.Timestamp);
 
     // Spec 5.4.1
@@ -386,8 +391,7 @@ export class TUFClient {
         root.roles.targets.threshold,
       );
     } catch (e) {
-      console.log(e);
-      throw new Error("Failed verifying targets role signature(s).");
+      throw new Error(`Failed verifying targets role signature(s): ${e}`);
     }
 
     // 5.6.4

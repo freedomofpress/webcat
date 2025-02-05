@@ -12,84 +12,239 @@ export async function validateCSP(
   fqdn: string,
   tabId: number,
   originState: OriginState,
-): Promise<boolean> {
+) {
   // See https://github.com/freedomofpress/webcat/issues/9
   // https://github.com/freedomofpress/webcat/issues/3
 
+  enum directives {
+    DefaultSrc = "default-src",
+    ScriptSrc = "script-src",
+    StyleSrc = "style-src",
+    ObjectSrc = "object-src",
+    ChildSrc = "child-src",
+    FrameSrc = "frame-src",
+    WorkerSrc = "worker-src",
+  }
+
+  enum source_keywords {
+    None = "'none'",
+    Self = "'self'",
+    WasmUnsafeEval = "'wasm-unsafe-eval'",
+    UnsafeInline = "'unsafe-inline'",
+    UnsafeEval = "'unsafe-eval'",
+    UnsafeHashes = "'unsafe-hashes'",
+    StrictDynamic = "'strict-dynamic",
+  }
+
+  enum source_types {
+    Hash = "'sha",
+    Blob = "blob:",
+    Data = "data:",
+    EnrolledOrigins = 1,
+  }
+
+  // The spec (and thus the parsing function) has to lowercase the directive names
   const parsedCSP = parseContentSecurityPolicy(csp);
-  logger.addLog("info", `Parsed CSP: ${parsedCSP.values()}`, tabId, fqdn);
 
-  const requiredDirectives = ["script-src", "style-src", "object-src"];
-  const allowedScriptSrc = new Set(["'self'", "'wasm-unsafe-eval'"]);
-  const allowedStyleSrc = new Set([
-    "'self'",
-    "'unsafe-inline'",
-    "'unsafe-hashes'",
-  ]);
+  let default_src_is_none = false;
+  const default_src = parsedCSP.get(directives.DefaultSrc);
+  logger.addLog(
+    "info",
+    `Parsed CSP default_src_is_none is ${default_src_is_none}`,
+    tabId,
+    fqdn,
+  );
 
-  // Ensure required directives exist
-  for (const directive of requiredDirectives) {
-    if (!parsedCSP.has(directive)) {
-      throw new Error(`Missing required directive: ${directive}`);
+  // Setp 1: check default src, which is the default for almost everything.
+  // 'self' and 'none' are allowed, but they have different implications and we should tag them
+  if (default_src) {
+    for (const src of default_src) {
+      if (src === source_keywords.None) {
+        default_src_is_none = true;
+        break;
+      } else if (src === source_keywords.Self) {
+        // Explicitly allowed for readability
+        continue;
+      } else {
+        throw new Error(
+          `Unexpected or non-allowed default-src directive: ${src}`,
+        );
+      }
     }
   }
 
-  // Validate script-src
-  // We can ignore, the check of existance is done in the loop above
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const scriptSrc = parsedCSP.get("script-src")!;
-  for (const src of scriptSrc) {
-    if (
-      !allowedScriptSrc.has(src) &&
-      !src.startsWith("'sha") /*&&
-      TODO: we will eventually decide if we want to source scripts/styles from third parties, i'd say no
-      !(await isFQDNEnrolled(getFQDNSafe(src), tabId))*/
+  // Step 2: enforce object-src 'none' if default-src is not 'none'
+  const object_src = parsedCSP.get(directives.ObjectSrc);
+  if (default_src_is_none == false && (!object_src || object_src.length < 1)) {
+    throw new Error(
+      `${directives.DefaultSrc} is not none, and ${directives.ObjectSrc} is not defined.`,
+    );
+  } else if (object_src) {
+    for (const src of object_src) {
+      if (src !== source_keywords.None) {
+        throw new Error(`Non-allowed ${directives.ObjectSrc} directive ${src}`);
+      }
+    }
+  }
+
+  async function isSourceAllowed(
+    src: string,
+    directive: string,
+    allowed_keywords: string[],
+    allowed_source_types: source_types[],
+  ): Promise<boolean> {
+    const lower_src = src.toLowerCase();
+    if (allowed_keywords.includes(lower_src)) {
+      return true;
+
+      // Onion services might do this, we enforce at a higher level
+      //} else if (src.includes("http:")) {
+      //  throw new Error(`${directive} cannot contain http: sources. `);
+    } else if (
+      allowed_source_types.includes(source_types.Hash) &&
+      src.startsWith(source_types.Hash)
     ) {
-      throw new Error(`Invalid source in script-src: ${src}`);
-    }
-  }
-
-  // Validate style-src
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const styleSrc = parsedCSP.get("style-src")!;
-  for (const src of styleSrc) {
-    if (!allowedStyleSrc.has(src)) {
-      throw new Error(`Invalid source in style-src: ${src}`);
-    }
-  }
-
-  // Validate object-src
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const objectSrc = parsedCSP.get("object-src")!;
-  if (objectSrc.length !== 1 || objectSrc[0] !== "'none'") {
-    throw new Error(`object-src must be 'none', found: ${objectSrc.join(" ")}`);
-  }
-
-  // Validate child-src and frame-src individually
-  const childSrc = parsedCSP.get("child-src") ?? [];
-  const frameSrc = parsedCSP.get("frame-src") ?? [];
-  const workerSrc = parsedCSP.get("worker-src") ?? [];
-
-  // TODO, you can probably never have an external worker src without an external script-src
-  for (const src of [...childSrc, ...frameSrc, ...workerSrc]) {
-    if (src.includes("*")) {
-      throw new Error(`Wildcards not allowed child-src/frame-src: ${src}`);
-    }
-    if (
-      src != "'none'" &&
-      src != "'self'" &&
-      !(await isFQDNEnrolled(getFQDNSafe(src), tabId))
+      return true;
+    } else if (
+      allowed_source_types.includes(source_types.Blob) &&
+      src.startsWith(source_types.Blob)
     ) {
+      return true;
+    } else if (
+      allowed_source_types.includes(source_types.Data) &&
+      src.startsWith(source_types.Data)
+    ) {
+      return true;
+    } else if (
+      allowed_source_types.includes(source_types.EnrolledOrigins) &&
+      src.includes(".")
+    ) {
+      let fqdn: string;
+      try {
+        fqdn = getFQDNSafe(src);
+      } catch (e) {
+        throw new Error(
+          `${directive} value ${src} was parsed as a url but it is not valid: ${e}`,
+        );
+      }
+
+      if (await isFQDNEnrolled(fqdn, tabId)) {
+        originState.valid_sources.add(fqdn);
+        return true;
+      } else {
+        throw new Error(
+          `${directive} value ${src}, parsed as FQDN: ${fqdn} is not enrolled and thus not allowed.`,
+        );
+      }
+    } else {
       throw new Error(
-        `Invalid source in child-src/frame-src/worker-src: ${src}`,
+        `${directive} cannot contain ${src} which is unsupported.`,
       );
-    } else if (src != "'none'" && src != "'self'" && getFQDNSafe(src) != fqdn) {
-      originState.valid_sources.add(getFQDNSafe(src));
+    }
+  }
+
+  // TODO: These checks can probably be refactored to be more concise and readable
+
+  // Step 3: think about scripts
+  const script_src = parsedCSP.get(directives.ScriptSrc);
+  if (default_src_is_none == false && (!script_src || script_src.length < 1)) {
+    throw new Error(
+      `${directives.DefaultSrc} is not none, and ${directives.ScriptSrc} is not defined.`,
+    );
+  } else if (script_src) {
+    for (const src of script_src) {
+      await isSourceAllowed(
+        src,
+        directives.ScriptSrc,
+        [
+          source_keywords.None,
+          source_keywords.Self,
+          source_keywords.WasmUnsafeEval,
+        ],
+        [source_types.Hash, source_types.EnrolledOrigins],
+      );
+    }
+  }
+
+  // Step 4: validate style-src
+  const style_src = parsedCSP.get(directives.StyleSrc);
+  if (default_src_is_none == false && (!style_src || style_src.length < 1)) {
+    throw new Error(
+      `${directives.DefaultSrc} is not none, and ${directives.StyleSrc} is not defined.`,
+    );
+  } else if (style_src) {
+    for (const src of style_src) {
+      await isSourceAllowed(
+        src,
+        directives.StyleSrc,
+        [
+          source_keywords.None,
+          source_keywords.Self,
+          // TODO eventually the following 2 should disappear from here
+          source_keywords.UnsafeInline,
+          source_keywords.UnsafeHashes,
+        ],
+        [source_types.Hash, source_types.EnrolledOrigins],
+      );
+    }
+  }
+
+  // Step 5: validate frame-src and child-src. They should follow the same policy and in theory one overrides the other
+  // but it depends on the CSP level so we'll check everything
+  const child_src = parsedCSP.get(directives.ChildSrc);
+  const frame_src = parsedCSP.get(directives.FrameSrc);
+  if (
+    default_src_is_none == false &&
+    (!child_src || child_src.length < 1) &&
+    (!frame_src || frame_src.length < 1)
+  ) {
+    throw new Error(
+      `${directives.DefaultSrc} is not none, and neither ${directives.FrameSrc} or ${directives.ChildSrc} are defined.`,
+    );
+  } else if (child_src || frame_src) {
+    if (child_src) {
+      for (const src of child_src) {
+        await isSourceAllowed(
+          src,
+          directives.ChildSrc,
+          [source_keywords.None, source_keywords.Self],
+          // You can iframe from a blob, and that will be either HTMl or include authenticated script
+          // Cause the script src is inherited or enforced in all frames, also the hook injection is inherited by allFrames
+          [source_types.Blob, source_types.EnrolledOrigins],
+        );
+      }
+    }
+
+    if (frame_src) {
+      for (const src of frame_src) {
+        await isSourceAllowed(
+          src,
+          directives.FrameSrc,
+          [source_keywords.None, source_keywords.Self],
+          // Same as for child src
+          [source_types.Blob, source_types.EnrolledOrigins],
+        );
+      }
+    }
+  }
+
+  const worker_src = parsedCSP.get(directives.WorkerSrc);
+  if (default_src_is_none == false && (!worker_src || worker_src.length < 1)) {
+    throw new Error(
+      `${directives.DefaultSrc} is not none, and ${directives.WorkerSrc} is not defined.`,
+    );
+  } else if (worker_src) {
+    for (const src of worker_src) {
+      await isSourceAllowed(
+        src,
+        directives.WorkerSrc,
+        [source_keywords.None, source_keywords.Self],
+        [source_types.EnrolledOrigins],
+      );
     }
   }
 
   logger.addLog("info", "CSP validation successful!", tabId, fqdn);
-  return true;
 }
 
 export async function validateManifest(
@@ -113,27 +268,25 @@ export async function validateManifest(
   let validCount = 0;
   for (const signer of originState.policy.signers) {
     if (originState.manifest.signatures[signer[1]]) {
-      try {
-        const res = await sigstore.verifyArtifact(
-          signer[1],
-          signer[0],
-          originState.manifest.signatures[signer[1]],
-          stringToUint8Array(canonicalize(fixedManifest)),
+      // If someone attached a signature that fails validation on the manifest, even if the threshold is met
+      // something is sketchy
+      const res = await sigstore.verifyArtifact(
+        signer[1],
+        signer[0],
+        originState.manifest.signatures[signer[1]],
+        stringToUint8Array(canonicalize(fixedManifest)),
+      );
+      if (res) {
+        logger.addLog(
+          "info",
+          `Verified ${signer[0]}, ${signer[1]}`,
+          tabId,
+          originState.fqdn,
         );
-        if (res) {
-          logger.addLog(
-            "info",
-            `Verified ${signer[0]}, ${signer[1]}`,
-            tabId,
-            originState.fqdn,
-          );
-          if (popupState) {
-            originState.valid_signers.push(signer);
-          }
-          validCount++;
+        if (popupState) {
+          originState.valid_signers.push(signer);
         }
-      } catch (e) {
-        console.error(e);
+        validCount++;
       }
     }
   }
@@ -144,12 +297,50 @@ export async function validateManifest(
     tabId,
     originState.fqdn,
   );
-  if (validCount >= originState.policy.threshold) {
-    if (popupState) {
-      popupState.valid_signers = originState.valid_signers;
-    }
-    return true;
-  } else {
-    return false;
+
+  // Not enough signatures to verify the manifest
+  if (validCount < originState.policy.threshold) {
+    throw new Error(
+      `Expected at least ${originState.policy.threshold} valid signatures, found only ${validCount}.`,
+    );
   }
+
+  // A manifest with no files should not exists
+  if (
+    !fixedManifest.manifest.files ||
+    Object.keys(fixedManifest.manifest.files).length < 1
+  ) {
+    throw new Error("Malformed manifest: files list is empty.");
+  }
+
+  // If there is no default CSP than the manifest is incomplete
+  if (
+    !fixedManifest.manifest.default_csp ||
+    fixedManifest.manifest.default_csp.length < 3
+  ) {
+    throw new Error("Malformed manifest: default_csp is empty or not set.");
+  }
+
+  // Validate the default CSP
+  await validateCSP(
+    fixedManifest.manifest.default_csp,
+    originState.fqdn,
+    tabId,
+    originState,
+  );
+
+  // Validate all extra CSP, it should also fill all the sources
+  for (const path in fixedManifest.manifest.extra_csp) {
+    if (fixedManifest.manifest.extra_csp.hasOwnProperty(path)) {
+      const csp = fixedManifest.manifest.extra_csp[path];
+      await validateCSP(csp, originState.fqdn, tabId, originState);
+    } else {
+      throw new Error(`Malformed manifest: extra_csp path ${path} is empty.`);
+    }
+  }
+
+  if (popupState) {
+    popupState.valid_signers = originState.valid_signers;
+  }
+  return true;
 }

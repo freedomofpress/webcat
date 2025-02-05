@@ -23,7 +23,11 @@ async function getSigstore(update: boolean = false): Promise<SigstoreVerifier> {
     tuf_sigstore_namespace,
   );
   if (update) {
-    await tuf_client.updateTUF();
+    try {
+      await tuf_client.updateTUF();
+    } catch (e) {
+      console.log(e);
+    }
   }
   const newSigstore = new SigstoreVerifier();
   await newSigstore.loadSigstoreRoot(await tuf_client.getTrustedRoot());
@@ -126,28 +130,15 @@ export async function headersListener(
 
   /* DEVELOPMENT GUARD */
   const originState = origins.get(fqdn);
+  const popupState = popups.get(details.tabId);
+
   if (!originState) {
     throw new Error("No originState while starting to pass response.");
   }
 
   try {
-    // ensure sigstore exists, this can happen at extension enable/disable
-
-    await validateResponseHeaders(
-      sigstore,
-      originState,
-      popups.get(details.tabId),
-      details,
-    );
+    await validateResponseHeaders(sigstore, originState, popupState, details);
   } catch (error) {
-    if (details.tabId > 0) {
-      // Signal the error for the UI
-      const popupState = popups.get(details.tabId);
-      if (!popupState) {
-        throw new Error("popupState does not exists when it should have");
-      }
-      popupState.valid_headers = false;
-    }
     logger.addLog(
       "error",
       `Error when parsing response headers: ${error}`,
@@ -157,7 +148,7 @@ export async function headersListener(
     origins.delete(fqdn);
     tabs.delete(details.tabId);
     errorpage(details.tabId);
-    return { redirectUrl: browser.runtime.getURL("pages/error.html") };
+    return { cancel: true };
   }
 
   return {};
@@ -259,10 +250,6 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
             const originState = origins.get(popupState.fqdn);
             popupState.valid_sources.add(popupState.fqdn);
 
-            if (!originState) {
-              throw new Error("FATAL: Missing originState");
-            }
-
             function traverseValidSources(
               source: string,
               valid_sources: Set<string>,
@@ -282,8 +269,10 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
               }
             }
 
-            for (const source of originState.valid_sources) {
-              traverseValidSources(source, popupState.valid_sources);
+            if (originState) {
+              for (const source of originState.valid_sources) {
+                traverseValidSources(source, popupState.valid_sources);
+              }
             }
 
             sendResponse({ tabId: tabId, popupState: popupState });
@@ -345,7 +334,7 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
   }
 }
 
-export function injectorListener(
+export async function injectorListener(
   details: browser.webNavigation._OnCommittedDetails,
 ) {
   // TODO: a security audit should find out if this is bypassable: can an onCommitted even race the
@@ -353,11 +342,17 @@ export function injectorListener(
   const fqdn = getFQDN(details.url);
   if (origins.has(fqdn)) {
     logger.addLog("debug", `Injecting WASM hooks`, details.tabId, fqdn);
-    browser.tabs.executeScript(details.tabId, {
+    const result = await browser.tabs.executeScript(details.tabId, {
       file: "hooks/inject.js",
       runAt: "document_start",
       // We are doing allFrames in the hope of https://github.com/freedomofpress/webcat/issues/3
       allFrames: true,
     });
+    logger.addLog(
+      "debug",
+      `WASM hooks injected: ${result[0]}`,
+      details.tabId,
+      fqdn,
+    );
   }
 }
