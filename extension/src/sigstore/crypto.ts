@@ -183,18 +183,22 @@ export async function verifySignature(
 
     // The verify option will do hashing internally
     // const signed_digest = await crypto.subtle.digest(hash_alg, signed)
-    const asn1_sig = ASN1Obj.parseBuffer(sig);
-    const r = asn1_sig.subs[0].toInteger();
-    const s = asn1_sig.subs[1].toInteger();
-
-    // Sometimes the integers can be less than the average, and we would miss bytes. The functione expects a finxed
-    // input in bytes depending on the curve, or it fails early.
-    const binr = hexToUint8Array(r.toString(16).padStart(sig_size * 2, "0"));
-    const bins = hexToUint8Array(s.toString(16).padStart(sig_size * 2, "0"));
-
-    const raw_signature = new Uint8Array(binr.length + bins.length);
-    raw_signature.set(binr, 0);
-    raw_signature.set(bins, binr.length);
+    let raw_signature: Uint8Array;
+    try {
+      const asn1_sig = ASN1Obj.parseBuffer(sig);
+      const r = asn1_sig.subs[0].toInteger();
+      const s = asn1_sig.subs[1].toInteger();
+      // Sometimes the integers can be less than the average, and we would miss bytes. The functione expects a finxed
+      // input in bytes depending on the curve, or it fails early.
+      const binr = hexToUint8Array(r.toString(16).padStart(sig_size * 2, "0"));
+      const bins = hexToUint8Array(s.toString(16).padStart(sig_size * 2, "0"));
+      raw_signature = new Uint8Array(binr.length + bins.length);
+      raw_signature.set(binr, 0);
+      raw_signature.set(bins, binr.length);
+    } catch {
+      // Signature is probably malformed
+      return false;
+    }
 
     return await crypto.subtle.verify(options, key, raw_signature, signed);
   } else if (key.algorithm.name === KeyTypes.Ed25519) {
@@ -259,12 +263,12 @@ export async function checkSignatures(
 
     // We checked before that the key exists
     if (
-      (await verifySignature(key, stringToUint8Array(signed_canon), sig)) !==
+      (await verifySignature(key, stringToUint8Array(signed_canon), sig)) ===
       true
     ) {
-      throw new Error("Failed verifying signature");
+      // We used to halt on error, but... https://github.com/sigstore/root-signing/issues/1448
+      valid_signatures++;
     }
-    valid_signatures++;
   }
 
   if (valid_signatures >= threshold) {
