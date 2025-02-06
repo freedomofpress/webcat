@@ -70,9 +70,9 @@ function updatePopup(popupState) {
     popupState.valid_manifest === true &&
     popupState.valid_headers === true
   ) {
-    addOrUpdateLi("csp-status", `✅ Verified CSP`);
+    addOrUpdateLi("csp-status", `✅ Verified content security policy`);
   } else if (popupState.valid_csp === false) {
-    addOrUpdateLi("csp-status", `❌ Failed to verify CSP`);
+    addOrUpdateLi("csp-status", `❌ Failed to verify content security policy`);
     listElement.removeChild(loadingElement);
   }
 
