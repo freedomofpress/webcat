@@ -1,18 +1,12 @@
 import { checkSignatures, getRoleKeys, loadKeys } from "./crypto";
 import { Uint8ArrayToHex, Uint8ArrayToString } from "./encoding";
-import {
-  HashAlgorithms,
-  Meta,
-  Metafile,
-  Roles,
-  Root,
-  TrustedRoot,
-} from "./interfaces";
+import { HashAlgorithms, Meta, Metafile, Roles, Root } from "./interfaces";
 
 export class TUFClient {
   private repositoryUrl: string;
   private startingRootPath: string;
   private namespace: string;
+  private cached: Array<string>;
 
   constructor(
     repositoryUrl: string,
@@ -22,6 +16,7 @@ export class TUFClient {
     this.repositoryUrl = repositoryUrl;
     this.startingRootPath = startingRootPath;
     this.namespace = namespace;
+    this.cached = [];
   }
 
   private getCacheKey(key: string): string {
@@ -37,16 +32,23 @@ export class TUFClient {
   private async setInCache(key: string, value: object): Promise<void> {
     const namespacedKey = this.getCacheKey(key);
     await browser.storage.local.set({ [namespacedKey]: value });
+    this.cached.push(namespacedKey);
   }
 
   private async fetchMetafileBase(
     role: string,
     version: number | string,
+    target: boolean = false,
   ): Promise<Response> {
-    const url =
-      version !== -1
-        ? `${this.repositoryUrl}/${version}.${role}.json`
-        : `${this.repositoryUrl}/${role}.json`;
+    let url;
+    if (!target) {
+      url =
+        version !== -1
+          ? `${this.repositoryUrl}/${version}.${role}.json`
+          : `${this.repositoryUrl}/${role}.json`;
+    } else {
+      url = `${this.repositoryUrl}/${version}.${role}`;
+    }
 
     console.log("[TUF]", "Fetching", url);
 
@@ -72,8 +74,9 @@ export class TUFClient {
   private async fetchMetafileBinary(
     role: string,
     version: number | string = -1,
+    target: boolean = false,
   ): Promise<Uint8Array> {
-    const response = await this.fetchMetafileBase(role, version);
+    const response = await this.fetchMetafileBase(role, version, target);
     return new Uint8Array(await response.arrayBuffer());
   }
 
@@ -350,7 +353,7 @@ export class TUFClient {
 
     let newTargetsRaw;
 
-    // Spec 5.6.1, sigstore targets.json does not even have hases for now
+    // Spec 5.6.1, sigstore targets.json does not even have hashes for now
     if (root.consistent_snapshot) {
       newTargetsRaw = await this.fetchMetafileBinary(
         Roles.Targets,
@@ -413,7 +416,20 @@ export class TUFClient {
     this.setInCache(Roles.Targets, newTargets);
   }
 
-  private async fetchTrustRoot() {
+  public async listSignedTargets() {
+    const cachedTargets = await this.getFromCache(Roles.Targets);
+
+    const filenames: Array<string> = [];
+
+    if (cachedTargets) {
+      for (const filename of Object.keys(cachedTargets.signed.targets)) {
+        filenames.push(filename);
+      }
+    }
+    return filenames;
+  }
+
+  private async fetchTarget(name: string) {
     const cachedTargets = await this.getFromCache(Roles.Targets);
 
     if (cachedTargets === undefined) {
@@ -421,32 +437,33 @@ export class TUFClient {
         "Failed to find the targets metafile when it should have existed.",
       );
     }
-    // Both sha256 and sha512 works for downloading the file (and verifying of course)
-    const sha256 =
-      cachedTargets.signed.targets["trusted_root.json"].hashes.sha256;
 
-    const trusted_root_raw = await this.fetchMetafileBinary(
-      "trusted_root",
+    if (!(name in cachedTargets.signed.targets)) {
+      throw new Error(`${name} not present in the targets role.`);
+    }
+
+    // Both sha256 and sha512 works for downloading the file (and verifying of course)
+    const sha256 = cachedTargets.signed.targets[name].hashes.sha256;
+
+    const raw_file = await this.fetchMetafileBinary(
+      name,
       `targets/${sha256}`,
+      true,
     );
     const sha256_calculated = Uint8ArrayToHex(
       new Uint8Array(
-        await crypto.subtle.digest(HashAlgorithms.SHA256, trusted_root_raw),
+        await crypto.subtle.digest(HashAlgorithms.SHA256, raw_file),
       ),
     );
-
-    // We can't directly compare uint8array because it's an object, there would be a faster trick
-    // But it's still not great IndexedDB.cmp(a, b)
     // TODO replace with crypto.bufferEqual
 
     if (sha256 !== sha256_calculated) {
-      throw new Error("trusted_root.json hash does not match TUF value.");
+      throw new Error(
+        `${name} hash does not match the value in the targets role.`,
+      );
     }
 
-    this.setInCache(
-      Roles.TrustedRoot,
-      JSON.parse(Uint8ArrayToString(trusted_root_raw)),
-    );
+    this.setInCache(name, JSON.parse(Uint8ArrayToString(raw_file)));
   }
 
   async updateTUF() {
@@ -468,15 +485,18 @@ export class TUFClient {
       snapshotVersion,
     );
     await this.updateTargets(root, frozenTimestamp, snapshot);
-    // We should fetch the root again only if TUF says so
-    await this.fetchTrustRoot();
   }
 
-  async getTrustedRoot(): Promise<TrustedRoot> {
-    const namespacedKey = this.getCacheKey(Roles.TrustedRoot);
+  async getTarget(name: string): Promise<unknown> {
+    if (!this.cached.includes(name)) {
+      await this.fetchTarget(name);
+    }
+
+    const namespacedKey = this.getCacheKey(name);
     const result = await browser.storage.local.get(namespacedKey);
+
     if (!result) {
-      throw new Error("Trusted root not available!");
+      throw new Error(`${name} not available!`);
     }
     return result[namespacedKey];
   }

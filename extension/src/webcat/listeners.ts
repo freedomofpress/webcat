@@ -5,6 +5,7 @@ import {
 } from "../config";
 import { origins, popups, tabs } from "../globals";
 import { Uint8ArrayToHex } from "../sigstore/encoding";
+import { TrustedRoot } from "../sigstore/interfaces";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { TUFClient } from "../sigstore/tuf";
 import { ensureDBOpen, isFQDNEnrolled } from "./db";
@@ -30,7 +31,9 @@ async function getSigstore(update: boolean = false): Promise<SigstoreVerifier> {
     }
   }
   const newSigstore = new SigstoreVerifier();
-  await newSigstore.loadSigstoreRoot(await tuf_client.getTrustedRoot());
+  await newSigstore.loadSigstoreRoot(
+    (await tuf_client.getTarget("trusted_root.json")) as TrustedRoot,
+  );
   return newSigstore;
 }
 

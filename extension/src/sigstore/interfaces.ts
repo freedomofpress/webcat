@@ -109,7 +109,6 @@ export enum Roles {
   Timestamp = "timestamp",
   Snapshot = "snapshot",
   Targets = "targets",
-  TrustedRoot = "trusted_root",
 }
 
 export interface Key {
