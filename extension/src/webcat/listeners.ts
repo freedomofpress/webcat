@@ -9,6 +9,7 @@ import { TrustedRoot } from "../sigstore/interfaces";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { TUFClient } from "../sigstore/tuf";
 import { ensureDBOpen, isFQDNEnrolled } from "./db";
+import { getHooksInjector } from "./hooks";
 import { metadataRequestSource } from "./interfaces";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
@@ -343,14 +344,43 @@ export async function injectorListener(
   // TODO: a security audit should find out if this is bypassable: can an onCommitted even race the
   // population of the origins? Perhaps it would be better to do this on a tabid basis
   const fqdn = getFQDN(details.url);
-  if (origins.has(fqdn)) {
+  // This functio
+  const originState = origins.get(fqdn);
+  if (originState) {
+    // We aksed for async generation in class instantiation, must be ready now
+    if (!originState.encryption_key || !originState.signing_key) {
+      originState.encryption_key = await originState.encryption_key_promise;
+      originState.signing_key = await originState.signing_key_promise;
+      originState.encryption_public_key = await crypto.subtle.exportKey(
+        "jwk",
+        originState.encryption_key.publicKey,
+      );
+      originState.signing_public_key = await crypto.subtle.exportKey(
+        "jwk",
+        originState.signing_key.publicKey,
+      );
+    }
+    if (
+      !originState.encryption_public_key ||
+      !originState.signing_public_key ||
+      !originState.encryption_key ||
+      !originState.signing_key
+    ) {
+      throw new Error("Error setting up hooks keys.");
+    }
+    console.log("Here");
     logger.addLog("debug", `Injecting WASM hooks`, details.tabId, fqdn);
+    const injectContent = getHooksInjector(
+      originState.signing_public_key,
+      originState.encryption_public_key,
+    );
     const result = await browser.tabs.executeScript(details.tabId, {
-      file: "hooks/inject.js",
+      code: injectContent,
       runAt: "document_start",
       // We are doing allFrames in the hope of https://github.com/freedomofpress/webcat/issues/3
       allFrames: true,
     });
+    console.log("Injected");
     logger.addLog(
       "debug",
       `WASM hooks injected: ${result[0]}`,

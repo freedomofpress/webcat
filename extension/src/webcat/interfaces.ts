@@ -38,6 +38,15 @@ export class OriginState {
   valid: boolean;
   errors: string[];
   references: number;
+  // These keys are used for per-origin webhooks comms. The hooks key are populated on first use
+  signing_key_promise: Promise<CryptoKeyPair>;
+  signing_key: CryptoKeyPair | undefined;
+  signing_public_key: JsonWebKey | undefined;
+  encryption_key_promise: Promise<CryptoKeyPair>;
+  encryption_key: CryptoKeyPair | undefined;
+  encryption_public_key: JsonWebKey | undefined;
+  hooks_signing_key: CryptoKey | undefined;
+  hooks_encryption_key: CryptoKey | undefined;
 
   constructor(fqdn: string) {
     this.fqdn = fqdn;
@@ -55,6 +64,18 @@ export class OriginState {
     this.valid = false;
     this.errors = [];
     this.references = 1;
+    this.signing_key_promise = crypto.subtle.generateKey(
+      { name: "Ed25519" },
+      true,
+      ["sign", "verify"],
+    ) as Promise<CryptoKeyPair>;
+    this.encryption_key_promise = crypto.subtle.generateKey(
+      { name: "X25519" },
+      true,
+      ["deriveKey", "deriveBits"],
+    ) as Promise<CryptoKeyPair>;
+    this.hooks_signing_key = undefined;
+    this.hooks_encryption_key = undefined;
   }
 }
 

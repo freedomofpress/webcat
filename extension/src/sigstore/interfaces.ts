@@ -98,12 +98,6 @@ export enum HashAlgorithms {
   SHA512 = "SHA-512",
 }
 
-export enum SignatureSchemes {
-  "rsassa-pss-sha256",
-  "ed25519",
-  "ecdsa-sha2-nistp256",
-}
-
 export enum Roles {
   Root = "root",
   Timestamp = "timestamp",
