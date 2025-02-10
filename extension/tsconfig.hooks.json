@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["DOM", "ES2020"],
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["firefox-webext-browser"],
+    "outDir": "./dist",
+  },
+  "include": ["./src/webcat/hooks.ts"],
+  "exclude": ["node_modules"]
+}

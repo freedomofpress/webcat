@@ -1,7 +1,7 @@
 ### How to package Cryptpad
 _Note_: while the following procedure has to be done per-instance, it would require minimal changes from the official projecty for it to be signed only once. Namely, config should be loaded as a fetched JSON or similar, and not sourced as a script.
 
-1. [Install following the official guide.]([https://github.com/element-hq/element-web/blob/develop/docs/install.md#debian-package](https://docs.cryptpad.org/fr/admin_guide/installation.html))
+1. [Install following the official guide](https://docs.cryptpad.org/fr/admin_guide/installation.html).
 2. Edit `/www/components/requirejs/require.js` and comment out the following line:
 ```
 //Calling onNodeCreated after all properties on the node have been

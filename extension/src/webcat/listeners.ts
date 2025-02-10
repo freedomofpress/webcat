@@ -4,12 +4,10 @@ import {
   tuf_sigstore_url,
 } from "../config";
 import { origins, popups, tabs } from "../globals";
-import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { TrustedRoot } from "../sigstore/interfaces";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { TUFClient } from "../sigstore/tuf";
 import { ensureDBOpen, isFQDNEnrolled } from "./db";
-import { getHooksInjector } from "./hooks";
 import { metadataRequestSource } from "./interfaces";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
@@ -105,7 +103,7 @@ export async function headersListener(
     (details.tabId < 0 && !(await isFQDNEnrolled(fqdn, details.tabId)))
   ) {
     // This is too much noise to really log
-    console.debug(`headersListener: skipping ${details.url}`);
+    //console.debug(`headersListener: skipping ${details.url}`);
     return {};
   }
 
@@ -167,7 +165,7 @@ export async function requestListener(
     // We will always wonder, is this check reasonable?
     // Might be redundant anyway if we skip xmlhttprequest
     // But we probably want to also ensure other extensions work
-    console.debug(`requestListener: skipping ${details.url}`);
+    //console.debug(`requestListener: skipping ${details.url}`);
     return {};
   }
 
@@ -290,102 +288,5 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
       //} else if (sender.url?.endsWith("/settings.html")) {
       //} else if (sender.url?.endsWith("/logs.html")) {
     }
-  }
-
-  const fqdn = getFQDN(sender.origin);
-  /* DEVELOPMENT GUARD */
-  if (!origins.has(fqdn) && sender.tab && tabs.has(sender.tab.id)) {
-    throw new Error(
-      "FATAL: WASM origin is not present but its execution tab is.",
-    );
-  }
-  const originStateCheck = origins.get(fqdn);
-  if (originStateCheck && !originStateCheck.populated) {
-    throw new Error(
-      "FATAL: WASM is being executed before the manifest is populated and verified.",
-    );
-  }
-  /* END DEVELOPMENT GUARD */
-
-  // Removed as we now inject only on enrolled websites anyway, see https://github.com/freedomofpress/webcat/issues/2
-  if (!origins.has(fqdn)) {
-    // TODO: this could be abused to detect the extension presence if we sent a response
-    // By not sending it, we disallow non-enrolled wbesite to know if the extension exists
-    logger.addLog(
-      "debug",
-      `${fqdn} is not enrolled, skipping WASM validation.`,
-      sender.tabId,
-      fqdn,
-    );
-    //sendResponse(true);
-    return;
-  }
-
-  const hash = Uint8ArrayToHex(new Uint8Array(message.details));
-  const originState = origins.get(fqdn);
-
-  if (
-    originState &&
-    originState.manifest &&
-    originState.manifest.manifest.wasm.includes(hash)
-  ) {
-    logger.addLog("info", `Validated WASM ${hash}`, sender.tab.id, fqdn);
-    sendResponse(true);
-  } else {
-    logger.addLog("error", `Invalid WASM ${hash}`, sender.tab.id, fqdn);
-    sendResponse(false);
-    errorpage(sender.tab.id);
-  }
-}
-
-export async function injectorListener(
-  details: browser.webNavigation._OnCommittedDetails,
-) {
-  // TODO: a security audit should find out if this is bypassable: can an onCommitted even race the
-  // population of the origins? Perhaps it would be better to do this on a tabid basis
-  const fqdn = getFQDN(details.url);
-  // This functio
-  const originState = origins.get(fqdn);
-  if (originState) {
-    // We aksed for async generation in class instantiation, must be ready now
-    if (!originState.encryption_key || !originState.signing_key) {
-      originState.encryption_key = await originState.encryption_key_promise;
-      originState.signing_key = await originState.signing_key_promise;
-      originState.encryption_public_key = await crypto.subtle.exportKey(
-        "jwk",
-        originState.encryption_key.publicKey,
-      );
-      originState.signing_public_key = await crypto.subtle.exportKey(
-        "jwk",
-        originState.signing_key.publicKey,
-      );
-    }
-    if (
-      !originState.encryption_public_key ||
-      !originState.signing_public_key ||
-      !originState.encryption_key ||
-      !originState.signing_key
-    ) {
-      throw new Error("Error setting up hooks keys.");
-    }
-    console.log("Here");
-    logger.addLog("debug", `Injecting WASM hooks`, details.tabId, fqdn);
-    const injectContent = getHooksInjector(
-      originState.signing_public_key,
-      originState.encryption_public_key,
-    );
-    const result = await browser.tabs.executeScript(details.tabId, {
-      code: injectContent,
-      runAt: "document_start",
-      // We are doing allFrames in the hope of https://github.com/freedomofpress/webcat/issues/3
-      allFrames: true,
-    });
-    console.log("Injected");
-    logger.addLog(
-      "debug",
-      `WASM hooks injected: ${result[0]}`,
-      details.tabId,
-      fqdn,
-    );
   }
 }

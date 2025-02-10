@@ -42,7 +42,7 @@ describe("validateCSP", () => {
   it("should pass with default-src 'self' and valid script-src, style-src, object-src, child-src/frame-src, and worker-src", async () => {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'sha256-abc'",
+      "script-src 'self' 'wasm-unsafe-eval'",
       "style-src 'self' 'sha256-def'",
       "object-src 'none'",
       "child-src 'self'",
@@ -157,45 +157,30 @@ describe("validateCSP", () => {
     );
   });
 
-  // Test 9: Invalid script-src source (unallowed host without enrollment)
+  // Test 9: Invalid frame-src source (unallowed host without enrollment)
   it("should throw an error for an invalid script-src source", async () => {
     const csp = [
       "default-src 'self'",
-      "script-src evil.com", // Not a valid keyword, hash, or enrolled origin
+      "script-src 'self'",
       "style-src 'self'",
       "object-src 'none'",
       "child-src 'self'",
-      "frame-src 'self'",
+      "frame-src evil.com",
       "worker-src 'self'",
     ].join("; ");
     await expect(
       validateCSP(csp, trustedFQDN, tabId, originState),
     ).rejects.toThrow(
-      "script-src value evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed.",
+      "frame-src value evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed.",
     );
   });
 
-  // Test 10: Valid script-src with an enrolled origin (simulate enrolled since isFQDNEnrolled returns true only for "trusted.com")
-  it("should pass for script-src with an enrolled origin", async () => {
-    const csp = [
-      "default-src 'self'",
-      "script-src trusted.com", // will be allowed because isFQDNEnrolled returns true
-      "style-src 'self'",
-      "object-src 'none'",
-      "child-src 'self'",
-      "frame-src 'self'",
-      "worker-src 'self'",
-    ].join("; ");
-    await expect(
-      validateCSP(csp, trustedFQDN, tabId, originState),
-    ).resolves.toBeUndefined();
-  });
-
   // Test 11: Invalid style-src source (non-enrolled and not a valid keyword/hash)
-  it("should throw an error for an invalid style-src source", async () => {
+  // No super strong feelings against external css, we already have unsafe inline anyway
+  /*it("should throw an error for an invalid style-src source", async () => {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'sha256-abc'",
+      "script-src 'self'",
       "style-src evil.com", // invalid
       "object-src 'none'",
       "child-src 'self'",
@@ -213,7 +198,7 @@ describe("validateCSP", () => {
   it("should pass for style-src with an enrolled origin", async () => {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'sha256-abc'",
+      "script-src 'self'",
       "style-src trusted.com", // allowed via enrollment
       "object-src 'none'",
       "child-src 'self'",
@@ -223,14 +208,14 @@ describe("validateCSP", () => {
     await expect(
       validateCSP(csp, trustedFQDN, tabId, originState),
     ).resolves.toBeUndefined();
-  });
+  });*/
 
   // Test 13: Invalid child-src with an http: scheme (if your logic forbids http:)
   it("should throw an error for child-src containing an http: source", async () => {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'sha256-abc'",
-      "style-src 'self'",
+      "script-src 'self' 'wasm-unsafe-eval'",
+      "style-src 'self' 'sha256-abc'",
       "object-src 'none'",
       "child-src http://evil.com",
       "frame-src 'self'",
@@ -247,7 +232,7 @@ describe("validateCSP", () => {
   it("should pass for child-src with a blob: source", async () => {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'sha256-abc'",
+      "script-src 'self'",
       "style-src 'self'",
       "object-src 'none'",
       "child-src blob:myblob",
@@ -263,7 +248,7 @@ describe("validateCSP", () => {
   it("should throw an error for frame-src containing a wildcard", async () => {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'sha256-abc'",
+      "script-src 'self' 'wasm-unsafe-eval'",
       "style-src 'self'",
       "object-src 'none'",
       "child-src 'self'",
@@ -279,7 +264,7 @@ describe("validateCSP", () => {
   it("should throw an error for script-src containing 'unsafe-inline'", async () => {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'sha256-abc'",
+      "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
       "style-src 'self'",
       "object-src 'none'",
       "child-src 'self'",
@@ -297,7 +282,7 @@ describe("validateCSP", () => {
   it("should pass for style-src containing 'unsafe-inline'", async () => {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'sha256-abc'",
+      "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
       "object-src 'none'",
       "child-src 'self'",
@@ -326,11 +311,11 @@ describe("validateCSP", () => {
   });
 
   // Test 19: Valid script-src with a valid hash source
-  it("should pass for script-src containing a valid hash", async () => {
+  it("should pass for style-src containing a valid hash", async () => {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'sha256-validhash'",
-      "style-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'sha256-validhash'",
       "object-src 'none'",
       "child-src 'self'",
       "frame-src 'self'",
@@ -345,7 +330,7 @@ describe("validateCSP", () => {
   it("should throw an error for child-src with a non-enrolled origin", async () => {
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'sha256-abc'",
+      "script-src 'self' 'wasm-unsafe-eval'",
       "style-src 'self'",
       "object-src 'none'",
       "child-src evil.com",

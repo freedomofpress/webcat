@@ -7,7 +7,7 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["firefox-webext-browser"],
+    "types": ["firefox-webext-browser", "vite/client"],
     "outDir": "./dist"
   },
   "include": ["./src/*.ts"],

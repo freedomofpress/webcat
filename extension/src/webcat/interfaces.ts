@@ -42,11 +42,6 @@ export class OriginState {
   signing_key_promise: Promise<CryptoKeyPair>;
   signing_key: CryptoKeyPair | undefined;
   signing_public_key: JsonWebKey | undefined;
-  encryption_key_promise: Promise<CryptoKeyPair>;
-  encryption_key: CryptoKeyPair | undefined;
-  encryption_public_key: JsonWebKey | undefined;
-  hooks_signing_key: CryptoKey | undefined;
-  hooks_encryption_key: CryptoKey | undefined;
 
   constructor(fqdn: string) {
     this.fqdn = fqdn;
@@ -69,13 +64,6 @@ export class OriginState {
       true,
       ["sign", "verify"],
     ) as Promise<CryptoKeyPair>;
-    this.encryption_key_promise = crypto.subtle.generateKey(
-      { name: "X25519" },
-      true,
-      ["deriveKey", "deriveBits"],
-    ) as Promise<CryptoKeyPair>;
-    this.hooks_signing_key = undefined;
-    this.hooks_encryption_key = undefined;
   }
 }
 
