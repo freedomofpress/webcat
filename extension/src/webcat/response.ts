@@ -1,6 +1,11 @@
-import { hexToUint8Array, Uint8ArrayToHex } from "../sigstore/encoding";
+import {
+  hexToUint8Array,
+  stringToUint8Array,
+  Uint8ArrayToHex,
+} from "../sigstore/encoding";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { origins } from "./../globals";
+import { getHooks } from "./genhooks";
 import { OriginState, PopupState } from "./interfaces";
 import { logger } from "./logger";
 import { parseSigners, parseThreshold } from "./parsers";
@@ -366,6 +371,13 @@ export async function validateResponseContent(
           popupState.valid_index = true;
         } else if (popupState) {
           popupState.loaded_assets.push(pathname);
+        }
+
+        if (details.type === "script") {
+          // Inject the WASM hooks in every loaded script.
+
+          const hooks = getHooks(originState.manifest.manifest.wasm);
+          filter.write(stringToUint8Array(hooks));
         }
 
         filter.write(blob);

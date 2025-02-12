@@ -6,26 +6,59 @@ CSP requirements are being dicussed more in detail in https://github.com/freedom
 
 However, some core requirements are unlinkely to change, as listed below.
 
+### default-src
+Only allowed attributes are:
+ - `self`
+ - `none`
+
+If `default-src` is not `none`, than it is required to specify `object-src`, `child-src` or `frame-src` and `worker-src`.
+
 ### script-src
 Only allowed attirbutes are:
+ - `none`
  - `self`
  - `wasm-unsafe-eval`
 
+Not that `sha-abc` format, while secure, breaks some assumptions about the sandbox and how the `WebAssembly` hooks work, thus it is not allowed.
+
 ### style-src
 Only allowed attirbutes are:
+ - `none`
  - `self`
+ - `sha-abc`
  - `unsafe-inline`*
+ - `unsafe-hashes`*
 
-* `unsafe-inline` is allowed due to every tested application making use of it. When developing or updating a new application, if possible, it would be better to avoid it to sensure future compatibility, as the end goal is to eventually drop support for it.
+* are allowed due to every tested application making use of it. When developing or updating a new application, if possible, it would be better to avoid it to sensure future compatibility, as the end goal is to eventually drop support for it.
 
 ### object-src
-None allowed for now, investigating the option of allowing `self` if necessary.
+Only allowed attirbutes are:
+ - `none`
+
+Must be `'none`' if `default-src` is not `'none'`, otherwise it can be omitted.
 
 ### frame-src, child-src
-Support and guidelines currently in progress. It is expected to allow only child sources also separately enrolled into this system.
+Only allowed attirbutes are:
+ - `none`
+ - `self`
+ - `blob:`
+ - `data:`
+ - `<external sources>`*
 
-### Everythign else (img-src, connect-src, etc)
-Everything should remain allowed.
+* external sources needs to be enrolled in WEBCAT too. At manifest parsing, it is checked whether any external origin is enrolled, or the validation fails. Then, upon loading, any external origin is fully validated th same as the main_frame.
+
+Either one of the two must be set if `default-src` is not `'none'`, otherwise it can be omitted.
+
+### worker-src
+Only allowed attirbutes are:
+ - `none`
+ - `self`
+
+Must be set if `default-src` is not `'none'`, otherwise it can be omitted.
+
+
+### Everything else (img-src, connect-src, etc)
+Everything else does not currently have limitations.
 
 ## Server generated content
 Since pages need to be signed and remain static, both HTML and scripts must not change after deployment or have any server generated content. Server generated content can still be sourced and used via `fetch` request, `image` objects and so on. This si to prevent runtime code from changing.
@@ -41,4 +74,4 @@ Similarly, branding in Jitsi is handled by editing HTML files such as `head.html
 Since server generated pages cannot work, in general it is expected that the application is launched from the root and then uses anchor navigation. Non anchor navigation is still supported, and every file not found in the manifest is tentatively hashed against the index hash in the manifest, as it is the case for Jitsi (a room name is a random path, and we cannot expect that to be present in the manifest, however we expect that to be handled by a url rewrite and sent to the index, which is present in the manifest).
 
 ## Signing
-For signing see the [signing script](../signing). In the future, the will be instructions on how to integrate signing in a CI pipeline, since that is already widely supported by Sigstore.
+For signing see the [signing script](../signing). In the future, the will be instructions on how to integrate signing in a CI pipeline, since that is already supported by Sigstore.

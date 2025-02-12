@@ -2,7 +2,7 @@
     "app_name": "GlobaLeaks",
     "app_version": "5.0.44",
     "comment": "https://github.com/globaleaks/globaleaks-whistleblowing-software/releases/tag/v5.0.44",
-    "wasm": [],
+    "wasm": ["4b3ae4e84f416581bc6ed81f3702bd3530318bf7140b0f7f177adfeb074452c4"],
     "default_csp": "base-uri 'none';default-src 'none';form-action 'none';frame-ancestors 'none';sandbox;trusted-types;require-trusted-types-for 'script';report-uri /api/report;",
     "extra_csp": {
         "/": "base-uri 'none';connect-src 'self';default-src 'none';font-src 'self';form-action 'none';frame-ancestors 'none';frame-src 'self';img-src 'self';media-src 'self';script-src 'self';style-src 'self';trusted-types angular angular#bundler dompurify default;require-trusted-types-for 'script';",

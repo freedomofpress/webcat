@@ -1,0 +1,8 @@
+{
+    "app_name": "Jitsi Meet",
+    "app_version": "2.0.10008",
+    "comment": "https://github.com/jitsi/jitsi-meet/releases/tag/stable%2Fjitsi-meet_10008",
+    "wasm": [],
+    "default_csp": "default-src 'self'; font-src 'self'; img-src 'self' data:; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'self';",
+    "extra_csp": {}
+}

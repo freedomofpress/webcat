@@ -1,11 +1,22 @@
 ### How to package Element
+Tested on 5.0.44.
 
 1. [Install the debian package.](https://github.com/element-hq/element-web/blob/develop/docs/install.md#debian-package)
-2. Due to how the WASM matrix SDK is loaded, we need to grab the hash of the crypto-sdk WASM at runtime (or dig in the packed js and extract the base64 of it manually). In a browser with the extension installed, visit a live copy of Element: look into the console and grab any WASM sha256 hash that gets printed in the console  by the hooking scripts.
-3. Build and sign the manifest:
-
-    1. `python3 signing/main.py /usr/share/element-web --output manifest.json --canonical_output canonical_manifest.json --app_version 2 --webcat_version 1 --signatures 2 --bundle_output sigstore_bundle `
-    2. When asked for additional WASM hashes, input the one(s) collected above.
-    3. Proceed with the signatures.
-
-Of course the webserver should be configure to be webcat compliant. Element also specifies the CSP policy in the main frame; every part of webcat expects that to be a HTTP header, so it's important to bring that policy also into the headers, and either remove it from the HTML (before signing), and if modified sync it in the two places.
+2. Add the required `x-sigstore-headers` and `x-sigstore-signers` to the webserver configuration.
+3. Add the following CSP to the webserver configuration (or adapt it to a more recent version, keeping in mind the CSP limitations in WEBCAT):
+```
+default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; img-src * blob: data:; connect-src * blob:; font-src 'self' data: ; media-src * blob: data:; child-src blob: data:; worker-src 'self'; frame-src blob: data:; form-action 'self'; manifest-src 'self';
+```
+4. Check and edit the following configuration if needed, save it in `/usr/share/element-web/webcat.config.json`:
+```
+{
+    "app_name": "Element",
+    "app_version": "1.11.92",
+    "comment": "https://github.com/element-hq/element-web/releases/tag/v1.11.92",
+    "wasm": [],
+    "default_csp": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; img-src * blob: data:; connect-src * blob:; font-src 'self' data: ; media-src * blob: data:; child-src blob: data:; worker-src 'self'; frame-src blob: data:; form-action 'self'; manifest-src 'self';",
+    "extra_csp": {}
+}
+```
+5. Build and sign the manifest, specifying the amount of signatures desired:
+`python3 signing/signer.py /usr/share/element-web/ --output /usr/share/element-web/webcat.json --signatures 1`

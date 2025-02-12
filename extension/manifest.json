@@ -13,6 +13,7 @@
     "webNavigation",
     "webRequest",
     "webRequestBlocking",
+    "webRequestFilterResponse.serviceWorkerScript",
     "tabs",
     "<all_urls>"
   ],
@@ -30,13 +31,6 @@
     "scripts": ["dist/bundle.js"],
     "persistent": true
   },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["hooks/relay.js"],
-      "run_at": "document_start"
-    }
-  ],
   "browser_action": {
     "default_icon": {
       "48": "icons/light/webcat.svg",

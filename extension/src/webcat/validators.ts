@@ -143,8 +143,6 @@ export async function validateCSP(
     }
   }
 
-  // TODO: These checks can probably be refactored to be more concise and readable
-
   // Step 3: think about scripts
   const script_src = parsedCSP.get(directives.ScriptSrc);
   if (default_src_is_none == false && (!script_src || script_src.length < 1)) {
@@ -161,7 +159,10 @@ export async function validateCSP(
           source_keywords.Self,
           source_keywords.WasmUnsafeEval,
         ],
-        [source_types.Hash, source_types.EnrolledOrigins],
+        // Here allowing hash would break the WASM hooking; as we are no longer injecting
+        // Via a content_script, but rather at the network level on script files, having embedded
+        // JS in HTML page could break the assumptions.
+        [],
       );
     }
   }
@@ -184,7 +185,8 @@ export async function validateCSP(
           source_keywords.UnsafeInline,
           source_keywords.UnsafeHashes,
         ],
-        [source_types.Hash, source_types.EnrolledOrigins],
+        // We could allow remote verified origins, but I'd lean towards not
+        [source_types.Hash],
       );
     }
   }
@@ -210,7 +212,7 @@ export async function validateCSP(
           [source_keywords.None, source_keywords.Self],
           // You can iframe from a blob, and that will be either HTMl or include authenticated script
           // Cause the script src is inherited or enforced in all frames, also the hook injection is inherited by allFrames
-          [source_types.Blob, source_types.EnrolledOrigins],
+          [source_types.Blob, source_types.Data, source_types.EnrolledOrigins],
         );
       }
     }
@@ -222,7 +224,7 @@ export async function validateCSP(
           directives.FrameSrc,
           [source_keywords.None, source_keywords.Self],
           // Same as for child src
-          [source_types.Blob, source_types.EnrolledOrigins],
+          [source_types.Blob, source_types.Data, source_types.EnrolledOrigins],
         );
       }
     }
@@ -239,7 +241,7 @@ export async function validateCSP(
         src,
         directives.WorkerSrc,
         [source_keywords.None, source_keywords.Self],
-        [source_types.EnrolledOrigins],
+        [],
       );
     }
   }

@@ -8,6 +8,12 @@ import {
 } from "./../../src/webcat/interfaces";
 import { validateResponseHeaders } from "./../../src/webcat/response";
 
+vi.mock("./../../dist/hooks.js?raw", () => {
+  return {
+    default: "",
+  };
+});
+
 vi.stubGlobal(
   "fetch",
   vi.fn(() =>
