@@ -9,6 +9,58 @@
     return;
   }
 
+  // ServiceWorkers persistence checker
+  // see https://github.com/freedomofpress/webcat/issues/18
+  if (
+    "serviceWorker" in navigator &&
+    typeof window !== "undefined" &&
+    self === window &&
+    !sessionStorage.getItem("checked_sw")
+  ) {
+    sessionStorage.setItem("checked_sw", "true");
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      for (const registration of registrations) {
+        // Check if there's an active service worker before calling update
+        if (!registration.active) {
+          console.warn(
+            `No active service worker found for registration with scope: ${registration.scope}. Skipping update.`,
+          );
+          continue; // Skip this registration if there's no active worker
+        }
+        try {
+          await registration.update();
+          console.log(
+            `Service worker at ${registration.active.scriptURL} updated successfully.`,
+          );
+        } catch (updateError) {
+          console.error(
+            `Service worker update failed for ${registration.active.scriptURL}:`,
+            updateError,
+          );
+          try {
+            const success = await registration.unregister();
+            if (success) {
+              console.log(
+                `Service worker at ${registration.active.scriptURL} was unregistered due to update failure.`,
+              );
+            } else {
+              console.warn(
+                `Service worker at ${registration.active.scriptURL} could not be unregistered.`,
+              );
+            }
+          } catch (unregisterError) {
+            console.error(
+              `Error while unregistering service worker at ${registration.active.scriptURL}:`,
+              unregisterError,
+            );
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching service worker registrations:", err);
+    }
+  }
   // Save the original crypto.subtle.
   const originalCryptoSubtle: SubtleCrypto = crypto.subtle;
 
