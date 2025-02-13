@@ -8,7 +8,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["firefox-webext-browser"],
-    "outDir": "./dist",
+    "outDir": "./dist"
   },
   "include": ["./src/webcat/hooks.ts"],
   "exclude": ["node_modules"]
