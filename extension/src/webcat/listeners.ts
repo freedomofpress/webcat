@@ -8,7 +8,7 @@ import { TrustedRoot } from "../sigstore/interfaces";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { TUFClient } from "../sigstore/tuf";
 import { ensureDBOpen, getFQDNPolicy } from "./db";
-import { metadataRequestSource } from "./interfaces";
+import { metadataRequestSource } from "./interfaces/base";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { validateResponseContent, validateResponseHeaders } from "./response";

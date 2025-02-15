@@ -1,11 +1,12 @@
+import { version } from "./../config";
 import { origins, popups, tabs } from "./../globals";
-import { getFQDNPolicy } from "./db";
+import { getFQDNPolicy, list_count } from "./db";
+import { metadataRequestSource } from "./interfaces/base";
 import {
-  metadataRequestSource,
   OriginStateHolder,
   OriginStateInitial,
-  PopupState,
-} from "./interfaces";
+} from "./interfaces/originstate";
+import { PopupState } from "./interfaces/popupstate";
 import { sigstore } from "./listeners";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
@@ -23,7 +24,7 @@ export async function validateOrigin(
   }
 
   if (type === metadataRequestSource.main_frame) {
-    const newPopupState = new PopupState(fqdn, tabId);
+    const newPopupState = new PopupState(fqdn, tabId, version, list_count);
     popups.set(tabId, newPopupState);
     setIcon(tabId);
   }

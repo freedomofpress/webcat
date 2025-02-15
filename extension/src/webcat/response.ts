@@ -8,8 +8,8 @@ import {
   OriginStatePopulatedHeaders,
   OriginStatePopulatedManifest,
   OriginStateVerifiedManifest,
-  PopupState,
-} from "./interfaces";
+} from "./interfaces/originstate";
+import { PopupState } from "./interfaces/popupstate";
 import { logger } from "./logger";
 import { setOKIcon } from "./ui";
 import {
@@ -120,6 +120,7 @@ export async function validateResponseHeaders(
       );
     }
     originStateHolder.current = populatedHeadersState;
+
     if (popupState) {
       popupState.threshold = originStateHolder.current.policy.threshold;
       popupState.valid_headers = true;
