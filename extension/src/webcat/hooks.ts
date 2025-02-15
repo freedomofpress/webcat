@@ -15,9 +15,9 @@
     "serviceWorker" in navigator &&
     typeof window !== "undefined" &&
     self === window &&
-    !sessionStorage.getItem("checked_sw")
+    !sessionStorage.getItem("__webcat_checked_sw__")
   ) {
-    sessionStorage.setItem("checked_sw", "true");
+    sessionStorage.setItem("__webcat_checked_sw__", "true");
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();
       for (const registration of registrations) {
