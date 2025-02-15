@@ -1,14 +1,16 @@
-import {
-  hexToUint8Array,
-  stringToUint8Array,
-  Uint8ArrayToHex,
-} from "../sigstore/encoding";
-import { SigstoreVerifier } from "../sigstore/sigstore";
+import { hexToUint8Array, stringToUint8Array } from "../sigstore/encoding";
 import { origins } from "./../globals";
 import { getHooks } from "./genhooks";
-import { OriginState, PopupState } from "./interfaces";
+import {
+  OriginStateFailed,
+  OriginStateHolder,
+  OriginStateInitial,
+  OriginStatePopulatedHeaders,
+  OriginStatePopulatedManifest,
+  OriginStateVerifiedManifest,
+  PopupState,
+} from "./interfaces";
 import { logger } from "./logger";
-import { parseSigners, parseThreshold } from "./parsers";
 import { setOKIcon } from "./ui";
 import {
   arrayBufferToHex,
@@ -17,51 +19,33 @@ import {
   getFQDN,
   SHA256,
 } from "./utils";
-import { validateManifest } from "./validators";
 
-export async function validateResponseHeaders(
-  sigstore: SigstoreVerifier,
-  originState: OriginState,
-  popupState: PopupState | undefined,
+export function extractAndValidateHeaders(
   details: browser.webRequest._OnHeadersReceivedDetails,
-) {
-  const headers: string[] = [];
-
-  // Some headers, such as CSP, needs to always be validated
-  // Some others, like the policy, just when we load the manifest for the first time
-
-  // In both cases, this should not happen
+): Map<string, string> {
+  // Ensure that response headers exist.
   if (!details.responseHeaders) {
     throw new Error("Missing response headers.");
   }
 
-  /* Now, we should reload and reverify the manifest only if:
-     1) It has not been done nefore
-     2) TODO: The app has been updated --> not implemented
-    */
-  logger.addLog(
-    "info",
-    `Validating response headers, url: ${details.url} populated: ${originState.populated}`,
-    details.tabId,
-    originState.fqdn,
-  );
-
-  // Headers we care about (normalized to lowercase)
+  // Define the critical headers we care about.
   const criticalHeaders = new Set([
     "content-security-policy",
     "x-sigstore-signers",
     "x-sigstore-threshold",
   ]);
 
-  // Track seen critical headers to detect duplicates
+  // Track seen critical headers to detect duplicates.
   const seenCriticalHeaders = new Set<string>();
   const normalizedHeaders = new Map<string, string>();
+  const headers: string[] = [];
 
+  // Loop over each header, normalize the name, and store its value.
   for (const header of details.responseHeaders) {
     if (header.name && header.value) {
       const lowerName = header.name.toLowerCase();
 
-      // Check for duplicates only among critical headers
+      // Check for duplicates among critical headers.
       if (criticalHeaders.has(lowerName)) {
         if (seenCriticalHeaders.has(lowerName)) {
           throw new Error(`Duplicate critical header detected: ${lowerName}`);
@@ -74,13 +58,42 @@ export async function validateResponseHeaders(
     }
   }
 
+  // Ensure all critical headers are present.
   for (const criticalHeader of criticalHeaders) {
     if (!normalizedHeaders.has(criticalHeader)) {
-      if (popupState) {
-        popupState.valid_headers = false;
-      }
       throw new Error(`Missing critical header: ${criticalHeader}`);
     }
+  }
+
+  // Retrieve the Content-Security-Policy (CSP) header (safe to use non-null assertion here based on the check above).
+  return normalizedHeaders;
+}
+
+export async function validateResponseHeaders(
+  originStateHolder: OriginStateHolder,
+  popupState: PopupState | undefined,
+  details: browser.webRequest._OnHeadersReceivedDetails,
+) {
+  const fqdn = originStateHolder.current.fqdn;
+  // Some headers, such as CSP, needs to always be validated
+  // Some others, like the policy, just when we load the manifest for the first time
+
+  logger.addLog(
+    "info",
+    `Validating response headers, url: ${details.url} status: ${originStateHolder.current.status}`,
+    details.tabId,
+    originStateHolder.current.fqdn,
+  );
+
+  // Step 1: Extract headers, normalize, check for duplicates and mandatory ones
+  let normalizedHeaders: Map<string, string>;
+  try {
+    normalizedHeaders = extractAndValidateHeaders(details);
+  } catch (e) {
+    if (popupState) {
+      popupState.valid_headers = false;
+    }
+    throw new Error(`Error parsing headers: ${e}`);
   }
 
   // The null assertion is checked in the loop above
@@ -88,82 +101,28 @@ export async function validateResponseHeaders(
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const csp = normalizedHeaders.get("content-security-policy")!;
 
-  if (originState.populated === false) {
-    // Extract X-Sigstore-Signers
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const signersHeader = normalizedHeaders.get("x-sigstore-signers")!;
-    originState.policy.signers = parseSigners(signersHeader);
+  // TODO: once all of this is tested we can remove the temp variables and operate directly on the holder
+  let populatedHeadersState: OriginStatePopulatedHeaders | OriginStateFailed;
+  let populatedManifestState: OriginStatePopulatedManifest | OriginStateFailed;
+  let verifiedManifestState: OriginStateVerifiedManifest | OriginStateFailed;
 
-    // Extract X-Sigstore-Threshold
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const thresholdHeader = normalizedHeaders.get("x-sigstore-threshold")!;
-    originState.policy.threshold = parseThreshold(
-      thresholdHeader,
-      originState.policy.signers.size,
-    );
-
-    // Update popup state if it exists
+  // Step 2: If
+  if (originStateHolder.current.status === "request_sent") {
+    const initialState = originStateHolder.current as OriginStateInitial;
+    populatedHeadersState =
+      await initialState.populateHeaders(normalizedHeaders);
+    if (populatedHeadersState.status === "failed") {
+      if (popupState) {
+        popupState.valid_headers = false;
+      }
+      throw new Error(
+        `Error validating headers: ${populatedHeadersState.errorMessage}`,
+      );
+    }
+    originStateHolder.current = populatedHeadersState;
     if (popupState) {
-      popupState.threshold = originState.policy.threshold;
-    }
-
-    if (
-      originState.policy.threshold < 1 ||
-      originState.policy.signers.size < 1 ||
-      originState.policy.threshold > originState.policy.signers.size
-    ) {
-      if (popupState) {
-        popupState.valid_headers = false;
-      }
-      throw new Error("Failed to find all the necessary policy headers!");
-    }
-
-    const normalizedSigners = Array.from(originState.policy.signers).map(
-      ([issuer, identity]) => ({
-        identity,
-        issuer,
-      }),
-    );
-
-    // Sort the normalized signers by identity, then issuer
-    normalizedSigners.sort(
-      (a, b) =>
-        a.identity.localeCompare(b.identity) ||
-        a.issuer.localeCompare(b.issuer),
-    );
-
-    // Create the policy object
-    const policyObject = {
-      "x-sigstore-signers": normalizedSigners, // Use array of objects
-      "x-sigstore-threshold": originState.policy.threshold, // Already normalized
-    };
-
-    // Compute hash of the normalized policy
-    const policyString = JSON.stringify(policyObject);
-    logger.addLog(
-      "info",
-      `policy: ${policyString}`,
-      details.tabId,
-      originState.fqdn,
-    );
-
-    // Validate policy hash
-    logger.addLog(
-      "info",
-      `Computed policy hash is ${Uint8ArrayToHex(new Uint8Array(await SHA256(policyString)))}`,
-      details.tabId,
-      originState.fqdn,
-    );
-    if (
-      !arraysEqual(
-        originState.policyHash,
-        new Uint8Array(await SHA256(policyString)),
-      )
-    ) {
-      if (popupState) {
-        popupState.valid_headers = false;
-      }
-      throw new Error("Response headers do not match the preload list.");
+      popupState.threshold = originStateHolder.current.policy.threshold;
+      popupState.valid_headers = true;
     }
 
     logger.addLog(
@@ -173,63 +132,64 @@ export async function validateResponseHeaders(
       getFQDN(details.url),
     );
 
-    if (popupState) {
-      popupState.valid_headers = true;
-    }
-
-    const manifestResponse = await originState.manifestPromise;
-
-    logger.addLog(
-      "debug",
-      "Manifest request returned",
-      details.tabId,
-      getFQDN(details.url),
-    );
-
-    if (manifestResponse.ok !== true) {
-      throw new Error("Failed to fetch manifest.json: server error");
-    }
-    originState.manifest = await manifestResponse.json();
-
-    try {
-      originState.valid = await validateManifest(
-        sigstore,
-        originState,
-        details.tabId,
-        popupState,
+    populatedManifestState = await populatedHeadersState.populateManifest();
+    if (populatedManifestState.status === "failed") {
+      throw new Error(
+        `Error populating manifest: ${populatedManifestState.errorMessage}`,
       );
-    } catch (e) {
+    }
+
+    originStateHolder.current = populatedManifestState;
+
+    verifiedManifestState = await populatedManifestState.validateManifest();
+    if (verifiedManifestState.status === "failed") {
       if (popupState) {
         popupState.valid_manifest = false;
       }
-      throw new Error(`Manifest validation failed: ${e}`);
+      throw new Error(
+        `Error populating manifest: ${verifiedManifestState.errorMessage}`,
+      );
+    }
+
+    originStateHolder.current = verifiedManifestState;
+
+    if (originStateHolder.current.status !== "verified_manifest") {
+      throw new Error(
+        `FATAL: expect origin in state verified_manifest, got ${originStateHolder.current.status}`,
+      );
     }
 
     if (popupState) {
       popupState.valid_manifest = true;
+      popupState.valid_signers = originStateHolder.current.valid_signers;
     }
-
-    originState.populated = true;
 
     logger.addLog(
       "info",
       `Metadata for ${details.url} loaded`,
       details.tabId,
-      originState.fqdn,
+      fqdn,
     );
-  } else if (popupState && originState.populated) {
-    popupState.valid_headers = true;
   }
 
   // Now, we should have the manifest, and can validate the CSP based on path
-  if (!originState.manifest || originState.valid !== true) {
+  /* DEVELOPMENT GUARD */
+  if (
+    !originStateHolder.current.manifest ||
+    originStateHolder.current.status !== "verified_manifest"
+  ) {
+    // Though this should never happen?
+    if (popupState) {
+      popupState.valid_manifest = true;
+    }
     throw new Error(
       "Validating CSP, but no valid manifest for the origin has been found.",
     );
   }
+  /* END DEVELOPMENT GUARD */
 
-  const extraCSP = originState.manifest.manifest.extra_csp || {};
-  const defaultCSP = originState.manifest.manifest.default_csp;
+  const extraCSP = originStateHolder.current.manifest.extra_csp || {};
+  const defaultCSP = originStateHolder.current.manifest.default_csp;
 
   const pathname = new URL(details.url).pathname;
   let correctCSP = "";
@@ -246,7 +206,7 @@ export async function validateResponseHeaders(
       "debug",
       `CSP expecting ${correctCSP}, server returned ${csp}`,
       details.tabId,
-      originState.fqdn,
+      originStateHolder.current.fqdn,
     );
   }
 
@@ -271,7 +231,7 @@ export async function validateResponseHeaders(
       "debug",
       `CSP path best match is ${bestMatch ? bestMatch : "default_csp"} for ${pathname}, expecting ${correctCSP}, server returned ${csp}`,
       details.tabId,
-      originState.fqdn,
+      fqdn,
     );
   }
 
@@ -285,7 +245,7 @@ export async function validateResponseHeaders(
     "info",
     `CSP validated for path ${pathname}`,
     details.tabId,
-    originState.fqdn,
+    fqdn,
   );
 
   if (popupState) {
@@ -307,6 +267,7 @@ export async function validateResponseContent(
     filter.write(new Uint8Array([68, 69, 78, 73, 69, 68]));
   }
 
+  const fqdn = getFQDN(details.url);
   const filter = browser.webRequest.filterResponseData(details.requestId);
 
   const source: ArrayBuffer[] = [];
@@ -319,28 +280,32 @@ export async function validateResponseContent(
   };
 
   filter.onstop = async () => {
-    if (!origins.has(getFQDN(details.url))) {
+    if (!origins.has(fqdn)) {
       throw new Error(
         "The origin still does not exists while the response content is arriving.",
       );
     }
-    const originState = origins.get(getFQDN(details.url));
-    if (originState && originState.valid === true) {
+    const originStateHolder = origins.get(getFQDN(details.url));
+    if (
+      originStateHolder &&
+      originStateHolder.current.status === "verified_manifest"
+    ) {
       const blob = await new Blob(source).arrayBuffer();
       const pathname = new URL(details.url).pathname;
 
-      if (!originState.manifest) {
+      const manifest = originStateHolder.current.manifest;
+      if (!manifest) {
         throw new Error(
           "Manifest not loaded, and it should never happen here.",
         );
       }
 
       const manifest_hash =
-        originState.manifest.manifest.files[pathname] ||
-        originState.manifest.manifest.files[
+        manifest.files[pathname] ||
+        manifest.files[
           pathname.substring(0, pathname.lastIndexOf("/")) + "/"
         ] ||
-        originState.manifest.manifest.files["/"];
+        manifest.files["/"];
 
       if (!manifest_hash) {
         throw new Error("Manifest does not contain a hash for the root.");
@@ -360,12 +325,7 @@ export async function validateResponseContent(
         blob.byteLength === 0
       ) {
         // If everything is OK then we can just write the raw blob back
-        logger.addLog(
-          "info",
-          `${pathname} verified.`,
-          details.tabId,
-          originState.fqdn,
-        );
+        logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
 
         if (details.type == "main_frame" && popupState) {
           popupState.valid_index = true;
@@ -376,7 +336,7 @@ export async function validateResponseContent(
         if (details.type === "script") {
           // Inject the WASM hooks in every loaded script.
 
-          const hooks = getHooks(originState.manifest.manifest.wasm);
+          const hooks = getHooks(manifest.wasm);
           filter.write(stringToUint8Array(hooks));
         }
 
@@ -388,8 +348,9 @@ export async function validateResponseContent(
           "error",
           `Error: hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
           details.tabId,
-          originState.fqdn,
+          fqdn,
         );
+
         if (details.type == "main_frame" && popupState) {
           popupState.valid_index = false;
         } else if (popupState) {
@@ -408,7 +369,7 @@ export async function validateResponseContent(
         "error",
         `Error: tab context is not valid ${details.url}`,
         details.tabId,
-        originState?.fqdn ? originState.fqdn : "undefined",
+        fqdn,
       );
       // DENIED
       deny(filter);

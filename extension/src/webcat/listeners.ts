@@ -7,7 +7,7 @@ import { origins, popups, tabs } from "../globals";
 import { TrustedRoot } from "../sigstore/interfaces";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { TUFClient } from "../sigstore/tuf";
-import { ensureDBOpen, isFQDNEnrolled } from "./db";
+import { ensureDBOpen, getFQDNPolicy } from "./db";
 import { metadataRequestSource } from "./interfaces";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
@@ -53,7 +53,7 @@ function cleanup(tabId: number) {
       );
     }
     /* END */
-    originState.references--;
+    originState.current.references--;
     /* Here we could check if references are 0, and delete the origin object too */
     tabs.delete(tabId);
     popups.delete(tabId);
@@ -97,10 +97,11 @@ export async function headersListener(
 
   if (
     // Skip non-enrolled tabs
-    (!tabs.has(details.tabId) && details.tabId > 0) ||
+    (!tabs.has(details.tabId) &&
+      details.tabId > 0 &&
+      (await getFQDNPolicy(fqdn)).length === 0) ||
     // Skip non-enrolled workers
-    // What at browser restart?
-    (details.tabId < 0 && !(await isFQDNEnrolled(fqdn, details.tabId)))
+    (details.tabId < 0 && (await getFQDNPolicy(fqdn)).length === 0)
   ) {
     // This is too much noise to really log
     //console.debug(`headersListener: skipping ${details.url}`);
@@ -121,8 +122,6 @@ export async function headersListener(
       fqdn,
     );
     await validateOrigin(
-      tabs,
-      popups,
       fqdn,
       details.url,
       details.tabId,
@@ -130,16 +129,15 @@ export async function headersListener(
     );
   }
 
-  /* DEVELOPMENT GUARD */
-  const originState = origins.get(fqdn);
-  const popupState = popups.get(details.tabId);
+  const originStateHolder = origins.get(fqdn);
+  const popupStateHolder = popups.get(details.tabId);
 
-  if (!originState) {
-    throw new Error("No originState while starting to pass response.");
+  if (!originStateHolder) {
+    throw new Error("No originState while starting to parse response.");
   }
 
   try {
-    await validateResponseHeaders(sigstore, originState, popupState, details);
+    await validateResponseHeaders(originStateHolder, popupStateHolder, details);
   } catch (error) {
     logger.addLog(
       "error",
@@ -183,8 +181,6 @@ export async function requestListener(
     try {
       // This just checks some basic stuff, like TLS/Onion usage and populate the cache if it doesnt exists
       await validateOrigin(
-        tabs,
-        popups,
         fqdn,
         details.url,
         details.tabId,
@@ -205,7 +201,7 @@ export async function requestListener(
   /* DEVELOPMENT GUARD */
   /*it's here for development: meaning if we reach this stage
     and the fqdn is enrolled, but a entry in the origin map has nor been created, there is a critical security bug */
-  if ((await isFQDNEnrolled(fqdn, details.tabId)) === true) {
+  if ((await getFQDNPolicy(fqdn)).length !== 0 && !origins.has(fqdn)) {
     console.error(
       "FATAL: loading from an enrolled origin but the state does not exists.",
     );
@@ -259,10 +255,10 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
               valid_sources.add(source);
 
               const sourceState = origins.get(source);
-              if (!sourceState) {
+              if (!sourceState?.current) {
                 return;
               }
-              const newValidSources = sourceState.valid_sources || [];
+              const newValidSources = sourceState.current.valid_sources || [];
 
               for (const newSource of newValidSources) {
                 if (!valid_sources.has(newSource)) {
@@ -271,8 +267,8 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
               }
             }
 
-            if (originState) {
-              for (const source of originState.valid_sources) {
+            if (originState?.current) {
+              for (const source of originState.current.valid_sources) {
                 traverseValidSources(source, popupState.valid_sources);
               }
             }

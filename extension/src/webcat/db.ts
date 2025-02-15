@@ -1,6 +1,6 @@
 import { nonOrigins, origins } from "./../globals";
 import { logger } from "./logger";
-import { arrayBufferToHex, SHA256 } from "./utils";
+import { SHA256 } from "./utils";
 
 export let list_count: number = 0;
 let list_db: IDBDatabase;
@@ -138,31 +138,26 @@ export async function getCount(storeName: string): Promise<number> {
   });
 }
 
-// TabID is passed only mostly for debugging
-// TODO, restructure so we do all object creation and caching and checking in the same function?
-export async function isFQDNEnrolled(
-  fqdn: string,
-  tabId: number,
-): Promise<boolean | Uint8Array> {
+export async function getFQDNPolicy(fqdn: string): Promise<Uint8Array> {
   // Caching of hits
   await ensureDBOpen();
-  const originState = origins.get(fqdn);
-  if (originState) {
+  const originStateHolder = origins.get(fqdn);
+  if (originStateHolder) {
     // This can't happen AFAIK
-    if (!originState.policyHash) {
+    if (!originStateHolder.current.policyHash) {
       throw new Error(
         "FATAL: we found a cached origin without a policy associated",
       );
     }
-    logger.addLog("info", `Policy cache hit for ${fqdn}`, tabId, fqdn);
+    //logger.addLog("debug", `Policy cache hit for ${fqdn}`, -1, fqdn);
 
-    return originState.policyHash;
+    return originStateHolder.current.policyHash;
   }
 
   // Caching of misses
   if (nonOrigins.has(fqdn)) {
-    logger.addLog("info", `Non enrolled cache hit for ${fqdn}`, tabId, fqdn);
-    return false;
+    //logger.addLog("info", `Non enrolled cache hit for ${fqdn}`, -1, fqdn);
+    return new Uint8Array();
   }
 
   const fqdn_hash = await SHA256(fqdn);
@@ -175,18 +170,18 @@ export async function isFQDNEnrolled(
 
     request.onsuccess = () => {
       if (request.result && request.result["policyhash"]) {
-        logger.addLog(
-          "info",
-          `Found policy hash ${arrayBufferToHex(request.result["policyhash"])} for ${fqdn}`,
-          tabId,
-          fqdn,
-        );
+        //logger.addLog(
+        //  "info",
+        //  `Found policy hash ${arrayBufferToHex(request.result["policyhash"])} for ${fqdn}`,
+        //  -1,
+        //  fqdn,
+        //);
         resolve(new Uint8Array(request.result["policyhash"]));
       } else {
         // Insert in cache
-        logger.addLog("info", `${fqdn} non-enrolled, caching`, tabId, fqdn);
+        //logger.addLog("debug", `${fqdn} non-enrolled, caching`, -1, fqdn);
         nonOrigins.add(fqdn);
-        resolve(false);
+        resolve(new Uint8Array());
       }
     };
     request.onerror = () => {
@@ -196,7 +191,7 @@ export async function isFQDNEnrolled(
         -1,
         fqdn,
       );
-      reject(false);
+      reject(new Uint8Array());
     };
   });
 }
