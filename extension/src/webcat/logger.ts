@@ -1,4 +1,4 @@
-import { LogEntry } from "./interfaces";
+import { LogEntry } from "./interfaces/log";
 
 type ConsoleLevel = "log" | "warn" | "error" | "info" | "debug";
 const globalLogs: LogEntry[] = [];
