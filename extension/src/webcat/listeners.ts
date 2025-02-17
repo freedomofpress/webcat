@@ -268,7 +268,9 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
             }
 
             if (originState?.current) {
-              for (const source of originState.current.valid_sources) {
+              for (const source of originState.current.valid_sources
+                ? originState.current.valid_sources
+                : new Set<string>()) {
                 traverseValidSources(source, popupState.valid_sources);
               }
             }

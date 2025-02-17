@@ -1,7 +1,6 @@
 // validateCSP.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { OriginState } from "../../src/webcat/interfaces";
 import { validateCSP } from "../../src/webcat/validators";
 
 // We already have mocks set up in your project as follows:

@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SigstoreVerifier } from "../../src/sigstore/sigstore";
 import {
-  Issuers,
   OriginStateHolder,
   OriginStateInitial,
-  PopupState,
-} from "./../../src/webcat/interfaces";
+} from "../../src/webcat/interfaces/originstate";
+import { PopupState } from "../../src/webcat/interfaces/popupstate";
+import { Issuers } from "./../../src/webcat/interfaces/base";
 import { validateResponseHeaders } from "./../../src/webcat/response";
 
 vi.mock("./../../dist/hooks.js?raw", () => {
@@ -126,7 +126,7 @@ describe("validateResponseHeaders", () => {
   });
 
   it("validates correct headers successfully", async () => {
-    originStateHolder.current.policyHash = await generatePolicyHash(
+    originStateHolder.current.policy_hash = await generatePolicyHash(
       details.responseHeaders,
     );
     await expect(
@@ -136,7 +136,7 @@ describe("validateResponseHeaders", () => {
   });
 
   it("throws error when response headers are missing", async () => {
-    originStateHolder.current.policyHash = await generatePolicyHash(
+    originStateHolder.current.policy_hash = await generatePolicyHash(
       details.responseHeaders,
     );
     details.responseHeaders = undefined;
@@ -146,7 +146,7 @@ describe("validateResponseHeaders", () => {
   });
 
   it("throws error for duplicate critical headers", async () => {
-    originState.policyHash = await generatePolicyHash(details.responseHeaders);
+    originState.policy_hash = await generatePolicyHash(details.responseHeaders);
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     details.responseHeaders!.push({
       name: "X-Sigstore-Threshold",
@@ -160,7 +160,7 @@ describe("validateResponseHeaders", () => {
   });
 
   it("throws error for invalid signers json", async () => {
-    originState.policyHash = await generatePolicyHash(details.responseHeaders);
+    originState.policy_hash = await generatePolicyHash(details.responseHeaders);
     details.responseHeaders = [
       { name: "Content-Security-Policy", value: defaultCSP },
       { name: "X-Sigstore-Signers", value: `invalid` },
@@ -179,7 +179,7 @@ describe("validateResponseHeaders", () => {
       },
       { name: "X-Sigstore-Threshold", value: "5" },
     ];
-    originState.policyHash = await generatePolicyHash(details.responseHeaders);
+    originState.policy_hash = await generatePolicyHash(details.responseHeaders);
     await expect(
       validateResponseHeaders(originState, popupState, details),
     ).rejects.toThrow(
@@ -188,7 +188,7 @@ describe("validateResponseHeaders", () => {
   });
 
   it("throws error for mismatched Sigstore signers header", async () => {
-    originState.policyHash = await generatePolicyHash(details.responseHeaders);
+    originState.policy_hash = await generatePolicyHash(details.responseHeaders);
 
     details.responseHeaders = [
       {
@@ -208,7 +208,7 @@ describe("validateResponseHeaders", () => {
   });
 
   it("throws error for mismatched CSP header", async () => {
-    originState.policyHash = await generatePolicyHash(details.responseHeaders);
+    originState.policy_hash = await generatePolicyHash(details.responseHeaders);
     details.responseHeaders = [
       {
         name: "Content-Security-Policy",

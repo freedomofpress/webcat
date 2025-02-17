@@ -5,9 +5,9 @@ import {
   OriginStateFailed,
   OriginStateHolder,
   OriginStateInitial,
-  OriginStatePopulatedHeaders,
   OriginStatePopulatedManifest,
   OriginStateVerifiedManifest,
+  OriginStateVerifiedPolicy,
 } from "./interfaces/originstate";
 import { PopupState } from "./interfaces/popupstate";
 import { logger } from "./logger";
@@ -101,28 +101,22 @@ export async function validateResponseHeaders(
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const csp = normalizedHeaders.get("content-security-policy")!;
 
-  // TODO: once all of this is tested we can remove the temp variables and operate directly on the holder
-  let populatedHeadersState: OriginStatePopulatedHeaders | OriginStateFailed;
-  let populatedManifestState: OriginStatePopulatedManifest | OriginStateFailed;
-  let verifiedManifestState: OriginStateVerifiedManifest | OriginStateFailed;
-
-  // Step 2: If
+  // Step 2: Populate the required headers in the origin and check the policy
   if (originStateHolder.current.status === "request_sent") {
-    const initialState = originStateHolder.current as OriginStateInitial;
-    populatedHeadersState =
-      await initialState.populateHeaders(normalizedHeaders);
-    if (populatedHeadersState.status === "failed") {
+    originStateHolder.current = await (
+      originStateHolder.current as OriginStateInitial
+    ).verifyPolicy(normalizedHeaders);
+    if (originStateHolder.current.status === "failed") {
       if (popupState) {
         popupState.valid_headers = false;
       }
       throw new Error(
-        `Error validating headers: ${populatedHeadersState.errorMessage}`,
+        `Error validating headers: ${(originStateHolder.current as OriginStateFailed).errorMessage}`,
       );
     }
-    originStateHolder.current = populatedHeadersState;
 
     if (popupState) {
-      popupState.threshold = originStateHolder.current.policy.threshold;
+      popupState.threshold = originStateHolder.current.policy?.threshold;
       popupState.valid_headers = true;
     }
 
@@ -133,36 +127,41 @@ export async function validateResponseHeaders(
       getFQDN(details.url),
     );
 
-    populatedManifestState = await populatedHeadersState.populateManifest();
-    if (populatedManifestState.status === "failed") {
+    // Step 3: Await the manifest rquest we fired on origin creation
+    originStateHolder.current = await (
+      originStateHolder.current as OriginStateVerifiedPolicy
+    ).populateManifest();
+    if (originStateHolder.current.status === "failed") {
       throw new Error(
-        `Error populating manifest: ${populatedManifestState.errorMessage}`,
+        `Error populating manifest: ${(originStateHolder.current as OriginStateFailed).errorMessage}`,
       );
     }
 
-    originStateHolder.current = populatedManifestState;
-
-    verifiedManifestState = await populatedManifestState.validateManifest();
-    if (verifiedManifestState.status === "failed") {
+    // Step 4: Validate the manifest
+    originStateHolder.current = await (
+      originStateHolder.current as OriginStatePopulatedManifest
+    ).verifyManifest();
+    if (originStateHolder.current.status === "failed") {
       if (popupState) {
         popupState.valid_manifest = false;
       }
       throw new Error(
-        `Error populating manifest: ${verifiedManifestState.errorMessage}`,
+        `Error validating manifest: ${(originStateHolder.current as OriginStateFailed).errorMessage}`,
       );
     }
 
-    originStateHolder.current = verifiedManifestState;
-
+    // Step 5: Ensure we are at the expected final state now
     if (originStateHolder.current.status !== "verified_manifest") {
       throw new Error(
-        `FATAL: expect origin in state verified_manifest, got ${originStateHolder.current.status}`,
+        `Error with the origin state: expected origin to be in state verified_manifest, got ${originStateHolder.current.status}`,
       );
     }
 
     if (popupState) {
       popupState.valid_manifest = true;
-      popupState.valid_signers = originStateHolder.current.valid_signers;
+      popupState.valid_signers = originStateHolder.current.valid_signers
+        ? originStateHolder.current.valid_signers
+        : [];
     }
 
     logger.addLog(
@@ -189,58 +188,11 @@ export async function validateResponseHeaders(
   }
   /* END DEVELOPMENT GUARD */
 
-  const extraCSP = originStateHolder.current.manifest.extra_csp || {};
-  const defaultCSP = originStateHolder.current.manifest.default_csp;
-
   const pathname = new URL(details.url).pathname;
-  let correctCSP = "";
-
-  // Sigh
-  if (
-    pathname === "/index.html" ||
-    pathname === "/index.htm" ||
-    pathname === "/"
-  ) {
-    correctCSP =
-      extraCSP["/"] || extraCSP["/index.htm"] || extraCSP["/index.html"];
-    logger.addLog(
-      "debug",
-      `CSP expecting ${correctCSP}, server returned ${csp}`,
-      details.tabId,
-      originStateHolder.current.fqdn,
-    );
-  }
-
-  if (!correctCSP) {
-    let bestMatch: string | null = null;
-    let bestMatchLength = 0;
-
-    for (const prefix in extraCSP) {
-      if (
-        prefix !== "/" &&
-        pathname.startsWith(prefix) &&
-        prefix.length > bestMatchLength
-      ) {
-        bestMatch = prefix;
-        bestMatchLength = prefix.length;
-      }
-    }
-
-    // Return the most specific match, or fallback to default CSP
-    correctCSP = bestMatch ? extraCSP[bestMatch] : defaultCSP;
-    logger.addLog(
-      "debug",
-      `CSP path best match is ${bestMatch ? bestMatch : "default_csp"} for ${pathname}, expecting ${correctCSP}, server returned ${csp}`,
-      details.tabId,
-      fqdn,
-    );
-  }
-
-  if (csp !== correctCSP) {
-    throw new Error(
-      "Server returned CSP does not match the one defined in the manifest.",
-    );
-  }
+  (originStateHolder.current as OriginStateVerifiedManifest).verifyCSP(
+    csp,
+    pathname,
+  );
 
   logger.addLog(
     "info",
@@ -281,102 +233,78 @@ export async function validateResponseContent(
   };
 
   filter.onstop = async () => {
-    if (!origins.has(fqdn)) {
-      throw new Error(
-        "The origin still does not exists while the response content is arriving.",
-      );
-    }
     const originStateHolder = origins.get(getFQDN(details.url));
+
     if (
-      originStateHolder &&
-      originStateHolder.current.status === "verified_manifest"
+      !originStateHolder ||
+      originStateHolder.current.status !== "verified_manifest" ||
+      !(originStateHolder.current as OriginStateVerifiedManifest).manifest
     ) {
-      const blob = await new Blob(source).arrayBuffer();
-      const pathname = new URL(details.url).pathname;
-
-      const manifest = originStateHolder.current.manifest;
-      if (!manifest) {
-        throw new Error(
-          "Manifest not loaded, and it should never happen here.",
-        );
-      }
-
-      const manifest_hash =
-        manifest.files[pathname] ||
-        manifest.files[
-          pathname.substring(0, pathname.lastIndexOf("/")) + "/"
-        ] ||
-        manifest.files["/"];
-
-      if (!manifest_hash) {
-        throw new Error("Manifest does not contain a hash for the root.");
-      }
-
-      //if (typeof manifest_hash !== "string") {
-      //  throw new Error(`File ${pathname} not found in manifest.`);
-      //}
-
-      const content_hash = await SHA256(blob);
-      // Sometimes answers gets cached and we get an empty result, we shouldnt mark those as a hash mismatch
-      if (
-        arraysEqual(
-          hexToUint8Array(manifest_hash),
-          new Uint8Array(content_hash),
-        ) ||
-        blob.byteLength === 0
-      ) {
-        // If everything is OK then we can just write the raw blob back
-        logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
-
-        if (details.type == "main_frame" && popupState) {
-          popupState.valid_index = true;
-        } else if (popupState) {
-          popupState.loaded_assets.push(pathname);
-        }
-
-        if (details.type === "script") {
-          // Inject the WASM hooks in every loaded script.
-
-          const hooks = getHooks(manifest.wasm);
-          filter.write(stringToUint8Array(hooks));
-        }
-
-        filter.write(blob);
-      } else {
-        // This is just "DENIED" already encoded
-        // This fails just for the single file not in the manifest or with the wrong hash
-        logger.addLog(
-          "error",
-          `Error: hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
-          details.tabId,
-          fqdn,
-        );
-
-        if (details.type == "main_frame" && popupState) {
-          popupState.valid_index = false;
-        } else if (popupState) {
-          popupState.invalid_assets.push(pathname);
-        }
-        deny(filter);
-        errorpage(details.tabId);
-      }
-      // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
-      // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
-      filter.close();
-      // Redirect the main frame to an error page
-    } else {
-      // If headers are wrong we abort everything
-      logger.addLog(
-        "error",
-        `Error: tab context is not valid ${details.url}`,
-        details.tabId,
-        fqdn,
-      );
-      // DENIED
       deny(filter);
       filter.close();
-      // Redirect the main frame to an error page
       errorpage(details.tabId);
+      throw new Error("Tab context is not valid");
     }
+
+    const blob = await new Blob(source).arrayBuffer();
+    const pathname = new URL(details.url).pathname;
+
+    const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
+      .manifest;
+
+    const manifest_hash =
+      manifest.files[pathname] ||
+      manifest.files[pathname.substring(0, pathname.lastIndexOf("/")) + "/"] ||
+      manifest.files["/"];
+
+    if (!manifest_hash) {
+      deny(filter);
+      filter.close();
+      errorpage(details.tabId);
+      throw new Error("Manifest does not contain a hash for the root.");
+    }
+
+    const content_hash = await SHA256(blob);
+    // Sometimes answers gets cached and we get an empty result, we shouldnt mark those as a hash mismatch
+    if (
+      !arraysEqual(
+        hexToUint8Array(manifest_hash),
+        new Uint8Array(content_hash),
+      ) &&
+      blob.byteLength !== 0
+    ) {
+      if (details.type == "main_frame" && popupState) {
+        popupState.valid_index = false;
+      } else if (popupState) {
+        popupState.invalid_assets.push(pathname);
+      }
+      deny(filter);
+      filter.close();
+      errorpage(details.tabId);
+      throw new Error(
+        `Error: hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
+      );
+    }
+    // If everything is OK then we can just write the raw blob back
+    logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
+
+    if (details.type == "main_frame" && popupState) {
+      popupState.valid_index = true;
+    } else if (popupState) {
+      popupState.loaded_assets.push(pathname);
+    }
+
+    if (details.type === "script") {
+      // Inject the WASM hooks in every loaded script.
+
+      const hooks = getHooks(manifest.wasm);
+      filter.write(stringToUint8Array(hooks));
+    }
+
+    filter.write(blob);
+    // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
+    // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
+    filter.close();
+    // Redirect the main frame to an error page
   };
 }

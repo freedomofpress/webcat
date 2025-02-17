@@ -17,8 +17,8 @@ export async function validateOrigin(
   tabId: number,
   type: metadataRequestSource,
 ) {
-  const policyHash = await getFQDNPolicy(fqdn);
-  if (policyHash.length === 0) {
+  const policy_hash = await getFQDNPolicy(fqdn);
+  if (policy_hash.length === 0) {
     console.debug(`${url} is not enrolled, skipping...`);
     return;
   }
@@ -62,7 +62,6 @@ export async function validateOrigin(
     // Since we use cached info, we should still populate the popup with the cached info
     const popupState = popups.get(tabId);
 
-    console.log(originStateHolder.current);
     if (popupState) {
       popupState.valid_headers =
         // We want it undefined, because we have not verified it yet
@@ -70,8 +69,10 @@ export async function validateOrigin(
           originStateHolder.current.status === "verified_manifest"
             ? true
             : undefined;
-      popupState.threshold = originStateHolder.current.policy.threshold;
-      popupState.valid_signers = originStateHolder.current.valid_signers;
+      popupState.threshold = originStateHolder.current.policy?.threshold;
+      popupState.valid_signers = originStateHolder.current.valid_signers
+        ? originStateHolder.current.valid_signers
+        : [];
     }
     return;
   }
@@ -85,7 +86,7 @@ export async function validateOrigin(
   );
 
   // Policy hash is checked at the top and then later again
-  const newOriginState = new OriginStateInitial(sigstore, fqdn, policyHash);
+  const newOriginState = new OriginStateInitial(sigstore, fqdn, policy_hash);
   origins.set(fqdn, new OriginStateHolder(newOriginState));
 
   // So, we cannot directly know that we are the initiator of this request, see

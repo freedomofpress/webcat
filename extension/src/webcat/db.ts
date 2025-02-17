@@ -144,14 +144,14 @@ export async function getFQDNPolicy(fqdn: string): Promise<Uint8Array> {
   const originStateHolder = origins.get(fqdn);
   if (originStateHolder) {
     // This can't happen AFAIK
-    if (!originStateHolder.current.policyHash) {
+    if (!originStateHolder.current.policy_hash) {
       throw new Error(
         "FATAL: we found a cached origin without a policy associated",
       );
     }
     //logger.addLog("debug", `Policy cache hit for ${fqdn}`, -1, fqdn);
 
-    return originStateHolder.current.policyHash;
+    return originStateHolder.current.policy_hash;
   }
 
   // Caching of misses
