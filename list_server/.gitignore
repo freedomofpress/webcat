@@ -1,0 +1,8 @@
+bin/
+processor/bin/
+api/bin/
+*.so
+vendor/
+*.log
+*.db
+*.key
