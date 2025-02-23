@@ -4,7 +4,6 @@ import { getFQDNSafe } from "./utils";
 
 export async function validateCSP(
   csp: string,
-  fqdn: string,
   valid_sources: Set<string>,
 ) {
   // See https://github.com/freedomofpress/webcat/issues/9

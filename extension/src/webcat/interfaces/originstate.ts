@@ -230,7 +230,7 @@ export class OriginStatePopulatedManifest extends OriginStateBase {
 
     // Validate the default CSP
     try {
-      await validateCSP(manifest.default_csp, this.fqdn, valid_sources);
+      await validateCSP(manifest.default_csp, valid_sources);
     } catch (e) {
       return new OriginStateFailed(this, `failed parsing default_csp: ${e}`);
     }
@@ -240,7 +240,7 @@ export class OriginStatePopulatedManifest extends OriginStateBase {
       if (manifest.extra_csp.hasOwnProperty(path)) {
         const csp = manifest.extra_csp[path];
         try {
-          await validateCSP(csp, this.fqdn, valid_sources);
+          await validateCSP(csp, valid_sources);
         } catch (e) {
           return new OriginStateFailed(this, `failed parsing extra_csp: ${e}`);
         }
