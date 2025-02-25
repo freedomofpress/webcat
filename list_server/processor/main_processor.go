@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"time"
 
 	"domain-verifier/common"
@@ -13,6 +14,11 @@ func main() {
 	var signer = common.EnsureSigsumKeyExists()
 	var policy = common.EnsureSigsumPolicyExists()
 
+	confirmationMode := os.Getenv("CONFIRMATION_MODE")
+	if confirmationMode == "" {
+		confirmationMode = "recheck"
+	}
+
 	log.Println("Starting background processor")
 	for {
 		var subs []common.Submission
@@ -23,7 +29,7 @@ func main() {
 
 		for i := range subs {
 			// Process each submission asynchronously.
-			go common.ProcessSubmissionFSM(&subs[i], signer, policy)
+			go common.ProcessSubmissionFSM(&subs[i], signer, policy, confirmationMode)
 		}
 		time.Sleep(5 * time.Second)
 	}

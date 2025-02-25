@@ -29,12 +29,12 @@ type Signer struct {
 }
 
 type CanonicalPayload struct {
-	Domain            string `json:"domain"`
-	Action            string `json:"action"`             // e.g., "add", "modify", or "delete" (lowercase)
-	Signers           string `json:"signers"`            // a slice of signer objects, each with only identity and issuer
-	Threshold         int    `json:"threshold"`          // integer from x-sigstore-threshold
-	ConfirmationEmail string `json:"confirmation_email"` // e.g., "info@example.com"
-	ConfirmationDate  string `json:"confirmation_date"`  // RFC3339 format date
+	Domain    string `json:"domain"`
+	Action    string `json:"action"`    // e.g., "add", "modify", or "delete" (lowercase)
+	Signers   string `json:"signers"`   // a slice of signer objects, each with only identity and issuer
+	Threshold int    `json:"threshold"` // integer from x-sigstore-threshold
+	//ConfirmationEmail string `json:"confirmation_email"` // e.g., "info@example.com"
+	ConfirmationDate string `json:"confirmation_date"` // RFC3339 format date
 }
 
 // FSM states:
@@ -77,7 +77,7 @@ func newSubmissionFSM(initialState string) *fsm.FSM {
 	)
 }
 
-func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.Policy) {
+func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.Policy, confirmationMode string) {
 	// Create an in-memory FSM using the current persisted state.
 	machine := newSubmissionFSM(sub.Status)
 
@@ -181,47 +181,87 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 		updateState(machine.Current())
 	}
 
-	// --- Step 5: Send Validation Email ---
+	// --- Step 5: Send Validation ---
 	if sub.Status == StateListChecked {
-		if err = machine.Event("sendValidation"); err != nil {
+		if err := machine.Event("sendValidation"); err != nil {
 			AppendLog(sub, "Send validation transition error: "+err.Error())
 			machine.Event("fail")
 			updateState(machine.Current())
 			return
 		}
-		// Generate a raw confirmation code.
-		rawToken := uuid.New().String()
-		// Compute the SHA-256 hash of the raw token.
-		fmt.Println(rawToken)
-		hashedToken := ComputeSHA256(rawToken)
-		// Store only the hashed token.
-		sub.ValidationToken = hashedToken
-		// Set the wait deadline to 12 hours from now.
-		waitUntil := time.Now().Add(12 * time.Hour)
-		sub.WaitUntil = &waitUntil
-		// Log a generic message (do not include the raw token).
-		AppendLog(sub, "Validation email sent; waiting for confirmation until "+waitUntil.Format(time.RFC3339))
-		updateState(machine.Current())
-		// (In production, email the rawToken to the user externally.)
-		return
-	}
 
-	// --- Step 5b: Awaiting Confirmation ---
-	if sub.Status == StateAwaitingConfirmation {
-		// If still waiting, do not proceed.
-		if sub.WaitUntil != nil && time.Now().Before(*sub.WaitUntil) {
-			AppendLog(sub, "Still waiting for confirmation; will re-check later")
+		if confirmationMode == "email" {
+			rawToken := uuid.New().String()
+			fmt.Println("Confirmation token:", rawToken)
+			hashedToken := ComputeSHA256(rawToken)
+			sub.ValidationToken = hashedToken
+			// Set the wait deadline to 12 hours.
+			waitUntil := time.Now().Add(12 * time.Hour)
+			sub.WaitUntil = &waitUntil
+			AppendLog(sub, "Validation email sent; waiting for confirmation until "+waitUntil.Format(time.RFC3339))
+			updateState(machine.Current())
+			// In email mode, processing will pause here waiting for external confirmation.
 			return
-		}
-		// If the wait has expired and no confirmation was received, mark as failed.
-		if sub.Status == StateAwaitingConfirmation {
-			AppendLog(sub, "Waiting period expired without confirmation")
-			machine.Event("fail")
+		} else if confirmationMode == "recheck" {
+			// RECHECK MODE: simply set a wait deadline.
+			waitUntil := time.Now().Add(7 * 24 * time.Hour)
+			sub.WaitUntil = &waitUntil
+			AppendLog(sub, "Recheck mode: waiting until "+waitUntil.Format(time.RFC3339)+" to re-fetch headers for auto-confirmation")
 			updateState(machine.Current())
 			return
 		}
 	}
 
+	// --- Step 5b: Awaiting Confirmation ---
+	if sub.Status == StateAwaitingConfirmation {
+		if sub.WaitUntil != nil && time.Now().Before(*sub.WaitUntil) {
+			// Too much log spam
+			//	AppendLog(sub, "Still waiting for confirmation; will re-check later")
+			return
+		}
+		// The waiting period has expired. Now decide what to do based on confirmation mode.
+		if confirmationMode == "recheck" {
+			// In recheck mode, re-fetch headers and compare them to the persisted values.
+			newHeaders, err := CheckHTTPS(sub.Domain)
+			if err != nil {
+				AppendLog(sub, "Error re-fetching HTTPS headers: "+err.Error())
+				machine.Event("fail")
+				updateState(machine.Current())
+				return
+			}
+			// We are not checking the list again because as long as this submission is pending
+			// No new one can be submitted
+			newNormalizedSigners, newThreshold, err := ValidateAndNormalizeSigstoreHeaders(newHeaders)
+			if err != nil {
+				AppendLog(sub, "Second header validation failed: "+err.Error())
+				machine.Event("fail")
+				updateState(machine.Current())
+				return
+			}
+			if newNormalizedSigners != sub.SigstoreSigners ||
+				newThreshold != sub.SigstoreThreshold ||
+				strings.ToLower(newHeaders.Get("x-webcat-action")) != sub.WebcatAction {
+				AppendLog(sub, "Header re-check failed: current headers do not match initial ones")
+				machine.Event("fail")
+				updateState(machine.Current())
+				return
+			}
+			AppendLog(sub, "Header re-check successful; auto-confirming submission")
+			if err := machine.Event("confirm"); err != nil {
+				AppendLog(sub, "Auto-confirm transition error: "+err.Error())
+				machine.Event("fail")
+				updateState(machine.Current())
+				return
+			}
+			updateState(machine.Current())
+		} else {
+			// In email mode, if the waiting period expires without confirmation, we mark as failed.
+			AppendLog(sub, "Waiting period expired without external confirmation")
+			machine.Event("fail")
+			updateState(machine.Current())
+			return
+		}
+	}
 	// --- Step 6: Process Confirmation ---
 	if sub.Status == StateConfirmed {
 		if err := machine.Event("signPayload"); err != nil {
@@ -231,16 +271,16 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 			return
 		}
 
-		domainWithoutScheme := strings.TrimPrefix(strings.TrimPrefix(sub.Domain, "https://"), "http://")
-		confirmationEmail := strings.ToLower("info@" + domainWithoutScheme)
+		//domainWithoutScheme := strings.TrimPrefix(strings.TrimPrefix(sub.Domain, "https://"), "http://")
+		//confirmationEmail := strings.ToLower("info@" + domainWithoutScheme)
 		confirmationDate := time.Now().Format(time.RFC3339)
 		canonicalPayload := CanonicalPayload{
-			Domain:            sub.Domain,
-			Action:            sub.WebcatAction,
-			Signers:           sub.SigstoreSigners,
-			Threshold:         sub.SigstoreThreshold,
-			ConfirmationEmail: confirmationEmail,
-			ConfirmationDate:  confirmationDate,
+			Domain:    sub.Domain,
+			Action:    sub.WebcatAction,
+			Signers:   sub.SigstoreSigners,
+			Threshold: sub.SigstoreThreshold,
+			//ConfirmationEmail: confirmationEmail,
+			ConfirmationDate: confirmationDate,
 		}
 		payloadBytes, err := json.Marshal(canonicalPayload)
 		if err != nil {
