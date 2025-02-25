@@ -367,13 +367,6 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 
 		AppendLog(sub, "Inclusion proof verified, completing transaction.")
 
-		if err := machine.Event("complete"); err != nil {
-			AppendLog(sub, "Complete transition error: "+err.Error())
-			machine.Event("fail")
-			updateState(machine.Current())
-			return
-		}
-
 		// --- Create Transparency Record ---
 		var asciiproof bytes.Buffer
 		proof.ToASCII(&asciiproof)
