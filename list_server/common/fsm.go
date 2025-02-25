@@ -5,16 +5,17 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/looplab/fsm"
+	"gorm.io/gorm"
 	"sigsum.org/sigsum-go/pkg/crypto"
 	"sigsum.org/sigsum-go/pkg/policy"
 	"sigsum.org/sigsum-go/pkg/requests"
@@ -28,11 +29,12 @@ type Signer struct {
 }
 
 type CanonicalPayload struct {
-	Action            string   `json:"action"`             // e.g., "add", "modify", or "delete" (lowercase)
-	Signers           []Signer `json:"signers"`            // a slice of signer objects, each with only identity and issuer
-	Threshold         int      `json:"threshold"`          // integer from x-sigstore-threshold
-	ConfirmationEmail string   `json:"confirmation_email"` // e.g., "info@example.com"
-	ConfirmationDate  string   `json:"confirmation_date"`  // RFC3339 format date
+	Domain            string `json:"domain"`
+	Action            string `json:"action"`             // e.g., "add", "modify", or "delete" (lowercase)
+	Signers           string `json:"signers"`            // a slice of signer objects, each with only identity and issuer
+	Threshold         int    `json:"threshold"`          // integer from x-sigstore-threshold
+	ConfirmationEmail string `json:"confirmation_email"` // e.g., "info@example.com"
+	ConfirmationDate  string `json:"confirmation_date"`  // RFC3339 format date
 }
 
 // FSM states:
@@ -97,14 +99,23 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 			updateState(machine.Current())
 			return
 		}
-		hostname := strings.TrimPrefix(strings.TrimPrefix(sub.Domain, "https://"), "http://")
-		ips, err := net.LookupIP(hostname)
+
+		domain, err := ValidateRawHostname(sub.Domain)
+		if err != nil {
+			AppendLog(sub, "Domain submitted is invalid"+err.Error())
+			machine.Event("fail")
+			updateState(machine.Current())
+			return
+		}
+		ips, err := net.LookupIP(domain)
 		if err != nil || len(ips) == 0 {
 			AppendLog(sub, "DNS lookup failed")
 			machine.Event("fail")
 			updateState(machine.Current())
 			return
 		}
+		sub.Domain = domain
+		updateState(StateHeadersValid)
 		AppendLog(sub, fmt.Sprintf("DNS lookup successful: %v", ips))
 		updateState(machine.Current())
 	}
@@ -123,35 +134,8 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 			updateState(machine.Current())
 			return
 		}
-		// Validate required headers:
-		if respHeaders.Get("x-sigstore-signers") == "" {
-			AppendLog(sub, "Missing required header: x-sigstore-signers")
-			machine.Event("fail")
-			updateState(machine.Current())
-			return
-		}
-		if respHeaders.Get("x-sigstore-threshold") == "" {
-			AppendLog(sub, "Missing required header: x-sigstore-threshold")
-			machine.Event("fail")
-			updateState(machine.Current())
-			return
-		}
-		webcatAction := respHeaders.Get("x-webcat-action")
-		if webcatAction == "" {
-			AppendLog(sub, "Missing required header: x-webcat-action")
-			machine.Event("fail")
-			updateState(machine.Current())
-			return
-		}
-		webcatAction = strings.ToUpper(webcatAction)
-		if webcatAction != "ADD" && webcatAction != "MODIFY" && webcatAction != "DELETE" {
-			AppendLog(sub, "Invalid x-webcat-action value: must be ADD, MODIFY, or DELETE")
-			machine.Event("fail")
-			updateState(machine.Current())
-			return
-		}
-		// Validate the sigstore headers (additional format checks).
-		if err := validateSigstoreHeaders(respHeaders); err != nil {
+		normalizedSigners, threshold, err := ValidateAndNormalizeSigstoreHeaders(respHeaders)
+		if err != nil {
 			AppendLog(sub, "Header validation failed: "+err.Error())
 			machine.Event("fail")
 			updateState(machine.Current())
@@ -159,9 +143,9 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 		}
 		AppendLog(sub, "HTTPS check and header validation successful")
 		// Persist the critical header values.
-		sub.SigstoreSigners = respHeaders.Get("x-sigstore-signers")
-		sub.SigstoreThreshold = respHeaders.Get("x-sigstore-threshold")
-		sub.WebcatAction = respHeaders.Get("x-webcat-action")
+		sub.SigstoreSigners = normalizedSigners
+		sub.SigstoreThreshold = threshold
+		sub.WebcatAction = strings.ToLower(respHeaders.Get("x-webcat-action"))
 		// Now update the state to HeadersValid.
 		updateState(StateHeadersValid)
 	}
@@ -174,7 +158,25 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 			updateState(machine.Current())
 			return
 		}
-		// (In production, perform a lookup against your separate list database.)
+		var listEntry ListEntry
+		err = DB.First(&listEntry, "domain = ?", sub.Domain).Error
+		if err == nil && sub.WebcatAction == "add" {
+			AppendLog(sub, "Error: domain already exists in list; cannot add duplicate")
+			machine.Event("fail")
+			updateState(machine.Current())
+			return
+		} else if errors.Is(err, gorm.ErrRecordNotFound) && (sub.WebcatAction == "delete" || sub.WebcatAction == "modify") {
+			AppendLog(sub, "Error: domain does not exists; cannot delete or modify")
+			machine.Event("fail")
+			updateState(machine.Current())
+			return
+		} else if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			AppendLog(sub, "Error: could not query the list "+err.Error())
+			machine.Event("fail")
+			updateState(machine.Current())
+			return
+		}
+
 		AppendLog(sub, "List database check passed")
 		updateState(machine.Current())
 	}
@@ -228,29 +230,15 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 			updateState(machine.Current())
 			return
 		}
-		// Build canonical payload from persisted header values.
-		action := strings.ToLower(sub.WebcatAction)
-		var parsedSigners []Signer
-		if err := json.Unmarshal([]byte(sub.SigstoreSigners), &parsedSigners); err != nil {
-			AppendLog(sub, "Error parsing persisted signers: "+err.Error())
-			machine.Event("fail")
-			updateState(machine.Current())
-			return
-		}
-		threshold, err := strconv.Atoi(sub.SigstoreThreshold)
-		if err != nil {
-			AppendLog(sub, "Error parsing persisted threshold: "+err.Error())
-			machine.Event("fail")
-			updateState(machine.Current())
-			return
-		}
+
 		domainWithoutScheme := strings.TrimPrefix(strings.TrimPrefix(sub.Domain, "https://"), "http://")
 		confirmationEmail := strings.ToLower("info@" + domainWithoutScheme)
 		confirmationDate := time.Now().Format(time.RFC3339)
 		canonicalPayload := CanonicalPayload{
-			Action:            action,
-			Signers:           parsedSigners,
-			Threshold:         threshold,
+			Domain:            sub.Domain,
+			Action:            sub.WebcatAction,
+			Signers:           sub.SigstoreSigners,
+			Threshold:         sub.SigstoreThreshold,
 			ConfirmationEmail: confirmationEmail,
 			ConfirmationDate:  confirmationDate,
 		}
@@ -305,10 +293,12 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 			return
 		}
 
+		publicKey := signer.Public()
+
 		leaf := requests.Leaf{
 			Message:   message,
 			Signature: signature,
-			PublicKey: signer.Public(),
+			PublicKey: publicKey,
 		}
 
 		ctx := context.Background()
@@ -323,8 +313,19 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 			return
 		}
 
-		// TODO sigsum-verify proof before completing and then updating the list
 		// TODO update list
+		AppendLog(sub, "Inclusion proof received; verifying it...")
+
+		prooferr := proof.Verify(&message, map[crypto.Hash]crypto.PublicKey{crypto.HashBytes(publicKey[:]): publicKey}, &policy)
+
+		if prooferr != nil {
+			AppendLog(sub, "Failed to verify received proof from the log: "+err.Error())
+			machine.Event("fail")
+			updateState(machine.Current())
+			return
+		}
+
+		AppendLog(sub, "Inclusion proof verified, completing transaction.")
 
 		if err := machine.Event("complete"); err != nil {
 			AppendLog(sub, "Complete transition error: "+err.Error())
@@ -332,7 +333,6 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 			updateState(machine.Current())
 			return
 		}
-		AppendLog(sub, "Inclusion proof received; submission completed")
 
 		// --- Create Transparency Record ---
 		var asciiproof bytes.Buffer
@@ -353,6 +353,52 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 			AppendLog(sub, "Error creating transparency record: "+err.Error())
 		} else {
 			AppendLog(sub, "Transparency record created with hash")
+		}
+
+		var listEntry ListEntry
+		if sub.WebcatAction == "add" {
+			// Create new list entry.
+			listEntry = ListEntry{
+				Domain:           sub.Domain,
+				Signers:          sub.SigstoreSigners,
+				Threshold:        sub.SigstoreThreshold, // obtained earlier
+				TransparencyHash: sub.Hash,
+				UpdatedAt:        time.Now(),
+			}
+			if err := DB.Create(&listEntry).Error; err != nil {
+				AppendLog(sub, "Error creating list entry: "+err.Error())
+				machine.Event("fail")
+				updateState(machine.Current())
+				return
+			}
+			AppendLog(sub, "List entry created for domain "+sub.Domain)
+		} else if sub.WebcatAction == "delete" {
+			if err := DB.Delete(&ListEntry{}, "domain = ?", sub.Domain).Error; err != nil {
+				AppendLog(sub, "Error deleting list entry: "+err.Error())
+				machine.Event("fail")
+				updateState(machine.Current())
+				return
+			}
+			AppendLog(sub, "List entry deleted for domain "+sub.Domain)
+		} else if sub.WebcatAction == "modify" {
+			if err != nil {
+				AppendLog(sub, "Error: domain does not exist; cannot modify")
+				machine.Event("fail")
+				updateState(machine.Current())
+				return
+			}
+			// Update existing list entry.
+			listEntry.Signers = sub.SigstoreSigners
+			listEntry.Threshold = sub.SigstoreThreshold
+			listEntry.TransparencyHash = sub.Hash
+			listEntry.UpdatedAt = time.Now()
+			if err := DB.Save(&listEntry).Error; err != nil {
+				AppendLog(sub, "Error updating list entry: "+err.Error())
+				machine.Event("fail")
+				updateState(machine.Current())
+				return
+			}
+			AppendLog(sub, "List entry updated for domain "+sub.Domain)
 		}
 
 		updateState(machine.Current())

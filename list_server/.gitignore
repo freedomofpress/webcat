@@ -6,3 +6,4 @@ vendor/
 *.log
 *.db
 *.key
+*.pub

@@ -16,7 +16,6 @@ type Submission struct {
 	ID                string `gorm:"primaryKey"`
 	Domain            string `gorm:"index"`
 	Status            string
-	ErrorMessage      string
 	Logs              string
 	ValidationToken   string
 	Payload           string
@@ -24,7 +23,7 @@ type Submission struct {
 	Hash              string
 	WaitUntil         *time.Time
 	SigstoreSigners   string
-	SigstoreThreshold string
+	SigstoreThreshold int
 	WebcatAction      string
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
@@ -48,6 +47,15 @@ type TransparencyRecord struct {
 	CreatedAt    time.Time
 }
 
+// What is used as a stable list reference
+type ListEntry struct {
+	Domain           string `gorm:"primaryKey"`
+	Signers          string
+	Threshold        int
+	TransparencyHash string
+	UpdatedAt        time.Time
+}
+
 var DB *gorm.DB
 
 // InitDB initializes the database connection and performs auto-migration.
@@ -59,7 +67,7 @@ func InitDB() {
 		log.Fatal("failed to connect database: ", err)
 	}
 	// Auto-migrate all models.
-	DB.AutoMigrate(&Submission{}, &TransparencyRecord{})
+	DB.AutoMigrate(&Submission{}, &TransparencyRecord{}, &ListEntry{})
 }
 
 // AppendLog appends a new log message to a submission's Logs field.

@@ -70,10 +70,9 @@ func main() {
 		var logs []common.LogEntry
 		_ = json.Unmarshal([]byte(submission.Logs), &logs)
 		c.JSON(http.StatusOK, gin.H{
-			"domain":       submission.Domain,
-			"status":       submission.Status,
-			"errorMessage": submission.ErrorMessage,
-			"logs":         logs,
+			"domain": submission.Domain,
+			"status": submission.Status,
+			"logs":   logs,
 		})
 	})
 
