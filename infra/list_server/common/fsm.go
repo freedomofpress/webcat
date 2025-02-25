@@ -204,7 +204,7 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 			return
 		} else if confirmationMode == "recheck" {
 			// RECHECK MODE: simply set a wait deadline.
-			waitUntil := time.Now().Add(7 * 24 * time.Hour)
+			waitUntil := time.Now().Add(1 * time.Minute)
 			sub.WaitUntil = &waitUntil
 			AppendLog(sub, "Recheck mode: waiting until "+waitUntil.Format(time.RFC3339)+" to re-fetch headers for auto-confirmation")
 			updateState(machine.Current())
