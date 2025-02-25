@@ -368,12 +368,14 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 		AppendLog(sub, "Inclusion proof verified, completing transaction.")
 
 		// --- Create Transparency Record ---
+		leafHash := crypto.HashBytes(message[:])
 		var asciiproof bytes.Buffer
 		proof.ToASCII(&asciiproof)
 		record := TransparencyRecord{
 			ID:           uuid.New().String(),
 			SubmissionID: sub.ID,
 			Hash:         sub.Hash,
+			LeafHash:     hex.EncodeToString(leafHash[:]),
 			Payload:      sub.Payload,
 			Signature:    sub.Signature,
 			Proof:        asciiproof.String(),
@@ -385,18 +387,18 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 		if err := DB.Create(&record).Error; err != nil {
 			AppendLog(sub, "Error creating transparency record: "+err.Error())
 		} else {
-			AppendLog(sub, "Transparency record created with hash")
+			AppendLog(sub, "Transparency record created with hash "+sub.Hash)
 		}
 
 		var listEntry ListEntry
 		if sub.WebcatAction == "add" {
 			// Create new list entry.
 			listEntry = ListEntry{
-				Domain:           sub.Domain,
-				Signers:          sub.SigstoreSigners,
-				Threshold:        sub.SigstoreThreshold, // obtained earlier
-				TransparencyHash: sub.Hash,
-				UpdatedAt:        time.Now(),
+				Domain:    sub.Domain,
+				Signers:   sub.SigstoreSigners,
+				Threshold: sub.SigstoreThreshold,
+				Hash:      sub.Hash,
+				UpdatedAt: time.Now(),
 			}
 			if err := DB.Create(&listEntry).Error; err != nil {
 				AppendLog(sub, "Error creating list entry: "+err.Error())
@@ -423,7 +425,7 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 			// Update existing list entry.
 			listEntry.Signers = sub.SigstoreSigners
 			listEntry.Threshold = sub.SigstoreThreshold
-			listEntry.TransparencyHash = sub.Hash
+			listEntry.Hash = sub.Hash
 			listEntry.UpdatedAt = time.Now()
 			if err := DB.Save(&listEntry).Error; err != nil {
 				AppendLog(sub, "Error updating list entry: "+err.Error())

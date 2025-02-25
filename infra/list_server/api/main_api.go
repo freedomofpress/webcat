@@ -80,7 +80,7 @@ func main() {
 	router.GET("/transparency/:hash", func(c *gin.Context) {
 		hash := c.Param("hash")
 		var record common.TransparencyRecord
-		if err := common.DB.First(&record, "hash = ?", hash).Error; err != nil {
+		if err := common.DB.First(&record, "leaf_hash = ?", hash).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Transparency record not found"})
 			return
 		}

@@ -43,17 +43,18 @@ type TransparencyRecord struct {
 	Payload      string
 	Signature    string
 	Hash         string
+	LeafHash     string
 	Proof        string
 	CreatedAt    time.Time
 }
 
 // What is used as a stable list reference
 type ListEntry struct {
-	Domain           string `gorm:"primaryKey"`
-	Signers          string
-	Threshold        int
-	TransparencyHash string
-	UpdatedAt        time.Time
+	Domain    string `gorm:"primaryKey"`
+	Signers   string
+	Threshold int
+	Hash      string
+	UpdatedAt time.Time
 }
 
 var DB *gorm.DB
