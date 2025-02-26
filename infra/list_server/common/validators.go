@@ -37,10 +37,16 @@ func ValidateRawHostname(input string) (string, error) {
 		return "", fmt.Errorf("failed to convert hostname to ASCII: %v", err)
 	}
 
+	// Reject hostnames that start with a dot.
+	if strings.HasPrefix(ascii, ".") || strings.HasSuffix(ascii, ".") {
+		return "", fmt.Errorf("hostname %q must not have a leading or ending dot", ascii)
+	}
+
 	if !strings.Contains(ascii, ".") || strings.Contains(ascii, "..") {
 		return "", fmt.Errorf("hostname %q does not appear to be valid", ascii)
 	}
 
+	ascii = strings.ToLower(ascii)
 	return ascii, nil
 }
 

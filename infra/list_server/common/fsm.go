@@ -102,7 +102,7 @@ func ProcessSubmissionFSM(sub *Submission, signer crypto.Signer, policy policy.P
 
 		domain, err := ValidateRawHostname(sub.Domain)
 		if err != nil {
-			AppendLog(sub, "Domain submitted is invalid"+err.Error())
+			AppendLog(sub, "Domain submitted is invalid: "+err.Error())
 			machine.Event("fail")
 			updateState(machine.Current())
 			return
