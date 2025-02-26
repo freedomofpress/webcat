@@ -17,7 +17,10 @@ import (
 
 	"sigsum.org/sigsum-go/pkg/client"
 	"sigsum.org/sigsum-go/pkg/crypto"
+	"sigsum.org/sigsum-go/pkg/policy"
+	"sigsum.org/sigsum-go/pkg/proof"
 	"sigsum.org/sigsum-go/pkg/requests"
+	"sigsum.org/sigsum-go/pkg/submit"
 	"sigsum.org/sigsum-go/pkg/types"
 
 	"gorm.io/driver/sqlite"
@@ -55,6 +58,92 @@ type DomainRecord struct {
 	Threshold int
 }
 
+func ReadPrivateKeyFile(path string) (crypto.PrivateKey, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return crypto.PrivateKey{}, err
+	}
+	var priv crypto.PrivateKey
+	// Use the provided decodeHex logic (or simply hex.DecodeString).
+	data, err := hex.DecodeString(string(b))
+	if err != nil {
+		return crypto.PrivateKey{}, fmt.Errorf("failed to decode private key hex: %w", err)
+	}
+	if len(data) != len(priv) {
+		return crypto.PrivateKey{}, fmt.Errorf("unexpected key length: got %d, expected %d", len(data), len(priv))
+	}
+	copy(priv[:], data)
+	return priv, nil
+}
+
+func SavePrivateKey(path string, priv crypto.PrivateKey) error {
+	data := hex.EncodeToString(priv[:])
+	return os.WriteFile(path, []byte(data), 0600)
+}
+
+func SavePublicKey(path string, pub crypto.PublicKey) error {
+	data := hex.EncodeToString(pub[:])
+	return os.WriteFile(path, []byte(data), 0644)
+}
+
+func ExportProofWithMessage(sp *proof.SigsumProof, messageHash crypto.Hash) ([]byte, error) {
+	// Define helper types for export.
+	type exportCosignature struct {
+		KeyHash   string `json:"keyhash"`
+		Timestamp uint64 `json:"timestamp"`
+		Signature string `json:"signature"`
+	}
+	type exportProof struct {
+		Version    int    `json:"version"`
+		LogKeyHash string `json:"log_key_hash"`
+		Leaf       struct {
+			KeyHash   string `json:"key_hash"`
+			Signature string `json:"signature"`
+		} `json:"leaf"`
+		TreeHead struct {
+			Size         uint64              `json:"size"`
+			RootHash     string              `json:"root_hash"`
+			Signature    string              `json:"signature"`
+			Cosignatures []exportCosignature `json:"cosignatures"`
+		} `json:"tree_head"`
+		InclusionProof struct {
+			LeafIndex  uint64   `json:"leaf_index"`
+			NodeHashes []string `json:"node_hashes"`
+		} `json:"inclusion_proof"`
+		MessageHash string `json:"message_hash"`
+	}
+
+	out := exportProof{
+		Version:     proof.SigsumProofVersion,
+		LogKeyHash:  hex.EncodeToString(sp.LogKeyHash[:]),
+		MessageHash: hex.EncodeToString(messageHash[:]),
+	}
+	// Export leaf.
+	out.Leaf.KeyHash = hex.EncodeToString(sp.Leaf.KeyHash[:])
+	out.Leaf.Signature = hex.EncodeToString(sp.Leaf.Signature[:])
+	// Export tree head.
+	out.TreeHead.Size = sp.TreeHead.Size
+	out.TreeHead.RootHash = hex.EncodeToString(sp.TreeHead.RootHash[:])
+	out.TreeHead.Signature = hex.EncodeToString(sp.TreeHead.Signature[:])
+	// Convert the cosignatures map into a slice.
+	out.TreeHead.Cosignatures = make([]exportCosignature, 0, len(sp.TreeHead.Cosignatures))
+	for key, cs := range sp.TreeHead.Cosignatures {
+		out.TreeHead.Cosignatures = append(out.TreeHead.Cosignatures, exportCosignature{
+			KeyHash:   hex.EncodeToString(key[:]),
+			Timestamp: cs.Timestamp,
+			Signature: hex.EncodeToString(cs.Signature[:]),
+		})
+	}
+	// Export inclusion proof.
+	out.InclusionProof.LeafIndex = sp.Inclusion.LeafIndex
+	out.InclusionProof.NodeHashes = make([]string, len(sp.Inclusion.Path))
+	for i, hash := range sp.Inclusion.Path {
+		out.InclusionProof.NodeHashes[i] = hex.EncodeToString(hash[:])
+	}
+
+	return json.MarshalIndent(out, "", "  ")
+}
+
 func main() {
 	// Command-line flags.
 	logURL := flag.String("log-url", "", "URL of the Sigsum log (e.g., https://poc.sigsum.org/jellyfish)")
@@ -63,7 +152,9 @@ func main() {
 	dataServer := flag.String("data-server", "", "URL of the data server for payload retrieval (e.g., https://data.example.com)")
 	startIndex := flag.Uint64("start-index", 0, "Index to start retrieving leaves from")
 	batchSize := flag.Uint64("batch-size", 512, "Number of leaves to fetch in each batch")
-	outputFile := flag.String("output", "output.bin", "Path to the output binary file")
+	outputDir := flag.String("output-dir", "pub", "Path to the output directory")
+	signingKeyFile := flag.String("signing-key-file", "signing.key", "Path to the signing key used to sign the output")
+	policyFile := flag.String("policy", "sigsum.policy.test", "Path to the Sigsum policy configuration")
 	flag.Parse()
 
 	if *logURL == "" || *logKeyHex == "" || *submitKeyHex == "" || *dataServer == "" {
@@ -84,8 +175,33 @@ func main() {
 	// Compute the hash of the target submit key.
 	targetKeyHash := crypto.HashBytes(targetKey[:])
 
+	var signer *crypto.Ed25519Signer
+	if _, err := os.Stat(*signingKeyFile); os.IsNotExist(err) {
+		log.Printf("Key file not found at %s. Generating a new key pair...", *signingKeyFile)
+		pub, newSigner, err := crypto.NewKeyPair()
+		if err != nil {
+			log.Fatalf("Generating key pair failed: %v", err)
+		}
+		if err := SavePrivateKey(*signingKeyFile, newSigner.Private()); err != nil {
+			log.Fatalf("Writing private key file failed: %v", err)
+		}
+		if err := SavePublicKey(*signingKeyFile+".pub", pub); err != nil {
+			log.Fatalf("Writing public key file failed: %v", err)
+		}
+		log.Printf("New key pair generated and saved at %s and %s.pub", *signingKeyFile, *signingKeyFile)
+		signer = newSigner
+	} else {
+		// If the key file exists, attempt to load it.
+		priv, err := ReadPrivateKeyFile(*signingKeyFile)
+		if err != nil {
+			log.Fatalf("Reading key file failed: %v", err)
+		}
+		// Create a signer from the loaded private key.
+		signer = crypto.NewEd25519Signer(&priv)
+	}
+
 	// Open (or create) SQLite database using GORM.
-	db, err := gorm.Open(sqlite.Open("list.db"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	if err != nil {
 		log.Fatalf("failed to connect database: %v", err)
 	}
@@ -290,8 +406,68 @@ func main() {
 		output = append(output, policyHash[:]...)
 	}
 
-	if err := os.WriteFile(*outputFile, output, 0644); err != nil {
+	message := crypto.HashBytes(output)
+	fmt.Println(hex.EncodeToString(message[:]))
+	fmt.Println(len(output))
+	outFile := fmt.Sprintf("%s/%s.bin", *outputDir, hex.EncodeToString(message[:]))
+
+	if err := os.WriteFile(outFile, output, 0644); err != nil {
 		log.Fatalf("failed to write output file: %v", err)
 	}
-	fmt.Printf("Output written to %s (%d bytes, %d records)\n", *outputFile, len(output), len(records))
+	fmt.Printf("Output written to %s (%d bytes, %d records)\n", outFile, len(output), len(records))
+
+	signature, err := types.SignLeafMessage(signer, message[:])
+	if err != nil {
+		log.Fatalf("failed to sign the list")
+	}
+
+	policy, err := policy.ReadPolicyFile(*policyFile)
+	if err != nil {
+		log.Fatalf("failed to open or parse policy file %s", *policyFile)
+	}
+
+	config := submit.Config{
+		Policy:        policy,
+		PerLogTimeout: 300 * time.Second,
+		// Domain rate limit stuff should eventually go here
+	}
+
+	publicKey := signer.Public()
+
+	leaf := requests.Leaf{
+		Message:   message,
+		Signature: signature,
+		PublicKey: publicKey,
+	}
+
+	ctx = context.Background()
+
+	proof, err := submit.SubmitLeafRequest(ctx, &config, &leaf)
+	if err != nil {
+		log.Fatalf("failed to submit signed leaf to the log %s", err.Error())
+	}
+
+	update, err := ExportProofWithMessage(&proof, message)
+	if err != nil {
+		log.Fatalf("failed to export proof in JSON %s", err.Error())
+		// maybe print proof in ASCII here for debugging
+	}
+
+	outJson := fmt.Sprintf("%s/%s.json", *outputDir, hex.EncodeToString(message[:]))
+	if err := os.WriteFile(outJson, update, 0644); err != nil {
+		log.Fatalf("failed to write %s: %v", outJson, err)
+	}
+
+	symlinkName := fmt.Sprintf("%s/update.json", *outputDir)
+	if _, err := os.Lstat(symlinkName); err == nil {
+		if err := os.Remove(symlinkName); err != nil {
+			log.Fatalf("failed to remove existing symlink %s: %v", symlinkName, err)
+		}
+	}
+
+	if err := os.Symlink(outJson, symlinkName); err != nil {
+		log.Fatalf("failed to create symlink %s -> %s: %v", symlinkName, outJson, err)
+	}
+	fmt.Printf("Created symlink %s -> %s\n", symlinkName, outJson)
+
 }
