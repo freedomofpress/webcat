@@ -55,7 +55,7 @@ kill:
 	@pkill -f "main_api" || true
 	@pkill -f "main_processor" || true
 
-package: clean
+package:
 	@echo "Building release binaries for linux/amd64 with CGO enabled..."
 	@mkdir -p $(BIN_DIR)
 	@echo "Building API release binary..."
