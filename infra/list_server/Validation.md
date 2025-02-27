@@ -1,4 +1,4 @@
-# Validation Process Description
+# WEBCAT Validation Process
 
 The validation process in Webcat is implemented as a finite state machine (FSM) that performs certain validation steps  before enrollment of a domain into the preload trust list. The process, defined in the `ProcessSubmissionFSM` function, consists of several sequential steps:
 
