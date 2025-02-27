@@ -465,7 +465,7 @@ func main() {
 		}
 	}
 
-	if err := os.Symlink(outJson, symlinkName); err != nil {
+	if err := os.Symlink(hex.EncodeToString(message[:])+".json", symlinkName); err != nil {
 		log.Fatalf("failed to create symlink %s -> %s: %v", symlinkName, outJson, err)
 	}
 	fmt.Printf("Created symlink %s -> %s\n", symlinkName, outJson)

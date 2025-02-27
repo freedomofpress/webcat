@@ -1,4 +1,7 @@
 import {
+  sigsum_log_key,
+  sigsum_signing_key,
+  sigsum_witness_key,
   tuf_sigstore_namespace,
   tuf_sigstore_root,
   tuf_sigstore_url,
@@ -7,6 +10,7 @@ import { origins, popups, tabs } from "../globals";
 import { TrustedRoot } from "../sigstore/interfaces";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { TUFClient } from "../sigstore/tuf";
+import { SigsumProof, SigsumVerifier } from "../sigsum/sigsum";
 import { ensureDBOpen, getFQDNPolicy } from "./db";
 import { metadataRequestSource } from "./interfaces/base";
 import { logger } from "./logger";
@@ -71,6 +75,21 @@ export async function installListener() {
 
 export async function startupListener() {
   console.log("[webcat] Running startupListener");
+  const proofJson =
+    '{"version":2,"log_key_hash":"c9e525b98f412ede185ff2ac5abf70920a2e63a6ae31c88b1138b85de328706b","leaf":{"key_hash":"3bf814d25abaa9bfa5f5911454a78c6a4645335bcad63a016c8fb18a94f008fd","signature":"6afcf1636218bff7cdd45587940e88a308a320cc69523f2c66538cf35300cd2849d83b59a21da5e3e4d69ef0f1c651df532bfdd9c91ccaff3127a9ef3f1f3901"},"tree_head":{"size":37179,"root_hash":"eabbccf99dc8e4ca1983a69c10961ebdea86a69c1fc2b63f89665e2e737a6df6","signature":"65a18115ba535a4ce189b71b9ebc273e5107644c0dac470f9d5d83a84d4169935719516e06c19680db10c872e2e78fe1484c81559625301dccb042f544e77108","cosignatures":[{"keyhash":"1c997261f16e6e81d13f420900a2542a4b6a049c2d996324ee5d82a90ca3360c","timestamp":1740605441,"signature":"d13c24560c605c16e65c6d364ce99aa82464df771527f0421589c3da0153214d4afd5f41c374956b0a1fbe28900ca2b5d9cb57d6ddcb2df88be319c80d879c0d"},{"keyhash":"42351ad474b29c04187fd0c8c7670656386f323f02e9a4ef0a0055ec061ecac8","timestamp":1740605441,"signature":"83b6c48f3a44516aa863f11b3a1ed81d36c11736f62b0905202b5991e203461e4672b9ca7878b37cae861cdd6387deaf79cbd8c2afb45dbcb6c2a09b5873020e"},{"keyhash":"e923764535cac36836d1af682a2a3e5352e2636ec29c1d34c00160e1f4946d31","timestamp":1740605441,"signature":"0abc5babd58f7491d6211781ac7def66f305e627a554ef7d336f4a98c4cdba33bf11b856786d1d3c2dab5b44120f4506ae6cf016b381f3a86148c151f0b2360d"},{"keyhash":"70b861a010f25030de6ff6a5267e0b951e70c04b20ba4a3ce41e7fba7b9b7dfc","timestamp":1740605441,"signature":"62ed968553a445845dc9d37a690a846934fd8898d8b3051f9243c8f8785da6f0eddb7ecb6486bd649e6b7ce638f471bf81f4810402baad60356949347285140b"}]},"inclusion_proof":{"leaf_index":37178,"node_hashes":["60e6504751997926b707c30ae121fa56c6cab7c97644ac7576ae6e2dddac453d","004452e1fa2afe5cc2332fc06d164e794741e0ea41a1a22a3f4ef6aea806320c","179690e99532f6ed37211881dee5d5d4e2627c9b31f208a7fc021e8c29e24460","b2d594003d85d0165cf93766cf2ee74f65f5f54edb70dbc816d3e082a6bf326b","6b8b4ba9a3d2796d3913b2849611b122ec61cbc9d16d6bfe34c79ea66be9936d","d9d64f73c2c84f369c482dad27b9cbbab7692dbbc43a10be108dc25f0d3748cb","a30888d947b9587c2d78375cf2532ef91ef462487edb22548ec135387a6cb6fd"]},"message_hash":"f8bb2e1b5f13940eeb2b880780a22008a0506b1491ca2726eab522a2ad7be87b"}';
+  const sigsum = await SigsumVerifier.create(
+    sigsum_log_key,
+    sigsum_witness_key,
+    sigsum_signing_key,
+  );
+  let proof: SigsumProof;
+  try {
+    proof = JSON.parse(proofJson) as SigsumProof;
+  } catch (error) {
+    throw new Error("Failed to parse Sigsum proof JSON: " + error);
+  }
+  console.log(sigsum.verify(proof));
+  console.log(sigsum);
 
   // Force the database to be initialized if it isn
   await ensureDBOpen();
