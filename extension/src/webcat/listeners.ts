@@ -1,18 +1,24 @@
 import {
+  sigsum_log_key,
+  sigsum_signing_key,
+  sigsum_witness_key,
   tuf_sigstore_namespace,
   tuf_sigstore_root,
   tuf_sigstore_url,
+  update_url,
 } from "../config";
 import { origins, popups, tabs } from "../globals";
+import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { TrustedRoot } from "../sigstore/interfaces";
 import { SigstoreVerifier } from "../sigstore/sigstore";
 import { TUFClient } from "../sigstore/tuf";
-import { ensureDBOpen, isFQDNEnrolled } from "./db";
-import { metadataRequestSource } from "./interfaces";
+import { SigsumProof, SigsumVerifier } from "../sigsum/sigsum";
+import { ensureDBOpen, list_db, updateDatabase, getFQDNPolicy, getListMetadata, updateLastChecked } from "./db";
+import { metadataRequestSource } from "./interfaces/base";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { validateResponseContent, validateResponseHeaders } from "./response";
-import { errorpage, getFQDN } from "./utils";
+import { errorpage, getFQDN, SHA256 } from "./utils";
 
 export let sigstore: SigstoreVerifier;
 
@@ -36,6 +42,60 @@ async function getSigstore(update: boolean = false): Promise<SigstoreVerifier> {
   return newSigstore;
 }
 
+async function updateList(db: IDBDatabase) {
+  const req = fetch(`${update_url}/update.json`, {cache: "no-store"})
+
+  console.log("[webcat] Running list updater");
+  const sigsum = await SigsumVerifier.create(
+    sigsum_log_key,
+    sigsum_witness_key,
+    sigsum_signing_key,
+  );
+
+  const metadata = await getListMetadata(list_db)
+
+  const response = await req;
+  if (!response.ok) {
+    throw new Error("Failed to fetch update.json from server");
+  }
+
+  const proof = await response.json() as SigsumProof;
+
+  let hash: string;
+
+  try {
+    hash = await sigsum.verify(proof)
+  } catch (e) {
+    throw new Error(`Failed to verify update: ${e}`)
+  }
+
+  updateLastChecked(list_db)
+
+  // Here check if new hash != old hash
+  // Check if new tree_size > old tree_size
+
+  if (!metadata || (hash != metadata.hash && proof.tree_head.size >= metadata.treeHead)) {
+    const responseList = await fetch(`${update_url}/${hash}.bin`, {cache: "no-store"})
+    if (!responseList.ok) {
+      throw new Error(`Failed to fetch ${update_url}/${hash}.bin`);
+    }
+
+    const binaryList = new Uint8Array(await response.arrayBuffer())
+    const binaryListHash = Uint8ArrayToHex(new Uint8Array(await SHA256(binaryList)))
+
+    if (binaryListHash !== hash) {
+      throw new Error("Hash mismatch between signed metadata and list binary file")
+    }
+
+    await updateDatabase(list_db, hash, proof.tree_head.size, binaryList)
+
+    console.log("[webcat] List successfully updated")
+  } else {
+    console.log("[webcat] No list update is available");
+  }
+  
+}
+
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
     const fqdn = tabs.get(tabId);
@@ -53,7 +113,7 @@ function cleanup(tabId: number) {
       );
     }
     /* END */
-    originState.references--;
+    originState.current.references--;
     /* Here we could check if references are 0, and delete the origin object too */
     tabs.delete(tabId);
     popups.delete(tabId);
@@ -74,6 +134,14 @@ export async function startupListener() {
 
   // Force the database to be initialized if it isn
   await ensureDBOpen();
+
+  // Run the list updater
+  try {
+    await updateList(list_db);
+  } catch (e) {
+    console.error(`[webcat] List updater failed: ${e}`)
+  }
+
   // Update TUF only at startup
   sigstore = await getSigstore(true);
 }
@@ -97,10 +165,11 @@ export async function headersListener(
 
   if (
     // Skip non-enrolled tabs
-    (!tabs.has(details.tabId) && details.tabId > 0) ||
+    (!tabs.has(details.tabId) &&
+      details.tabId > 0 &&
+      (await getFQDNPolicy(fqdn)).length === 0) ||
     // Skip non-enrolled workers
-    // What at browser restart?
-    (details.tabId < 0 && !(await isFQDNEnrolled(fqdn, details.tabId)))
+    (details.tabId < 0 && (await getFQDNPolicy(fqdn)).length === 0)
   ) {
     // This is too much noise to really log
     //console.debug(`headersListener: skipping ${details.url}`);
@@ -121,8 +190,6 @@ export async function headersListener(
       fqdn,
     );
     await validateOrigin(
-      tabs,
-      popups,
       fqdn,
       details.url,
       details.tabId,
@@ -130,16 +197,15 @@ export async function headersListener(
     );
   }
 
-  /* DEVELOPMENT GUARD */
-  const originState = origins.get(fqdn);
-  const popupState = popups.get(details.tabId);
+  const originStateHolder = origins.get(fqdn);
+  const popupStateHolder = popups.get(details.tabId);
 
-  if (!originState) {
-    throw new Error("No originState while starting to pass response.");
+  if (!originStateHolder) {
+    throw new Error("No originState while starting to parse response.");
   }
 
   try {
-    await validateResponseHeaders(sigstore, originState, popupState, details);
+    await validateResponseHeaders(originStateHolder, popupStateHolder, details);
   } catch (error) {
     logger.addLog(
       "error",
@@ -183,8 +249,6 @@ export async function requestListener(
     try {
       // This just checks some basic stuff, like TLS/Onion usage and populate the cache if it doesnt exists
       await validateOrigin(
-        tabs,
-        popups,
         fqdn,
         details.url,
         details.tabId,
@@ -205,7 +269,7 @@ export async function requestListener(
   /* DEVELOPMENT GUARD */
   /*it's here for development: meaning if we reach this stage
     and the fqdn is enrolled, but a entry in the origin map has nor been created, there is a critical security bug */
-  if ((await isFQDNEnrolled(fqdn, details.tabId)) === true) {
+  if ((await getFQDNPolicy(fqdn)).length !== 0 && !origins.has(fqdn)) {
     console.error(
       "FATAL: loading from an enrolled origin but the state does not exists.",
     );
@@ -259,10 +323,10 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
               valid_sources.add(source);
 
               const sourceState = origins.get(source);
-              if (!sourceState) {
+              if (!sourceState?.current) {
                 return;
               }
-              const newValidSources = sourceState.valid_sources || [];
+              const newValidSources = sourceState.current.valid_sources || [];
 
               for (const newSource of newValidSources) {
                 if (!valid_sources.has(newSource)) {
@@ -271,8 +335,10 @@ export function messageListener(message: any, sender: any, sendResponse: any) {
               }
             }
 
-            if (originState) {
-              for (const source of originState.valid_sources) {
+            if (originState?.current) {
+              for (const source of originState.current.valid_sources
+                ? originState.current.valid_sources
+                : new Set<string>()) {
                 traverseValidSources(source, popupState.valid_sources);
               }
             }

@@ -1,7 +1,6 @@
 // validateCSP.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { OriginState } from "../../src/webcat/interfaces";
 import { validateCSP } from "../../src/webcat/validators";
 
 // We already have mocks set up in your project as follows:
@@ -12,7 +11,13 @@ vi.mock("../../src/webcat/logger", () => ({
 }));
 
 vi.mock("../../src/webcat/db", () => ({
-  isFQDNEnrolled: vi.fn(async (fqdn: string) => fqdn === "trusted.com"),
+  getFQDNPolicy: vi.fn(async (fqdn: string) => {
+    if (fqdn === "trusted.com") {
+      return new Uint8Array([0, 1, 2, 3]);
+    } else {
+      return new Uint8Array();
+    }
+  }),
   getCount: vi.fn(async (storeName: string) => {
     if (storeName === "list") {
       return 42;

@@ -1,17 +1,11 @@
-import { canonicalize } from "../sigstore/canonicalize";
-import { stringToUint8Array } from "../sigstore/encoding";
-import { SigstoreVerifier } from "../sigstore/sigstore";
-import { isFQDNEnrolled } from "./db";
-import { OriginState, PopupState } from "./interfaces";
-import { logger } from "./logger";
+import { getFQDNPolicy } from "./db";
 import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDNSafe } from "./utils";
 
 export async function validateCSP(
   csp: string,
   fqdn: string,
-  tabId: number,
-  originState: OriginState,
+  valid_sources: Set<string>,
 ) {
   // See https://github.com/freedomofpress/webcat/issues/9
   // https://github.com/freedomofpress/webcat/issues/3
@@ -48,12 +42,6 @@ export async function validateCSP(
 
   let default_src_is_none = false;
   const default_src = parsedCSP.get(directives.DefaultSrc);
-  logger.addLog(
-    "info",
-    `Parsed CSP default_src_is_none is ${default_src_is_none}`,
-    tabId,
-    fqdn,
-  );
 
   // Setp 1: check default src, which is the default for almost everything.
   // 'self' and 'none' are allowed, but they have different implications and we should tag them
@@ -128,8 +116,8 @@ export async function validateCSP(
         );
       }
 
-      if (await isFQDNEnrolled(fqdn, tabId)) {
-        originState.valid_sources.add(fqdn);
+      if ((await getFQDNPolicy(fqdn)).length !== 0) {
+        valid_sources.add(fqdn);
         return true;
       } else {
         throw new Error(
@@ -245,104 +233,4 @@ export async function validateCSP(
       );
     }
   }
-
-  logger.addLog("info", "CSP validation successful!", tabId, fqdn);
-}
-
-export async function validateManifest(
-  sigstore: SigstoreVerifier,
-  originState: OriginState,
-  tabId: number,
-  popupState: PopupState | undefined,
-) {
-  if (
-    !originState.manifest ||
-    !originState.manifest.signatures ||
-    !originState.manifest.manifest ||
-    Object.keys(originState.manifest.signatures).length <
-      originState.policy.threshold
-  ) {
-    return false;
-  }
-
-  const fixedManifest = { manifest: originState.manifest.manifest };
-  logger.addLog("debug", canonicalize(fixedManifest), tabId, originState.fqdn);
-  let validCount = 0;
-  for (const signer of originState.policy.signers) {
-    if (originState.manifest.signatures[signer[1]]) {
-      // If someone attached a signature that fails validation on the manifest, even if the threshold is met
-      // something is sketchy
-      const res = await sigstore.verifyArtifact(
-        signer[1],
-        signer[0],
-        originState.manifest.signatures[signer[1]],
-        stringToUint8Array(canonicalize(fixedManifest)),
-      );
-      if (res) {
-        logger.addLog(
-          "info",
-          `Verified ${signer[0]}, ${signer[1]}`,
-          tabId,
-          originState.fqdn,
-        );
-        if (popupState) {
-          originState.valid_signers.push(signer);
-        }
-        validCount++;
-      }
-    }
-  }
-
-  logger.addLog(
-    "info",
-    `threshold: ${originState.policy.threshold}, valid: ${validCount}`,
-    tabId,
-    originState.fqdn,
-  );
-
-  // Not enough signatures to verify the manifest
-  if (validCount < originState.policy.threshold) {
-    throw new Error(
-      `Expected at least ${originState.policy.threshold} valid signatures, found only ${validCount}.`,
-    );
-  }
-
-  // A manifest with no files should not exists
-  if (
-    !fixedManifest.manifest.files ||
-    Object.keys(fixedManifest.manifest.files).length < 1
-  ) {
-    throw new Error("Malformed manifest: files list is empty.");
-  }
-
-  // If there is no default CSP than the manifest is incomplete
-  if (
-    !fixedManifest.manifest.default_csp ||
-    fixedManifest.manifest.default_csp.length < 3
-  ) {
-    throw new Error("Malformed manifest: default_csp is empty or not set.");
-  }
-
-  // Validate the default CSP
-  await validateCSP(
-    fixedManifest.manifest.default_csp,
-    originState.fqdn,
-    tabId,
-    originState,
-  );
-
-  // Validate all extra CSP, it should also fill all the sources
-  for (const path in fixedManifest.manifest.extra_csp) {
-    if (fixedManifest.manifest.extra_csp.hasOwnProperty(path)) {
-      const csp = fixedManifest.manifest.extra_csp[path];
-      await validateCSP(csp, originState.fqdn, tabId, originState);
-    } else {
-      throw new Error(`Malformed manifest: extra_csp path ${path} is empty.`);
-    }
-  }
-
-  if (popupState) {
-    popupState.valid_signers = originState.valid_signers;
-  }
-  return true;
 }

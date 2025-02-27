@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { Issuers } from "./../../src/webcat/interfaces";
+import { Issuers } from "./../../src/webcat/interfaces/base";
 import {
   parseContentSecurityPolicy,
   parseSigners,

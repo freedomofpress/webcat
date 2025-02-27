@@ -1,9 +1,10 @@
+import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { nonOrigins, origins } from "./../globals";
 import { logger } from "./logger";
-import { arrayBufferToHex, SHA256 } from "./utils";
+import { SHA256 } from "./utils";
 
 export let list_count: number = 0;
-let list_db: IDBDatabase;
+export let list_db: IDBDatabase;
 
 // https://stackoverflow.com/questions/40593260/should-i-open-an-idbdatabase-each-time-or-keep-one-instance-open
 // Someone here claims opening and close is almost the same as keeping it open, performance-wise
@@ -33,7 +34,6 @@ export async function openDatabase(db_name: string): Promise<IDBDatabase> {
         settingstore.createIndex("settings", "key", { unique: true });
         const liststore = db.createObjectStore("list", { keyPath: "fqdnhash" });
         liststore.createIndex("list", "fqdnhash", { unique: true });
-        initDatabase(db);
 
         console.log("[webcat]", "Created new list database");
       } catch (error) {
@@ -55,6 +55,131 @@ export async function openDatabase(db_name: string): Promise<IDBDatabase> {
       );
     };
   });
+}
+
+export async function updateLastChecked(db: IDBDatabase): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction("settings", "readwrite");
+    const store = transaction.objectStore("settings");
+    const now = Date.now();
+    const record = { key: "lastChecked", timestamp: now };
+    const request = store.put(record);
+    request.onsuccess = () => {
+      console.log("[webcat] Last checked timestamp updated:", now);
+      resolve();
+    };
+    request.onerror = () => {
+      reject(new Error("Failed to update lastChecked timestamp"));
+    };
+  });
+}
+
+
+export async function getLastChecked(db: IDBDatabase): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction("settings", "readonly");
+    const store = transaction.objectStore("settings");
+    const request = store.get("lastChecked");
+    request.onsuccess = () => {
+      if (request.result && request.result.timestamp) {
+        resolve(request.result.timestamp);
+      } else {
+        resolve(null);
+      }
+    };
+    request.onerror = () => {
+      reject(new Error("Failed to retrieve lastChecked timestamp"));
+    };
+  });
+}
+
+export interface ListMetadata {
+  hash: string;
+  treeHead: number;
+}
+
+export async function getListMetadata(db: IDBDatabase): Promise<ListMetadata | null> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction("settings", "readonly");
+    const store = transaction.objectStore("settings");
+    const request = store.get("listMetadata");
+    request.onsuccess = () => {
+      resolve(request.result || null);
+    };
+    request.onerror = () => {
+      reject(new Error("Failed to get list metadata"));
+    };
+  });
+}
+
+export async function updateListMetadata(
+  db: IDBDatabase,
+  hash: string,
+  treeHead: number
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction("settings", "readwrite");
+    const store = transaction.objectStore("settings");
+    const metadata = { key: "listMetadata", hash, treeHead };
+    const request = store.put(metadata);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(new Error("Failed to update list metadata"));
+  });
+}
+
+export async function reinitializeDatabase(
+  db: IDBDatabase,
+  rawBytes: Uint8Array,
+  newHash: string,
+  newTreeHead: number
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(["list", "settings"], "readwrite");
+    const listStore = transaction.objectStore("list");
+    // First clear the existing list entries.
+    const clearRequest = listStore.clear();
+    clearRequest.onsuccess = async () => {
+      try {
+        // Insert new binary data into "list"
+        await insertBinaryData(db, rawBytes);
+        // Update the metadata in "settings"
+        await updateListMetadata(db, newHash, newTreeHead);
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
+    };
+    clearRequest.onerror = () => {
+      reject(new Error("Failed to clear list store"));
+    };
+  });
+}
+
+export async function updateDatabase(
+  db: IDBDatabase,
+  newHash: string,
+  newTreeHead: number,
+  rawBytes: Uint8Array
+): Promise<void> {
+  // Check if the "list" store is empty.
+  const count = await getCount("list");
+  
+  if (count === 0) {
+    // No data present: perform initial insertion.
+    await insertBinaryData(db, rawBytes);
+    await updateListMetadata(db, newHash, newTreeHead);
+    console.log("[webcat] Database initialized with new binary update list.");
+  } else {
+    // Data already exists: reinitialize the store.
+    await reinitializeDatabase(db, rawBytes, newHash, newTreeHead);
+    console.log("[webcat] Database updated with new binary update list.");
+  }
+  
+  // Update the "lastChecked" timestamp.
+  await updateLastChecked(db);
+  
+  // Update the global count variable.
+  list_count = await getCount("list");
 }
 
 // Quest for performance in inserts, see https://stackoverflow.com/questions/22247614/optimized-bulk-chunk-upload-of-objects-into-indexeddb
@@ -100,25 +225,6 @@ export async function insertBinaryData(db: IDBDatabase, rawBytes: Uint8Array) {
   };
 }
 
-export async function initDatabase(db: IDBDatabase) {
-  // Fetch the raw bytes file from the browser extension's assets
-  const response = await fetch(browser.runtime.getURL("assets/dev_list.bin"));
-
-  if (!response.ok) {
-    throw new Error(`Failed to load binary file: ${response.statusText}`);
-  }
-
-  const rawBytes = new Uint8Array(await response.arrayBuffer());
-
-  // Insert the binary data into the database
-  await insertBinaryData(db, rawBytes);
-
-  const randomCount = 1000;
-  const randomBytes = new Uint8Array(64 * randomCount);
-  crypto.getRandomValues(randomBytes);
-  await insertBinaryData(db, randomBytes);
-  list_count = await getCount("list");
-}
 
 // To be used in the UI
 export async function getCount(storeName: string): Promise<number> {
@@ -138,31 +244,26 @@ export async function getCount(storeName: string): Promise<number> {
   });
 }
 
-// TabID is passed only mostly for debugging
-// TODO, restructure so we do all object creation and caching and checking in the same function?
-export async function isFQDNEnrolled(
-  fqdn: string,
-  tabId: number,
-): Promise<boolean | Uint8Array> {
+export async function getFQDNPolicy(fqdn: string): Promise<Uint8Array> {
   // Caching of hits
   await ensureDBOpen();
-  const originState = origins.get(fqdn);
-  if (originState) {
+  const originStateHolder = origins.get(fqdn);
+  if (originStateHolder) {
     // This can't happen AFAIK
-    if (!originState.policyHash) {
+    if (!originStateHolder.current.policy_hash) {
       throw new Error(
         "FATAL: we found a cached origin without a policy associated",
       );
     }
-    logger.addLog("info", `Policy cache hit for ${fqdn}`, tabId, fqdn);
+    //logger.addLog("debug", `Policy cache hit for ${fqdn}`, -1, fqdn);
 
-    return originState.policyHash;
+    return originStateHolder.current.policy_hash;
   }
 
   // Caching of misses
   if (nonOrigins.has(fqdn)) {
-    logger.addLog("info", `Non enrolled cache hit for ${fqdn}`, tabId, fqdn);
-    return false;
+    //logger.addLog("info", `Non enrolled cache hit for ${fqdn}`, -1, fqdn);
+    return new Uint8Array();
   }
 
   const fqdn_hash = await SHA256(fqdn);
@@ -175,18 +276,18 @@ export async function isFQDNEnrolled(
 
     request.onsuccess = () => {
       if (request.result && request.result["policyhash"]) {
-        logger.addLog(
-          "info",
-          `Found policy hash ${arrayBufferToHex(request.result["policyhash"])} for ${fqdn}`,
-          tabId,
-          fqdn,
-        );
+        //logger.addLog(
+        //  "info",
+        //  `Found policy hash ${arrayBufferToHex(request.result["policyhash"])} for ${fqdn}`,
+        //  -1,
+        //  fqdn,
+        //);
         resolve(new Uint8Array(request.result["policyhash"]));
       } else {
         // Insert in cache
-        logger.addLog("info", `${fqdn} non-enrolled, caching`, tabId, fqdn);
+        //logger.addLog("debug", `${fqdn} non-enrolled, caching`, -1, fqdn);
         nonOrigins.add(fqdn);
-        resolve(false);
+        resolve(new Uint8Array());
       }
     };
     request.onerror = () => {
@@ -196,7 +297,7 @@ export async function isFQDNEnrolled(
         -1,
         fqdn,
       );
-      reject(false);
+      reject(new Uint8Array());
     };
   });
 }
