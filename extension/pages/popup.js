@@ -30,8 +30,11 @@ function updatePopup(popupState) {
   document.getElementById("version").textContent = popupState.webcat.version;
   document.getElementById("totalEntries").textContent =
     popupState.webcat.list_count;
-  document.getElementById("lastUpdated").textContent =
-    popupState.webcat.list_last_update;
+  document.getElementById("lastChecked").textContent = new Date(
+    popupState.webcat.list_last_update,
+  ).toISOString();
+  document.getElementById("listVersion").textContent =
+    popupState.webcat.list_version;
 
   const listElement = document.getElementById("status-list"); // The parent <ul>
   const loadingElement = document.getElementById("loading-status"); // The loading <li>

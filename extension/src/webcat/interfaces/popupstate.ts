@@ -17,7 +17,8 @@ export class PopupState {
   webcat: {
     version: number;
     list_count: number;
-    list_last_update: string;
+    list_last_update: number;
+    list_version: string;
   };
 
   constructor(
@@ -25,6 +26,8 @@ export class PopupState {
     tabId: number,
     version: number,
     list_count: number,
+    list_last_update: number,
+    list_version: string,
   ) {
     this.fqdn = fqdn;
     this.tabId = tabId;
@@ -42,7 +45,8 @@ export class PopupState {
       version: version,
       list_count: list_count,
       // TODO
-      list_last_update: new Date().toISOString(),
+      list_last_update: list_last_update,
+      list_version: list_version,
     };
   }
 }

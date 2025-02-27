@@ -1,10 +1,11 @@
-import { Uint8ArrayToHex } from "../sigstore/encoding";
 import { nonOrigins, origins } from "./../globals";
 import { logger } from "./logger";
 import { SHA256 } from "./utils";
 
 export let list_count: number = 0;
 export let list_db: IDBDatabase;
+export let list_last_checked: number;
+export let list_version: string;
 
 // https://stackoverflow.com/questions/40593260/should-i-open-an-idbdatabase-each-time-or-keep-one-instance-open
 // Someone here claims opening and close is almost the same as keeping it open, performance-wise
@@ -62,6 +63,7 @@ export async function updateLastChecked(db: IDBDatabase): Promise<void> {
     const transaction = db.transaction("settings", "readwrite");
     const store = transaction.objectStore("settings");
     const now = Date.now();
+    list_last_checked = now;
     const record = { key: "lastChecked", timestamp: now };
     const request = store.put(record);
     request.onsuccess = () => {
@@ -73,7 +75,6 @@ export async function updateLastChecked(db: IDBDatabase): Promise<void> {
     };
   });
 }
-
 
 export async function getLastChecked(db: IDBDatabase): Promise<number | null> {
   return new Promise((resolve, reject) => {
@@ -98,12 +99,17 @@ export interface ListMetadata {
   treeHead: number;
 }
 
-export async function getListMetadata(db: IDBDatabase): Promise<ListMetadata | null> {
+export async function getListMetadata(
+  db: IDBDatabase,
+): Promise<ListMetadata | null> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("settings", "readonly");
     const store = transaction.objectStore("settings");
     const request = store.get("listMetadata");
     request.onsuccess = () => {
+      if (request.result) {
+        list_version = request.result.hash;
+      }
       resolve(request.result || null);
     };
     request.onerror = () => {
@@ -115,11 +121,12 @@ export async function getListMetadata(db: IDBDatabase): Promise<ListMetadata | n
 export async function updateListMetadata(
   db: IDBDatabase,
   hash: string,
-  treeHead: number
+  treeHead: number,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("settings", "readwrite");
     const store = transaction.objectStore("settings");
+    list_version = hash;
     const metadata = { key: "listMetadata", hash, treeHead };
     const request = store.put(metadata);
     request.onsuccess = () => resolve();
@@ -131,7 +138,7 @@ export async function reinitializeDatabase(
   db: IDBDatabase,
   rawBytes: Uint8Array,
   newHash: string,
-  newTreeHead: number
+  newTreeHead: number,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(["list", "settings"], "readwrite");
@@ -159,11 +166,11 @@ export async function updateDatabase(
   db: IDBDatabase,
   newHash: string,
   newTreeHead: number,
-  rawBytes: Uint8Array
+  rawBytes: Uint8Array,
 ): Promise<void> {
   // Check if the "list" store is empty.
   const count = await getCount("list");
-  
+
   if (count === 0) {
     // No data present: perform initial insertion.
     await insertBinaryData(db, rawBytes);
@@ -174,10 +181,10 @@ export async function updateDatabase(
     await reinitializeDatabase(db, rawBytes, newHash, newTreeHead);
     console.log("[webcat] Database updated with new binary update list.");
   }
-  
+
   // Update the "lastChecked" timestamp.
   await updateLastChecked(db);
-  
+
   // Update the global count variable.
   list_count = await getCount("list");
 }
@@ -224,7 +231,6 @@ export async function insertBinaryData(db: IDBDatabase, rawBytes: Uint8Array) {
     );
   };
 }
-
 
 // To be used in the UI
 export async function getCount(storeName: string): Promise<number> {
