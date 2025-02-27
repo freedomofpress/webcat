@@ -36,6 +36,8 @@ The following test domains are available, keeping in mind that their only purpos
 | [cryptpad.nym.re](https://cryptpad.nym.re)     | [**CryptPad**](https://github.com/cryptpad/cryptpad)                                       | End-to-end encrypted collaboration suite.            |
 
 
+![Screenshot of Jitsi validation](https://github.com/user-attachments/assets/82c2bd63-f062-4d30-8b5d-b6a589120ba6)
+
 
 
 
