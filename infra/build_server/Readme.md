@@ -1,4 +1,6 @@
-# List Builder and Sigsum Submission Tool Documentation
+# WEBCAT List Builder
+
+A demo of the produced artifacts can be seen visiting [the test update server](https://transparency.cat/update/).
 
 This tool is designed to build a reproducible preload trust list independently of the list server. It works by scanning a public Sigsum log for leaves that match a given public key, then fetching the corresponding leaf source from the [API server](../list_server/API.md).
 
@@ -69,3 +71,64 @@ go run main.go \
    - This is what is fetched by the extensions to check if an update exists, and in case verify and download it.
 
 For further details on the security model, update architecture, and overall system design, please refer to [../Readme.md](../Readme.md).
+
+## Systemd Service Configuration
+
+Create the file `/etc/systemd/system/webcat-builder.service` with the following content:
+
+```
+[Unit]
+Description=Webcat List Builder Service
+After=network.target
+
+[Service]
+Type=oneshot
+User=webcat-builder
+WorkingDirectory=/var/webcat-builder
+ExecStart=/usr/bin/webcat-builder -log-url="YOUR_SIGSUM_LOG_URL" -submit-key="YOUR_SUBMIT_KEY_HEX" -log-key="YOUR_LOG_KEY_HEX" -start-index=0 -batch-size=512 -data-server https://transparency.cat/api -policy /etc/webcat/sigsum.policy
+StandardOutput=append:/var/webcat-builder/logs/list-builder.log
+StandardError=append:/var/webcat-builder/logs/list-builder.log
+
+[Install]
+WantedBy=multi-user.target
+```
+
+## User and Folder Setup
+
+1. Create the Service User:
+
+   The service must run under a dedicated system user:
+   ```bash
+   sudo useradd -r -s /usr/sbin/nologin webcat-builder
+   ```
+
+2. Create the Working Directory:
+
+   Create the working directory for the builder and ensure correct ownership:
+   ```bash
+   sudo mkdir -p /var/webcat-builder/logs
+   sudo chown -R webcat-builder:webcat-builder /var/webcat-builder
+   ```
+
+3. **Configuration Files:**
+
+   - The Sigsum policy file should be located at `/etc/webcat/sigsum.policy`. Ensure the configuration directory exists and is owned by `root`:
+     ```bash
+     sudo mkdir -p /etc/webcat
+     sudo chown -R root:root /etc/webcat
+     ```
+   - Place your Sigsum policy configuration in `/etc/webcat/sigsum.policy`.
+
+## Webserver Requirement for Artifacts
+
+A webserver is required to serve the output directory (commonly `/var/webcat-builder/pub/`) over TLS. Configure your preferred webserver (e.g., Nginx, Apache) with a valid TLS certificate to serve the `/pub/` directory.
+
+## Enable and Run the Service
+
+After configuring the service and preparing the environment, reload systemd and start the service:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl start webcat-builder.service
+```
+
+The builder will run once and log its output to `/var/webcat-builder/logs/list-builder.log`. Check this log for details on the list building process and any issues encountered.
