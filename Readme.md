@@ -41,4 +41,62 @@ The following test domains are provided solely for demonstration and showcasing 
 
 
 
+## Architectural Overview
+The following points describe how the signing, enrollment, and subsequent validation happen at a high level.
 
+### 1. App Developer
+
+  - The developer creates an application manifest that lists all web application files (e.g., `script.js`, HTML files, web workers, and WebAssembly snippets) along with their hashes.
+  - The manifest also defines the expected Content Security Policy (CSP) for each application path (and a fallback one). This allows an application to specify different CSPs for scenarios such as sandboxing (e.g., via iframes) or granting special permissions to workers.
+  - The manifest is signed using Sigstore. The developer authenticates via OIDC to obtain a short-lived certificate from the Sigstore Certificate Authority (CA) through Rekor.
+  - The certificate, which includes the issuer details, is used to sign the manifest.
+  - Multiple identities can sign a manifest, and each signing event is transparently logged in the Fulcio transparency log.
+
+## 2. Website Administrator
+
+  - The website administrator decides to enable the integrity protections offered by the system.
+  - They must enroll their website by ensuring that the signed web application is served with the correct manifest and CSP.
+  - The administrator adds specific HTTP headers that:
+    - Declare the intent to participate in the service.
+    - Specify which identities (and their issuers) are authorized to sign for the domain.
+    - Define a signing threshold—indicating how many valid signatures are required for the manifest to be considered valid.
+  
+_Trust decisions, administrator that are also developers_:
+  - If the application is open source and maintained by trusted parties, the administrator might choose to trust the maintainers' signatures.
+  - If the administrator modifies or builds a custom version, they must sign the application with their own OIDC identity and thus enroll those.
+
+## 3. List Service Operator
+
+### Enrollment Service
+  - Once a website is ready (i.e., serving a signed web application with the correct manifest and CSP), the administrator submits the domain to an enrollment service.
+  - The enrollment service verifies that the domain is not already enrolled, checks the HTTP headers, computes a hash based on signers and threshold, and sends a signed payload to the Sigstore transparency log.
+
+### List Building and Distribution
+  - An asynchronous list building service (running periodically, such as daily) collects signed proofs from the Sigsum log and fetches original payloads from the enrollment service.
+  - It reproducibly builds a preload trust list that preserves the inclusion order of entries.
+  - The new list is signed using a dedicated list update key, and the signing event is logged in Sigsum.
+  - Historical files are preserved for audit purposes, allowing anyone to verify the signing key and list updates.
+
+## 4. User Browser
+
+- **Extension Initialization and Updates:**
+  - At startup, the browser extension fetches Sigstore trust updates via The Update Framework (TUF).
+  - It also checks for list updates. When a new signed list is available, the extension verifies its signature and inclusion proof using the signed tree head to guard against rollbacks.
+
+- **Runtime Integrity Checks:**
+  - When a user opens a new main frame (e.g., a new tab), the extension performs a local lookup to determine if the domain is enrolled.
+  - If enrolled, it verifies that the header hash (reflecting signers and threshold) matches the one stored in the list.
+  - The extension then fetches the manifest from the same origin and validates the Sigstore signatures—ensuring that at least the required threshold of valid signatures is present.
+  - Every executable asset (scripts, HTML, WebAssembly) is integrity-checked against the hashes specified in the manifest at the network level.
+  - If all checks pass, a green icon is displayed along with verification details (such as signing identities and loaded assets). If any integrity check fails, execution is halted and the user is redirected to a blocking page before any compromised material reaches the DOM.
+
+## 5. Auditors
+The system is fully transparent and auditable. Different parts can be interested in auding only those relevant to them: a developer can monitor the usage of their OIDC identity, while a website administrator can monitor any list changes that affect their domain(s).
+
+- **Monitor List Changes:** By tracking signing events in the Sigsum transparency log, auditors can observe every change made to the list.
+
+- **Verify Distributed List Blobs:** Auditors can reproducibly rebuild the preload trust list from the enrollment data and compare it with the distributed blobs. This ensures that the distributed list is identical to the one generated from the source data. Additionally, all signing events of the list builder are logged, allowing auditors to review every update.
+
+- **Monitor OIDC Certificate Issuance:** By examining the Fulcio transparency log, auditors can track the issuance of OIDC certificates. This helps confirm that certificate issuance is done transparently and according to policy.
+
+- **Verify Artifact Signing:** Auditors can also verify that artifacts are signed correctly by monitoring the certificates issued by Fulcio. This ensures that the artifacts' signing events, as recorded by Fulcio, match the expected cryptographic proofs.
