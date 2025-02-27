@@ -14,7 +14,7 @@ package:
 	@echo "Building List Builder binary..."
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-gnu-gcc go build -ldflags "-s -w" -o $(LIST_BUILDER_BIN) main.go
 	@echo "Zipping release binary..."
-	zip -j $(DIST_DIR)/webcat-build-server.zip $(LIST_BUILDER_BIN)
-	@echo "Release package created: ../../webcat-build-server.zip"
+	zip -j ../../dist/webcat-build-server.zip $(LIST_BUILDER_BIN)
+	@echo "Release package created: ../../dist/webcat-build-server.zip"
 
 .PHONY: package

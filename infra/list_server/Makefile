@@ -64,6 +64,6 @@ package:
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-gnu-gcc go build -ldflags "-s -w" -o $(PROC_BIN) ./processor
 	@echo "Zipping release binaries..."
 	zip -j ../../dist/webcat-list-server.zip $(API_BIN) $(PROC_BIN)
-	@echo "Release package created: webcat-list-server.zip"
+	@echo "Release package created: dist/webcat-list-server.zip"
 
 .PHONY: all build clean run-api run-processor run-all
