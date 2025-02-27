@@ -1,4 +1,4 @@
-SUBDIRS = extension infra/list_server
+SUBDIRS = extension infra/list_server infra/build_server
 
 .PHONY: all $(SUBDIRS) clean
 

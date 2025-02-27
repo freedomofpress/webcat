@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  build-list-server:
+  build-build-server:
     runs-on: ubuntu-latest
 
     defaults:
