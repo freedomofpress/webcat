@@ -2,8 +2,6 @@ module domain-verifier
 
 go 1.22
 
-toolchain go1.23.6
-
 require (
 	github.com/gin-gonic/gin v1.7.7
 	github.com/google/uuid v1.3.0
