@@ -37,4 +37,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: domain-verifier-release
-          path: infra/list_server/domain-verifier-release.zip
+          path: dist/webcat-list-server.zip
