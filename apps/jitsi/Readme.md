@@ -13,7 +13,9 @@ To resolve both issues run, the script `compileSSI.py /usr/share/jitsi-meet /usr
 
 5. Add the CSP and sigstore headers to the nginx config file:
 
-...
+```
+    [...]
+
     gzip_proxied no-cache no-store private expired auth;
     gzip_min_length 512;
 
@@ -24,7 +26,8 @@ To resolve both issues run, the script `compileSSI.py /usr/share/jitsi-meet /usr
     add_header x-sigstore-threshold "1" always;
 
     location = /config.js {
-...
+ 
+    [...]
 
     location ~ ^/(libs|css|static|images|fonts|lang|sounds|.well-known)/(.*)$
     {
@@ -40,5 +43,5 @@ To resolve both issues run, the script `compileSSI.py /usr/share/jitsi-meet /usr
         }
     }
 
-...
+    [...]
 ```
