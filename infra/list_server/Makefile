@@ -13,7 +13,7 @@ TEST_KEY = sigsum.key
 TEST_POLICY = sigsum.policy.test
 
 # Default target: build both binaries
-all: build
+all: package
 
 # Build the REST API and background processor binaries.
 build:
@@ -54,5 +54,16 @@ kill:
 	@echo "Killing API and processor processes..."
 	@pkill -f "main_api" || true
 	@pkill -f "main_processor" || true
+
+package: clean
+	@echo "Building release binaries for linux/amd64 with CGO enabled..."
+	@mkdir -p $(BIN_DIR)
+	@echo "Building API release binary..."
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-gnu-gcc go build -ldflags "-s -w" -o $(API_BIN) ./api
+	@echo "Building Processor release binary..."
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=x86_64-linux-gnu-gcc go build -ldflags "-s -w" -o $(PROC_BIN) ./processor
+	@echo "Zipping release binaries..."
+	zip -j ../../dist/webcat-list-server.zip $(API_BIN) $(PROC_BIN)
+	@echo "Release package created: webcat-list-server.zip"
 
 .PHONY: all build clean run-api run-processor run-all

@@ -9,7 +9,8 @@ import (
 )
 
 func main() {
-	common.InitDB()
+	dbpath := os.Getenv("DATABASE_PATH")
+	common.InitDB(dbpath)
 
 	var signer = common.EnsureSigsumKeyExists()
 	var policy = common.EnsureSigsumPolicyExists()

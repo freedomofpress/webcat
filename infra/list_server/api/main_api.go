@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
+	"os"
 	"time"
 
 	"domain-verifier/common"
@@ -13,8 +14,8 @@ import (
 )
 
 func main() {
-	// Initialize the database.
-	common.InitDB()
+	dbpath := os.Getenv("DATABASE_PATH")
+	common.InitDB(dbpath)
 
 	router := gin.Default()
 	router.SetTrustedProxies([]string{})

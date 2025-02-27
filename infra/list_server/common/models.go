@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"time"
 
@@ -60,10 +61,10 @@ type ListEntry struct {
 var DB *gorm.DB
 
 // InitDB initializes the database connection and performs auto-migration.
-func InitDB() {
+func InitDB(dbpath string) {
 	var err error
 	// For demonstration we use SQLite; in production, replace with your RDS connection string.
-	DB, err = gorm.Open(sqlite.Open("submissions.db"), &gorm.Config{})
+	DB, err = gorm.Open(sqlite.Open(fmt.Sprintf("%s/submissions.db", dbpath)), &gorm.Config{})
 	if err != nil {
 		log.Fatal("failed to connect database: ", err)
 	}
