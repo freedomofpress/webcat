@@ -52,7 +52,7 @@ The following points describe how the signing, enrollment, and subsequent valida
   - The certificate, which includes the issuer details, is used to sign the manifest.
   - Multiple identities can sign a manifest, and each signing event is transparently logged in the Fulcio transparency log.
 
-### #2. Website Administrator
+### 2. Website Administrator
 
   - The website administrator decides to enable the integrity protections offered by the system.
   - They must enroll their website by ensuring that the signed web application is served with the correct manifest and CSP.
