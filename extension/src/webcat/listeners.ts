@@ -250,13 +250,13 @@ export async function requestListener(
     return {};
   }
 
-  if (details.type === "main_frame") {
+  if (details.type === "main_frame" || details.type === "sub_frame") {
     // User is navigatin to a new context, whether is enrolled or not better to reset
     cleanup(details.tabId);
 
     logger.addLog(
       "info",
-      `Loading main_frame ${details.url}`,
+      `Loading ${details.type} ${details.url}`,
       details.tabId,
       fqdn,
     );
@@ -272,7 +272,7 @@ export async function requestListener(
     } catch (error) {
       logger.addLog(
         "error",
-        `Error loading main_frame: ${error}`,
+        `Error loading ${details.type}: ${error}`,
         details.tabId,
         fqdn,
       );
