@@ -52,7 +52,7 @@ The following points describe how the signing, enrollment, and subsequent valida
   - The certificate, which includes the issuer details, is used to sign the manifest.
   - Multiple identities can sign a manifest, and each signing event is transparently logged in the Fulcio transparency log.
 
-## #2. Website Administrator
+### #2. Website Administrator
 
   - The website administrator decides to enable the integrity protections offered by the system.
   - They must enroll their website by ensuring that the signed web application is served with the correct manifest and CSP.
@@ -93,10 +93,10 @@ _Trust decisions, administrator that are also developers_:
 ### 5. Auditors
 The system is fully transparent and auditable. Different parts can be interested in auding only those relevant to them: a developer can monitor the usage of their OIDC identity, while a website administrator can monitor any list changes that affect their domain(s).
 
-- **Monitor List Changes:** By tracking signing events in the Sigsum transparency log, auditors can observe every change made to the list.
+- **Monitor List Changes:** By tracking signing events in the Sigsum transparency log, auditors can observe every change made to the list. See the [Sigsum getting started documentation](https://www.sigsum.org/getting-started/) for a walkthrough on how.
 
 - **Verify Distributed List Blobs:** Auditors can reproducibly rebuild the preload trust list from the enrollment data and compare it with the distributed blobs. This ensures that the distributed list is identical to the one generated from the source data. Additionally, all signing events of the list builder are logged, allowing auditors to review every update.
 
-- **Monitor OIDC Certificate Issuance:** By examining the Fulcio transparency log, auditors can track the issuance of OIDC certificates. This helps confirm that certificate issuance is done transparently and according to policy.
+- **Monitor OIDC Certificate Issuance:** By examining the Fulcio transparency log, auditors can track the issuance of OIDC certificates. This helps confirm that certificate issuance is done transparently and according to policy. See the [Rekor web interface](https://search.sigstore.dev/) to search through the issued certificates.
 
 - **Verify Artifact Signing:** Auditors can also verify that artifacts are signed correctly by monitoring the certificates issued by Fulcio. This ensures that the artifacts' signing events, as recorded by Fulcio, match the expected cryptographic proofs.
