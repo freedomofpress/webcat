@@ -52,7 +52,7 @@ The following points describe how the signing, enrollment, and subsequent valida
   - The certificate, which includes the issuer details, is used to sign the manifest.
   - Multiple identities can sign a manifest, and each signing event is transparently logged in the Fulcio transparency log.
 
-## 2. Website Administrator
+## #2. Website Administrator
 
   - The website administrator decides to enable the integrity protections offered by the system.
   - They must enroll their website by ensuring that the signed web application is served with the correct manifest and CSP.
@@ -65,19 +65,19 @@ _Trust decisions, administrator that are also developers_:
   - If the application is open source and maintained by trusted parties, the administrator might choose to trust the maintainers' signatures.
   - If the administrator modifies or builds a custom version, they must sign the application with their own OIDC identity and thus enroll those.
 
-## 3. List Service Operator
+### 3. Webcat Sevices Operator
 
-### Enrollment Service
+#### Enrollment Service
   - Once a website is ready (i.e., serving a signed web application with the correct manifest and CSP), the administrator submits the domain to an enrollment service.
   - The enrollment service verifies that the domain is not already enrolled, checks the HTTP headers, computes a hash based on signers and threshold, and sends a signed payload to the Sigstore transparency log.
 
-### List Building and Distribution
+#### List Building and Distribution
   - An asynchronous list building service (running periodically, such as daily) collects signed proofs from the Sigsum log and fetches original payloads from the enrollment service.
   - It reproducibly builds a preload trust list that preserves the inclusion order of entries.
   - The new list is signed using a dedicated list update key, and the signing event is logged in Sigsum.
   - Historical files are preserved for audit purposes, allowing anyone to verify the signing key and list updates.
 
-## 4. User Browser
+### 4. User Browser
 
 - **Extension Initialization and Updates:**
   - At startup, the browser extension fetches Sigstore trust updates via The Update Framework (TUF).
@@ -90,7 +90,7 @@ _Trust decisions, administrator that are also developers_:
   - Every executable asset (scripts, HTML, WebAssembly) is integrity-checked against the hashes specified in the manifest at the network level.
   - If all checks pass, a green icon is displayed along with verification details (such as signing identities and loaded assets). If any integrity check fails, execution is halted and the user is redirected to a blocking page before any compromised material reaches the DOM.
 
-## 5. Auditors
+### 5. Auditors
 The system is fully transparent and auditable. Different parts can be interested in auding only those relevant to them: a developer can monitor the usage of their OIDC identity, while a website administrator can monitor any list changes that affect their domain(s).
 
 - **Monitor List Changes:** By tracking signing events in the Sigsum transparency log, auditors can observe every change made to the list.
