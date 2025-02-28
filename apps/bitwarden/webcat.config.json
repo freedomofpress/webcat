@@ -1,0 +1,8 @@
+{
+    "app_name": "Bitwarden",
+    "app_version": "2024.12.1",
+    "comment": "https://github.com/bitwarden/clients/releases/tag/web-v2024.12.1",
+    "wasm": [],
+    "default_csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://haveibeenpwned.com; child-src 'self'; frame-src 'self'; connect-src 'self' wss: https://api.pwnedpasswords.com https://api.2fa.directory; object-src 'none'; worker-src 'self'",
+    "extra_csp": {}
+}

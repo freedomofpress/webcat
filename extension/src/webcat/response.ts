@@ -1,4 +1,8 @@
-import { hexToUint8Array, stringToUint8Array } from "../sigstore/encoding";
+import {
+  hexToUint8Array,
+  stringToUint8Array,
+  Uint8ArrayToString,
+} from "../sigstore/encoding";
 import { origins } from "./../globals";
 import { getHooks } from "./genhooks";
 import {
@@ -189,10 +193,12 @@ export async function validateResponseHeaders(
   /* END DEVELOPMENT GUARD */
 
   const pathname = new URL(details.url).pathname;
-  if ((originStateHolder.current as OriginStateVerifiedManifest).verifyCSP(
-    csp,
-    pathname,
-  ) !== true) {
+  if (
+    (originStateHolder.current as OriginStateVerifiedManifest).verifyCSP(
+      csp,
+      pathname,
+    ) !== true
+  ) {
     throw new Error(`Failed to match CSP with manifest valie for ${pathname}`);
   }
 
@@ -283,8 +289,9 @@ export async function validateResponseContent(
       deny(filter);
       filter.close();
       errorpage(details.tabId);
+      console.log(Uint8ArrayToString(new Uint8Array(blob)));
       throw new Error(
-        `Error: hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
+        `hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
       );
     }
     // If everything is OK then we can just write the raw blob back
