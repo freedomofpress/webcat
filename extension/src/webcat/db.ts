@@ -2,7 +2,7 @@ import { nonOrigins, origins } from "./../globals";
 import { logger } from "./logger";
 import { SHA256 } from "./utils";
 
-export let list_count: number = 0;
+export let list_count: number;
 export let list_db: IDBDatabase;
 export let list_last_checked: number;
 export let list_version: string;
@@ -59,6 +59,7 @@ export async function openDatabase(db_name: string): Promise<IDBDatabase> {
 }
 
 export async function updateLastChecked(db: IDBDatabase): Promise<void> {
+  list_count = await getCount("list");
   return new Promise((resolve, reject) => {
     const transaction = db.transaction("settings", "readwrite");
     const store = transaction.objectStore("settings");
@@ -184,9 +185,6 @@ export async function updateDatabase(
 
   // Update the "lastChecked" timestamp.
   await updateLastChecked(db);
-
-  // Update the global count variable.
-  list_count = await getCount("list");
 }
 
 // Quest for performance in inserts, see https://stackoverflow.com/questions/22247614/optimized-bulk-chunk-upload-of-objects-into-indexeddb
