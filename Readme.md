@@ -20,7 +20,23 @@ See [threat model](./docs/ThreatModel.md) for preliminary threat model considera
 
 If you are a developer and want to design or port your application, look at the [developer reference](./docs/DeveloperGuide.md) and also at the issues mentioning the porting of existing apps (such as: https://github.com/freedomofpress/webcat/issues/28, https://github.com/freedomofpress/webcat/issues/26, https://github.com/freedomofpress/webcat/issues/25).
 
-## Alpha
+## Web Features Support Matrix
+
+| Feature             | Supported? | CSP Directive / Value         | Notes                                          |
+|---------------------|------------|-------------------------------|------------------------------------------------|
+| WebAssembly         | Yes        | script-src 'wasm-unsafe-eval' | Fully compatible, all methods.  |
+| Web Workers   | Yes        | worker-src 'self'                   | All dedicated workers are supported.           |
+| Shared Workers      | Yes        | worker-src 'self'               | Fully supported.                               |
+| Service Workers     | Yes        | worker-src 'self'                   | Fully supported.                               |
+| Iframes             | Yes        | frame-src/child-src  'self' blob: data: <enrolled_origin>                   | Supports embedding via iframes.                |
+| Nested Iframes      | Yes        | frame-src/child-src  'self' blob: data: <enrolled_origin>                  | Fully supported even within nested contexts.   |
+| Inline Script       | No         | ~script-src 'unsafe-inline'~  | Inline scripts are disallowed.                 |
+| Script Hash         | No         | ~script-src sha256-xxx~      | Script hashes are not supported.               |
+| Script Unsafe Eval  | No         | ~script-src 'unsafe-eval'~    | Unsafe eval is not allowed.                    |
+
+It is implemented and theoretically possible to include scripts from remote origins that are also enrolled (and similarly workers or styles), still providing a transparency chain of all hosts and allowing loads from CDNs. This is because origin validation is recursive, and enrollment is checked when the manifest is parsed and validated.
+
+## Alpha testing
 The unsigned extension, to use exclusively for testing, development, and debugging, is built via GitHub Actions at every commit. [Download the artifact from the latest run](https://github.com/freedomofpress/webcat/actions/workflows/build-extension.yml). Once unzipped, it can be installed temporarily in Firefox via `about:debugging#/runtime/this-firefox` and then choosing _"Load Temporary Add-on..."_ and selecting the extracted `manifest.json`.
 
 The following test domains are provided solely for demonstration and showcasing purposes. As such, they are **not secure**, **not well-maintained**, and do not guarantee any form of **data retention**. A test enrollment server and list distributor—provided without any guarantees—are available at `https://transparency.cat/api/` and `https://transparency.cat/update/`.
