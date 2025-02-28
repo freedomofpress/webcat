@@ -61,7 +61,7 @@ The following points describe how the signing, enrollment, and subsequent valida
     - Specify which identities (and their issuers) are authorized to sign for the domain.
     - Define a signing threshold—indicating how many valid signatures are required for the manifest to be considered valid.
   
-_Trust decisions, administrator that are also developers_:
+_Trust decisions (administrators that are also developers)_:
   - If the application is open source and maintained by trusted parties, the administrator might choose to trust the maintainers' signatures.
   - If the administrator modifies or builds a custom version, they must sign the application with their own OIDC identity and thus enroll those.
 
