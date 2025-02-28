@@ -189,10 +189,12 @@ export async function validateResponseHeaders(
   /* END DEVELOPMENT GUARD */
 
   const pathname = new URL(details.url).pathname;
-  (originStateHolder.current as OriginStateVerifiedManifest).verifyCSP(
+  if ((originStateHolder.current as OriginStateVerifiedManifest).verifyCSP(
     csp,
     pathname,
-  );
+  ) !== true) {
+    throw new Error(`Failed to match CSP with manifest valie for ${pathname}`);
+  }
 
   logger.addLog(
     "info",
