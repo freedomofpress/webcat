@@ -1,0 +1,5 @@
+/*
+    x-sigstore-signers: [{"identity": "giulio@freedom.press", "issuer": "https://accounts.google.com"}, {"identity": "cory@freedom.press", "issuer": "https://accounts.google.com"}, {"identity": "github@lsd.cat", "issuer": "https://github.com/login/oauth"}]
+    x-sigstore-threshold: 2
+    x-webcat-action: add
+    content-security-policy: object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; frame-src 'none';

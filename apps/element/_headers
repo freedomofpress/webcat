@@ -1,0 +1,5 @@
+/*
+    x-sigstore-signers: [{"identity": "giulio@freedom.press", "issuer": "https://accounts.google.com"}, {"identity": "cory@freedom.press", "issuer": "https://accounts.google.com"}, {"identity": "github@lsd.cat", "issuer": "https://github.com/login/oauth"}]
+    x-sigstore-threshold: 1
+    x-webcat-action: add
+    content-security-policy: default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; img-src * blob: data:; connect-src * blob:; font-src 'self' data: ; media-src * blob: data:; child-src blob: data:; worker-src 'self'; frame-src blob: data:; form-action 'self'; manifest-src 'self'; frame-ancestors 'self'

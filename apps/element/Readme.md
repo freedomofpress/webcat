@@ -1,5 +1,5 @@
 ### How to package Element
-Tested on 5.0.44.
+Tested on 1.11.94.
 
 1. [Install the debian package.](https://github.com/element-hq/element-web/blob/develop/docs/install.md#debian-package)
 2. Add the required `x-sigstore-headers` and `x-sigstore-signers` to the webserver configuration.
