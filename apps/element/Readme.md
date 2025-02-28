@@ -5,7 +5,7 @@ Tested on 5.0.44.
 2. Add the required `x-sigstore-headers` and `x-sigstore-signers` to the webserver configuration.
 3. Add the following CSP to the webserver configuration (or adapt it to a more recent version, keeping in mind the CSP limitations in WEBCAT):
 ```
-default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; img-src * blob: data:; connect-src * blob:; font-src 'self' data: ; media-src * blob: data:; child-src blob: data:; worker-src 'self'; frame-src blob: data:; form-action 'self'; manifest-src 'self';
+default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; img-src * blob: data:; connect-src * blob:; font-src 'self' data: ; media-src * blob: data:; child-src blob: data:; worker-src 'self'; frame-src blob: data:; form-action 'self'; manifest-src 'self'; frame-ancestors 'self'
 ```
 4. Check and edit the following configuration if needed, save it in `/usr/share/element-web/webcat.config.json`:
 ```
