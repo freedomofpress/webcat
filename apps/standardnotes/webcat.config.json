@@ -1,0 +1,8 @@
+{
+    "app_name": "StandardNotes",
+    "app_version": "3.195.13",
+    "comment": "https://github.com/standardnotes/app/releases/tag/@standardnotes/desktop@3.195.13",
+    "wasm": ["9d7135eb90de07fa8c51a78d919718d5c3bdc51117e46199baf4dc0f59b1db9f"],
+    "default_csp": "default-src 'self'; base-uri 'self'; connect-src api.standardnotes.com sync.standardnotes.org files.standardnotes.com ws://sockets.standardnotes.com raw.githubusercontent.com listed.to blob: data:; font-src * data:; form-action 'self'; img-src 'self' * data: blob:; manifest-src 'self'; media-src 'self' blob: *.standardnotes.com; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' 'unsafe-hashes'; worker-src 'self'; frame-src 'none';",
+    "extra_csp": {}
+}
