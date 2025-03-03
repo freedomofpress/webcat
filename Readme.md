@@ -116,3 +116,23 @@ The system is fully transparent and auditable. Different parts can be interested
 - **Monitor OIDC Certificate Issuance:** By examining the Fulcio transparency log, auditors can track the issuance of OIDC certificates. This helps confirm that certificate issuance is done transparently and according to policy. See the [Rekor web interface](https://search.sigstore.dev/) to search through the issued certificates.
 
 - **Verify Artifact Signing:** Auditors can also verify that artifacts are signed correctly by monitoring the certificates issued by Fulcio. This ensures that the artifacts' signing events, as recorded by Fulcio, match the expected cryptographic proofs.
+
+## Future work
+### Browser changes
+To implement something like WEBCAT natively, or as an adopted standard, the following changes would be needed:
+ -  Implement SRI for Web Workers, Shared Workers, Service Workers
+ -  Implement SRI for ES6 module imports
+ -  Implement SRI for `WebAssembly.compileStreaming` and `WebAssembly.instantiateStreaming`
+ -  Implement dedicated WebAssembly CSP adding adding `wasm-src` directive:
+      - Support `'self'/<origins>` for `WebAssembly.compileStreaming` and `WebAssembly.instantiateStreaming`
+      - Support `unsafe-eval` `sha-xxx` for `WebAssembly.compile`, `WebAssembly.instantiate`, `new WebAssembly.Module`
+
+ - Implement CSP extension adding an additional source expression to `frame-src` and `child-src`  to allow only origins that satisfy the inregity requirements (which is, that are enrolled in the same integrity and transparency mechanism of the current origin).
+
+ - 
+Since the browser, when presented multiple CSP, such as one via HTTP header (or multiple via multiple HTTP headers) and one ore more via HTML meta tags, an CSP embedded in a HTML file such as the index can be transparency logged as part of the index.html or the loaded html file. However, that cannot happen for CSP assigned for instance, to a specific JS file such as a worker.
+
+
+
+### Infrastructure
+Proposals like [Source Code Transparency](https://github.com/twiss/source-code-transparency/blob/main/explainer.md) have a slightly different threat model and user facing requirements. The usefuleness of the preload list is to allow verification to happen on a domain-base and independent of UX indicators shown to a potential user. If whatever information needed to verify the integrity and transparency of the web application is provided via an extension in a TLS ceritifcate, then a webserver not presenting the required information would likely require detection to be done by the end user. This has still room for targeted attacks, and breaks the possible audit trail. Similarly, while it is hard to imagine large providers misbehaving, the threat model is a bit more complex for self hosted applications, such as `Cryptpad`. For instance, in the [jabber.ru MITM incident](https://www.devever.net/~hl/xmpp-incident), authorities likely issued a rogue certificate via either a server or DNS takeover. Or for instance when [domain hijacking or in certain cases BGP hijacking happens](https://www.theverge.com/2018/4/24/17275982/myetherwallet-hack-bgp-dns-hijacking-stolen-ethereum), attackers would be able to issue rogue ceritificates: surely that could be detected, but it's open to the question if detection is enough deterrance for small self hosted servers, and whether local administrators have enough resources for promptly detecting it.
