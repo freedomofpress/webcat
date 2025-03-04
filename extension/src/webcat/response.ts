@@ -314,6 +314,7 @@ export async function validateResponseContent(
     // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
     // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
     filter.close();
+    setOKIcon(details.tabId);
     // Redirect the main frame to an error page
   };
 }
