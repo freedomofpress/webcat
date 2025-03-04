@@ -74,4 +74,4 @@ Similarly, branding in Jitsi is handled by editing HTML files such as `head.html
 Since server generated pages cannot work, in general it is expected that the application is launched from the root and then uses anchor navigation. Non anchor navigation is still supported, and every file not found in the manifest is tentatively hashed against the index hash in the manifest, as it is the case for Jitsi (a room name is a random path, and we cannot expect that to be present in the manifest, however we expect that to be handled by a url rewrite and sent to the index, which is present in the manifest).
 
 ## Signing
-For signing see the [signing script](../signing). In the future, the will be instructions on how to integrate signing in a CI pipeline, since that is already supported by Sigstore.
+For signing see the [signing script](../tools/signing). In the future, the will be instructions on how to integrate signing in a CI pipeline, since that is already supported by Sigstore.
