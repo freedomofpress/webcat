@@ -1,15 +1,15 @@
-# **WEBCAT Policy Hashing***
+# WEBCAT Policy Hashing
 
-## **1. Overview**
+## 1. Overview
 This document defines the format and hashing mechanism for Sigstore policies, ensuring a consistent and verifiable method for encoding signer policies associated with a Fully Qualified Domain Name (FQDN).
 
-## **2. Header Format**
+## 2. Header Format
 Sigstore-based policies are transmitted via HTTPS headers in response to every request. The required headers are:
 
 - **`x-sigstore-signers`** (Required): A JSON-encoded list of authorized signers.
 - **`x-sigstore-threshold`** (Required): A numerical value defining the minimum number of required signers.
 
-### **2.1 `x-sigstore-signers` Format**
+### 2.1 `x-sigstore-signers` Format
 The `x-sigstore-signers` header must contain a JSON array where each element is an object with the following fields:
 
 - **`identity`** (String, Required): The signer's identity (e.g., email or OIDC identity).
@@ -29,7 +29,7 @@ Example:
 ]
 ```
 
-### **2.2 `x-sigstore-threshold` Format**
+### 2.2 `x-sigstore-threshold` Format
 The `x-sigstore-threshold` header must be an integer indicating the minimum number of signers required for policy validation.
 
 Example:
@@ -37,20 +37,20 @@ Example:
 x-sigstore-threshold: 2
 ```
 
-### **2.3 Ensuring Headers are Unique**
+### 2.3 Ensuring Headers are Unique
 It is critical to check that headers are not duplicated. If multiple instances of `x-sigstore-signers` or `x-sigstore-threshold` exist in the HTTP response, the response **must be rejected** to prevent ambiguity and potential security risks.
 
 ## **3. Policy Hashing Procedure**
 The policy hash is computed in the following steps:
 
-### **3.1 Fetch the Policy**
+### 3.1 Fetch the Policy
 - A GET request is sent to the policy URL (e.g., `https://example.com`).
 - The response headers are validated to ensure:
   - The URL uses HTTPS.
   - Both `x-sigstore-signers` and `x-sigstore-threshold` headers are present.
   - There are no duplicate instances of required headers.
 
-### **3.2 Normalize Signers**
+### 3.2 Normalize Signers
 - The JSON array from `x-sigstore-signers` is parsed.
 - Each signer's `identity` and `issuer` are converted to lowercase.
 - The array is sorted lexicographically by (`identity`, `issuer`).
@@ -82,7 +82,7 @@ After normalization:
 ]
 ```
 
-### **3.3 Construct the Policy Object**
+### 3.3 Construct the Policy Object
 A new JSON object is created with:
 - `x-sigstore-signers`: The sorted list of normalized signers.
 - `x-sigstore-threshold`: The integer value from the header.
@@ -104,7 +104,7 @@ Example:
 }
 ```
 
-### **3.4 Serialize the Policy**
+### 3.4 Serialize the Policy
 The JSON object is serialized using the following constraints:
 - No extra spaces or indentation (i.e., compact representation).
 - JSON keys are in their natural order.
@@ -114,7 +114,7 @@ Example serialized string:
 {"x-sigstore-signers":[{"identity":"alice@example.com","issuer":"https://accounts.google.com"},{"identity":"bob@example.com","issuer":"https://github.com"}],"x-sigstore-threshold":2}
 ```
 
-### **3.5 Compute the SHA-256 Hash**
+### 3.5 Compute the SHA-256 Hash
 The serialized JSON string is encoded as UTF-8 and hashed using the SHA-256 algorithm.
 
 ```
@@ -126,7 +126,7 @@ Example hash (hex encoded):
 d2a5a67c8f5e1b43c7895b7c62a0a3b645a9643c8c7d03ec9dc8b2e2e4b5e66c
 ```
 
-## **4. Verification**
+## 4. Verification
 To verify a policy hash:
 1. Fetch the policy headers.
 2. Ensure that required headers are present and unique.
@@ -135,7 +135,7 @@ To verify a policy hash:
 5. Compute the SHA-256 hash.
 6. Compare the computed hash with the expected hash.
 
-## **5. Supported OIDC Issuers**
+## Appendix: Supported OIDC Issuers
 The following issuers are currently supported by the community Fulcio deployment:
 
 | Issuer Name   | URL |
