@@ -1,12 +1,11 @@
 import { checkSignatures, getRoleKeys, loadKeys } from "./crypto";
 import { Uint8ArrayToHex, Uint8ArrayToString } from "./encoding";
-import { HashAlgorithms, Meta, Metafile, Roles, Root } from "./interfaces";
+import { HashAlgorithms, Meta, Metafile, Role, Roles, Root } from "./interfaces";
 
 export class TUFClient {
   private repositoryUrl: string;
   private startingRootPath: string;
   private namespace: string;
-  private cached: Array<string>;
 
   constructor(
     repositoryUrl: string,
@@ -16,14 +15,13 @@ export class TUFClient {
     this.repositoryUrl = repositoryUrl;
     this.startingRootPath = startingRootPath;
     this.namespace = namespace;
-    this.cached = [];
   }
 
   private getCacheKey(key: string): string {
     return `${this.namespace}:${key}`;
   }
 
-  private async getFromCache(key: Roles): Promise<Metafile | undefined> {
+  private async getFromCache(key: string): Promise<Metafile | undefined> {
     const namespacedKey = this.getCacheKey(key);
     const result = await browser.storage.local.get(namespacedKey);
     return result[namespacedKey];
@@ -32,7 +30,6 @@ export class TUFClient {
   private async setInCache(key: string, value: object): Promise<void> {
     const namespacedKey = this.getCacheKey(key);
     await browser.storage.local.set({ [namespacedKey]: value });
-    this.cached.push(namespacedKey);
   }
 
   private async fetchMetafileBase(
@@ -429,7 +426,9 @@ export class TUFClient {
     return filenames;
   }
 
-  private async fetchTarget(name: string) {
+  private async fetchTarget(name: string): Promise<any> {
+    const cachedTarget = await this.getFromCache(name);
+
     const cachedTargets = await this.getFromCache(Roles.Targets);
 
     if (cachedTargets === undefined) {
@@ -442,28 +441,34 @@ export class TUFClient {
       throw new Error(`${name} not present in the targets role.`);
     }
 
-    // Both sha256 and sha512 works for downloading the file (and verifying of course)
-    const sha256 = cachedTargets.signed.targets[name].hashes.sha256;
+    if (!cachedTarget) {
+          // Both sha256 and sha512 works for downloading the file (and verifying of course)
+      const sha256 = cachedTargets.signed.targets[name].hashes.sha256;
 
-    const raw_file = await this.fetchMetafileBinary(
-      name,
-      `targets/${sha256}`,
-      true,
-    );
-    const sha256_calculated = Uint8ArrayToHex(
-      new Uint8Array(
-        await crypto.subtle.digest(HashAlgorithms.SHA256, raw_file),
-      ),
-    );
-    // TODO replace with crypto.bufferEqual
-
-    if (sha256 !== sha256_calculated) {
-      throw new Error(
-        `${name} hash does not match the value in the targets role.`,
+      const raw_file = await this.fetchMetafileBinary(
+        name,
+        `targets/${sha256}`,
+        true,
       );
-    }
+      const sha256_calculated = Uint8ArrayToHex(
+        new Uint8Array(
+          await crypto.subtle.digest(HashAlgorithms.SHA256, raw_file),
+        ),
+      );
+      // TODO replace with crypto.bufferEqual
 
-    this.setInCache(name, JSON.parse(Uint8ArrayToString(raw_file)));
+      if (sha256 !== sha256_calculated) {
+        throw new Error(
+          `${name} hash does not match the value in the targets role.`,
+        );
+      }
+
+      const verifiedTarget = JSON.parse(Uint8ArrayToString(raw_file))
+      this.setInCache(name, verifiedTarget);
+      return verifiedTarget;
+    } else {
+      return cachedTarget;
+    }
   }
 
   async updateTUF() {
@@ -488,9 +493,7 @@ export class TUFClient {
   }
 
   async getTarget(name: string): Promise<unknown> {
-    if (!this.cached.includes(name)) {
-      await this.fetchTarget(name);
-    }
+    await this.fetchTarget(name);
 
     const namespacedKey = this.getCacheKey(name);
     const result = await browser.storage.local.get(namespacedKey);
