@@ -3,13 +3,13 @@ The purpose of this script is to build and sign a `manifest.json` file for a web
 
 ## Installation
 Install the requirements in a new python3 virtualenv.
-```
+```bash
 cd webcat/tools/signing
 python3 -m venv .venv
 pip3 install -r requirements.txt
 ```
 Test the script.
-```
+```bash
 python3 signer.py
 ```
 
@@ -24,10 +24,10 @@ Steps maarked with `*` are optional.
  6. _Choose the CSP(s)_: read the documentation in the [Developer Guide](../../docs/DeveloperGuide.md) to see what is allowed or not. An unlimited number of per path CSP are supported.
  7. _Prepare the application configuration_: complete the `webcat.config.json` boilerplate below with the collected information, and place it in the app folder.
 
-	```
+	```json
 	{
 	    "app_name": "<free text>",
-	    "app_version": "<should be incremental>,
+	    "app_version": "<should be incremental>",
 	    "comment": "<link to source code>",
 	    "wasm": ["<wasm hash A from step 3>", "<wasm hash B from step 3>"],
 	    "default_csp": "<default CSP from step 6>",
@@ -45,12 +45,11 @@ Steps maarked with `*` are optional.
 
 	  To see examples that uses all the optional features, see [Cryptpad](../../apps/cryptpad) for extra files, and [Globaleaks](../../apps/globaleaks) for multiple CSPs.
   
-  8. _Proceed with the signatures_: the signing script will invoke Sigstore. If a browser is available, the OIDC login to Fulcio will be automatically opened, otherwise the link will be shown. `python2 signer.py --signatures 1 --output app/webcat.json app/`
+  8. _Proceed with the signatures_: the signing script will invoke Sigstore. If a browser is available, the OIDC login to Fulcio will be automatically opened, otherwise the link will be shown.
+     `python2 signer.py --signatures 1 --output app/webcat.json app/`
 
   10. _Insert the signing identity_: after the signing, the script will prompt asking, in order, which identities have been used for the various signatures. Identities are always emails, for instance, in the case of a Github OIDC login, the identity will be the primary email.
 
 For signed manifest examples, see some of the currently deployd `webcat.json` files: [testapp/webcat.json](https://testapp.nym.re/webcat.json), [Jitsi](https://jitsi.nym.re/webcat.json)
 
 _TODO: the manual input for identities can be eliminated, as the "signatures" structure in the manifest JSON should be an array and not an object._
-
-For signed manifest examples
