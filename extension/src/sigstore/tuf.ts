@@ -1,6 +1,6 @@
 import { checkSignatures, getRoleKeys, loadKeys } from "./crypto";
 import { Uint8ArrayToHex, Uint8ArrayToString } from "./encoding";
-import { HashAlgorithms, Meta, Metafile, Role, Roles, Root } from "./interfaces";
+import { HashAlgorithms, Meta, Metafile, Roles, Root } from "./interfaces";
 
 export class TUFClient {
   private repositoryUrl: string;
@@ -426,7 +426,7 @@ export class TUFClient {
     return filenames;
   }
 
-  private async fetchTarget(name: string): Promise<any> {
+  private async fetchTarget(name: string): Promise<unknown> {
     const cachedTarget = await this.getFromCache(name);
 
     const cachedTargets = await this.getFromCache(Roles.Targets);
@@ -442,7 +442,7 @@ export class TUFClient {
     }
 
     if (!cachedTarget) {
-          // Both sha256 and sha512 works for downloading the file (and verifying of course)
+      // Both sha256 and sha512 works for downloading the file (and verifying of course)
       const sha256 = cachedTargets.signed.targets[name].hashes.sha256;
 
       const raw_file = await this.fetchMetafileBinary(
@@ -463,7 +463,7 @@ export class TUFClient {
         );
       }
 
-      const verifiedTarget = JSON.parse(Uint8ArrayToString(raw_file))
+      const verifiedTarget = JSON.parse(Uint8ArrayToString(raw_file));
       this.setInCache(name, verifiedTarget);
       return verifiedTarget;
     } else {
