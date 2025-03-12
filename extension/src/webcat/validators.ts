@@ -43,7 +43,7 @@ export async function validateCSP(
   let default_src_is_none = false;
   const default_src = parsedCSP.get(directives.DefaultSrc);
 
-  // Setp 1: check default src, which is the default for almost everything.
+  // Step 1: check default src, which is the default for almost everything.
   // 'self' and 'none' are allowed, but they have different implications and we should tag them
   if (default_src) {
     for (const src of default_src) {

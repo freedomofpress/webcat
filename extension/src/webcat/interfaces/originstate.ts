@@ -193,7 +193,7 @@ export class OriginStatePopulatedManifest extends OriginStateBase {
     const valid_sources: Set<string> = new Set();
 
     for (const signer of this.policy.signers) {
-      // This automatically avoids duplicates, cause they would cinflict in the json array
+      // This automatically avoids duplicates, cause they would conflict in the json array
       if (this.manifest_data.signatures[signer[1]]) {
         // If someone attached a signature that fails validation on the manifest, even if the threshold is met
         // something is sketchy

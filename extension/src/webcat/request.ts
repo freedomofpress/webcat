@@ -63,7 +63,7 @@ export async function validateOrigin(
     return { redirectUrl: urlobj.toString() };
   }
 
-  // Nothing can go wrong in this func anynmore hopefully, let's add the reference
+  // Nothing can go wrong in this func anymore hopefully, let's add the reference
   if (type === metadataRequestSource.main_frame) {
     tabs.set(tabId, fqdn);
   }

@@ -90,7 +90,7 @@ export class TUFClient {
 
   // This function supports ECDSA (256, 385, 521), Ed25519 in Hex or PEM format
   // it is possible to support certain cases of RSA, but it is not really useful for now
-  // Returns a mapping keyd (hexstring) -> CryptoKey object
+  // Returns a mapping keyid (hexstring) -> CryptoKey object
   private async loadRoot(json: Metafile, oldroot?: Root): Promise<Root> {
     if (json.signed._type !== Roles.Root) {
       throw new Error("Loading the wrong metafile as root.");
@@ -99,7 +99,7 @@ export class TUFClient {
     let keys: Map<string, CryptoKey>;
     let threshold: number;
 
-    // If no oldroot, this is a fresh start froma trusted file, so it's self signed
+    // If no oldroot, this is a fresh start from a trusted file, so it's self signed
     if (oldroot == undefined) {
       keys = await loadKeys(json.signed.keys);
       // ~~We want to check everybody signed the bootstrap file or I wish~~
@@ -360,8 +360,8 @@ export class TUFClient {
       newTargetsRaw = await this.fetchMetafileBinary(Roles.Targets, -1);
     }
 
-    // Spec 5.6.2 verfy hashes only if there is any specified
-    // TODO: ideally we should check for both sha256 and 512, but tverything is hardcoded 256 bfor now
+    // Spec 5.6.2 verify hashes only if there is any specified
+    // TODO: ideally we should check for both sha256 and 512, but everything is hardcoded 256 for now
 
     if (snapshot[`${Roles.Targets}.json`].hashes?.sha256) {
       const newTargetsRaw_sha256 = Uint8ArrayToHex(
@@ -377,7 +377,7 @@ export class TUFClient {
       ) {
         throw new Error("Targets hash does not match snapshot hash.");
       }
-      console.log("[TUF]", "Hash verfiied");
+      console.log("[TUF]", "Hash verified");
     }
 
     const newTargets = JSON.parse(Uint8ArrayToString(newTargetsRaw));

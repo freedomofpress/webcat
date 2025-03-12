@@ -131,7 +131,7 @@ export async function validateResponseHeaders(
       getFQDN(details.url),
     );
 
-    // Step 3: Await the manifest rquest we fired on origin creation
+    // Step 3: Await the manifest request we fired on origin creation
     originStateHolder.current = await (
       originStateHolder.current as OriginStateVerifiedPolicy
     ).populateManifest();
@@ -275,7 +275,7 @@ export async function validateResponseContent(
     }
 
     const content_hash = await SHA256(blob);
-    // Sometimes answers gets cached and we get an empty result, we shouldnt mark those as a hash mismatch
+    // Sometimes answers gets cached and we get an empty result, we shouldn't mark those as a hash mismatch
     if (
       !arraysEqual(
         hexToUint8Array(manifest_hash),

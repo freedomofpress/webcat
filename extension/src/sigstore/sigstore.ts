@@ -32,7 +32,7 @@ export class SigstoreVerifier {
     // But it probably do to verify past artifacts: otherwise things still valid today might be discarded
 
     for (const log of logs) {
-      // if start date is not in the future, and if an end doesnt exist or is in the future
+      // if start date is not in the future, and if an end doesn't exist or is in the future
       if (
         frozenTimestamp > new Date(log.publicKey.validFor.start) &&
         (!log.publicKey.validFor.end ||
@@ -51,7 +51,7 @@ export class SigstoreVerifier {
 
   async loadCA(frozenTimestamp: Date, cas: RawCAs): Promise<X509Certificate> {
     for (const ca of cas) {
-      // if start date is not in the future, and if an end doesnt exist or is in the future
+      // if start date is not in the future, and if an end doesn't exist or is in the future
       if (
         frozenTimestamp > new Date(ca.validFor.start) &&
         (!ca.validFor.end || new Date(ca.validFor.end) > frozenTimestamp)
@@ -135,7 +135,7 @@ export class SigstoreVerifier {
 
     // No SCT extension found to verify
     if (!extSCT) {
-      throw new Error("No SCT exension was found.");
+      throw new Error("No SCT extension was found.");
     }
 
     // Found an SCT extension but it has no SCTs
@@ -315,7 +315,7 @@ export class SigstoreVerifier {
       throw new Error("Inclusion promise validation failed.");
     }
 
-    // # 5 Rekor treehashs
+    // # 5 Rekor treehashes
 
     // # 6 TSA *skipping*, not supported by sigstore community
 

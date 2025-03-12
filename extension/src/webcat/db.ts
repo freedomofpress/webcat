@@ -9,7 +9,7 @@ export let list_version: string;
 
 // https://stackoverflow.com/questions/40593260/should-i-open-an-idbdatabase-each-time-or-keep-one-instance-open
 // Someone here claims opening and close is almost the same as keeping it open, performance-wise
-// But it is also true that most reccomendations suggest to do that for apps that do multiple operations
+// But it is also true that most recommendations suggest to do that for apps that do multiple operations
 // We just do lookups... Worth investigating performance/best practices later
 
 export async function ensureDBOpen() {
@@ -22,7 +22,7 @@ export async function openDatabase(db_name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(db_name, 1);
 
-    // At the moment we are using this event only to detect if the db doesnt exists. We do not handle
+    // At the moment we are using this event only to detect if the db doesn't exists. We do not handle
     // any kind of migrations yet
     request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
       const db = (event.target as IDBOpenDBRequest).result;

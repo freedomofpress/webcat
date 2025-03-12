@@ -3,7 +3,7 @@ import { Signer } from "./base";
 export class PopupState {
   readonly fqdn: string;
   readonly tabId: number;
-  // In the popup, if undefined mark it as loading. False means somethign failed.
+  // In the popup, if undefined mark it as loading. False means something failed.
   valid_headers: boolean | undefined;
   valid_manifest: boolean | undefined;
   valid_csp: boolean | undefined;

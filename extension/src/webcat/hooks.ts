@@ -1,5 +1,5 @@
 // This file is to be compiled, minified and embedded as a string to be
-// dybamically updated with ALLOWED_HASES and injected into scripts
+// dynamically updated with ALLOWED_HASHES and injected into scripts
 // by response.ts
 
 (async function () {
