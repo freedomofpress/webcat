@@ -46,9 +46,9 @@ Steps maarked with `*` are optional.
 	  To see examples that uses all the optional features, see [Cryptpad](../../apps/cryptpad) for extra files, and [Globaleaks](../../apps/globaleaks) for multiple CSPs.
   
   8. _Proceed with the signatures_: the signing script will invoke Sigstore. If a browser is available, the OIDC login to Fulcio will be automatically opened, otherwise the link will be shown.
-     `python2 signer.py --signatures 1 --output app/webcat.json app/`
+     `python3 signer.py --signatures 1 --output app/webcat.json app/`
 
-  10. _Insert the signing identity_: after the signing, the script will prompt asking, in order, which identities have been used for the various signatures. Identities are always emails, for instance, in the case of a Github OIDC login, the identity will be the primary email.
+  9. _Insert the signing identity_: after the signing, the script will prompt asking, in order, which identities have been used for the various signatures. Identities are always emails, for instance, in the case of a Github OIDC login, the identity will be the primary email.
 
 For signed manifest examples, see some of the currently deployd `webcat.json` files: [testapp/webcat.json](https://testapp.nym.re/webcat.json), [Jitsi](https://jitsi.nym.re/webcat.json)
 

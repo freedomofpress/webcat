@@ -199,7 +199,9 @@ export async function validateResponseHeaders(
       pathname,
     ) !== true
   ) {
-    throw new Error(`Failed to match CSP with manifest valie for ${pathname}`);
+    console.log("CSP:", csp);
+    console.log("manifest:", originStateHolder.current.manifest.default_csp);
+    throw new Error(`Failed to match CSP with manifest value for ${pathname}`);
   }
 
   logger.addLog(
@@ -213,8 +215,8 @@ export async function validateResponseHeaders(
     popupState.valid_csp = true;
   }
 
-  // TODO (perfomance): significant amount of time is spent calling this function
-  // at every loadef ile, without added benefit. It should be enough to call it if
+  // TODO (performance): significant amount of time is spent calling this function
+  // at every loaded file, without added benefit. It should be enough to call it if
   // details.type == "main_frame", but then the icon change does not work...
   setOKIcon(details.tabId);
 }

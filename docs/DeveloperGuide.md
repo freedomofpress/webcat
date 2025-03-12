@@ -19,7 +19,7 @@ Only allowed attirbutes are:
  - `self`
  - `wasm-unsafe-eval`
 
-Not that `sha-abc` format, while secure, breaks some assumptions about the sandbox and how the `WebAssembly` hooks work, thus it is not allowed.
+Note `sha-abc` format, while secure, breaks some assumptions about the sandbox and how the `WebAssembly` hooks work, thus it is not allowed.
 
 ### style-src
 Only allowed attirbutes are:
