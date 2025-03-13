@@ -14,7 +14,7 @@ Only allowed attributes are:
 If `default-src` is not `none`, than it is required to specify `object-src`, `child-src` or `frame-src` and `worker-src`.
 
 ### script-src
-Only allowed attirbutes are:
+Only allowed attributes are:
  - `none`
  - `self`
  - `wasm-unsafe-eval`
@@ -29,7 +29,7 @@ Only allowed attirbutes are:
  - `unsafe-inline`*
  - `unsafe-hashes`*
 
-* are allowed due to every tested application making use of it. When developing or updating a new application, if possible, it would be better to avoid it to sensure future compatibility, as the end goal is to eventually drop support for it.
+* are allowed due to every tested application making use of it. When developing or updating a new application, if possible, it would be better to avoid it to ensure future compatibility, as the end goal is to eventually drop support for it.
 
 ### object-src
 Only allowed attirbutes are:
