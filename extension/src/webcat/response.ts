@@ -1,8 +1,4 @@
-import {
-  hexToUint8Array,
-  stringToUint8Array,
-  Uint8ArrayToString,
-} from "../sigstore/encoding";
+import { hexToUint8Array, stringToUint8Array } from "../sigstore/encoding";
 import { origins } from "./../globals";
 import { getHooks } from "./genhooks";
 import {
