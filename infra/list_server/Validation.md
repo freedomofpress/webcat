@@ -2,6 +2,8 @@
 
 The validation process in Webcat is implemented as a finite state machine (FSM) that performs certain validation steps  before enrollment of a domain into the preload trust list. The process, defined in the `ProcessSubmissionFSM` function, consists of several sequential steps:
 
+TODO: Currently only the final payload is logged. Instead, for the _cool down_ period to be effective, a payload must be submitted at the beginning of the process, and one at the end of the waiting period. So that if an admin detects an anomaly, they have time to restore their servers or domains in a way that will fail the re-check.
+
 1. **DNS Check (StateIngested → StateDNSChecked):**
    - The submitted domain is first validated for proper format.
    - A DNS lookup is performed to ensure that the domain resolves to at least one IP address.
@@ -27,7 +29,7 @@ The mode is selected by the preload list server config, not by the submitter. Em
 
    - Based on the confirmation mode:
      - **Email Mode:** A unique validation token is generated, hashed, and ideally sent via email (with a waiting period of 12 hours). *Note: Email validation is not currently in use, as it is not viable for onion services.*
-     - **Recheck Mode:** A waiting period is set to allow for a re-check of HTTPS headers. In the demo setup, this period is intentionally short (e.g., 1 minute). In production, it should be extended (e.g., to a week) to mitigate rapid changes (e.g. due to a domain takeover, or webserver compromise, or to spam the list).
+     - **Cool-down Mode:** A waiting period is set to allow for a re-check of HTTPS headers. In the demo setup, this period is intentionally short (e.g., 1 minute). In production, it should be extended (e.g., to a week) to mitigate rapid changes (e.g. due to a domain takeover, or webserver compromise, or to spam the list).
    - The submission remains in the awaiting confirmation state until confirmation is received or the waiting period expires.
 
 5. **Auto-Confirmation (StateAwaitingConfirmation):**
