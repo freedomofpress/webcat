@@ -291,7 +291,6 @@ export async function validateResponseContent(
       deny(filter);
       filter.close();
       errorpage(details.tabId);
-      console.log(Uint8ArrayToString(new Uint8Array(blob)));
       throw new Error(
         `hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
       );

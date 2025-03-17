@@ -4,7 +4,7 @@
 
 The purpose of this project is to showcase an architectural framework that provides blocking code signing, as well as integrity and transparency checks for browser-based single-page applications. In doing so, it primarily leverages existing technologies and community infrastructure, including [Sigstore](https://sigstore.dev), [Sigsum](https://sigsum.org), and [The Update Framework](https://theupdateframework.io/). The browser extension has no runtime dependencies, and all cryptographic operations are performed using only the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API). Runtime policy enforcement in the enrolled domains is handled by the browser's [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP).
 
-The project has been written as master thesis for the [Master Computer Security at the Vrije Universiteit Amsterdam](vu.nl/csec) and the [University of Amsterdam](https://uva.nl), sponsored by the [Freedom of the Press Foundation](https://freedom.press). The full dissertation will appear later in this repository.
+The project has been written as a master's thesis for the [Master Computer Security at the Vrije Universiteit Amsterdam](https://vu.nl/csec) and the [University of Amsterdam](https://uva.nl), sponsored by the [Freedom of the Press Foundation](https://freedom.press). The full dissertation will appear later in this repository.
 
 Webcat is:
  1. [An enrollment server](./infra/list_server/)
@@ -60,92 +60,62 @@ The following test domains are provided solely for demonstration and showcasing 
 ## Architectural Overview
 The following points describe how the signing, enrollment, and subsequent validation happen at a high level.
 
-### 1. App Developer
+### 1. App Developer(s)
 
-  - The developer creates an application manifest that lists all web application files (e.g., `script.js`, HTML files, web workers, and WebAssembly snippets) along with their hashes.
-  - The manifest also defines the expected Content Security Policy (CSP) for each application path (and a fallback one). This allows an application to specify different CSPs for scenarios such as sandboxing (e.g., via iframes) or granting special permissions to workers.
-  - The manifest is signed using Sigstore. The developer authenticates via OIDC to obtain a short-lived certificate from the Sigstore Certificate Authority (CA) through Rekor.
-  - The certificate, which includes the issuer details, is used to sign the manifest.
-  - Multiple identities can sign a manifest, and each signing event is transparently logged in the Fulcio transparency log.
+  1. The developer builds an application manifest that lists all web application files (e.g., `script.js`, HTML files, web workers, and WebAssembly snippets) along with their hashes. The manifest also defines the expected Content Security Policy (CSP) for each application path (and a fallback one). This allows an application to specify different CSPs for scenarios such as sandboxing (e.g., via iframes) or granting different permissions to workers.
+  2. The manifest is signed using Sigstore. The developer authenticates via OIDC to obtain a short-lived certificate from Sigstore's Fulcio, and that certificate is logged in Rekor. The certificate, which includes the issuer details, is used to sign the manifest.
+  3. If necessary, more developers add their signature, since multiple identities can sign a manifest, and each signing event is transparently logged in the Fulcio transparency log. Each signature is logged in Rekor.
 
 ### 2. Website Administrator
 
-  - The website administrator decides to enable the integrity protections offered by the system.
-  - They must enroll their website by ensuring that the signed web application is served with the correct manifest and CSP.
-  - The administrator adds specific HTTP headers that:
+  1. The website administrator who wants to enroll in the preload mechanism adds specific HTTP headers that:
     - Declare the intent to participate in the service.
     - Specify which identities (and their issuers) are authorized to sign for the domain.
     - Define a signing threshold—indicating how many valid signatures are required for the manifest to be considered valid.
+  2. Sends their domain to the enrollment service.
+  3. Deploys the signed web application.
   
-_Trust decisions (administrators that are also developers)_:
+_Note on trust decisions (administrators that are also developers)_:
   - If the application is open source and maintained by trusted parties, the administrator might choose to trust the maintainers' signatures.
-  - If the administrator modifies or builds a custom version, they must sign the application with their own OIDC identity and thus enroll those.
+  - If the administrator modifies or builds a custom version, they must sign the application with their own OIDC identity and thus use those in the headers.
 
-### 3. Webcat Sevices Operator
+### 3. Webcat Services Operator
 
 #### Enrollment Service
-  - Once a website is ready (i.e., serving a signed web application with the correct manifest and CSP), the administrator submits the domain to an enrollment service.
-  - The enrollment service verifies that the domain is not already enrolled, checks the HTTP headers, computes a hash based on signers and threshold, and sends a signed payload to the Sigstore transparency log.
+  1. Receive domain submissions from anyone on the internet.
+  2. Verifies that the domain is not already enrolled, checks the HTTP headers, computes a hash based on signers and threshold, and submits a signed payload to the Sigsum transparency log.
+  3. Waits a _cool down_ period (e.g.: a week), and performs the checks and the payload signing and inclusion again (same as point 2, but with an updated timestamp).
 
 #### List Building and Distribution
-  - An asynchronous list building service (running periodically, such as daily) collects signed proofs from the Sigsum log and fetches original payloads from the enrollment service.
-  - It reproducibly builds a preload trust list that preserves the inclusion order of entries.
-  - The new list is signed using a dedicated list update key, and the signing event is logged in Sigsum.
-  - Historical files are preserved for audit purposes, allowing anyone to verify the signing key and list updates.
+  4. An asynchronous list building service (running periodically, such as daily) collects signed proofs from the Sigsum log and fetches original payloads from the enrollment service.
+  5. It reproducibly builds a preload trust list that preserves the inclusion order of entries.
+  6. The new list is signed using a dedicated list update key, and the signing event is logged in Sigsum.
+  7. Publish a metadata file describing the most recent list version.
+
+  _Note_: Historical files are preserved for audit purposes, allowing anyone to verify the signing key and list updates._
 
 ### 4. User Browser
 
-- **Extension Initialization and Updates:**
-  - At startup, the browser extension fetches Sigstore trust updates via The Update Framework (TUF).
-  - It also checks for list updates. When a new signed list is available, the extension verifies its signature and inclusion proof using the signed tree head to guard against rollbacks.
+- Extension initialization and update (at install and startup, or if a long running browser instance every 24 hours):
 
-- **Runtime Integrity Checks:**
-  - When a user opens a new main frame (e.g., a new tab), the extension performs a local lookup to determine if the domain is enrolled.
-  - If enrolled, it verifies that the header hash (reflecting signers and threshold) matches the one stored in the list.
-  - The extension then fetches the manifest from the same origin and validates the Sigstore signatures—ensuring that at least the required threshold of valid signatures is present.
-  - Every executable asset (scripts, HTML, WebAssembly) is integrity-checked against the hashes specified in the manifest at the network level.
-  - If all checks pass, a green icon is displayed along with verification details (such as signing identities and loaded assets). If any integrity check fails, execution is halted and the user is redirected to a blocking page before any compromised material reaches the DOM.
+    1. At startup, the browser extension fetches Sigstore trust updates via The Update Framework (TUF).
+    2. It also checks for list updates. When a new signed list is available, the extension verifies its signature and inclusion proof using the signed tree head to guard against rollbacks.
+
+- Runtime integrity checks (running at every page load):
+
+    3. When a user opens a new main frame (e.g., a new tab), the extension performs a local lookup to determine if the domain is enrolled.
+    4. If enrolled, it verifies that the header hash (reflecting signers and threshold) matches the one stored in the list.
+    5. The extension then fetches the manifest from the same origin and validates the Sigstore signatures, ensuring that at least the required threshold of valid signatures is present.
+    6. Every executable asset (scripts, HTML, WebAssembly, workers) is integrity-checked against the hashes specified in the manifest at the network level.
+    7. If all checks pass, a green icon is displayed along with verification details (such as signing identities and loaded assets). If any integrity check fails, execution is halted and the user is redirected to a blocking page before any compromised material reaches the DOM.
 
 ### 5. Auditors
-The system is fully transparent and auditable. Different parts can be interested in auding only those relevant to them: a developer can monitor the usage of their OIDC identity, while a website administrator can monitor any list changes that affect their domain(s).
+The system is fully transparent and auditable. Different parties can be interested in auditing only those relevant to them: a developer can monitor the usage of their OIDC identity, while a website administrator can monitor any list changes that affect their domain(s).
 
-- **Monitor List Changes:** By tracking signing events in the Sigsum transparency log, auditors can observe every change made to the list. See the [Sigsum getting started documentation](https://www.sigsum.org/getting-started/) for a walkthrough on how.
+- **Monitor List Changes:** By tracking signing events in the Sigsum transparency log, auditors can observe every change made to the list. See the [Sigsum getting started documentation](https://www.sigsum.org/getting-started/) for a walkthrough on how. With the _cool down_ period, administrators can monitor when a change is requested, but detect it before it is merged, and if it is malicious, revert it before the next enrollment server check.
 
-- **Verify Distributed List Blobs:** Auditors can reproducibly rebuild the preload trust list from the enrollment data and compare it with the distributed blobs. This ensures that the distributed list is identical to the one generated from the source data. Additionally, all signing events of the list builder are logged, allowing auditors to review every update.
+- **Verify Distributed List Blobs:** Auditors can reproducibly rebuild the preload trust list from the enrollment data and compare it with the distributed blobs. This ensures that the distributed list is identical to the one generated from the source data. Additionally, all signing events of the list builder are logged, allowing auditors to review every update. The update server should maintain all historical data, so that all the signing events in the Sigsum log are reproducible.
 
-- **Monitor OIDC Certificate Issuance:** By examining the Fulcio transparency log, auditors can track the issuance of OIDC certificates. This helps confirm that certificate issuance is done transparently and according to policy. See the [Rekor web interface](https://search.sigstore.dev/) to search through the issued certificates.
+- **Monitor OIDC Certificate Issuance:** By examining the Rekor transparency log, auditors (and developers) can track the issuance of OIDC certificates. This helps confirm that certificate issuance is done transparently and according to policy. See the [Rekor web interface](https://search.sigstore.dev/) to search through the issued certificates.
 
-- **Verify Artifact Signing:** Auditors can also verify that artifacts are signed correctly by monitoring the certificates issued by Fulcio. This ensures that the artifacts' signing events, as recorded by Fulcio, match the expected cryptographic proofs.
-
-## Implementing WEBCAT Natively or as an Adopted Standard
-
-To implement something like WEBCAT natively, or as an adopted standard, the following changes would be needed:
-
-### Subresource Integrity (SRI) Extensions
-- Implement SRI for Web Workers, Shared Workers, and Service Workers.
-- Implement SRI for ES6 module imports.
-- Implement SRI for `WebAssembly.compileStreaming` and `WebAssembly.instantiateStreaming`.
-
-### WebAssembly Content Security Policy (CSP) Extension
-- Introduce a dedicated WebAssembly CSP directive: `wasm-src`.
-- Support `'self'` and specific `<origins>` for `WebAssembly.compileStreaming` and `WebAssembly.instantiateStreaming`.
-- Support `unsafe-eval` and `sha-xxx` hashes for:
-  - `WebAssembly.compile`
-  - `WebAssembly.instantiate`
-  - `new WebAssembly.Module`
-
-### Integrity-Constrained Origins Content Security Policy (CSP) Extension
-- Extend CSP to add an additional source expression to `frame-src` and `child-src`.
-- Allow only origins that meet integrity requirements (i.e., those enrolled in the same integrity and transparency mechanism as the current origin).
-
-### Considerations for Transparency Logging
-Browsers process multiple CSPs from different sources:
-  - HTTP headers (single or multiple instances).
-  - `<meta>` tags within HTML.
-A CSP embedded in an `index.html` file or any loaded HTML file can be transparency logged as part of that file. However, CSP assigned to specific JavaScript files (e.g., a worker script) cannot be easily logged in the same manner. However, it is essential to log the CSPs along the application code, and enforce both to be integrity checked.
-
-
-### Infrastructure
-Proposals like [Source Code Transparency](https://github.com/twiss/source-code-transparency/blob/main/explainer.md) have slightly different threat models and user-facing requirements. The usefulness of the preload list is to allow verification on a domain basis, independent of UX indicators shown to a potential user. If the necessary integrity and transparency verification information is provided via an extension in a TLS certificate, a web server failing to present the required information would likely require end-user detection. This leaves room for targeted attacks and could break the potential audit trail.
-
-Similarly, while it is hard to imagine large providers misbehaving, the threat model is more complex for self-hosted applications such as `Cryptpad`. For example, in the [jabber.ru MITM incident](https://www.devever.net/~hl/xmpp-incident), authorities likely issued a rogue certificate via either a server or DNS takeover. Additionally, when [domain hijacking or BGP hijacking occurs](https://www.theverge.com/2018/4/24/17275982/myetherwallet-hack-bgp-dns-hijacking-stolen-ethereum), attackers may issue rogue certificates. Detection of such incidents is possible, but whether detection alone is a sufficient deterrent for small self-hosted servers remains an open question, especially as different jurisdictions worldwide have different constraints, local administrators may lack the necessary resources for promptly detecting and mitigating such threats.
+- **Verify Artifact Signing:** Auditors can also verify that artifacts are signed correctly by monitoring the artifacts signatures logged by Rekor. Developers should keep public an archive of all the artifacts they ever signed with a given identit.
