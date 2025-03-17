@@ -24,15 +24,15 @@ If you are a developer and want to design or port your application, look at the 
 
 | Feature             | Supported? | CSP Directive / Value         | Notes                                          |
 |---------------------|------------|-------------------------------|------------------------------------------------|
-| WebAssembly         | Yes        | script-src 'wasm-unsafe-eval' | Fully compatible, all methods.  |
-| Web Workers   | Yes        | worker-src 'self'                   | All dedicated workers are supported.           |
-| Shared Workers      | Yes        | worker-src 'self'               | Fully supported.                               |
-| Service Workers     | Yes        | worker-src 'self'                   | Fully supported.                               |
-| Iframes             | Yes        | frame-src/child-src  'self' blob: data: <enrolled_origin>                   | Supports embedding via iframes.                |
-| Nested Iframes      | Yes        | frame-src/child-src  'self' blob: data: <enrolled_origin>                  | Fully supported even within nested contexts.   |
-| Inline Script       | No         | ~script-src 'unsafe-inline'~  | Inline scripts are disallowed.                 |
-| Script Hash         | No         | ~script-src sha256-xxx~      | Script hashes are not supported.               |
-| Script Unsafe Eval  | No         | ~script-src 'unsafe-eval'~    | Unsafe eval is not allowed.                    |
+| WebAssembly         | Yes        | script-src 'wasm-unsafe-eval' |   |
+| Web Workers   | Yes        | worker-src 'self'                   |            |
+| Shared Workers      | Yes        | worker-src 'self'               |                                |
+| Service Workers     | Yes        | worker-src 'self'                   |                              |
+| Iframes             | Yes        | frame-src/child-src  'self' blob: data: <enrolled_origin>                   | External origins needs to be enrolled.                |
+| Nested Iframes      | Yes        | frame-src/child-src  'self' blob: data: <enrolled_origin>                  |  All external origins needs to be enrolled.   |
+| Inline Script       | No         | ~script-src 'unsafe-inline'~  |                  |
+| Script Hash         | No         | ~script-src sha256-xxx~      |                |
+| Script Unsafe Eval  | No         | ~script-src 'unsafe-eval'~    |                     |
 
 It is implemented and theoretically possible to include scripts from remote origins that are also enrolled (and similarly workers or styles), still providing a transparency chain of all hosts and allowing loads from CDNs. This is because origin validation is recursive, and enrollment is checked when the manifest is parsed and validated.
 
