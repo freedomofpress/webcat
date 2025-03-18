@@ -1,4 +1,4 @@
-# Web-based Code Assurance & Transparency (WEBCAT)
+# Web-based Code Assurance and Transparency (WEBCAT)
 ![webcat logo dark](./docs/icons/dark/256/webcat.png#gh-dark-mode-only)
 ![webcat logo light](./docs/icons/light/256/webcat.png#gh-light-mode-only)
 
@@ -92,7 +92,7 @@ _Note on trust decisions (administrators that are also developers)_:
   6. The new list is signed using a dedicated list update key, and the signing event is logged in Sigsum.
   7. Publish a metadata file describing the most recent list version.
 
-  _Note_: Historical files are preserved for audit purposes, allowing anyone to verify the signing key and list updates._
+  _Note_: Historical files are preserved for audit purposes, allowing anyone to verify the signing key and list updates.
 
 ### 4. User Browser
 

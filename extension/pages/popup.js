@@ -16,7 +16,6 @@ function getActiveTabInfo() {
       }
 
       const popupState = response.popupState;
-      console.log(popupState);
       updatePopup(popupState);
     })
     .catch((error) => {
@@ -92,7 +91,7 @@ function updatePopup(popupState) {
   }
 
   if (popupState.invalid_assets.length > 0) {
-    addOrUpdateLi("assets-status", `❌ Runtime error`);
+    addOrUpdateLi("assets-status", `❌ Integrity error`);
     listElement.removeChild(loadingElement);
   }
 
