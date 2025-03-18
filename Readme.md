@@ -84,16 +84,16 @@ _Note on trust decisions (administrators that are also developers)_:
 
 ### 3. Webcat Services Operator
 
-#### Enrollment Service
+#### Enrollment Server
   1. Receive domain submissions from anyone on the internet.
   2. Verifies that the domain is not already enrolled, checks the HTTP headers, computes a hash based on signers and threshold, and submits a signed payload to the Sigsum transparency log.
   3. Waits a _cool down_ period (e.g.: a week), and performs the checks and the payload signing and inclusion again (same as point 2, but with an updated timestamp).
 
-#### List Building and Distribution
+#### Build Server and Update Server
   4. An asynchronous list building service (running periodically, such as daily) collects signed proofs from the Sigsum log and fetches original payloads from the enrollment service.
   5. It reproducibly builds a preload trust list that preserves the inclusion order of entries.
   6. The new list is signed using a dedicated list update key, and the signing event is logged in Sigsum.
-  7. Publish a metadata file describing the most recent list version.
+  7. Publish a metadata file describing the most recent list version to the update server.
 
   _Note_: Historical files are preserved for audit purposes, allowing anyone to verify the signing key and list updates.
 
