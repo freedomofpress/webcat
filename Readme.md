@@ -119,9 +119,9 @@ The system is fully transparent and auditable. Different parties can be interest
 
 - **Audit Distributed List Blobs:** Auditors can reproducibly rebuild the preload trust list from the enrollment data and compare it with the distributed blobs. This ensures that the distributed list is identical to the one generated from the source data. Additionally, all signing events of the list builder are logged, allowing auditors to review every update. The update server should maintain all historical data, so that all the signing events in the Sigsum log are reproducible.
 
-- **Audit OIDC Certificate Issuance:** By examining the Rekor transparency log, auditors (and developers) can track the issuance of OIDC certificates. This helps confirm that certificate issuance is done transparently and according to policy. See the [Rekor web interface](https://search.sigstore.dev/) to search through the issued certificates.
+- **Audit OIDC Certificate Issuance:** By examining the Rekor transparency log, auditors (and developers) can track the issuance of OIDC certificates. This helps confirm that certificate issuance is done transparently and according to policy. See the Rekor web interface](https://search.sigstore.dev/) to search through the issued certificates.
 
 - **Audit Artifact Signing:** Auditors can also verify that artifacts are signed correctly by monitoring the artifacts signatures logged by Rekor. Developers should keep public an archive of all the artifacts they ever signed with a given identit.
 
 ## Acknowledgements
-Thanks to [smaury](https://github.com/smaury) of [Shielder](https://www.shielder.com/) and to [https://github.com/antisnatchor](https://www.shielder.com/) of [Persistent Security](https://www.persistent-security.net/) for their security-related insights. Thanks to [Giorgio Maone](https://github.com/hackademix) of the Tor Proect for the development-related support.
+Thanks to [smaury](https://github.com/smaury) of [Shielder](https://www.shielder.com/) and to [antisnatchor](https://github.com/antisnatchor) of [Persistent Security](https://www.persistent-security.net/) for their security-related insights. Thanks to [Giorgio Maone](https://github.com/hackademix) of the Tor Project for the development-related support.
