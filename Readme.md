@@ -122,3 +122,6 @@ The system is fully transparent and auditable. Different parties can be interest
 - **Audit OIDC Certificate Issuance:** By examining the Rekor transparency log, auditors (and developers) can track the issuance of OIDC certificates. This helps confirm that certificate issuance is done transparently and according to policy. See the [Rekor web interface](https://search.sigstore.dev/) to search through the issued certificates.
 
 - **Audit Artifact Signing:** Auditors can also verify that artifacts are signed correctly by monitoring the artifacts signatures logged by Rekor. Developers should keep public an archive of all the artifacts they ever signed with a given identit.
+
+## Acknowledgements
+Thanks to [smaury](https://github.com/smaury) of [Shielder](https://www.shielder.com/) and to [https://github.com/antisnatchor](https://www.shielder.com/) of [Persistent Security](https://www.persistent-security.net/) for their security-related insights. Thanks to [Giorgio Maone](https://github.com/hackademix) of the Tor Proect for the development-related support.
