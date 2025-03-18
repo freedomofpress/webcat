@@ -58,6 +58,9 @@ The following test domains are provided solely for demonstration and showcasing 
 
 
 ## Architectural Overview
+
+![Diagram depicting the full architecture, as described below](./docs/architecture.svg)
+
 The following points describe how the signing, enrollment, and subsequent validation happen at a high level.
 
 ### 1. App Developer(s)
