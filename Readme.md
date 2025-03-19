@@ -12,13 +12,16 @@ Webcat is:
  3. [A Firefox (v2) extension](./extension/)
  4. [A signing script](./tools/signing/)
 
-See [The long and winding road to safe browser-based cryptography](https://securedrop.org/news/browser-based-cryptography/) for additional context.
+**This is currently experimental software and should not be used in production**.
+
+See [The long and winding road to safe browser-based cryptography](https://securedrop.org/news/browser-based-cryptography/) and [Introducing WEBCAT](https://securedrop.org/news/introducing-webcat-web-based-code-assurance-and-transparency/) for additional context.
 
 See [apps](./apps) for a list of supported and in-progress apps.
 
 See [threat model](./docs/ThreatModel.md) for preliminary threat model considerations.
 
 If you are a developer and want to design or port your application, look at the [developer reference](./docs/DeveloperGuide.md) and also at the issues mentioning the porting of existing apps (such as: https://github.com/freedomofpress/webcat/issues/28, https://github.com/freedomofpress/webcat/issues/26, https://github.com/freedomofpress/webcat/issues/25).
+
 
 ## Web Features Support Matrix
 
