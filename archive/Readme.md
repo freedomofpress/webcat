@@ -1,3 +1,3 @@
-This folder just contains components no longer in use. Previously to using Sigsum, it was using a dedicated Trillian log server with a custom built-perosnality. I also wrote python bindings for Trillian that are available.
+This folder contains components that are no longer in use. Before migrating to Sigsum, the system relied on a dedicated Trillian log server with a custom-built personality. I also developed Python bindings for Trillian, which are still available.
 
-The infrastructure had been greatly simplified by not tunning its own transparency server, thus the whole Terraform setup is overkill for the current needs and is deperecated.
+The infrastructure has since been greatly simplified by no longer running its own transparency server, making the existing Terraform setup unnecessary and now deprecated.
