@@ -1,18 +1,18 @@
 # Benchmarking tools
 ## bench.py
-The purpose of this test suite is to automate performance benchmarks to measure the overhead and performance impact of having the WEBCAT browser extension installed. The test suite expcts two URLs, one enrolled and one non-enrolled. For the test to be accurate, the two URLs should point to the same server and app, so that on the average what is measured is only the overhead of the extension. The extension zipfile to pass to the command line of this tool can be build by running `make package` in the `extension/` folder.
+The purpose of this test suite is to automate performance benchmarks to measure the overhead and performance impact of having the WEBCAT browser extension installed. The test suite expects two URLs, one enrolled and one non-enrolled. For the test to be accurate, the two URLs should point to the same server and app, so that on the average what is measured is only the overhead of the extension. The extension zipfile to pass to the command line of this tool can be built by running `make package` in the `extension/` folder.
 
 For instance, most tests have been performed using:
  * `https://webcat.nym.re` as an enrolled URL
  * `https://webcat-element.pages.dev` a non enrolled URL
 
-They both point to the same Cloudflare Pages instance. They are a good test to demo real-lice performance, including network fluctuations, while more accurate testing could be performed by hosting everything locally.
+They both point to the same Cloudflare Pages instance. They are a good test to see real-world performance, including network fluctuations, while more accurate testing could be performed by hosting locally instead. A browser state is very complex, and performances degrades over time. As such, warm tests are collected by visiting a second time the test url after a cold test, then the browser is killed and the profile is removed. When testing with a long lived browser instance, warm baseline performance degrades, becoming slower than cold tests.
 
 Tests can be performed in two different scenarios:
  * _Cold_: fresh browser profile and session, caches empty
  * _Warm_: the URL has been previously visited, both the browser cache and the WEBCAT cache are populated
 
-It also run an extra test without the browser extension to get the baseline performance to compare with.
+_Cold_ tests are particularly slow: a new profile for Firefox is created, then the browser is started, the extension is installed and there is a wait time for the extension to initialize (download and import the trust chain and the preload list).
 
 The script runs six tests by default, and saves the output to a Sqlite database, `results.db`.
 
@@ -27,16 +27,18 @@ The tests are:
 | Warm | No | Yes |
 | Warm | N/A | No |
 
-Performance data are gathered by calling [performance.getEntriesByType()](https://developer.mozilla.org/en-US/docs/Web/API/Performance/getEntriesByType). Furthermore, in the _enrolled_ case, the script checks for the WebAssembly hooks marker to confirm that WEBCAT has indeed been executed. If that is not the case, the result is discarded and the iteration is repeated.
+The purpose of extra test without the browser extension is to get the baseline performance to compare with.
 
-The tool uses [geckordp](https://github.com/jpramosi/geckordp), a library to use the Firefox Remote Debugging Protocol, and as such it is Firefox specific. Contrary to Chromium based browsers, Firefox cannot take an extension from the command line. Selenium and other automation tools either use the CDP API or Marionette, and as far as I could test, neither supported installing temporary addons. Thus, this method could be in the future the most convenient to also implement functional tests.
+Performance data are gathered by calling [performance.getEntriesByType()](https://developer.mozilla.org/en-US/docs/Web/API/Performance/getEntriesByType). Furthermore, in the _enrolled_ case, the script checks for the [WebAssembly hooks marker](https://github.com/freedomofpress/webcat/blob/56e8906b089e730a9412482cd5878a905f1fc0cc/extension/src/webcat/hooks.ts#L7) to confirm that WEBCAT has indeed been executed. If that is not the case, the result is discarded and the iteration is repeated.
+
+The tool uses [geckordp](https://github.com/jpramosi/geckordp), a library to use the Firefox Remote Debugging Protocol, and as such it is Firefox specific. Contrary to Chromium based browsers, Firefox does not support taking an extension path from the command line. Selenium and other automation tools either use the CDP API or Marionette, and as far as I could test, neither supported installing temporary addons. Thus, this method could be in the future the most convenient to implement functional tests.
 
 ### Install
 Firefox needs to be already installed.
 
 ```bash
 python3 -m venv venv
-. venv/bin.activate
+. venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -57,15 +59,4 @@ options:
                         URL for the non-enrolled domain
   --headless HEADLESS   Headless mode
 ```
-
-Sample output:
-```bash
-python3 final.py --addon /Users/g/webcat/dist/webcat-extension.zip --iterations 10 --enrolled-url https://element.nym.re --non-enrolled-url https://webcat-element.pages.dev
-Test URL                            Mode     Enrolled Addon    #        Elapsed 
-https://element.nym.re              cold     true     true     10/10       307.4s
-https://webcat-element.pages.dev    cold     false    true     10/10       304.8s
-https://element.nym.re              cold     false    false    10/10       308.8s
-https://element.nym.re              warm     true     true     10/10        50.9s
-https://webcat-element.pages.dev    warm     false    true     10/10        51.2s
-https://element.nym.re              warm     false    false    10/10        52.1s
-```
+ The script saves each iteration, and if run multiple times it will resume from the last run.
