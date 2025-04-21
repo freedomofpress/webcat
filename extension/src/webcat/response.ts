@@ -195,8 +195,8 @@ export async function validateResponseHeaders(
       pathname,
     ) !== true
   ) {
-    console.log("CSP:", csp);
-    console.log("manifest:", originStateHolder.current.manifest.default_csp);
+    //console.log("CSP:", csp);
+    //console.log("manifest:", originStateHolder.current.manifest.default_csp);
     throw new Error(`Failed to match CSP with manifest value for ${pathname}`);
   }
 

@@ -90,7 +90,7 @@ export class OriginStateInitial extends OriginStateBase {
     const signers = parseSigners(signersHeader);
 
     // Extract X-Sigstore-Threshold
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
     const threshold = parseThreshold(thresholdHeader, signers.size);
 
     if (threshold < 1 || signers.size < 1 || threshold > signers.size) {
