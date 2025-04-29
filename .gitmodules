@@ -1,0 +1,3 @@
+[submodule "test/cases/element"]
+	path = test/cases/element
+	url = https://github.com/lsd-cat/webcat-element

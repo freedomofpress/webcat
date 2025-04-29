@@ -16,6 +16,8 @@ import { sigstore } from "./listeners";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
 
+declare const __TESTING__: boolean;
+
 export async function validateOrigin(
   fqdn: string,
   url: string,
@@ -43,24 +45,28 @@ export async function validateOrigin(
 
   // See https://github.com/freedomofpress/webcat/issues/1
   const urlobj = new URL(url);
-  if (
-    !["80", "443", ""].includes(urlobj.port) || // Ports 80, 443, or no port specified.
-    !["http:", "https:"].includes(urlobj.protocol) // Protocol must be HTTP or HTTPS.
-  ) {
-    throw new Error(
-      `Attempting to load an enrolled resource using protocol "${urlobj.protocol}" and port "${urlobj.port || "(default)"}". Only standard protocols (HTTP/HTTPS) and ports (80/443) are allowed.`,
-    );
-  }
 
-  // If the website is enrolled but is not https force a redirect
-  // Or maybe not if it's an onion website :)
-  if (
-    urlobj.protocol !== "https:" &&
-    urlobj.hostname.substring(fqdn.lastIndexOf(".")) !== ".onion"
-  ) {
-    urlobj.protocol = "https:";
-    // Redirect to HTTPS
-    return { redirectUrl: urlobj.toString() };
+  // In case of testing we use localhost http for convenience
+  if (!__TESTING__) {
+    if (
+      !["80", "443", ""].includes(urlobj.port) || // Ports 80, 443, or no port specified.
+      !["http:", "https:"].includes(urlobj.protocol) // Protocol must be HTTP or HTTPS.
+    ) {
+      throw new Error(
+        `Attempting to load an enrolled resource using protocol "${urlobj.protocol}" and port "${urlobj.port || "(default)"}". Only standard protocols (HTTP/HTTPS) and ports (80/443) are allowed.`,
+      );
+    }
+
+    // If the website is enrolled but is not https force a redirect
+    // Or maybe not if it's an onion website :)
+    if (
+      urlobj.protocol !== "https:" &&
+      urlobj.hostname.substring(fqdn.lastIndexOf(".")) !== ".onion"
+    ) {
+      urlobj.protocol = "https:";
+      // Redirect to HTTPS
+      return { redirectUrl: urlobj.toString() };
+    }
   }
 
   // Nothing can go wrong in this func anymore hopefully, let's add the reference
@@ -98,7 +104,13 @@ export async function validateOrigin(
   );
 
   // Policy hash is checked at the top and then later again
-  const newOriginState = new OriginStateInitial(sigstore, fqdn, policy_hash);
+  const newOriginState = new OriginStateInitial(
+    sigstore,
+    urlobj.protocol,
+    urlobj.port,
+    fqdn,
+    policy_hash,
+  );
   origins.set(fqdn, new OriginStateHolder(newOriginState));
 
   // So, we cannot directly know that we are the initiator of this request, see

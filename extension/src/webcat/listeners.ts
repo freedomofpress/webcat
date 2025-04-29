@@ -29,6 +29,8 @@ import { errorpage, getFQDN, SHA256 } from "./utils";
 
 export let sigstore: SigstoreVerifier;
 
+declare const __TESTING__: boolean;
+
 async function getSigstore(update: boolean = false): Promise<SigstoreVerifier> {
   const tuf_client = await new TUFClient(
     tuf_sigstore_url,
@@ -50,64 +52,71 @@ async function getSigstore(update: boolean = false): Promise<SigstoreVerifier> {
 }
 
 async function updateList(db: IDBDatabase) {
-  const req = fetch(`${update_url}/update.json`, { cache: "no-store" });
+  if (__TESTING__) {
+    console.log("[webcat] Running test list updater");
+    updateLastChecked(db);
+    // updateDatabase has also a __TESTING__ condition; later we might want to move everything into the same place
+    await updateDatabase(db, "", 1337, new Uint8Array());
+  } else {
+    const req = fetch(`${update_url}/update.json`, { cache: "no-store" });
 
-  console.log("[webcat] Running list updater");
-  const sigsum = await SigsumVerifier.create(
-    sigsum_log_key,
-    sigsum_witness_key,
-    sigsum_signing_key,
-  );
-
-  const metadata = await getListMetadata(db);
-
-  const response = await req;
-  if (!response.ok) {
-    throw new Error("Failed to fetch update.json from server");
-  }
-
-  const proof = (await response.json()) as SigsumProof;
-
-  let hash: string;
-
-  try {
-    hash = await sigsum.verify(proof);
-  } catch (e) {
-    throw new Error(`Failed to verify update: ${e}`);
-  }
-
-  updateLastChecked(db);
-
-  // Here check if new hash != old hash
-  // Check if new tree_size > old tree_size
-
-  if (
-    !metadata ||
-    (hash != metadata.hash && proof.tree_head.size >= metadata.treeHead)
-  ) {
-    const responseList = await fetch(`${update_url}/${hash}.bin`, {
-      cache: "no-store",
-    });
-    if (!responseList.ok) {
-      throw new Error(`Failed to fetch ${update_url}/${hash}.bin`);
-    }
-
-    const binaryList = new Uint8Array(await responseList.arrayBuffer());
-    const binaryListHash = Uint8ArrayToHex(
-      new Uint8Array(await SHA256(binaryList)),
+    console.log("[webcat] Running production list updater");
+    const sigsum = await SigsumVerifier.create(
+      sigsum_log_key,
+      sigsum_witness_key,
+      sigsum_signing_key,
     );
 
-    if (binaryListHash !== hash) {
-      throw new Error(
-        "Hash mismatch between signed metadata and list binary file",
-      );
+    const metadata = await getListMetadata(db);
+
+    const response = await req;
+    if (!response.ok) {
+      throw new Error("Failed to fetch update.json from server");
     }
 
-    await updateDatabase(db, hash, proof.tree_head.size, binaryList);
+    const proof = (await response.json()) as SigsumProof;
 
-    console.log("[webcat] List successfully updated");
-  } else {
-    console.log("[webcat] No list update is available");
+    let hash: string;
+
+    try {
+      hash = await sigsum.verify(proof);
+    } catch (e) {
+      throw new Error(`Failed to verify update: ${e}`);
+    }
+
+    updateLastChecked(db);
+
+    // Here check if new hash != old hash
+    // Check if new tree_size > old tree_size
+
+    if (
+      !metadata ||
+      (hash != metadata.hash && proof.tree_head.size >= metadata.treeHead)
+    ) {
+      const responseList = await fetch(`${update_url}/${hash}.bin`, {
+        cache: "no-store",
+      });
+      if (!responseList.ok) {
+        throw new Error(`Failed to fetch ${update_url}/${hash}.bin`);
+      }
+
+      const binaryList = new Uint8Array(await responseList.arrayBuffer());
+      const binaryListHash = Uint8ArrayToHex(
+        new Uint8Array(await SHA256(binaryList)),
+      );
+
+      if (binaryListHash !== hash) {
+        throw new Error(
+          "Hash mismatch between signed metadata and list binary file",
+        );
+      }
+
+      await updateDatabase(db, hash, proof.tree_head.size, binaryList);
+
+      console.log("[webcat] List successfully updated");
+    } else {
+      console.log("[webcat] No list update is available");
+    }
   }
 }
 

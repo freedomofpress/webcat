@@ -29,6 +29,8 @@ export abstract class OriginStateBase {
     | "populated_manifest"
     | "verified_manifest"
     | "failed";
+  public readonly scheme: string;
+  public readonly port: string;
   public readonly fqdn: string;
   public readonly policy_hash: Uint8Array;
   public readonly manifestPromise: Promise<Response>;
@@ -40,17 +42,26 @@ export abstract class OriginStateBase {
   public readonly valid_signers?: Array<Signer>;
   public readonly valid_sources?: Set<string>;
 
+  // Due to list logic, we support only one app per domain, and that should be a privileged one
+  // But that is enforced in request.ts
   constructor(
     sigstore: SigstoreVerifier,
+    scheme: string,
+    port: string,
     fqdn: string,
     policy_hash: Uint8Array,
   ) {
+    this.scheme = scheme;
+    this.port = port;
     this.fqdn = fqdn;
     this.policy_hash = policy_hash;
     this.sigstore = sigstore;
-    this.manifestPromise = fetch(`https://${fqdn}/${manifest_name}`, {
-      cache: "no-store",
-    });
+    this.manifestPromise = fetch(
+      `${scheme}//${fqdn}:${port}/${manifest_name}`,
+      {
+        cache: "no-store",
+      },
+    );
     this.references = 1;
   }
 }
@@ -60,7 +71,7 @@ export class OriginStateFailed extends OriginStateBase {
   public errorMessage: string;
 
   constructor(prev: OriginStateBase, errorMessage: string) {
-    super(prev.sigstore, prev.fqdn, prev.policy_hash);
+    super(prev.sigstore, prev.scheme, prev.port, prev.fqdn, prev.policy_hash);
     Object.assign(this, prev);
     // We must set it again because we are copying
     this.status = "failed" as const;
@@ -73,10 +84,12 @@ export class OriginStateInitial extends OriginStateBase {
 
   constructor(
     sigstore: SigstoreVerifier,
+    scheme: string,
+    port: string,
     fqdn: string,
     policy_hash: Uint8Array,
   ) {
-    super(sigstore, fqdn, policy_hash);
+    super(sigstore, scheme, port, fqdn, policy_hash);
   }
 
   public async verifyPolicy(
@@ -88,9 +101,6 @@ export class OriginStateInitial extends OriginStateBase {
     const thresholdHeader = normalizedHeaders.get("x-sigstore-threshold")!;
 
     const signers = parseSigners(signersHeader);
-
-    // Extract X-Sigstore-Threshold
-
     const threshold = parseThreshold(thresholdHeader, signers.size);
 
     if (threshold < 1 || signers.size < 1 || threshold > signers.size) {
@@ -141,7 +151,7 @@ export class OriginStateVerifiedPolicy extends OriginStateBase {
   public readonly policy: Policy;
 
   constructor(prev: OriginStateInitial, policy: Policy) {
-    super(prev.sigstore, prev.fqdn, prev.policy_hash);
+    super(prev.sigstore, prev.scheme, prev.port, prev.fqdn, prev.policy_hash);
     this.policy = policy;
   }
 
@@ -166,7 +176,7 @@ export class OriginStatePopulatedManifest extends OriginStateBase {
     prev: OriginStateVerifiedPolicy,
     manifest_data: ManifestDataStructure,
   ) {
-    super(prev.sigstore, prev.fqdn, prev.policy_hash);
+    super(prev.sigstore, prev.scheme, prev.port, prev.fqdn, prev.policy_hash);
     this.policy = prev.policy;
     this.manifest_data = manifest_data;
   }
@@ -272,7 +282,7 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     valid_signers: Array<Signer>,
     valid_sources: Set<string>,
   ) {
-    super(prev.sigstore, prev.fqdn, prev.policy_hash);
+    super(prev.sigstore, prev.scheme, prev.port, prev.fqdn, prev.policy_hash);
     this.policy = prev.policy;
     this.manifest_data = prev.manifest_data;
     this.manifest = manifest;

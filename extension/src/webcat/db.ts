@@ -1,3 +1,4 @@
+import { hexToUint8Array } from "../sigstore/encoding";
 import { nonOrigins, origins } from "./../globals";
 import { logger } from "./logger";
 import { SHA256 } from "./utils";
@@ -6,6 +7,8 @@ export let list_count: number;
 export let list_db: IDBDatabase;
 export let list_last_checked: number;
 export let list_version: string;
+
+declare const __TESTING__: boolean;
 
 // https://stackoverflow.com/questions/40593260/should-i-open-an-idbdatabase-each-time-or-keep-one-instance-open
 // Someone here claims opening and close is almost the same as keeping it open, performance-wise
@@ -170,19 +173,53 @@ export async function updateDatabase(
   rawBytes: Uint8Array,
 ): Promise<void> {
   // Check if the "list" store is empty.
-  const count = await getCount("list");
 
-  if (count === 0) {
-    // No data present: perform initial insertion.
+  if (__TESTING__) {
+    console.log("[webcat] Running test list insertion.");
+    // Block used for local testing; by using a define, it should be a dead branch and compiled out
+    const numRandom = 1000;
+    const rawBytes = new Uint8Array(64);
+    const encoder = new TextEncoder();
+
+    const staticPolicy = hexToUint8Array(
+      "77f407ed38cdb1c8ad44839fa33b491c0eb93bd2f46afdf3071a62be933ea22a",
+    ); // Replace if needed
+
+    const ip = `127.0.0.1`;
+    const fqdnHash = new Uint8Array(await SHA256(encoder.encode(ip)));
+    rawBytes.set(fqdnHash, 0);
+    rawBytes.set(staticPolicy, 32);
+
     await insertBinaryData(db, rawBytes);
-    await updateListMetadata(db, newHash, newTreeHead);
-    console.log("[webcat] Database initialized with new binary update list.");
-  } else {
-    // Data already exists: reinitialize the store.
-    await reinitializeDatabase(db, rawBytes, newHash, newTreeHead);
-    console.log("[webcat] Database updated with new binary update list.");
-  }
 
+    console.log(`[webcat] Inserted localhost test entry.`);
+
+    const randomBytes = new Uint8Array(64 * numRandom);
+    crypto.getRandomValues(randomBytes);
+    await insertBinaryData(db, randomBytes);
+    await updateListMetadata(
+      db,
+      "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+      1337,
+    );
+
+    console.log(`[webcat] Inserted ${numRandom} random entries.`);
+  } else {
+    console.log("[webcat] Running production list insertion.");
+    // "Production"
+    const count = await getCount("list");
+
+    if (count === 0) {
+      // No data present: perform initial insertion.
+      await insertBinaryData(db, rawBytes);
+      await updateListMetadata(db, newHash, newTreeHead);
+      console.log("[webcat] Database initialized with new binary update list.");
+    } else {
+      // Data already exists: reinitialize the store.
+      await reinitializeDatabase(db, rawBytes, newHash, newTreeHead);
+      console.log("[webcat] Database updated with new binary update list.");
+    }
+  }
   // Update the "lastChecked" timestamp.
   await updateLastChecked(db);
 }
