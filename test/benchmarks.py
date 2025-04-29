@@ -95,7 +95,12 @@ class PerformanceTester:
             browser.navigate(url)
             sleep(self.url_wait)
 
-            result = browser.execute(js_code)
+            result_raw = browser.execute(js_code)
+            try:
+                result = json.loads(result_raw)
+            except Exception as e:
+                print("Error parsing JS result:", result_raw)
+                result = {}
 
             if self.enrolled and self.addon_path:
                 if not result.get(self.marker, False):
