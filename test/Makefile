@@ -17,5 +17,8 @@ install: venv
 test: install
 	$(PYTEST) -v tests.py --addon ../dist/webcat-extension-test.zip
 
+benchmark: install
+	$(PYTHON) benchmarks.py --addon ../dist/webcat-extension-test.zip --iterations 5
+
 clean:
 	rm -rf $(VENV) __pycache__ .pytest_cache

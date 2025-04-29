@@ -32,13 +32,12 @@ js_code = """
 """
 
 class PerformanceTester:
-    def __init__(self, root, headers, host, url_wait=2, scenario=Scenario.COLD, enrolled=False, iterations=1, addon_path=None, addon_wait=10, marker="webcat_executed", headless=False):
+    def __init__(self, root, headers, host, url_wait=2, enrolled=False, iterations=1, addon_path=None, addon_wait=10, marker="webcat_executed", headless=False):
         self.root = root
         self.headers = headers or {}
         self.host = host
         self.url_wait = url_wait
         self.iterations = iterations
-        self.scenario = scenario
         self.enrolled = enrolled
         self.addon_path = addon_path
         self.addon_wait = addon_wait
@@ -58,7 +57,8 @@ class PerformanceTester:
                 url TEXT,
                 sequence INTEGER,
                 timestamp TEXT,
-                json TEXT
+                json TEXT,
+                UNIQUE(scenario, extension, enrolled, sequence)
             )
         """)
         conn.commit()
@@ -81,41 +81,57 @@ class PerformanceTester:
             sleep(self.addon_wait)
             return browser
 
-        if self.scenario == Scenario.WARM:
+        cursor.execute("""
+            SELECT MAX(sequence) FROM results
+            WHERE scenario=? AND extension=? AND enrolled=?
+        """, (Scenario.COLD.value, 1 if self.addon_path else 0, self.enrolled))
+        row = cursor.fetchone()
+        i = (row[0] + 1) if row[0] is not None else 0
+
+        #print(f"Resuming from iteration {i}")
+
+        while i < self.iterations:
+            print(f"{url:50} {'true' if self.enrolled else 'false':8} {'true' if self.addon_path else 'false':8} {f'{i+1}/{self.iterations}':8} {time.time()-start:8.1f}s", end='\r')
+
             browser = setup_browser()
-            browser.navigate(url)
-            sleep(self.url_wait)
 
-        i = 1
-        while i <= self.iterations:
-            print(f"{url:50} {self.scenario.value:8} {'true' if self.enrolled else 'false':8} {'true' if self.addon_path else 'false':8} {f'{i}/{self.iterations}':8} {time.time()-start:8.1f}s", end='\r')
-            if self.scenario == Scenario.COLD:
-                browser = setup_browser()
-
-            browser.navigate(url)
-            sleep(self.url_wait)
-
-            result_raw = browser.execute(js_code)
             try:
+                browser.navigate(url)
+                sleep(self.url_wait)
+                result_raw = browser.execute(js_code)
                 result = json.loads(result_raw)
-            except Exception as e:
-                print("Error parsing JS result:", result_raw)
-                result = {}
-
-            if self.enrolled and self.addon_path:
-                if not result.get(self.marker, False):
-                    continue
-
-            cursor.execute("INSERT INTO results (scenario, extension, enrolled, url, sequence, timestamp, json) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (self.scenario.value, 1 if self.addon_path else 0, self.enrolled, url, i, time.time(), json.dumps(result)))
-            self.conn.commit()
-
-            i += 1
-            if self.scenario == Scenario.COLD:
+            except:
                 browser.destroy()
+                continue
 
-        if self.scenario == Scenario.WARM:
+            if self.enrolled and self.addon_path and not result.get(self.marker, False):
+                browser.destroy()
+                continue
+
+            cursor.execute("""
+                INSERT OR IGNORE INTO results (scenario, extension, enrolled, url, sequence, timestamp, json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (Scenario.COLD.value, 1 if self.addon_path else 0, self.enrolled, url, i, time.time(), json.dumps(result)))
+
+            try:
+                browser.navigate(url)
+                sleep(self.url_wait)
+                result_raw = browser.execute(js_code)
+                result = json.loads(result_raw)
+            except:
+                self.conn.rollback()
+                browser.destroy()
+                continue
+
+            cursor.execute("""
+                INSERT OR IGNORE INTO results (scenario, extension, enrolled, url, sequence, timestamp, json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (Scenario.WARM.value, 1 if self.addon_path else 0, self.enrolled, url, i, time.time(), json.dumps(result)))
+
+            self.conn.commit()
             browser.destroy()
+            i += 1
+
         srv.stop()
         print()
 
@@ -140,15 +156,15 @@ def main():
         "content-security-policy": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; img-src * blob: data:; connect-src * blob:; font-src 'self' data: ; media-src * blob: data:; child-src blob: data:; worker-src 'self'; frame-src blob: data:; form-action 'self'; manifest-src 'self'; frame-ancestors 'self'"
     }
 
-    print(f"{'Test URL':50} {'Mode':8} {'Enrolled':8} {'Addon':8} {'#':8} {'Elapsed':8}")
+    print(f"{'Test URL':50} {'Enrolled':8} {'Addon':8} {'#':8} {'Elapsed':8}")
 
     for scenario in Scenario:
         # Enrolled addon (served via 127.0.0.1)
-        PerformanceTester(args.root, headers, "127.0.0.1", 2, scenario, True, args.iterations, abs_path, 10, "webcat_executed", args.headless).run_test()
+        PerformanceTester(args.root, headers, "127.0.0.1", 2, True, args.iterations, abs_path, 10, "webcat_executed", args.headless).run_test()
         # Non-enrolled addon (served via localhost)
-        PerformanceTester(args.root, headers, "localhost", 2, scenario, False, args.iterations, abs_path, 10, "webcat_executed", args.headless).run_test()
+        PerformanceTester(args.root, headers, "localhost", 2, False, args.iterations, abs_path, 10, "webcat_executed", args.headless).run_test()
         # No addon (served via 127.0.0.1)
-        PerformanceTester(args.root, headers, "127.0.0.1", 2, scenario, False, args.iterations, headless=args.headless).run_test()
+        PerformanceTester(args.root, headers, "127.0.0.1", 2, False, args.iterations, headless=args.headless).run_test()
 
 if __name__ == "__main__":
     main()

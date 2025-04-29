@@ -42,6 +42,12 @@ def teardown_browser_and_server(srv, browser):
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
     }, {}, "Hello!"),
 
+    # Full stripping
+    ({
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
+    }, {}, "Something went wrong. The request was blocked."),
+
     # Wrong threshold
     ({
         "x-sigstore-signers": '[{"identity": "giulio@freedom.press", "issuer": "https://accounts.google.com"}, '
@@ -127,6 +133,7 @@ def teardown_browser_and_server(srv, browser):
 
 ], ids=[
     "basic_test",
+    "stripping_test",
     "wrong_threshold_test",
     "wrong_signers_test",
     "wrong_csp_test",
@@ -137,7 +144,7 @@ def teardown_browser_and_server(srv, browser):
     "corrupted_manifest_test",
     "corrupted_js_test"
 ])
-def test_webcat_cases(headers, hooks, expected, addon_path):
+def test_webcat(headers, hooks, expected, addon_path):
     srv, browser = setup_browser_and_server(
         root="cases/testapp",
         headers=headers,

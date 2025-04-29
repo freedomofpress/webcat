@@ -2,7 +2,7 @@ PACKAGE_NAME = webcat-extension
 ZIP_FILE = $(PACKAGE_NAME).zip
 TEST_ZIP_FILE = $(PACKAGE_NAME)-test.zip
 
-all: build package cleanup clean
+all: build package test-package cleanup clean
 
 build:
 	npm install
