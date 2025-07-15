@@ -272,12 +272,16 @@ export async function requestListener(
 
     try {
       // This just checks some basic stuff, like TLS/Onion usage and populate the cache if it doesnt exists
-      await validateOrigin(
+      const redirect = await validateOrigin(
         fqdn,
         details.url,
         details.tabId,
         metadataRequestSource.main_frame,
       );
+      if (redirect) {
+        logger.addLog("info", `Redirecting to https`, details.tabId, fqdn);
+        return redirect;
+      }
     } catch (error) {
       logger.addLog(
         "error",
