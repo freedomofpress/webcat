@@ -57,3 +57,33 @@ export function errorpage(tabId: number) {
     });
   }
 }
+
+// Will remove this as we develop and bundle into thre Sigsum package
+// A native JSON format
+// In the meantime
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function jsonToSigsumAscii(json: any): string {
+  const lines: string[] = [];
+
+  lines.push(`version=${json.version}`);
+  lines.push(`log=${json.log_key_hash}`);
+  lines.push(`leaf=${json.leaf.key_hash} ${json.leaf.signature}`);
+  lines.push(`tree_size=${json.tree_head.size}`);
+  lines.push(`root_hash=${json.tree_head.root_hash}`);
+  lines.push(`signature=${json.tree_head.signature}`);
+
+  if (Array.isArray(json.tree_head.cosignatures)) {
+    for (const cosig of json.tree_head.cosignatures) {
+      lines.push(
+        `cosignature=${cosig.keyhash} ${cosig.timestamp} ${cosig.signature}`,
+      );
+    }
+  }
+
+  lines.push(`leaf_index=${json.inclusion_proof.leaf_index}`);
+  for (const hash of json.inclusion_proof.node_hashes) {
+    lines.push(`node_hash=${hash}`);
+  }
+
+  return lines.join("\n");
+}
