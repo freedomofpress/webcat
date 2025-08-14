@@ -14,7 +14,7 @@ The enrollment blockchain has three roles:
 * Process enrollment transactions
 * Build daily enrollment lists
 
-This is a permissioned chain run by a limited set of trusted organizations. External parties can audit the chain but do not participate in consensus. The chain governs enrollment, modification, and de-enrollment. Validators independently fetch the target host, observe the proposed change, and agree on both the observed state and the operation’s validity (e.g., you cannot de-enroll a domain that isn’t currently enrolled).
+This is a permissioned chain run by a limited set of trusted organizations. External parties can audit the chain but do not participate in consensus. The chain governs enrollment, modification, and de-enrollment. Nodes (and validators) independently fetch the target host, observe the proposed change, and agree on both the observed state and the operation’s validity (e.g., you cannot de-enroll a domain that isn’t currently enrolled).
 
 Once per day, the chain initiates a list-building transaction that deterministically applies the full history to produce the current enrollment list. That list is distributed to users' browsers at startup and at predefined intervals.
 
