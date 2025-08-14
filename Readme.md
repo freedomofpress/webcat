@@ -2,6 +2,9 @@
 ![webcat logo dark](./docs/icons/dark/256/webcat.png#gh-dark-mode-only)
 ![webcat logo light](./docs/icons/light/256/webcat.png#gh-light-mode-only)
 
+> [!IMPORTANT]  
+> Most of the documentation in the repository references a previous architecture, which is currently being reworked. Most information about web applications and manifests remains unchanged, while major parts of the infrastructure are deprecated. See [ReadmeV2.md](./ReadmeV2.md).
+
 The purpose of this project is to showcase an architectural framework that provides blocking code signing, as well as integrity and transparency checks for browser-based single-page applications. In doing so, it primarily leverages existing technologies and community infrastructure, including [Sigstore](https://sigstore.dev), [Sigsum](https://sigsum.org), and [The Update Framework](https://theupdateframework.io/). The browser extension has no runtime dependencies, and all cryptographic operations are performed using only the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API). Runtime policy enforcement in the enrolled domains is handled by the browser's [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP).
 
 The project has been written as a master's thesis for the [Master Computer Security at the Vrije Universiteit Amsterdam](https://vu.nl/csec) and the [University of Amsterdam](https://uva.nl), sponsored by the [Freedom of the Press Foundation](https://freedom.press). [The full dissertation is available on ePrint](https://eprint.iacr.org/2025/797.pdf).
