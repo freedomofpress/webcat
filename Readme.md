@@ -3,18 +3,18 @@
 ![webcat logo light](./docs/icons/light/256/webcat.png#gh-light-mode-only)
 
 > [!IMPORTANT]  
-> Most of the documentation in the repository references a previous architecture, which is currently being reworked. Most information about web applications and manifests remains unchanged, while major parts of the infrastructure are deprecated.
+> Most of the documentation in the repository, including the dissertation, references a previous architecture, which is currently being reworked. Most information about web applications and manifests remains unchanged, while major parts of the infrastructure are deprecated. Target alpha release: December 2025.
 
-The purpose of this project is to showcase an architectural framework that provides blocking code signing, as well as integrity and transparency checks for browser-based single-page applications. In doing so, it primarily leverages existing technologies and community infrastructure, including [Sigsum](https://sigsum.org), and [CometBFT](github.com/cometbft/cometbft). The browser extension has no runtime dependencies, and all cryptographic operations are performed using only the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API). Runtime policy enforcement in the enrolled domains is handled by the browser's [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP).
+The purpose of this project is to showcase an architectural framework that provides blocking code signing, as well as integrity and transparency checks for browser-based applications. In doing so, it primarily leverages existing technologies and community infrastructure, including [Sigsum](https://sigsum.org), and [CometBFT](https://github.com/cometbft/cometbft). The browser extension has no external runtime dependencies, and all cryptographic operations are performed using only the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API). Runtime policy enforcement in the enrolled domains is handled by the browser's [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP).
 
-The project has been written as a master's thesis for the [Master Computer Security at the Vrije Universiteit Amsterdam](https://vu.nl/csec) and the [University of Amsterdam](https://uva.nl), sponsored by the [Freedom of the Press Foundation](https://freedom.press). [The full dissertation is available on ePrint](https://eprint.iacr.org/2025/797.pdf).
+The project has been originally written as a master's thesis for the [Master Computer Security at the Vrije Universiteit Amsterdam](https://vu.nl/csec) and the [University of Amsterdam](https://uva.nl), sponsored by the [Freedom of the Press Foundation](https://freedom.press). [The full dissertation is available on ePrint](https://eprint.iacr.org/2025/797.pdf). It has since evolved to address censorships risks, centralization, and single points of failure concerns.
 
-Webcat is:
+WEBCAT is:
  1. [An enrollment consensus system](https://github.com/freedomofpress/webcat-infra-chain/)
  2. [A set of specifications](https://github.com/freedomofpress/webcat-spec)
- 3. [A Firefox (v2) extension](./extension/)
- 4. [A signing script](./tools/signing/)
- 5. Some ependencies, such as [sigsum-ts](github.com/freedomofpress/sigsum-ts) and [cometbft-ts](https://github.com/freedomofpress/cometbft-ts)
+ 3. [A Firefox (v2) extension](./extension/) (out of date)
+ 4. [A signing script](./tools/signing/) (out of date)
+ 5. Some dependencies, such as [sigsum-ts](github.com/freedomofpress/sigsum-ts) and [cometbft-ts](https://github.com/freedomofpress/cometbft-ts)
 
 **This is currently experimental software and should not be used in production**.
 
@@ -68,9 +68,9 @@ The following test domains are provided solely for demonstration and showcasing 
 
 [Click here for a PNG version.](./docs/architectureV2.png)
 
-### Enrollment Blockchain
+### Enrollment Consensus System
 
-The enrollment blockchain has three roles:
+The enrollment system has three roles:
 * Log all enrollment transactions
 * Process enrollment transactions
 * Build daily enrollment lists
@@ -96,7 +96,6 @@ Website administrators enroll using a developer-provided policy (optionally refe
 ### Users
 
 Users download the most recent enrollment list from a CDN and verify its freshness and consensus using the embedded trusted-organization keys in the browser component. When visiting a site, the browser checks the local enrollment list. If the site is enrolled, it fetches the site’s enrollment policy from the site itself and verifies it against the policy hash embedded in the local list. If a reference hostname is provided, the browser also verifies that the current site’s policy hash matches the reference’s (e.g., `submissions.webcat.example` matches `securedrop.org`). The verified enrollment policy is then used to validate developer artifacts.
-
 
 ## Acknowledgements
 Thanks to [smaury](https://github.com/smaury) of [Shielder](https://www.shielder.com/) and to [antisnatchor](https://github.com/antisnatchor) of [Persistent Security](https://www.persistent-security.net/) for their security-related insights. Thanks to [Giorgio Maone](https://github.com/hackademix) of the Tor Project for the development-related support. We are also working with, and taking inspiration from, the WAICT working group.
