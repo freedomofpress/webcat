@@ -3,17 +3,18 @@
 ![webcat logo light](./docs/icons/light/256/webcat.png#gh-light-mode-only)
 
 > [!IMPORTANT]  
-> Most of the documentation in the repository references a previous architecture, which is currently being reworked. Most information about web applications and manifests remains unchanged, while major parts of the infrastructure are deprecated. See [ReadmeV2.md](./ReadmeV2.md).
+> Most of the documentation in the repository references a previous architecture, which is currently being reworked. Most information about web applications and manifests remains unchanged, while major parts of the infrastructure are deprecated.
 
-The purpose of this project is to showcase an architectural framework that provides blocking code signing, as well as integrity and transparency checks for browser-based single-page applications. In doing so, it primarily leverages existing technologies and community infrastructure, including [Sigstore](https://sigstore.dev), [Sigsum](https://sigsum.org), and [The Update Framework](https://theupdateframework.io/). The browser extension has no runtime dependencies, and all cryptographic operations are performed using only the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API). Runtime policy enforcement in the enrolled domains is handled by the browser's [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP).
+The purpose of this project is to showcase an architectural framework that provides blocking code signing, as well as integrity and transparency checks for browser-based single-page applications. In doing so, it primarily leverages existing technologies and community infrastructure, including [Sigsum](https://sigsum.org), and [CometBFT](github.com/cometbft/cometbft). The browser extension has no runtime dependencies, and all cryptographic operations are performed using only the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API). Runtime policy enforcement in the enrolled domains is handled by the browser's [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP).
 
 The project has been written as a master's thesis for the [Master Computer Security at the Vrije Universiteit Amsterdam](https://vu.nl/csec) and the [University of Amsterdam](https://uva.nl), sponsored by the [Freedom of the Press Foundation](https://freedom.press). [The full dissertation is available on ePrint](https://eprint.iacr.org/2025/797.pdf).
 
 Webcat is:
- 1. [An enrollment server](./infra/list_server/)
- 2. [An updater service](./infra/build_server/)
+ 1. [An enrollment consensus system](https://github.com/freedomofpress/webcat-infra-chain/)
+ 2. [A set of specifications](https://github.com/freedomofpress/webcat-spec)
  3. [A Firefox (v2) extension](./extension/)
  4. [A signing script](./tools/signing/)
+ 5. Some ependencies, such as [sigsum-ts](github.com/freedomofpress/sigsum-ts) and [cometbft-ts](https://github.com/freedomofpress/cometbft-ts)
 
 **This is currently experimental software and should not be used in production**.
 
@@ -62,74 +63,40 @@ The following test domains are provided solely for demonstration and showcasing 
 ![Screenshot of Jitsi validation](https://github.com/user-attachments/assets/82c2bd63-f062-4d30-8b5d-b6a589120ba6)
 
 
+## Overview
+![Diagram depicting the full architecture, as summarized below](./docs/architectureV2.svg)
 
-## Architectural Overview
+[Click here for a PNG version.](./docs/architectureV2.png)
 
-![Diagram depicting the full architecture, as described below](./docs/architecture.svg)
+### Enrollment Blockchain
 
-[Click here for a PNG version.](./docs/architecture.png)
+The enrollment blockchain has three roles:
+* Log all enrollment transactions
+* Process enrollment transactions
+* Build daily enrollment lists
 
-The following points describe how the signing, enrollment, and subsequent validation happen at a high level.
+This is a permissioned chain run by a limited set of trusted organizations. External parties can audit the chain but do not participate in consensus. The chain governs enrollment, modification, and de-enrollment. Nodes (and validators) independently fetch the target host, observe the proposed change, and agree on both the observed state and the operation's validity (e.g., you cannot de-enroll a domain that isn’t currently enrolled).
 
-### 1. App Developer(s)
+Once per day, the chain initiates a list-building transaction that deterministically applies the full history to produce the current enrollment list. That list is distributed to users' browsers at startup and at predefined intervals.
 
-  1. The developer builds an application manifest that lists all web application files (e.g., `script.js`, HTML files, web workers, and WebAssembly snippets) along with their hashes. The manifest also defines the expected Content Security Policy (CSP) for each application path (and a fallback one). This allows an application to specify different CSPs for scenarios such as sandboxing (e.g., via iframes) or granting different permissions to workers.
-  2. The manifest is signed using Sigstore. The developer authenticates via OIDC to obtain a short-lived certificate from Sigstore's Fulcio, and that certificate is logged in Rekor. The certificate, which includes the issuer details, is used to sign the manifest.
-  3. If necessary, more developers add their signature, since multiple identities can sign a manifest, and each certificate and signature are logged in Rekor.
+### Developers
 
-### 2. Website Administrator
+Developers are responsible for signing, logging, and distributing their artifacts, and for publishing a policy. A policy is the trust material required to validate developer artifacts. It consists of:
 
-  1. The website administrator who wants to enroll in the preload mechanism adds specific HTTP headers that:
-    - Declare the intent to participate in the service.
-    - Specify which identities (and their issuers) are authorized to sign for the domain.
-    - Define a signing threshold—indicating how many valid signatures are required for the manifest to be considered valid.
-  2. Sends their domain to the enrollment service.
-  3. Deploys the signed web application.
-  
-_Note on trust decisions (administrators that are also developers)_:
-  - If the application is open source and maintained by trusted parties, the administrator might choose to trust the maintainers' signatures.
-  - If the administrator modifies or builds a custom version, they must sign the application with their own OIDC identity and thus use those in the headers.
+* One or more Ed25519 signing keys
+* A signature threshold (≤ number of keys)
+* A Sigsum policy (one or more Sigsum logs and their keys, plus a witness policy)
 
-### 3. Webcat Services Operator
+Developers may also publish a reference hostname that is enrolled with the same policy. Artifacts are signed using any threshold of the policy’s keys, and each signature carries a Sigsum proof satisfying the Sigsum policy.
 
-#### Enrollment Server
-  1. Receive domain submissions from anyone on the internet.
-  2. Verifies that the domain is not already enrolled, checks the HTTP headers, computes a hash based on signers and threshold, and submits a signed payload to the Sigsum transparency log.
-  3. Waits a _cool-down_ period (e.g.: a week), and performs the checks and the payload signing and inclusion again (same as point 2, but with an updated timestamp).
+### Website Administrators
 
-#### Build Server and Update Server
-  4. An asynchronous list building service (running periodically, such as daily) collects signed proofs from the Sigsum log and fetches original payloads from the enrollment service.
-  5. It reproducibly builds a preload trust list that preserves the inclusion order of entries.
-  6. The new list is signed using a dedicated list update key, and the signing event is logged in Sigsum.
-  7. Publish a metadata file describing the most recent list version to the update server.
+Website administrators enroll using a developer-provided policy (optionally referencing the developer’s reference hostname) and deploy the developer’s artifacts.
 
-  _Note_: Historical files are preserved for audit purposes, allowing anyone to verify the signing key and list updates.
+### Users
 
-### 4. User Browser
+Users download the most recent enrollment list from a CDN and verify its freshness and consensus using the embedded trusted-organization keys in the browser component. When visiting a site, the browser checks the local enrollment list. If the site is enrolled, it fetches the site’s enrollment policy from the site itself and verifies it against the policy hash embedded in the local list. If a reference hostname is provided, the browser also verifies that the current site’s policy hash matches the reference’s (e.g., `submissions.webcat.example` matches `securedrop.org`). The verified enrollment policy is then used to validate developer artifacts.
 
-- Extension initialization and update (at install and startup, or if a long running browser instance every 24 hours):
-
-    1. At startup, the browser extension fetches Sigstore trust updates via The Update Framework (TUF).
-    2. It also checks for list updates. When a new signed list is available, the extension verifies its signature and inclusion proof using the signed tree head to guard against rollbacks.
-
-- Runtime integrity checks (running at every page load):
-
-    3. When a user opens a new main frame (e.g., a new tab), the extension performs a local lookup to determine if the domain is enrolled.
-    4. If enrolled, it verifies that the header hash (reflecting signers and threshold) matches the one stored in the list.
-    5. The extension then fetches the manifest from the same origin and validates the Sigstore signatures, ensuring that at least the required threshold of valid signatures is present.
-    6. Every executable asset (scripts, HTML, WebAssembly, workers) is integrity-checked against the hashes specified in the manifest at the network level.
-    7. If all checks pass, a green icon is displayed along with verification details (such as signing identities and loaded assets). If any integrity check fails, execution is halted and the user is redirected to a blocking page before any compromised material reaches the DOM.
-
-### 5. Auditors
-The system is fully transparent and auditable. Different parties can be interested in auditing only those relevant to them: a developer can monitor the usage of their OIDC identity, while a website administrator can monitor any list changes that affect their domain(s).
-
-- **Audit List Changes:** By tracking signing events in the Sigsum transparency log, auditors can observe every change made to the list. See the [Sigsum getting started documentation](https://www.sigsum.org/getting-started/) for a walkthrough on how. With the _cool-down_ period, administrators can monitor when a change is requested, detect it before it is merged, and if it is malicious, revert it before the next enrollment server check.
-
-- **Audit List Builds:** Auditors can reproducibly build the preload trust list from the enrollment data and compare it with the distributed ones. This ensures that the distributed list is identical to the one generated from the source data. Additionally, all signing events of the list builder are logged, allowing auditors to review every update. The update server should maintain all historical data, so that all the signing events in the Sigsum log are reproducible.
-
-- **Audit OIDC Certificates:** By examining the Rekor transparency log, auditors (and developers) can track the issuance of OIDC certificates. This helps confirm that certificate issuance is done transparently and according to policy. See the [Rekor web interface](https://search.sigstore.dev/) to search through the issued certificates.
-
-- **Audit Manifest Signing:** Auditors can also verify that artifacts are signed correctly by monitoring the artifacts signatures logged by Rekor. Developers should keep public an archive of all the artifacts they ever signed with a given identit.
 
 ## Acknowledgements
-Thanks to [smaury](https://github.com/smaury) of [Shielder](https://www.shielder.com/) and to [antisnatchor](https://github.com/antisnatchor) of [Persistent Security](https://www.persistent-security.net/) for their security-related insights. Thanks to [Giorgio Maone](https://github.com/hackademix) of the Tor Project for the development-related support.
+Thanks to [smaury](https://github.com/smaury) of [Shielder](https://www.shielder.com/) and to [antisnatchor](https://github.com/antisnatchor) of [Persistent Security](https://www.persistent-security.net/) for their security-related insights. Thanks to [Giorgio Maone](https://github.com/hackademix) of the Tor Project for the development-related support. We are also working with, and taking inspiration from, the WAICT working group.
