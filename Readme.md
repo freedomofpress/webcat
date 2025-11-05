@@ -2,8 +2,11 @@
 ![webcat logo dark](./docs/icons/dark/256/webcat.png#gh-dark-mode-only)
 ![webcat logo light](./docs/icons/light/256/webcat.png#gh-light-mode-only)
 
-> [!IMPORTANT]  
+> [!IMPORTANT]
 > Most of the documentation in the repository, including the dissertation, references a previous architecture, which is currently being reworked. Most information about web applications and manifests remains unchanged, while major parts of the infrastructure are deprecated. Target alpha release: December 2025.
+
+> [!NOTE]
+> To read the motivation for this project and the problem it solves, please [read our introductory blog post on WEBCAT](https://securedrop.org/news/introducing-webcat-web-based-code-assurance-and-transparency/).
 
 The purpose of this project is to showcase an architectural framework that provides blocking code signing, as well as integrity and transparency checks for browser-based applications. In doing so, it primarily leverages existing technologies and community infrastructure, including [Sigsum](https://sigsum.org), and [CometBFT](https://github.com/cometbft/cometbft). The browser extension has no external runtime dependencies, and all cryptographic operations are performed using only the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API). Runtime policy enforcement in the enrolled domains is handled by the browser's [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP).
 
