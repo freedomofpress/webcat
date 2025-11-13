@@ -13,11 +13,11 @@ The purpose of this project is to showcase an architectural framework that provi
 The project has been originally written as a master's thesis for the [Master Computer Security at the Vrije Universiteit Amsterdam](https://vu.nl/csec) and the [University of Amsterdam](https://uva.nl), sponsored by the [Freedom of the Press Foundation](https://freedom.press). [The full dissertation is available on ePrint](https://eprint.iacr.org/2025/797.pdf). It has since evolved to address censorships risks, centralization, and single points of failure concerns.
 
 WEBCAT is:
- 1. [An enrollment consensus system](https://github.com/freedomofpress/webcat-infra-chain/)
+ 1. [An enrollment consensus system](https://github.com/freedomofpress/webcat-infra-chain)
  2. [A set of specifications](https://github.com/freedomofpress/webcat-spec)
  3. [A Firefox (v2) extension](./extension/) (out of date)
- 4. [A signing script](./tools/signing/) (out of date)
- 5. Some dependencies, such as [sigsum-ts](github.com/freedomofpress/sigsum-ts) and [cometbft-ts](https://github.com/freedomofpress/cometbft-ts)
+ 4. [A CLI for developers and hosters](https://github.com/freedomofpress/webcat-cli)
+ 5. Some dependencies, such as [sigsum-ts](github.com/freedomofpress/sigsum-ts) and [cometbft-ts](https://github.com/freedomofpress/cometbft-ts). Though they are no longer in use in WEBCAT, we also worked on [tuf-browser](https://github.com/freedomofpress/tuf-browser) and [sigstore-browser](https://github.com/freedomofpress/sigstore-browser).
 
 **This is currently experimental software and should not be used in production**.
 
