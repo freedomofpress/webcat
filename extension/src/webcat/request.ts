@@ -12,7 +12,6 @@ import {
   OriginStateInitial,
 } from "./interfaces/originstate";
 import { PopupState } from "./interfaces/popupstate";
-import { sigstore } from "./listeners";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
 
@@ -105,7 +104,6 @@ export async function validateOrigin(
 
   // Policy hash is checked at the top and then later again
   const newOriginState = new OriginStateInitial(
-    sigstore,
     urlobj.protocol,
     urlobj.port,
     fqdn,
