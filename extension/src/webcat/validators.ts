@@ -239,7 +239,7 @@ export async function validateCSP(
   await validateDirectiveList(
     directives.ScriptSrcElem,
     parsedCSP.get(directives.ScriptSrcElem),
-    default_src_is_none,
+    true,
     [
       source_keywords.None,
       source_keywords.Self,
@@ -267,7 +267,7 @@ export async function validateCSP(
   await validateDirectiveList(
     directives.StyleSrcElem,
     parsedCSP.get(directives.StyleSrcElem),
-    default_src_is_none,
+    default_src_is_none || parsedCSP.has(directives.StyleSrc),
     [
       source_keywords.None,
       source_keywords.Self,

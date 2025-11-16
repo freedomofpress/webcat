@@ -5,7 +5,7 @@ import {
   OriginStateBase,
   OriginStateHolder,
   OriginStateInitial,
-  OriginStatePopulatedManifest,
+  OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "../../src/webcat/interfaces/originstate";
 import { PopupState } from "../../src/webcat/interfaces/popupstate";

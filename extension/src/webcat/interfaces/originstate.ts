@@ -234,15 +234,17 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
 
     const canonicalized = stringToUint8Array(canonicalize(manifest));
 
+    // The purpose of cloning the original list of signers is to have logic to ensure
+    // that each signers can at most sign once. Since we are dealing with a lot of
+    // transformations (hex, b64, etc) and any of these can have malleability, we want to
+    // avoid a scenario where the same signature but with a different public key
+    // encoding is counted twice. By removing a signer from the set of possible signers
+    // we shold prevent this systematically.
+    const remainingSigners = new Set(this.enrollment.signers);
     let validCount = 0;
 
-    // TODO SECURITY: check for proper normalization to avoid duplication:
-    // ie: check that for instace adding the same signature twice but using b64 malleability for the identifier
-    // does not count as two signatures
-    // should probably rely on the webcrypto api or some level of importing and exporting again
-    // ALERT this is likely currently vulnerable
     for (const pubKey of Object.keys(signatures)) {
-      if (this.enrollment.signers.includes(pubKey)) {
+      if (remainingSigners.has(pubKey)) {
         try {
           // Verify using Sigsum using:
           // - The signer public key
@@ -260,6 +262,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
             `failed to verify manifest: ${e}.`,
           );
         }
+        remainingSigners.delete(pubKey);
         validCount++;
       }
     }
@@ -285,7 +288,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     // If there is no default index or fallback
     if (
       !manifest.default_index ||
-      manifest.default_fallback ||
+      !manifest.default_fallback ||
       !manifest.files[manifest.default_index] ||
       !manifest.files[manifest.default_fallback]
     ) {
@@ -293,6 +296,10 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
         this,
         "default_index or default_fallback are empty or do not reference a file.",
       );
+    }
+
+    if (!manifest.wasm) {
+      return new OriginStateFailed(this, "wasm is not set.");
     }
 
     // ValidateCSP will populate this based on hosts presents in both
