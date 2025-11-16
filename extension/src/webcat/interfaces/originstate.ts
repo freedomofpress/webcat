@@ -1,21 +1,19 @@
-import { manifest_name } from "../../config";
-import { canonicalize } from "../../sigstore/canonicalize";
-import { stringToUint8Array } from "../../sigstore/encoding";
-import { SigstoreVerifier } from "../../sigstore/sigstore";
+import { bundle_name } from "../../config";
+import { canonicalize } from "../canonicalize";
+import { stringToUint8Array, base64UrlToUint8Array } from "../encoding";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
 import { validateCSP } from "../validators";
-import { parseSigners, parseThreshold } from "./../parsers";
-import { Policy, Signer } from "./base";
-import { Manifest, ManifestDataStructure } from "./manifest";
+import { Bundle, Enrollment, Manifest, Signatures } from "./bundle";
+import { verifyMessageWithCompiledPolicy } from "sigsum/dist/verify"
+import { RawPublicKey } from "sigsum/dist/types"
 
 export class OriginStateHolder {
   constructor(
     public current:
       | OriginStateBase
       | OriginStateInitial
-      | OriginStateVerifiedPolicy
-      | OriginStatePopulatedManifest
+      | OriginStateVerifiedEnrollment
       | OriginStateVerifiedManifest
       | OriginStateFailed,
   ) {}
@@ -25,45 +23,65 @@ export class OriginStateHolder {
 export abstract class OriginStateBase {
   abstract status:
     | "request_sent"
-    | "verified_policy"
+    | "verified_enrollment"
     | "populated_manifest"
     | "verified_manifest"
     | "failed";
   public readonly scheme: string;
   public readonly port: string;
   public readonly fqdn: string;
-  public readonly policy_hash: Uint8Array;
-  public readonly manifestPromise: Promise<Response>;
-  public readonly sigstore: SigstoreVerifier;
+  public readonly enrollment_hash: Uint8Array;
+  public readonly bundlePromise: Promise<Response>;
   public references: number;
-  public readonly policy?: Policy;
-  public readonly manifest_data?: ManifestDataStructure;
+  public bundle?: Bundle;
+  public readonly enrollment?: Enrollment;
   public readonly manifest?: Manifest;
-  public readonly valid_signers?: Array<Signer>;
+  public readonly valid_signers?: Set<string>;
   public readonly valid_sources?: Set<string>;
 
   // Due to list logic, we support only one app per domain, and that should be a privileged one
   // But that is enforced in request.ts
   constructor(
-    sigstore: SigstoreVerifier,
     scheme: string,
     port: string,
     fqdn: string,
-    policy_hash: Uint8Array,
+    enrollment_hash: Uint8Array,
   ) {
     this.scheme = scheme;
     this.port = port;
     this.fqdn = fqdn;
-    this.policy_hash = policy_hash;
-    this.sigstore = sigstore;
-    this.manifestPromise = fetch(
-      `${scheme}//${fqdn}:${port}/${manifest_name}`,
-      {
-        cache: "no-store",
-      },
-    );
+    this.enrollment_hash = enrollment_hash;
+    const url = `${scheme}//${fqdn}:${port}/${bundle_name}`
+    this.bundlePromise = fetch(url, { cache: "no-store" });
     this.references = 1;
   }
+
+  public async awaitBundle() {
+    // If we already have a bundle, consider it done
+    if (this.bundle) {
+      return;
+    }
+    // If bundlePromise was awaited before and cached a failure result,
+    // we don't want to re-fetch, so detect that. It should never happen
+    if (!this.bundlePromise) {
+      return new OriginStateFailed(this, "no bundlePromise available");
+    }
+    const bundleResponse = await this.bundlePromise;
+    if (bundleResponse.ok !== true) {
+      return new OriginStateFailed(this, "failed to fetch bundle");
+    }
+    const bundle_data: Bundle = await bundleResponse.json() as Bundle;
+    if (!bundle_data.enrollment) {
+        return new OriginStateFailed(this, "bundle does not contain enrollment data");
+    }
+    if (!bundle_data.manifest) {
+      return new OriginStateFailed(this, "bundle does not contain manifest data");
+    }
+    if (!bundle_data.signatures) {
+      return new OriginStateFailed(this, "bundle does not contain signatures");
+    }
+    this.bundle = bundle_data;
+  } 
 }
 
 export class OriginStateFailed extends OriginStateBase {
@@ -71,7 +89,7 @@ export class OriginStateFailed extends OriginStateBase {
   public errorMessage: string;
 
   constructor(prev: OriginStateBase, errorMessage: string) {
-    super(prev.sigstore, prev.scheme, prev.port, prev.fqdn, prev.policy_hash);
+    super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
     Object.assign(this, prev);
     // We must set it again because we are copying
     this.status = "failed" as const;
@@ -81,150 +99,143 @@ export class OriginStateFailed extends OriginStateBase {
 
 export class OriginStateInitial extends OriginStateBase {
   public status = "request_sent" as const;
+  public bundle?: Bundle;
 
   constructor(
-    sigstore: SigstoreVerifier,
     scheme: string,
     port: string,
     fqdn: string,
-    policy_hash: Uint8Array,
+    enrollment_hash: Uint8Array,
   ) {
-    super(sigstore, scheme, port, fqdn, policy_hash);
+    super(scheme, port, fqdn, enrollment_hash);
   }
 
-  public async verifyPolicy(
-    normalizedHeaders: Map<string, string>,
-  ): Promise<OriginStateVerifiedPolicy | OriginStateFailed> {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const signersHeader = normalizedHeaders.get("x-sigstore-signers")!;
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    const thresholdHeader = normalizedHeaders.get("x-sigstore-threshold")!;
-
-    const signers = parseSigners(signersHeader);
-    const threshold = parseThreshold(thresholdHeader, signers.size);
-
-    if (threshold < 1 || signers.size < 1 || threshold > signers.size) {
-      return new OriginStateFailed(
-        this,
-        "failed to find all the necessary policy headers!",
-      );
+  public async verifyEnrollment(
+    enrollment?: Enrollment
+  ): Promise<OriginStateVerifiedEnrollment | OriginStateFailed> {
+    
+    // Enrollment info can be fetched from a manifest bundle,
+    // or we should support supplying it differently, such is in http headers
+    if (!enrollment) {
+      const res = await this.awaitBundle();
+      if (res instanceof OriginStateFailed) {
+        return res;
+      }
+      enrollment = this.bundle!.enrollment;
     }
 
-    const normalizedSigners = Array.from(signers).map(([issuer, identity]) => ({
-      identity,
-      issuer,
-    }));
+    const canonicalized = stringToUint8Array(canonicalize(enrollment));
+    const canonicalized_hash = new Uint8Array(await SHA256(canonicalized))
 
-    // Sort the normalized signers by identity, then issuer
-    normalizedSigners.sort(
-      (a, b) =>
-        a.identity.localeCompare(b.identity) ||
-        a.issuer.localeCompare(b.issuer),
-    );
-
-    // Create the policy object
-    const policyObject = {
-      "x-sigstore-signers": normalizedSigners, // Use array of objects
-      "x-sigstore-threshold": threshold, // Already normalized
-    };
-
-    // Compute hash of the normalized policy
-    const policyString = JSON.stringify(policyObject);
-    if (
-      !arraysEqual(this.policy_hash, new Uint8Array(await SHA256(policyString)))
-    ) {
-      return new OriginStateFailed(
-        this,
-        "response headers do not match the preload list.",
-      );
+    // If it doesn't match, stop early
+    if (!arraysEqual(this.enrollment_hash, canonicalized_hash)) {
+      return new OriginStateFailed(this, "enrollment data does not match the preload list");
     }
 
-    return new OriginStateVerifiedPolicy(this, {
-      signers: signers,
-      threshold: threshold,
-    });
+    if (typeof enrollment.policy !== "string") {
+      return new OriginStateFailed(this, "policy must be a string");
+    }
+    if (enrollment.policy.length === 0 || enrollment.policy.length > 8192) {
+      return new OriginStateFailed(this, "policy too long or too short");
+    }
+
+    if (!Array.isArray(enrollment.signers)) {
+      return new OriginStateFailed(this, "signers must be an array of strings");
+    }
+
+    if (enrollment.signers.length === 0) {
+      return new OriginStateFailed(this, "signers cannot be empty");
+    }
+
+    for (const key of enrollment.signers) {
+      if (typeof key !== "string") {
+        return new OriginStateFailed(this, "each signer must be a string");
+      }
+    }
+
+    if (typeof enrollment.threshold !== "number" || !Number.isInteger(enrollment.threshold) || enrollment.threshold < 1) {
+      return new OriginStateFailed(this, "threshold must be a positive an integer");
+    }
+
+    if (enrollment.threshold > enrollment.signers.length) {
+      return new OriginStateFailed(this, "threshold cannot exceed number of signers");
+    }
+
+    if (typeof enrollment.max_age !== "number" || !Number.isFinite(enrollment.max_age)) {
+      return new OriginStateFailed(this, "max_age must be a number");
+    }
+
+    //const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60;
+    //if (enrollment.max_age <= 0 || enrollment.max_age > ONE_YEAR_SECONDS) {
+    //  return fail("max_age must be >0 and <1 year (seconds)");
+    //}
+
+    // we probably don't care about validating it in the client as it is useful for monitoring
+    //if (typeof enrollment.cas_url !== "string") {
+    //  return fail("cas_url must be a string");
+    //}
+
+    // TODO: we currently use the orginal raw enrollment data structure
+    // However we should import signing keys once as cryptokeys and
+    // parse the compiled sigsum policy once here instead of doing that
+    // at every verification. Currently the sigsum-ts lib does not support that
+    // and maybe more abstraction there would be useful
+    return new OriginStateVerifiedEnrollment(this, enrollment);
   }
 }
 
-export class OriginStateVerifiedPolicy extends OriginStateBase {
-  public readonly status = "verified_policy" as const;
-  public readonly policy: Policy;
+export class OriginStateVerifiedEnrollment extends OriginStateBase {
+  public readonly status = "verified_enrollment" as const;
+  public readonly enrollment: Enrollment;
+  public bundle?: Bundle;
 
-  constructor(prev: OriginStateInitial, policy: Policy) {
-    super(prev.sigstore, prev.scheme, prev.port, prev.fqdn, prev.policy_hash);
-    this.policy = policy;
+  constructor(prev: OriginStateInitial, enrollment: Enrollment) {
+    super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
+    this.enrollment = enrollment;
   }
 
-  public async populateManifest(): Promise<
-    OriginStatePopulatedManifest | OriginStateFailed
-  > {
-    const manifestResponse = await this.manifestPromise;
-    if (manifestResponse.ok !== true) {
-      return new OriginStateFailed(this, "server error");
-    }
-    const manifest_data = await manifestResponse.json();
-    return new OriginStatePopulatedManifest(this, manifest_data);
-  }
-}
-
-export class OriginStatePopulatedManifest extends OriginStateBase {
-  public readonly status = "populated_manifest" as const;
-  public readonly policy: Policy;
-  public readonly manifest_data: ManifestDataStructure;
-
-  constructor(
-    prev: OriginStateVerifiedPolicy,
-    manifest_data: ManifestDataStructure,
-  ) {
-    super(prev.sigstore, prev.scheme, prev.port, prev.fqdn, prev.policy_hash);
-    this.policy = prev.policy;
-    this.manifest_data = manifest_data;
-  }
-
-  public async verifyManifest(): Promise<
-    OriginStateVerifiedManifest | OriginStateFailed
-  > {
-    if (
-      !this.manifest_data ||
-      !this.manifest_data.signatures ||
-      !this.manifest_data.manifest ||
-      Object.keys(this.manifest_data.signatures).length < this.policy.threshold
-    ) {
-      return new OriginStateFailed(
-        this,
-        "either there are missing fields, or there are less signatures than the threshold.",
-      );
+  public async verifyManifest(manifest?: Manifest, signatures?: Signatures): Promise<OriginStateVerifiedManifest | OriginStateFailed> {
+    // Manifest info can be fetched from a manifest bundle,
+    // or we should support supplying it differently
+    if (!manifest || !signatures) {
+      const res = await this.awaitBundle();
+      if (res instanceof OriginStateFailed) {
+        return res;
+      }
+      // awaitBundle checks already that manifest exists
+      manifest = this.bundle!.manifest;
+      signatures = this.bundle!.signatures;
     }
 
-    const manifest = this.manifest_data.manifest;
+    const canonicalized = stringToUint8Array(canonicalize(manifest));
+  
     let validCount = 0;
 
-    const valid_signers: Array<Signer> = [];
-    const valid_sources: Set<string> = new Set();
-
-    for (const signer of this.policy.signers) {
-      // This automatically avoids duplicates, cause they would conflict in the json array
-      if (this.manifest_data.signatures[signer[1]]) {
-        // If someone attached a signature that fails validation on the manifest, even if the threshold is met
-        // something is sketchy
-        const res = await this.sigstore.verifyArtifact(
-          signer[1],
-          signer[0],
-          this.manifest_data.signatures[signer[1]],
-          stringToUint8Array(canonicalize({ manifest: manifest })),
-        );
-        if (res) {
-          valid_signers.push(signer);
-          validCount++;
+    // TODO SECURITY: check for proper normalization to avoid duplication:
+    // ie: check that for instace adding the same signature twice but using b64 malleability for the identifier
+    // does not count as two signatures
+    // should probably rely on the webcrypto api or some level of importing and exporting again
+    // ALERT this is likely currently vulnerable
+    for (const pubKey of Object.keys(signatures)) {
+      if (this.enrollment.signers.includes(pubKey)) {
+        try {
+          // Verify using Sigsum using:
+          // - The signer public key
+          // - The compiled policy in the enrollment metadata
+          // - The signature and Sigsum proof associated
+          await verifyMessageWithCompiledPolicy(canonicalized, new RawPublicKey(base64UrlToUint8Array(pubKey)), base64UrlToUint8Array(this.enrollment.policy), signatures[pubKey])
+        } catch (e) {
+          return new OriginStateFailed(this, `failed to verify manifest: ${e}.`);
         }
+        validCount++;
       }
     }
 
     // Not enough signatures to verify the manifest
-    if (validCount < this.policy.threshold) {
+    if (validCount < this.enrollment.threshold) {
       return new OriginStateFailed(
         this,
-        `expected at least ${this.policy.threshold} valid signatures, found only ${validCount}.`,
+        `found only ${validCount} valid signatures of required threshold of ${this.enrollment.threshold}.`,
       );
     }
 
@@ -237,6 +248,16 @@ export class OriginStatePopulatedManifest extends OriginStateBase {
     if (!manifest.default_csp || manifest.default_csp.length < 3) {
       return new OriginStateFailed(this, "default_csp is empty or not set.");
     }
+
+    // If there is no default index or fallback
+    if (!manifest.default_index || manifest.default_fallback || !manifest.files[manifest.default_index] || !manifest.files[manifest.default_fallback]) {
+      return new OriginStateFailed(this, "default_index or default_fallback are empty or do not reference a file.");
+    }
+
+    // ValidateCSP will populate this based on hosts presents in both
+    // the CSP policies specified AND the enrollment list
+    // If an enrolled CSP policy has non-enrolled hosts, then it will throw
+    const valid_sources: Set<string> = new Set();
 
     // Validate the default CSP
     try {
@@ -262,31 +283,25 @@ export class OriginStatePopulatedManifest extends OriginStateBase {
     return new OriginStateVerifiedManifest(
       this,
       manifest,
-      valid_signers,
-      valid_sources,
+      valid_sources
     );
   }
 }
 
 export class OriginStateVerifiedManifest extends OriginStateBase {
   public readonly status = "verified_manifest" as const;
-  public readonly policy: Policy;
-  public readonly manifest_data: ManifestDataStructure;
+  public readonly enrollment: Enrollment;
   public readonly manifest: Manifest;
-  public readonly valid_signers: Array<Signer>;
   public readonly valid_sources: Set<string> = new Set();
 
   constructor(
-    prev: OriginStatePopulatedManifest,
+    prev: OriginStateVerifiedEnrollment,
     manifest: Manifest,
-    valid_signers: Array<Signer>,
     valid_sources: Set<string>,
   ) {
-    super(prev.sigstore, prev.scheme, prev.port, prev.fqdn, prev.policy_hash);
-    this.policy = prev.policy;
-    this.manifest_data = prev.manifest_data;
+    super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
+    this.enrollment = prev.enrollment;
     this.manifest = manifest;
-    this.valid_signers = valid_signers;
     this.valid_sources = valid_sources;
   }
 
@@ -294,41 +309,30 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     const extraCSP = this.manifest.extra_csp || {};
     const defaultCSP = this.manifest.default_csp;
 
-    let correctCSP = "";
+    const effectivePath = pathname === "/" ? this.manifest.default_index : pathname;
 
-    // Sigh
-    if (
-      pathname === "/index.html" ||
-      pathname === "/index.htm" ||
-      pathname === "/"
-    ) {
-      correctCSP =
-        extraCSP["/"] || extraCSP["/index.htm"] || extraCSP["/index.html"];
+    // Try direct match first (exact path used in extra_csp)
+    if (extraCSP[effectivePath]) {
+      return csp === extraCSP[effectivePath];
     }
 
-    if (!correctCSP) {
-      let bestMatch: string | null = null;
-      let bestMatchLength = 0;
+    // Otherwise, try longest-prefix match
+    let bestMatch: string | null = null;
+    let bestMatchLength = 0;
 
-      for (const prefix in extraCSP) {
-        if (
-          prefix !== "/" &&
-          pathname.startsWith(prefix) &&
-          prefix.length > bestMatchLength
-        ) {
-          bestMatch = prefix;
-          bestMatchLength = prefix.length;
-        }
+    for (const prefix in extraCSP) {
+      if (
+        effectivePath.startsWith(prefix) &&
+        prefix.length > bestMatchLength
+      ) {
+        bestMatch = prefix;
+        bestMatchLength = prefix.length;
       }
-
-      // Return the most specific match, or fallback to default CSP
-      correctCSP = bestMatch ? extraCSP[bestMatch] : defaultCSP;
     }
 
-    if (csp !== correctCSP) {
-      return false;
-    } else {
-      return true;
-    }
+    const correctCSP = bestMatch ? extraCSP[bestMatch] : defaultCSP;
+
+    return csp === correctCSP;
   }
+
 }
