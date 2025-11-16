@@ -1,18 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { canonicalize } from "../../src/webcat/canonicalize";
+import { stringToUint8Array } from "../../src/webcat/encoding";
+import type {
+  Enrollment,
+  Manifest,
+  Signatures,
+} from "../../src/webcat/interfaces/bundle";
 import {
-  OriginStateBase,
-  OriginStateHolder,
+  OriginStateFailed,
   OriginStateInitial,
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
-  OriginStateFailed,
 } from "../../src/webcat/interfaces/originstate"; // adjust path if needed
-
-import { canonicalize } from "../../src/webcat/canonicalize";
-import { stringToUint8Array } from "../../src/webcat/encoding";
 import { SHA256 } from "../../src/webcat/utils";
-import type { Enrollment, Manifest, Signatures } from "../../src/webcat/interfaces/bundle";
 
 // --- Mocks for external deps used by originstate.ts ---
 
@@ -31,7 +32,9 @@ vi.mock("../../src/webcat/validators", () => ({
 }));
 
 // Helper: compute the *real* enrollment_hash exactly as production does.
-async function computeEnrollmentHash(enrollment: Enrollment): Promise<Uint8Array> {
+async function computeEnrollmentHash(
+  enrollment: Enrollment,
+): Promise<Uint8Array> {
   const canonical = canonicalize(enrollment);
   const bytes = stringToUint8Array(canonical);
   const digest = await SHA256(bytes);
@@ -63,7 +66,12 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    state = new OriginStateInitial("https:", "443", "example.com", enrollmentHash);
+    state = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      enrollmentHash,
+    );
   });
 
   it("accepts a valid enrollment that matches the preload hash", async () => {
@@ -92,11 +100,17 @@ describe("OriginStateInitial.verifyEnrollment", () => {
   it("fails when signers is not an array", async () => {
     const mutated = {
       ...enrollment,
+      // eslint-disable-next-line
       signers: null as any,
     };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginStateInitial("https:", "443", "example.com", mutatedHash);
+    const mutatedState = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      mutatedHash,
+    );
 
     const res = await mutatedState.verifyEnrollment(mutated);
 
@@ -112,7 +126,12 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginStateInitial("https:", "443", "example.com", mutatedHash);
+    const mutatedState = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      mutatedHash,
+    );
 
     const res = await mutatedState.verifyEnrollment(mutated);
 
@@ -128,7 +147,12 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginStateInitial("https:", "443", "example.com", mutatedHash);
+    const mutatedState = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      mutatedHash,
+    );
 
     const res = await mutatedState.verifyEnrollment(mutated);
 
@@ -144,13 +168,20 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginStateInitial("https:", "443", "example.com", mutatedHash);
+    const mutatedState = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      mutatedHash,
+    );
 
     const res = await mutatedState.verifyEnrollment(mutated);
 
     expect(res).toBeInstanceOf(OriginStateFailed);
     const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toBe("threshold cannot exceed number of signers");
+    expect(failed.errorMessage).toBe(
+      "threshold cannot exceed number of signers",
+    );
   });
 });
 
@@ -176,11 +207,18 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    initial = new OriginStateInitial("https:", "443", "example.com", enrollmentHash);
+    initial = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      enrollmentHash,
+    );
 
     const res = await initial.verifyEnrollment(enrollment);
     if (!(res instanceof OriginStateVerifiedEnrollment)) {
-      throw new Error("verifyEnrollment did not return OriginStateVerifiedEnrollment in test setup");
+      throw new Error(
+        "verifyEnrollment did not return OriginStateVerifiedEnrollment in test setup",
+      );
     }
     verifiedEnrollment = res;
 
@@ -250,7 +288,10 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
       default_csp: "",
     };
 
-    const res = await verifiedEnrollment.verifyManifest(badManifest, signatures);
+    const res = await verifiedEnrollment.verifyManifest(
+      badManifest,
+      signatures,
+    );
 
     expect(res).toBeInstanceOf(OriginStateFailed);
     const failed = res as OriginStateFailed;
@@ -263,7 +304,10 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
       default_index: "/missing.html",
     };
 
-    const res = await verifiedEnrollment.verifyManifest(badManifest, signatures);
+    const res = await verifiedEnrollment.verifyManifest(
+      badManifest,
+      signatures,
+    );
 
     expect(res).toBeInstanceOf(OriginStateFailed);
     const failed = res as OriginStateFailed;
@@ -277,7 +321,10 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     // @ts-expect-error simulate missing wasm
     delete badManifest.wasm;
 
-    const res = await verifiedEnrollment.verifyManifest(badManifest, signatures);
+    const res = await verifiedEnrollment.verifyManifest(
+      badManifest,
+      signatures,
+    );
 
     expect(res).toBeInstanceOf(OriginStateFailed);
     const failed = res as OriginStateFailed;
@@ -305,10 +352,17 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    initial = new OriginStateInitial("https:", "443", "example.com", enrollmentHash);
+    initial = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      enrollmentHash,
+    );
     const res = await initial.verifyEnrollment(enrollment);
     if (!(res instanceof OriginStateVerifiedEnrollment)) {
-      throw new Error("verifyEnrollment did not return OriginStateVerifiedEnrollment");
+      throw new Error(
+        "verifyEnrollment did not return OriginStateVerifiedEnrollment",
+      );
     }
     verifiedEnrollment = res;
 
@@ -337,36 +391,24 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
   });
 
   it("matches default CSP for root path", () => {
-    const ok = verifiedManifestState.verifyCSP(
-      defaultCSP,
-      "/",
-    );
+    const ok = verifiedManifestState.verifyCSP(defaultCSP, "/");
     expect(ok).toBe(true);
   });
 
   it("matches extra CSP for exact path", () => {
     const csp = "default-src 'none'; script-src 'self' 'unsafe-inline';";
-    const ok = verifiedManifestState.verifyCSP(
-      csp,
-      "/admin",
-    );
+    const ok = verifiedManifestState.verifyCSP(csp, "/admin");
     expect(ok).toBe(true);
   });
 
   it("falls back to default CSP when no extra_csp prefix matches", () => {
-    const ok = verifiedManifestState.verifyCSP(
-      defaultCSP,
-      "/other",
-    );
+    const ok = verifiedManifestState.verifyCSP(defaultCSP, "/other");
     expect(ok).toBe(true);
   });
 
   it("returns false when CSP does not match expected policy", () => {
     const badCsp = "default-src 'self'; script-src 'self';";
-    const ok = verifiedManifestState.verifyCSP(
-      badCsp,
-      "/",
-    );
+    const ok = verifiedManifestState.verifyCSP(badCsp, "/");
     expect(ok).toBe(false);
   });
 });

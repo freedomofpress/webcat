@@ -127,6 +127,8 @@ export class OriginStateInitial extends OriginStateBase {
       if (res instanceof OriginStateFailed) {
         return res;
       }
+      // We can assert here because the check is guaranteed in awaitBundle
+      // eslint-disable-next-line
       enrollment = this.bundle!.enrollment;
     }
 
@@ -228,7 +230,9 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
         return res;
       }
       // awaitBundle checks already that manifest exists
+      // eslint-disable-next-line
       manifest = this.bundle!.manifest;
+      // eslint-disable-next-line
       signatures = this.bundle!.signatures;
     }
 

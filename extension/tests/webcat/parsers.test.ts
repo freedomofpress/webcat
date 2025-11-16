@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  parseContentSecurityPolicy,
-} from "./../../src/webcat/parsers";
+import { parseContentSecurityPolicy } from "./../../src/webcat/parsers";
 
 describe("parseContentSecurityPolicy", () => {
   it("should correctly parse a valid CSP with multiple directives", () => {

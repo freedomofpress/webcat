@@ -342,19 +342,17 @@
   /* END HASH FUNCTION */
 
   // Helper: Convert ArrayBuffer digest to a hex string.
-function arrayBufferToHex(buffer: ArrayBuffer | Uint8Array): string {
-  const byteArray = buffer instanceof Uint8Array
-    ? buffer
-    : new Uint8Array(buffer);
+  function arrayBufferToHex(buffer: ArrayBuffer | Uint8Array): string {
+    const byteArray =
+      buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
-  const hexCodes: string[] = [];
-  for (const byte of byteArray) {
-    const hexCode = byte.toString(16).padStart(2, "0");
-    hexCodes.push(hexCode);
+    const hexCodes: string[] = [];
+    for (const byte of byteArray) {
+      const hexCode = byte.toString(16).padStart(2, "0");
+      hexCodes.push(hexCode);
+    }
+    return hexCodes.join("");
   }
-  return hexCodes.join("");
-}
-
 
   // Async bytecode verifier: uses crypto.subtle.digest.
   async function verifyBytecodeAsync(buffer: ArrayBuffer): Promise<void> {
@@ -379,9 +377,7 @@ function arrayBufferToHex(buffer: ArrayBuffer | Uint8Array): string {
   }
 
   // Helper: Extract an ArrayBuffer from a bufferSource.
-  function extractBuffer(
-    bufferSource: BufferSource,
-  ): ArrayBuffer {
+  function extractBuffer(bufferSource: BufferSource): ArrayBuffer {
     if (bufferSource instanceof ArrayBuffer) {
       return bufferSource;
     }
@@ -453,9 +449,7 @@ function arrayBufferToHex(buffer: ArrayBuffer | Uint8Array): string {
   // Hook WebAssembly.validate (synchronous)
   //
   const originalValidate = WebAssembly.validate;
-  WebAssembly.validate = function (
-    bufferSource: BufferSource,
-  ): boolean {
+  WebAssembly.validate = function (bufferSource: BufferSource): boolean {
     const buffer: ArrayBuffer = extractBuffer(bufferSource);
     verifyBytecodeSync(buffer);
     return originalValidate.call(this, bufferSource);

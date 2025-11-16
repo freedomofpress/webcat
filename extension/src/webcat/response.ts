@@ -1,7 +1,6 @@
 import { origins } from "./../globals";
 import {
   base64UrlToUint8Array,
-  hexToUint8Array,
   stringToUint8Array,
   Uint8ArrayToString,
 } from "./encoding";
@@ -219,10 +218,19 @@ export async function validateResponseContent(
     const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
       .manifest;
 
-    const manifest_hash =
-      manifest.files[pathname] ||
-      manifest.files[pathname.substring(0, pathname.lastIndexOf("/")) + "/"] ||
-      manifest.files[manifest.default_fallback];
+    // Following order of priority:
+    // - If there's an exact match, that should be the hash
+    // - If the paths ends in /, and there was no exact match, then use default_index
+    // - If everything else fails, it's an error or a catchall case, so attempt default_fallback
+    let manifest_hash: string;
+
+    if (manifest.files[pathname]) {
+      manifest_hash = manifest.files[pathname];
+    } else if (pathname.endsWith("/")) {
+      manifest_hash = manifest.files[pathname + manifest.default_index];
+    } else {
+      manifest_hash = manifest.files[manifest.default_fallback];
+    }
 
     if (!manifest_hash) {
       deny(filter);
@@ -235,7 +243,7 @@ export async function validateResponseContent(
     // Sometimes answers gets cached and we get an empty result, we shouldn't mark those as a hash mismatch
     if (
       !arraysEqual(
-        hexToUint8Array(manifest_hash),
+        base64UrlToUint8Array(manifest_hash),
         new Uint8Array(content_hash),
       ) &&
       blob.byteLength !== 0

@@ -10,7 +10,7 @@ export interface LogEntry {
   timestamp: Date;
   tabId: number;
   origin: string;
-  level: keyof Console; // Ensures valid console log levels
+  level: keyof Console;
   message: string;
   stack?: string;
 }
