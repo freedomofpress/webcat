@@ -11,7 +11,7 @@ vi.mock("../../src/webcat/logger", () => ({
 }));
 
 vi.mock("../../src/webcat/db", () => ({
-  getFQDNPolicy: vi.fn(async (fqdn: string) => {
+  getFQDNEnrollment: vi.fn(async (fqdn: string) => {
     if (fqdn === "trusted.com") {
       return new Uint8Array([0, 1, 2, 3]);
     } else {

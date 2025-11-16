@@ -1,9 +1,7 @@
 import { origins, popups, tabs } from "../globals";
-import { hexToUint8Array, Uint8ArrayToHex } from "../sigstore/encoding";
 import {
   ensureDBOpen,
-  getFQDNPolicy,
-  getListMetadata,
+  getFQDNEnrollment,
   list_db,
   updateDatabase,
   updateLastChecked,
@@ -12,7 +10,7 @@ import { metadataRequestSource } from "./interfaces/base";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { validateResponseContent, validateResponseHeaders } from "./response";
-import { errorpage, getFQDN, SHA256 } from "./utils";
+import { errorpage, getFQDN } from "./utils";
 
 declare const __TESTING__: boolean;
 
@@ -91,9 +89,9 @@ export async function headersListener(
     // Skip non-enrolled tabs
     (!tabs.has(details.tabId) &&
       details.tabId > 0 &&
-      (await getFQDNPolicy(fqdn)).length === 0) ||
+      (await getFQDNEnrollment(fqdn)).length === 0) ||
     // Skip non-enrolled workers
-    (details.tabId < 0 && (await getFQDNPolicy(fqdn)).length === 0)
+    (details.tabId < 0 && (await getFQDNEnrollment(fqdn)).length === 0)
   ) {
     // This is too much noise to really log
     //console.debug(`headersListener: skipping ${details.url}`);
@@ -197,7 +195,7 @@ export async function requestListener(
   /* DEVELOPMENT GUARD */
   /*it's here for development: meaning if we reach this stage
     and the fqdn is enrolled, but a entry in the origin map has nor been created, there is a critical security bug */
-  if ((await getFQDNPolicy(fqdn)).length !== 0 && !origins.has(fqdn)) {
+  if ((await getFQDNEnrollment(fqdn)).length !== 0 && !origins.has(fqdn)) {
     console.error(
       "FATAL: loading from an enrolled origin but the state does not exists.",
     );

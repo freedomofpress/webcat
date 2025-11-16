@@ -1,5 +1,5 @@
-import { hexToUint8Array } from "../sigstore/encoding";
 import { nonOrigins, origins } from "./../globals";
+import { hexToUint8Array } from "./encoding";
 import { logger } from "./logger";
 import { SHA256 } from "./utils";
 
@@ -285,20 +285,20 @@ export async function getCount(storeName: string): Promise<number> {
   });
 }
 
-export async function getFQDNPolicy(fqdn: string): Promise<Uint8Array> {
+export async function getFQDNEnrollment(fqdn: string): Promise<Uint8Array> {
   // Caching of hits
   await ensureDBOpen();
   const originStateHolder = origins.get(fqdn);
   if (originStateHolder) {
     // This can't happen AFAIK
-    if (!originStateHolder.current.policy_hash) {
+    if (!originStateHolder.current.enrollment_hash) {
       throw new Error(
         "FATAL: we found a cached origin without a policy associated",
       );
     }
     //logger.addLog("debug", `Policy cache hit for ${fqdn}`, -1, fqdn);
 
-    return originStateHolder.current.policy_hash;
+    return originStateHolder.current.enrollment_hash;
   }
 
   // Caching of misses

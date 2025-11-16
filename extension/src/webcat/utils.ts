@@ -22,17 +22,20 @@ export function isExtensionRequest(
   );
 }
 
-export async function SHA256(data: ArrayBuffer | Uint8Array | string) {
-  // Sometimes we hash strings, such as the FQDN, sometimes we hash bytes, such as page content
-  let inputData: Uint8Array | ArrayBuffer;
-  if (typeof data === "string") {
-    inputData = new TextEncoder().encode(data);
-  } else {
-    inputData = data;
-  }
-  const hash = await crypto.subtle.digest("SHA-256", inputData);
+export async function SHA256(
+  data: ArrayBuffer | Uint8Array | string,
+): Promise<ArrayBuffer> {
+  let input: ArrayBuffer;
 
-  return hash;
+  if (typeof data === "string") {
+    input = new TextEncoder().encode(data).buffer;
+  } else if (data instanceof Uint8Array) {
+    input = data.slice().buffer;
+  } else {
+    input = data;
+  }
+
+  return crypto.subtle.digest("SHA-256", input);
 }
 
 export function arrayBufferToHex(buffer: Uint8Array | ArrayBuffer) {

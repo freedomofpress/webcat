@@ -1,10 +1,3 @@
-const Issuers = {
-  google: "https://accounts.google.com",
-  microsoft: "https://login.microsoftonline.com",
-  github: "https://github.com/login/oauth",
-  gitlab: "https://gitlab.com",
-};
-
 function getActiveTabInfo() {
   // Send a message to the background script
   browser.runtime
@@ -199,7 +192,7 @@ function updatePopup(popupState) {
     sectionElement.appendChild(header);
 
     // Populate the list with signers
-    popupState.valid_signers.forEach(([issuer, identity]) => {
+    popupState.valid_signers.forEach(([_, identity]) => {
       // Create the row
       const row = document.createElement("div");
       row.className = "identity-row";
@@ -208,26 +201,6 @@ function updatePopup(popupState) {
       const emailSpan = document.createElement("span");
       emailSpan.className = "identity-email";
       emailSpan.textContent = identity;
-
-      // Create the provider span with tooltip and icon
-      const providerSpan = document.createElement("span");
-      providerSpan.className = "identity-provider";
-      providerSpan.setAttribute("data-tooltip", issuer);
-
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-
-      // Map issuer to the appropriate icon
-      const iconMapping = {
-        [Issuers.google]: "#google-icon",
-        [Issuers.microsoft]: "#microsoft-icon",
-        [Issuers.github]: "#github-icon",
-        [Issuers.gitlab]: "#gitlab-icon",
-      };
-
-      use.setAttribute("href", iconMapping[issuer]);
-      svg.appendChild(use);
-      providerSpan.appendChild(svg);
 
       // Create the identity status span
       const statusSpan = document.createElement("span");

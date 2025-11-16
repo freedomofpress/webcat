@@ -1,12 +1,13 @@
+import { RawPublicKey } from "sigsum/dist/types";
+import { verifyMessageWithCompiledPolicy } from "sigsum/dist/verify";
+
 import { bundle_name } from "../../config";
 import { canonicalize } from "../canonicalize";
-import { stringToUint8Array, base64UrlToUint8Array } from "../encoding";
+import { base64UrlToUint8Array, stringToUint8Array } from "../encoding";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
 import { validateCSP } from "../validators";
 import { Bundle, Enrollment, Manifest, Signatures } from "./bundle";
-import { verifyMessageWithCompiledPolicy } from "sigsum/dist/verify"
-import { RawPublicKey } from "sigsum/dist/types"
 
 export class OriginStateHolder {
   constructor(
@@ -51,7 +52,7 @@ export abstract class OriginStateBase {
     this.port = port;
     this.fqdn = fqdn;
     this.enrollment_hash = enrollment_hash;
-    const url = `${scheme}//${fqdn}:${port}/${bundle_name}`
+    const url = `${scheme}//${fqdn}:${port}/${bundle_name}`;
     this.bundlePromise = fetch(url, { cache: "no-store" });
     this.references = 1;
   }
@@ -70,18 +71,24 @@ export abstract class OriginStateBase {
     if (bundleResponse.ok !== true) {
       return new OriginStateFailed(this, "failed to fetch bundle");
     }
-    const bundle_data: Bundle = await bundleResponse.json() as Bundle;
+    const bundle_data: Bundle = (await bundleResponse.json()) as Bundle;
     if (!bundle_data.enrollment) {
-        return new OriginStateFailed(this, "bundle does not contain enrollment data");
+      return new OriginStateFailed(
+        this,
+        "bundle does not contain enrollment data",
+      );
     }
     if (!bundle_data.manifest) {
-      return new OriginStateFailed(this, "bundle does not contain manifest data");
+      return new OriginStateFailed(
+        this,
+        "bundle does not contain manifest data",
+      );
     }
     if (!bundle_data.signatures) {
       return new OriginStateFailed(this, "bundle does not contain signatures");
     }
     this.bundle = bundle_data;
-  } 
+  }
 }
 
 export class OriginStateFailed extends OriginStateBase {
@@ -111,9 +118,8 @@ export class OriginStateInitial extends OriginStateBase {
   }
 
   public async verifyEnrollment(
-    enrollment?: Enrollment
+    enrollment?: Enrollment,
   ): Promise<OriginStateVerifiedEnrollment | OriginStateFailed> {
-    
     // Enrollment info can be fetched from a manifest bundle,
     // or we should support supplying it differently, such is in http headers
     if (!enrollment) {
@@ -125,11 +131,14 @@ export class OriginStateInitial extends OriginStateBase {
     }
 
     const canonicalized = stringToUint8Array(canonicalize(enrollment));
-    const canonicalized_hash = new Uint8Array(await SHA256(canonicalized))
+    const canonicalized_hash = new Uint8Array(await SHA256(canonicalized));
 
     // If it doesn't match, stop early
     if (!arraysEqual(this.enrollment_hash, canonicalized_hash)) {
-      return new OriginStateFailed(this, "enrollment data does not match the preload list");
+      return new OriginStateFailed(
+        this,
+        "enrollment data does not match the preload list",
+      );
     }
 
     if (typeof enrollment.policy !== "string") {
@@ -153,15 +162,28 @@ export class OriginStateInitial extends OriginStateBase {
       }
     }
 
-    if (typeof enrollment.threshold !== "number" || !Number.isInteger(enrollment.threshold) || enrollment.threshold < 1) {
-      return new OriginStateFailed(this, "threshold must be a positive an integer");
+    if (
+      typeof enrollment.threshold !== "number" ||
+      !Number.isInteger(enrollment.threshold) ||
+      enrollment.threshold < 1
+    ) {
+      return new OriginStateFailed(
+        this,
+        "threshold must be a positive an integer",
+      );
     }
 
     if (enrollment.threshold > enrollment.signers.length) {
-      return new OriginStateFailed(this, "threshold cannot exceed number of signers");
+      return new OriginStateFailed(
+        this,
+        "threshold cannot exceed number of signers",
+      );
     }
 
-    if (typeof enrollment.max_age !== "number" || !Number.isFinite(enrollment.max_age)) {
+    if (
+      typeof enrollment.max_age !== "number" ||
+      !Number.isFinite(enrollment.max_age)
+    ) {
       return new OriginStateFailed(this, "max_age must be a number");
     }
 
@@ -194,7 +216,10 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     this.enrollment = enrollment;
   }
 
-  public async verifyManifest(manifest?: Manifest, signatures?: Signatures): Promise<OriginStateVerifiedManifest | OriginStateFailed> {
+  public async verifyManifest(
+    manifest?: Manifest,
+    signatures?: Signatures,
+  ): Promise<OriginStateVerifiedManifest | OriginStateFailed> {
     // Manifest info can be fetched from a manifest bundle,
     // or we should support supplying it differently
     if (!manifest || !signatures) {
@@ -208,7 +233,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     }
 
     const canonicalized = stringToUint8Array(canonicalize(manifest));
-  
+
     let validCount = 0;
 
     // TODO SECURITY: check for proper normalization to avoid duplication:
@@ -223,9 +248,17 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
           // - The signer public key
           // - The compiled policy in the enrollment metadata
           // - The signature and Sigsum proof associated
-          await verifyMessageWithCompiledPolicy(canonicalized, new RawPublicKey(base64UrlToUint8Array(pubKey)), base64UrlToUint8Array(this.enrollment.policy), signatures[pubKey])
+          await verifyMessageWithCompiledPolicy(
+            canonicalized,
+            new RawPublicKey(base64UrlToUint8Array(pubKey)),
+            base64UrlToUint8Array(this.enrollment.policy),
+            signatures[pubKey],
+          );
         } catch (e) {
-          return new OriginStateFailed(this, `failed to verify manifest: ${e}.`);
+          return new OriginStateFailed(
+            this,
+            `failed to verify manifest: ${e}.`,
+          );
         }
         validCount++;
       }
@@ -250,8 +283,16 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     }
 
     // If there is no default index or fallback
-    if (!manifest.default_index || manifest.default_fallback || !manifest.files[manifest.default_index] || !manifest.files[manifest.default_fallback]) {
-      return new OriginStateFailed(this, "default_index or default_fallback are empty or do not reference a file.");
+    if (
+      !manifest.default_index ||
+      manifest.default_fallback ||
+      !manifest.files[manifest.default_index] ||
+      !manifest.files[manifest.default_fallback]
+    ) {
+      return new OriginStateFailed(
+        this,
+        "default_index or default_fallback are empty or do not reference a file.",
+      );
     }
 
     // ValidateCSP will populate this based on hosts presents in both
@@ -280,11 +321,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       }
     }
 
-    return new OriginStateVerifiedManifest(
-      this,
-      manifest,
-      valid_sources
-    );
+    return new OriginStateVerifiedManifest(this, manifest, valid_sources);
   }
 }
 
@@ -309,7 +346,8 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     const extraCSP = this.manifest.extra_csp || {};
     const defaultCSP = this.manifest.default_csp;
 
-    const effectivePath = pathname === "/" ? this.manifest.default_index : pathname;
+    const effectivePath =
+      pathname === "/" ? this.manifest.default_index : pathname;
 
     // Try direct match first (exact path used in extra_csp)
     if (extraCSP[effectivePath]) {
@@ -321,10 +359,7 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     let bestMatchLength = 0;
 
     for (const prefix in extraCSP) {
-      if (
-        effectivePath.startsWith(prefix) &&
-        prefix.length > bestMatchLength
-      ) {
+      if (effectivePath.startsWith(prefix) && prefix.length > bestMatchLength) {
         bestMatch = prefix;
         bestMatchLength = prefix.length;
       }
@@ -334,5 +369,4 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
 
     return csp === correctCSP;
   }
-
 }

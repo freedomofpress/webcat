@@ -1,6 +1,67 @@
-import { getFQDNPolicy } from "./db";
+import { getFQDNEnrollment } from "./db";
 import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDNSafe } from "./utils";
+
+export function extractAndValidateHeaders(
+  details: browser.webRequest._OnHeadersReceivedDetails,
+): Map<string, string> {
+  // Ensure that response headers exist.
+  if (!details.responseHeaders) {
+    throw new Error("Missing response headers.");
+  }
+
+  // Define the critical headers we care about.
+  const criticalHeaders = new Set(["content-security-policy"]);
+
+  const forbiddenHeaders = new Set([
+    // See https://github.com/freedomofpress/webcat/issues/23
+    // Furthermore, as reported by TBD there's the risk of TBD
+    "location",
+    // See https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Refresh
+    // It's just another way to achieve redirects
+    "refresh",
+    // See https://github.com/freedomofpress/webcat/issues/24
+    "link",
+  ]);
+
+  // Track seen critical headers to detect duplicates.
+  const seenCriticalHeaders = new Set<string>();
+  const normalizedHeaders = new Map<string, string>();
+  const headers: string[] = [];
+
+  // Loop over each header, normalize the name, and store its value.
+  for (const header of details.responseHeaders) {
+    if (header.name && header.value) {
+      const lowerName = header.name.toLowerCase();
+
+      // Check and block in case of forbidden headers
+      if (forbiddenHeaders.has(lowerName)) {
+        throw new Error(`Forbidden response header detected: ${lowerName}`);
+      }
+
+      // Check for duplicates among critical headers.
+      if (criticalHeaders.has(lowerName)) {
+        if (seenCriticalHeaders.has(lowerName)) {
+          throw new Error(`Duplicate critical header detected: ${lowerName}`);
+        }
+        seenCriticalHeaders.add(lowerName);
+      }
+
+      normalizedHeaders.set(lowerName, header.value);
+      headers.push(lowerName);
+    }
+  }
+
+  // Ensure all critical headers are present.
+  for (const criticalHeader of criticalHeaders) {
+    if (!normalizedHeaders.has(criticalHeader)) {
+      throw new Error(`Missing critical header: ${criticalHeader}`);
+    }
+  }
+
+  // Retrieve the Content-Security-Policy (CSP) header (safe to use non-null assertion here based on the check above).
+  return normalizedHeaders;
+}
 
 export async function validateCSP(
   csp: string,
@@ -13,7 +74,9 @@ export async function validateCSP(
   enum directives {
     DefaultSrc = "default-src",
     ScriptSrc = "script-src",
+    ScriptSrcElem = "script-src-elem",
     StyleSrc = "style-src",
+    StyleSrcElem = "style-src-elem",
     ObjectSrc = "object-src",
     ChildSrc = "child-src",
     FrameSrc = "frame-src",
@@ -116,7 +179,7 @@ export async function validateCSP(
         );
       }
 
-      if ((await getFQDNPolicy(fqdn)).length !== 0) {
+      if ((await getFQDNEnrollment(fqdn)).length !== 0) {
         valid_sources.add(fqdn);
         return true;
       } else {
@@ -131,53 +194,88 @@ export async function validateCSP(
     }
   }
 
-  // Step 3: think about scripts
-  const script_src = parsedCSP.get(directives.ScriptSrc);
-  if (default_src_is_none == false && (!script_src || script_src.length < 1)) {
-    throw new Error(
-      `${directives.DefaultSrc} is not none, and ${directives.ScriptSrc} is not defined.`,
-    );
-  } else if (script_src) {
-    for (const src of script_src) {
-      await isSourceAllowed(
-        src,
-        directives.ScriptSrc,
-        [
-          source_keywords.None,
-          source_keywords.Self,
-          source_keywords.WasmUnsafeEval,
-        ],
-        // Here allowing hash would break the WASM hooking; as we are no longer injecting
-        // Via a content_script, but rather at the network level on script files, having embedded
-        // JS in HTML page could break the assumptions.
-        [],
+  async function validateDirectiveList(
+    directive: string,
+    list: string[] | undefined,
+    default_src_is_none: boolean,
+    allowed_keywords: string[],
+    allowed_source_types: source_types[],
+  ) {
+    if (default_src_is_none == false && (!list || list.length < 1)) {
+      throw new Error(
+        `${directives.DefaultSrc} is not none, and ${directive} is not defined.`,
       );
+    }
+
+    if (list) {
+      for (const src of list) {
+        await isSourceAllowed(
+          src,
+          directive,
+          allowed_keywords,
+          allowed_source_types,
+        );
+      }
     }
   }
 
+  // Step 3: think about scripts
+  // Here allowing hash would break the WASM hooking; as we are no longer injecting
+  // Via a content_script, but rather at the network level on script files, having embedded
+  // JS in HTML page could break the assumptions.
+
+  await validateDirectiveList(
+    directives.ScriptSrc,
+    parsedCSP.get(directives.ScriptSrc),
+    default_src_is_none,
+    [
+      source_keywords.None,
+      source_keywords.Self,
+      source_keywords.WasmUnsafeEval,
+    ],
+    [],
+  );
+
+  await validateDirectiveList(
+    directives.ScriptSrcElem,
+    parsedCSP.get(directives.ScriptSrcElem),
+    default_src_is_none,
+    [
+      source_keywords.None,
+      source_keywords.Self,
+      source_keywords.WasmUnsafeEval,
+    ],
+    [],
+  );
+
   // Step 4: validate style-src
-  const style_src = parsedCSP.get(directives.StyleSrc);
-  if (default_src_is_none == false && (!style_src || style_src.length < 1)) {
-    throw new Error(
-      `${directives.DefaultSrc} is not none, and ${directives.StyleSrc} is not defined.`,
-    );
-  } else if (style_src) {
-    for (const src of style_src) {
-      await isSourceAllowed(
-        src,
-        directives.StyleSrc,
-        [
-          source_keywords.None,
-          source_keywords.Self,
-          // TODO eventually the following 2 should disappear from here
-          source_keywords.UnsafeInline,
-          source_keywords.UnsafeHashes,
-        ],
-        // We could allow remote verified origins, but I'd lean towards not
-        [source_types.Hash],
-      );
-    }
-  }
+  // TODO credit for -elem tags
+  await validateDirectiveList(
+    directives.StyleSrc,
+    parsedCSP.get(directives.StyleSrc),
+    default_src_is_none,
+    [
+      source_keywords.None,
+      source_keywords.Self,
+      // TODO eventually these 2 should disappear
+      source_keywords.UnsafeInline,
+      source_keywords.UnsafeHashes,
+    ],
+    [source_types.Hash],
+  );
+
+  await validateDirectiveList(
+    directives.StyleSrcElem,
+    parsedCSP.get(directives.StyleSrcElem),
+    default_src_is_none,
+    [
+      source_keywords.None,
+      source_keywords.Self,
+      source_keywords.UnsafeInline,
+      source_keywords.UnsafeHashes,
+    ],
+    [source_types.Hash],
+  );
 
   // Step 5: validate frame-src and child-src. They should follow the same policy and in theory one overrides the other
   // but it depends on the CSP level so we'll check everything
