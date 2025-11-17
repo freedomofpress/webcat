@@ -44,6 +44,18 @@ function cleanup(tabId: number) {
     /* END */
     originState.current.references--;
     /* Here we could check if references are 0, and delete the origin object too */
+    // TODO: if we do, we should also cleanup the listeners
+    /*
+    if (originState.current.references === 0) {
+      browser.webRequest.onBeforeRequest.removeListener(
+          originState.current.onBeforeRequest!
+      );
+      browser.webRequest.onHeadersReceived.removeListener(
+          originState.current.onHeadersReceived!
+      );
+      origins.delete(fqdn);
+    }
+    */
     tabs.delete(tabId);
     popups.delete(tabId);
   }
