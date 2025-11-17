@@ -7,6 +7,7 @@ import {
 } from "./interfaces/originstate";
 import { PopupState } from "./interfaces/popupstate";
 import { logger } from "./logger";
+import { NON_FRAME_TYPES } from "./resources";
 import { setIcon } from "./ui";
 
 declare const __TESTING__: boolean;
@@ -87,7 +88,29 @@ export async function validateOrigin(
     fqdn,
     enrollment_hash,
   );
-  origins.set(fqdn, new OriginStateHolder(newOriginState));
+  const origin = new OriginStateHolder(newOriginState);
+  origins.set(fqdn, origin);
+
+  // We want to intercept everything for enrolled wbesites
+  browser.webRequest.onBeforeRequest.addListener(
+    origin.current.onBeforeRequest!,
+    {
+      urls: [`http://${fqdn}/*`, `https://${fqdn}/*`],
+      types: NON_FRAME_TYPES,
+    },
+    ["blocking"],
+  );
+
+  browser.webRequest.onHeadersReceived.addListener(
+    origin.current.onHeadersReceived!,
+    {
+      urls: [`http://${fqdn}/*`, `https://${fqdn}/*`],
+      types: NON_FRAME_TYPES,
+    },
+    ["blocking", "responseHeaders"],
+  );
+
+  return;
 
   // So, we cannot directly know that we are the initiator of this request, see
   // https://stackoverflow.com/questions/31129648/how-to-identify-who-initiated-the-http-request-in-firefox

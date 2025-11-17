@@ -4,6 +4,7 @@ import { verifyMessageWithCompiledPolicy } from "sigsum/dist/verify";
 import { bundle_name } from "../../config";
 import { canonicalize } from "../canonicalize";
 import { base64UrlToUint8Array, stringToUint8Array } from "../encoding";
+import { headersListener, requestListener } from "../listeners";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
 import { validateCSP } from "../validators";
@@ -40,6 +41,16 @@ export abstract class OriginStateBase {
   public readonly valid_signers?: Set<string>;
   public readonly valid_sources?: Set<string>;
 
+  // Per origin function wrappers: the extension API does not support registering
+  // the same listener multiple times with different rules. We thus want a wrapper
+  // listener per every origin for their own intercepting function
+  public onBeforeRequest?: (
+    details: browser.webRequest._OnBeforeRequestDetails,
+  ) => Promise<browser.webRequest.BlockingResponse>;
+  public onHeadersReceived?: (
+    details: browser.webRequest._OnHeadersReceivedDetails,
+  ) => Promise<browser.webRequest.BlockingResponse>;
+
   // Due to list logic, we support only one app per domain, and that should be a privileged one
   // But that is enforced in request.ts
   constructor(
@@ -55,6 +66,9 @@ export abstract class OriginStateBase {
     const url = `${scheme}//${fqdn}:${port}/${bundle_name}`;
     this.bundlePromise = fetch(url, { cache: "no-store" });
     this.references = 1;
+
+    this.onBeforeRequest = (details) => requestListener(details);
+    this.onHeadersReceived = (details) => headersListener(details);
   }
 
   public async awaitBundle() {
