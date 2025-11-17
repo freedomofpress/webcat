@@ -1,5 +1,4 @@
 export interface Enrollment {
-  // < 4k
   policy: string;
   // ed25519 base64url encoded public keys
   signers: string[];

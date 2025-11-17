@@ -271,6 +271,8 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       }
     }
 
+    // TODO SECURITY: verify timestamp in the manifest and relate it to max_age
+
     // Not enough signatures to verify the manifest
     if (validCount < this.enrollment.threshold) {
       return new OriginStateFailed(

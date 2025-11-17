@@ -224,10 +224,15 @@ export async function validateResponseContent(
     // - If everything else fails, it's an error or a catchall case, so attempt default_fallback
     let manifest_hash: string;
 
+    // TODO (default index should not have starting /), this is a quick patch for developing
+    const normalizedDefaultIndex = manifest.default_index.startsWith("/")
+      ? manifest.default_index.slice(1)
+      : manifest.default_index;
+
     if (manifest.files[pathname]) {
       manifest_hash = manifest.files[pathname];
     } else if (pathname.endsWith("/")) {
-      manifest_hash = manifest.files[pathname + manifest.default_index];
+      manifest_hash = manifest.files[pathname + normalizedDefaultIndex];
     } else {
       manifest_hash = manifest.files[manifest.default_fallback];
     }
