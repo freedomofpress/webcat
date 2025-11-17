@@ -243,7 +243,7 @@ export async function validateResponseContent(
   };
 
   filter.onstop = async () => {
-    const originStateHolder = getVerifiedManifestState(fqdn, details.tabId);
+    const originStateHolder = getVerifiedManifestState(fqdn);
     const blob = await new Blob(source).arrayBuffer();
 
     const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
