@@ -85,3 +85,8 @@ export function Uint8ArrayToBase64Url(uint8Array: Uint8Array): string {
     .replace(/\//g, "_")
     .replace(/=+$/g, "");
 }
+
+export function arrayBufferToHex(buffer: Uint8Array | ArrayBuffer) {
+  const array = Array.from(new Uint8Array(buffer));
+  return array.map((b) => b.toString(16).padStart(2, "0")).join("");
+}

@@ -18,7 +18,10 @@ export class OriginStateHolder {
       | OriginStateVerifiedEnrollment
       | OriginStateVerifiedManifest
       | OriginStateFailed,
-  ) {}
+  ) {
+    const url = `${current.scheme}//${current.fqdn}:${current.port}/${bundle_name}`;
+    current.bundlePromise = fetch(url, { cache: "no-store" });
+  }
 }
 
 // The OriginState class caches origins and assumes safe defaults. We assume we are enrolled and nothing is verified.
@@ -33,7 +36,7 @@ export abstract class OriginStateBase {
   public readonly port: string;
   public readonly fqdn: string;
   public readonly enrollment_hash: Uint8Array;
-  public readonly bundlePromise: Promise<Response>;
+  public bundlePromise?: Promise<Response>;
   public references: number;
   public bundle?: Bundle;
   public readonly enrollment?: Enrollment;
@@ -63,8 +66,6 @@ export abstract class OriginStateBase {
     this.port = port;
     this.fqdn = fqdn;
     this.enrollment_hash = enrollment_hash;
-    const url = `${scheme}//${fqdn}:${port}/${bundle_name}`;
-    this.bundlePromise = fetch(url, { cache: "no-store" });
     this.references = 1;
 
     this.onBeforeRequest = (details) => requestListener(details);
@@ -218,7 +219,9 @@ export class OriginStateInitial extends OriginStateBase {
     // parse the compiled sigsum policy once here instead of doing that
     // at every verification. Currently the sigsum-ts lib does not support that
     // and maybe more abstraction there would be useful
-    return new OriginStateVerifiedEnrollment(this, enrollment);
+    const next = new OriginStateVerifiedEnrollment(this, enrollment);
+    next.bundlePromise = this.bundlePromise;
+    return next;
   }
 }
 
@@ -229,6 +232,11 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
 
   constructor(prev: OriginStateInitial, enrollment: Enrollment) {
     super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
+    this.bundle = prev.bundle;
+    this.bundlePromise = prev.bundlePromise;
+    this.onBeforeRequest = prev.onBeforeRequest;
+    this.onHeadersReceived = prev.onHeadersReceived;
+    this.references = prev.references;
     this.enrollment = enrollment;
   }
 
@@ -347,8 +355,9 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
         return new OriginStateFailed(this, `extra_csp path ${path} is empty.`);
       }
     }
-
-    return new OriginStateVerifiedManifest(this, manifest, valid_sources);
+    const next = new OriginStateVerifiedManifest(this, manifest, valid_sources);
+    next.bundlePromise = this.bundlePromise;
+    return next;
   }
 }
 
@@ -364,6 +373,11 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     valid_sources: Set<string>,
   ) {
     super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
+    this.bundle = prev.bundle;
+    this.bundlePromise = prev.bundlePromise;
+    this.onBeforeRequest = prev.onBeforeRequest;
+    this.onHeadersReceived = prev.onHeadersReceived;
+    this.references = prev.references;
     this.enrollment = prev.enrollment;
     this.manifest = manifest;
     this.valid_sources = valid_sources;

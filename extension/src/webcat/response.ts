@@ -2,6 +2,7 @@ import { origins } from "./../globals";
 import {
   base64UrlToUint8Array,
   stringToUint8Array,
+  Uint8ArrayToBase64Url,
   Uint8ArrayToString,
 } from "./encoding";
 import { getHooks } from "./genhooks";
@@ -17,13 +18,7 @@ import { PopupState } from "./interfaces/popupstate";
 import { logger } from "./logger";
 import { PASS_THROUGH_TYPES } from "./resources";
 import { setOKIcon } from "./ui";
-import {
-  arrayBufferToHex,
-  arraysEqual,
-  errorpage,
-  getFQDN,
-  SHA256,
-} from "./utils";
+import { arraysEqual, errorpage, getFQDN, SHA256 } from "./utils";
 import { extractAndValidateHeaders } from "./validators";
 
 export async function validateResponseHeaders(
@@ -292,8 +287,9 @@ export async function validateResponseContent(
       deny(filter);
       filter.close();
       errorpage(details.tabId);
+      console.log(blob);
       throw new Error(
-        `hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
+        `hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${Uint8ArrayToBase64Url(new Uint8Array(content_hash))}`,
       );
     }
     // If everything is OK then we can just write the raw blob back
