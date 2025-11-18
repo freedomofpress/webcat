@@ -1,3 +1,15 @@
+import {
+  verifyCosignedTreeHead,
+  verifySignedTreeHead,
+} from "sigsum/dist//crypto";
+import {
+  evalQuorumBytecode,
+  importAndHashAll,
+  parseCompiledPolicy,
+} from "sigsum/dist/compiledPolicy";
+import { parseCosignedTreeHead } from "sigsum/dist/proof";
+import { Base64KeyHash, CosignedTreeHead, KeyHash } from "sigsum/dist/types";
+
 import { getFQDNEnrollment } from "./db";
 import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDNSafe } from "./utils";
@@ -353,4 +365,63 @@ export function isSafeRelativeLocation(value: string): boolean {
   if (SCHEME_RE.test(trimmed)) return false;
 
   return true;
+}
+
+export async function witnessTimestampsFromCosignedTreeHead(
+  compiledPolicy: Uint8Array,
+  treeHead: string,
+): Promise<number[]> {
+  const compiled = parseCompiledPolicy(compiledPolicy);
+  const logs = await importAndHashAll(compiled.logsRaw);
+  const witnesses = await importAndHashAll(compiled.witnessesRaw);
+  const cosignedTreeHead: CosignedTreeHead = await parseCosignedTreeHead(
+    treeHead.split("\n"),
+  );
+
+  let logKeyHash: KeyHash | null = null;
+  for (const log of logs) {
+    if (
+      await verifySignedTreeHead(
+        cosignedTreeHead.SignedTreeHead,
+        log.pub,
+        log.hash,
+      )
+    ) {
+      logKeyHash = log.hash;
+      break;
+    }
+  }
+
+  if (!logKeyHash) {
+    throw new Error("no log key in policy verified the tree head");
+  }
+
+  const present = new Uint8Array(witnesses.length);
+  const timestamps: number[] = [];
+
+  for (const [i, witness] of witnesses.entries()) {
+    const cosignature = Base64KeyHash.lookup(
+      cosignedTreeHead.Cosignatures,
+      witness.b64,
+    );
+    if (!cosignature) continue;
+
+    if (
+      await verifyCosignedTreeHead(
+        cosignedTreeHead.SignedTreeHead.TreeHead,
+        witness.pub,
+        logKeyHash,
+        cosignature,
+      )
+    ) {
+      present[i] = 1;
+      timestamps.push(cosignature.Timestamp);
+    }
+  }
+
+  if (!evalQuorumBytecode(compiled.quorum, witnesses.length, present)) {
+    throw new Error("cosignature quorum not satisfied");
+  }
+
+  return timestamps;
 }

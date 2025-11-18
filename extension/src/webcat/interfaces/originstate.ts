@@ -7,7 +7,10 @@ import { base64UrlToUint8Array, stringToUint8Array } from "../encoding";
 import { headersListener, requestListener } from "../listeners";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
-import { validateCSP } from "../validators";
+import {
+  validateCSP,
+  witnessTimestampsFromCosignedTreeHead,
+} from "../validators";
 import { Bundle, Enrollment, Manifest, Signatures } from "./bundle";
 
 export class OriginStateHolder {
@@ -29,7 +32,6 @@ export abstract class OriginStateBase {
   abstract status:
     | "request_sent"
     | "verified_enrollment"
-    | "populated_manifest"
     | "verified_manifest"
     | "failed";
   public readonly scheme: string;
@@ -293,13 +295,36 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       }
     }
 
-    // TODO SECURITY: verify timestamp in the manifest and relate it to max_age
-
     // Not enough signatures to verify the manifest
     if (validCount < this.enrollment.threshold) {
       return new OriginStateFailed(
         this,
         `found only ${validCount} valid signatures of required threshold of ${this.enrollment.threshold}.`,
+      );
+    }
+
+    if (!manifest.timestamp) {
+      return new OriginStateFailed(
+        this,
+        "no timestamp in manifest or it is too short",
+      );
+    }
+
+    const timestamps = await witnessTimestampsFromCosignedTreeHead(
+      base64UrlToUint8Array(this.enrollment.policy),
+      manifest.timestamp,
+    );
+
+    const timestamp = timestamps.sort((a, b) => a - b)[
+      Math.floor(timestamps.length / 2)
+    ];
+    console.log(timestamps);
+    const now = Math.floor(Date.now() / 1000);
+
+    if (now - timestamp > this.enrollment.max_age) {
+      return new OriginStateFailed(
+        this,
+        `manifest has expired (max age: ${this.enrollment.max_age}, manifest timestamp: ${timestamp}, now: ${now}).`,
       );
     }
 
@@ -317,7 +342,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     if (
       !manifest.default_index ||
       !manifest.default_fallback ||
-      !manifest.files[manifest.default_index] ||
+      !manifest.files["/" + manifest.default_index] ||
       !manifest.files[manifest.default_fallback]
     ) {
       return new OriginStateFailed(
