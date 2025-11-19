@@ -1,3 +1,5 @@
+import { WebcatError } from "./interfaces/errors";
+
 export function getFQDN(url: string): string {
   const urlobj = new URL(url);
   return urlobj.hostname;
@@ -38,11 +40,6 @@ export async function SHA256(
   return crypto.subtle.digest("SHA-256", input);
 }
 
-export function arrayBufferToHex(buffer: Uint8Array | ArrayBuffer) {
-  const array = Array.from(new Uint8Array(buffer));
-  return array.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 export function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -51,12 +48,12 @@ export function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
-export function errorpage(tabId: number) {
+export function errorpage(tabId: number, error?: WebcatError) {
   // TODO, what if the error happens in the background? We should probably hunt all tabs with
   // that main frame or subframe and error them
   if (tabId > 0) {
     browser.tabs.update(tabId, {
-      url: browser.runtime.getURL("pages/error.html"),
+      url: browser.runtime.getURL(`pages/error.html#${error?.code}`),
     });
   }
 }

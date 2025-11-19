@@ -83,31 +83,36 @@ export abstract class OriginStateBase {
     // If bundlePromise was awaited before and cached a failure result,
     // we don't want to re-fetch, so detect that. It should never happen
     if (!this.bundlePromise) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Fetch.FETCH_PROMISE_MISSING,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Fetch.FETCH_PROMISE_MISSING),
+      );
     }
     const bundleResponse = await this.bundlePromise;
     if (bundleResponse.ok !== true) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Fetch.FETCH_ERROR,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Fetch.FETCH_ERROR),
+      );
     }
     const bundle_data: Bundle = (await bundleResponse.json()) as Bundle;
     if (!bundle_data.enrollment) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Bundle.ENROLLMENT_MISSING,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Bundle.ENROLLMENT_MISSING),
+      );
     }
     if (!bundle_data.manifest) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Bundle.MANIFEST_MISSING,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Bundle.MANIFEST_MISSING),
+      );
     }
     if (!bundle_data.signatures) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Bundle.SIGNATURES_MISSING,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Bundle.SIGNATURES_MISSING),
+      );
     }
     this.bundle = bundle_data;
   }
@@ -159,40 +164,47 @@ export class OriginStateInitial extends OriginStateBase {
 
     // If it doesn't match, stop early
     if (!arraysEqual(this.enrollment_hash, canonicalized_hash)) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Enrollment.MISMATCH,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
+      );
     }
 
     if (typeof enrollment.policy !== "string") {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Enrollment.POLICY_MALFORMED,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Enrollment.POLICY_MALFORMED),
+      );
     }
     if (enrollment.policy.length === 0 || enrollment.policy.length > 8192) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Enrollment.POLICY_LENGTH,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Enrollment.POLICY_LENGTH),
+      );
     }
 
     if (!Array.isArray(enrollment.signers)) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Enrollment.SIGNERS_MALFORMED,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_MALFORMED),
+      );
     }
 
     if (enrollment.signers.length === 0) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Enrollment.SIGNERS_EMPTY,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_EMPTY),
+      );
     }
 
     for (const key of enrollment.signers) {
       if (typeof key !== "string") {
-        return new OriginStateFailed(this, {
-          code: WebcatErrorCode.Enrollment.SIGNERS_KEY_MALFORMED,
-          details: [String(key)],
-        });
+        return new OriginStateFailed(
+          this,
+          new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_KEY_MALFORMED, [
+            String(key),
+          ]),
+        );
       }
     }
 
@@ -201,24 +213,27 @@ export class OriginStateInitial extends OriginStateBase {
       !Number.isInteger(enrollment.threshold) ||
       enrollment.threshold < 1
     ) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Enrollment.THRESHOLD_MALFORMED,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Enrollment.THRESHOLD_MALFORMED),
+      );
     }
 
     if (enrollment.threshold > enrollment.signers.length) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE),
+      );
     }
 
     if (
       typeof enrollment.max_age !== "number" ||
       !Number.isFinite(enrollment.max_age)
     ) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED),
+      );
     }
 
     //const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60;
@@ -300,10 +315,12 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
             signatures[pubKey],
           );
         } catch (e) {
-          return new OriginStateFailed(this, {
-            code: WebcatErrorCode.Manifest.VERIFY_FAILED,
-            details: [String(e)],
-          });
+          return new OriginStateFailed(
+            this,
+            new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED, [
+              String(e),
+            ]),
+          );
         }
         remainingSigners.delete(pubKey);
         validCount++;
@@ -312,16 +329,20 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
 
     // Not enough signatures to verify the manifest
     if (validCount < this.enrollment.threshold) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED,
-        details: [String(validCount), String(this.enrollment.threshold)],
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED, [
+          String(validCount),
+          String(this.enrollment.threshold),
+        ]),
+      );
     }
 
     if (!manifest.timestamp) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.TIMESTAMP_MISSING,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_MISSING),
+      );
     }
 
     let timestamps;
@@ -331,10 +352,12 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
         manifest.timestamp,
       );
     } catch (e) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.TIMESTAMP_VERIFY_FAILED,
-        details: [String(e)],
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_VERIFY_FAILED, [
+          String(e),
+        ]),
+      );
     }
 
     const timestamp = timestamps.sort((a, b) => a - b)[
@@ -344,57 +367,67 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     const now = Math.floor(Date.now() / 1000);
 
     if (now - timestamp > this.enrollment.max_age) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.EXPIRED,
-        details: [String(this.enrollment.max_age), String(timestamp)],
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.EXPIRED, [
+          String(this.enrollment.max_age),
+          String(timestamp),
+        ]),
+      );
     }
 
     // A manifest with no files should not exists
     if (!manifest.files || Object.keys(manifest.files).length < 1) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.FILES_MISSING,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.FILES_MISSING),
+      );
     }
 
     // If there is no default CSP than the manifest is incomplete
     if (!manifest.default_csp) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.DEFAULT_CSP_MISSING,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_CSP_MISSING),
+      );
     }
 
     // If there is no default index or fallback
     if (!manifest.default_index) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING),
+      );
     }
 
     if (!manifest.default_fallback) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING),
+      );
     }
 
     // The file referenced by default_index must be in files
     if (!manifest.files["/" + manifest.default_index]) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING_FILE,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING_FILE),
+      );
     }
 
     // The file referenced by default_fallback must be in files
     if (!manifest.files[manifest.default_fallback]) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING),
+      );
     }
 
     if (!manifest.wasm) {
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.WASM_MISSING,
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.WASM_MISSING),
+      );
     }
 
     // ValidateCSP will populate this based on hosts presents in both
@@ -407,10 +440,12 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       await validateCSP(manifest.default_csp, this.fqdn, valid_sources);
     } catch (e) {
       //return new OriginStateFailed(this, `failed parsing default_csp: ${e}`);
-      return new OriginStateFailed(this, {
-        code: WebcatErrorCode.Manifest.DEFAULT_CSP_INVALID,
-        details: [String(e)],
-      });
+      return new OriginStateFailed(
+        this,
+        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_CSP_INVALID, [
+          String(e),
+        ]),
+      );
     }
 
     // Validate all extra CSP, it should also fill all the sources
@@ -420,16 +455,20 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
         try {
           await validateCSP(csp, this.fqdn, valid_sources);
         } catch (e) {
-          return new OriginStateFailed(this, {
-            code: WebcatErrorCode.Manifest.EXTRA_CSP_INVALID,
-            details: [String(e)],
-          });
+          return new OriginStateFailed(
+            this,
+            new WebcatError(WebcatErrorCode.Manifest.EXTRA_CSP_INVALID, [
+              String(e),
+            ]),
+          );
         }
       } else {
-        return new OriginStateFailed(this, {
-          code: WebcatErrorCode.Manifest.EXTRA_CSP_MALFORMED,
-          details: [String(path)],
-        });
+        return new OriginStateFailed(
+          this,
+          new WebcatError(WebcatErrorCode.Manifest.EXTRA_CSP_MALFORMED, [
+            String(path),
+          ]),
+        );
       }
     }
     const next = new OriginStateVerifiedManifest(this, manifest, valid_sources);

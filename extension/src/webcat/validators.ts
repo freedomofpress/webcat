@@ -11,15 +11,16 @@ import { parseCosignedTreeHead } from "sigsum/dist/proof";
 import { Base64KeyHash, CosignedTreeHead, KeyHash } from "sigsum/dist/types";
 
 import { getFQDNEnrollment } from "./db";
+import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDNSafe } from "./utils";
 
 export function extractAndValidateHeaders(
   details: browser.webRequest._OnHeadersReceivedDetails,
-): Map<string, string> {
+): Map<string, string> | WebcatError {
   // Ensure that response headers exist.
   if (!details.responseHeaders) {
-    throw new Error("Missing response headers.");
+    return new WebcatError(WebcatErrorCode.Headers.MISSING);
   }
 
   // Define the critical headers we care about.
@@ -51,19 +52,22 @@ export function extractAndValidateHeaders(
       // Special case: Location header — allow only relative redirects
       if (lowerName === "location") {
         if (!isSafeRelativeLocation(value)) {
-          throw new Error(
-            `Forbidden absolute redirect in Location header: ${value}`,
-          );
+          return new WebcatError(WebcatErrorCode.Headers.LOCATION_EXTERNAL, [
+            String(value),
+          ]);
         }
-        console.log(`Allowing relative redirect: ${value}`);
       } else if (forbiddenHeaders.has(lowerName)) {
-        throw new Error(`Forbidden response header detected: ${lowerName}`);
+        return new WebcatError(WebcatErrorCode.Headers.FORBIDDEN, [
+          String(lowerName),
+        ]);
       }
 
       // Check for duplicates among critical headers.
       if (criticalHeaders.has(lowerName)) {
         if (seenCriticalHeaders.has(lowerName)) {
-          throw new Error(`Duplicate critical header detected: ${lowerName}`);
+          return new WebcatError(WebcatErrorCode.Headers.DUPLICATE, [
+            String(lowerName),
+          ]);
         }
         seenCriticalHeaders.add(lowerName);
       }
@@ -76,7 +80,9 @@ export function extractAndValidateHeaders(
   // Ensure all critical headers are present.
   for (const criticalHeader of criticalHeaders) {
     if (!normalizedHeaders.has(criticalHeader)) {
-      throw new Error(`Missing critical header: ${criticalHeader}`);
+      return new WebcatError(WebcatErrorCode.Headers.MISSING_CRITICAL, [
+        String(criticalHeader),
+      ]);
     }
   }
 

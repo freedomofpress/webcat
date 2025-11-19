@@ -7,6 +7,7 @@ import {
   updateLastChecked,
 } from "./db";
 import { metadataRequestSource } from "./interfaces/base";
+import { WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { validateResponseContent, validateResponseHeaders } from "./response";
@@ -139,18 +140,21 @@ export async function headersListener(
     throw new Error("No originState while starting to parse response.");
   }
 
-  try {
-    await validateResponseHeaders(originStateHolder, popupStateHolder, details);
-  } catch (error) {
+  const result = await validateResponseHeaders(
+    originStateHolder,
+    popupStateHolder,
+    details,
+  );
+  if (result instanceof WebcatError) {
     logger.addLog(
       "error",
-      `Error when parsing response headers: ${error}`,
+      `Error when parsing response headers: ${result}`,
       details.tabId,
       fqdn,
     );
     origins.delete(fqdn);
     tabs.delete(details.tabId);
-    errorpage(details.tabId);
+    errorpage(details.tabId, result);
     return { cancel: true };
   }
 

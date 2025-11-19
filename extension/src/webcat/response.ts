@@ -7,6 +7,7 @@ import {
 } from "./encoding";
 import { getHooks } from "./genhooks";
 import { Enrollment } from "./interfaces/bundle";
+import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
   OriginStateFailed,
   OriginStateHolder,
@@ -37,15 +38,18 @@ export async function validateResponseHeaders(
   );
 
   // Step 1: Extract headers, normalize, check for duplicates and mandatory ones
-  let normalizedHeaders: Map<string, string>;
-  try {
-    normalizedHeaders = extractAndValidateHeaders(details);
-  } catch (e) {
+  const result = extractAndValidateHeaders(details);
+
+  if (result instanceof WebcatError) {
+    // This is an error object returned without throwing
     if (popupState) {
       popupState.valid_headers = false;
     }
-    throw new Error(`Error parsing headers: ${e}`);
+    return result; // or wrap it
   }
+
+  // Otherwise it's the header map
+  const normalizedHeaders = result;
 
   // The null assertion is checked in the loop above
   // Extract Content-Security-Policy
@@ -65,7 +69,7 @@ export async function validateResponseHeaders(
           Uint8ArrayToString(base64UrlToUint8Array(enrollment_header)),
         ) as Enrollment;
       } catch {
-        throw new Error("Enrollment info in x-webcat-enrollment is malformed");
+        return new WebcatError(WebcatErrorCode.Headers.ENROLLMENT_MALFORMED);
       }
       originStateHolder.current = await (
         originStateHolder.current as OriginStateInitial
@@ -80,9 +84,7 @@ export async function validateResponseHeaders(
       if (popupState) {
         // TODO
       }
-      throw new Error(
-        `${(originStateHolder.current as OriginStateFailed).error.code}`,
-      );
+      return (originStateHolder.current as OriginStateFailed).error;
     }
 
     if (popupState) {
@@ -104,12 +106,11 @@ export async function validateResponseHeaders(
       if (popupState) {
         popupState.valid_manifest = false;
       }
-      throw new Error(
-        `${(originStateHolder.current as OriginStateFailed).error.code}`,
-      );
+      return (originStateHolder.current as OriginStateFailed).error;
     }
 
     // Step 4: Ensure we are at the expected final state now
+    // This should never happen
     if (originStateHolder.current.status !== "verified_manifest") {
       throw new Error(
         `Error with the origin state: expected origin to be in state verified_manifest, got ${originStateHolder.current.status}`,
@@ -153,7 +154,7 @@ export async function validateResponseHeaders(
   ) {
     //console.log("CSP:", csp);
     //console.log("manifest:", originStateHolder.current.manifest.default_csp);
-    throw new Error(`Failed to match CSP with manifest value for ${pathname}`);
+    return new WebcatError(WebcatErrorCode.CSP.MISMATCH, [String(pathname)]);
   }
 
   logger.addLog(

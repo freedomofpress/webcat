@@ -56,8 +56,16 @@ export enum WebcatErrorManifest {
 //
 export enum WebcatErrorCSP {
   PARSE_FAILED = "ERR_WEBCAT_CSP_PARSE_FAILED",
-  EXTRA_FAILED = "ERR_WEBCAT_CSP_EXTRA_FAILED",
   MISMATCH = "ERR_WEBCAT_CSP_MISMATCH",
+}
+
+export enum WebcatErrorHeaders {
+  MISSING = "ERR_WEBCAT_HEADERS_MISSING",
+  LOCATION_EXTERNAL = "ERR_WEBCAT_HEADERS_LOCATION_EXTERNAL",
+  FORBIDDEN = "ERR_WEBCAT_HEADERS_FORBIDDEN",
+  DUPLICATE = "ERR_WEBCAT_HEADERS_DUPLICATE",
+  MISSING_CRITICAL = "ERR_WEBCAT_HEADERS_MISSING_CRITICAL",
+  ENROLLMENT_MALFORMED = "ERR_WEBCAT_HEADERS_ENROLLMENT_MALFORMED",
 }
 
 //
@@ -69,6 +77,7 @@ export const WebcatErrorCode = {
   Enrollment: WebcatErrorEnrollment,
   Manifest: WebcatErrorManifest,
   CSP: WebcatErrorCSP,
+  Headers: WebcatErrorHeaders,
 } as const;
 
 //
@@ -79,12 +88,18 @@ export type WebcatErrorCodeAny =
   | WebcatErrorBundle
   | WebcatErrorEnrollment
   | WebcatErrorManifest
-  | WebcatErrorCSP;
+  | WebcatErrorCSP
+  | WebcatErrorHeaders;
 
 //
 // Error object
 //
-export interface WebcatError {
-  code: WebcatErrorCodeAny;
-  details?: string[];
+export class WebcatError extends Error {
+  constructor(
+    public readonly code: WebcatErrorCodeAny,
+    public readonly details?: string[],
+  ) {
+    super(code);
+    this.name = "WebcatError";
+  }
 }
