@@ -1,288 +1,414 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { SigstoreVerifier } from "../../src/sigstore/sigstore";
+import { canonicalize } from "../../src/webcat/canonicalize";
+import { stringToUint8Array } from "../../src/webcat/encoding";
+import type {
+  Enrollment,
+  Manifest,
+  Signatures,
+} from "../../src/webcat/interfaces/bundle";
 import {
-  OriginStateBase,
-  OriginStateHolder,
+  OriginStateFailed,
   OriginStateInitial,
-  OriginStatePopulatedManifest,
+  OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
-} from "../../src/webcat/interfaces/originstate";
-import { PopupState } from "../../src/webcat/interfaces/popupstate";
-import { Issuers } from "./../../src/webcat/interfaces/base";
-import { validateResponseHeaders } from "./../../src/webcat/response";
+} from "../../src/webcat/interfaces/originstate"; // adjust path if needed
+import { SHA256 } from "../../src/webcat/utils";
 
-// Define a mutable version of the origin state for testing purposes.
-interface MutableOriginState extends OriginStateBase {
-  manifest: unknown;
-  manifest_data: unknown;
-  policy_hash: Uint8Array;
-}
+// --- Mocks for external deps used by originstate.ts ---
 
-vi.mock("./../../dist/hooks.js?raw", () => {
-  return { default: "" };
-});
-
-vi.stubGlobal(
-  "fetch",
-  vi.fn(() =>
-    Promise.resolve({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          manifest: {
-            app_name: "testapp",
-            app_version: "1.0",
-            comment: "",
-            files: {},
-            wasm: [],
-            // Use proper CSP syntax (no colon/commas)
-            default_csp:
-              "default-src 'none'; script-src 'self'; style-src 'self'; object-src 'none'",
-            extra_csp: {},
-          },
-          signatures: {
-            demo1: {},
-            demo2: {},
-          },
-        }),
-    }),
-  ),
-);
-
-vi.mock("./../../src/webcat/logger", () => ({
-  logger: { addLog: vi.fn() },
-}));
-
-vi.mock("./../../src/webcat/ui", () => ({
-  setIcon: vi.fn(),
-  setOKIcon: vi.fn(),
-  setErrorIcon: vi.fn(),
+vi.mock("sigsum/dist/verify", () => ({
+  verifyMessageWithCompiledPolicy: vi.fn(async () => {
+    // Always "valid" in tests unless overridden
+    return true;
+  }),
 }));
 
 vi.mock("../../src/webcat/validators", () => ({
-  validateCSP: vi.fn(async () => true),
-  validateManifest: vi.fn(async () => true),
+  validateCSP: vi.fn(async () => {
+    // No-op; we just care that it's called and doesn't throw
+    return;
+  }),
 }));
 
-async function generatePolicyHash(
-  responseHeadersArray: Array<{ name: string; value: string }>,
-) {
-  // Convert the array of headers into a key-value map.
-  const responseHeaders = responseHeadersArray.reduce(
-    (acc: Record<string, string>, header) => {
-      acc[header.name.toLowerCase()] = header.value;
-      return acc;
-    },
-    {},
-  );
+// Helper: compute the *real* enrollment_hash exactly as production does.
+async function computeEnrollmentHash(
+  enrollment: Enrollment,
+): Promise<Uint8Array> {
+  const canonical = canonicalize(enrollment);
+  const bytes = stringToUint8Array(canonical);
+  const digest = await SHA256(bytes);
 
-  const normalizedSigners = JSON.parse(responseHeaders["x-sigstore-signers"])
-    .map((signer: { identity: string; issuer: string }) => ({
-      identity: signer.identity.toLowerCase(),
-      issuer: signer.issuer.toLowerCase(),
-    }))
-    .sort(
-      (a, b) =>
-        a.identity.localeCompare(b.identity) ||
-        a.issuer.localeCompare(b.issuer),
-    );
-
-  const policyObject = {
-    "x-sigstore-signers": normalizedSigners,
-    "x-sigstore-threshold": parseInt(
-      responseHeaders["x-sigstore-threshold"],
-      10,
-    ),
-  };
-
-  const policyString = JSON.stringify(policyObject);
-  const encoder = new TextEncoder();
-  const data = encoder.encode(policyString);
-  return new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+  if (digest instanceof Uint8Array) {
+    return digest;
+  }
+  return new Uint8Array(digest);
 }
 
-describe("validateResponseHeaders", () => {
-  let originStateHolder: OriginStateHolder;
-  let popupState: PopupState;
-  let details: browser.webRequest._OnHeadersReceivedDetails;
+// Some dummy “keys” and policy for tests
+const TEST_POLICY_B64URL = "c29tZS1zaWdzdW0tcG9saWN5"; // "some-sigsum-policy" -> base64url-ish
+const SIGNER1 = "c2lnbmVyMQ"; // "signer1" in fake base64url
+const SIGNER2 = "c2lnbmVyMg";
+const SIGNER3 = "c2lnbmVyMw";
+
+describe("OriginStateInitial.verifyEnrollment", () => {
+  let enrollment: Enrollment;
+  let enrollmentHash: Uint8Array;
+  let state: OriginStateInitial;
+
+  beforeEach(async () => {
+    enrollment = {
+      policy: TEST_POLICY_B64URL,
+      signers: [SIGNER1, SIGNER2, SIGNER3],
+      threshold: 2,
+      max_age: 3600,
+      cas_url: "https://cas.example.com",
+    };
+
+    enrollmentHash = await computeEnrollmentHash(enrollment);
+    state = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      enrollmentHash,
+    );
+  });
+
+  it("accepts a valid enrollment that matches the preload hash", async () => {
+    const res = await state.verifyEnrollment(enrollment);
+
+    expect(res).toBeInstanceOf(OriginStateVerifiedEnrollment);
+    const verified = res as OriginStateVerifiedEnrollment;
+    expect(verified.enrollment).toEqual(enrollment);
+  });
+
+  it("fails when enrollment does not match the preload hash", async () => {
+    const differentEnrollment: Enrollment = {
+      ...enrollment,
+      threshold: 3, // change something so the hash differs
+    };
+
+    const res = await state.verifyEnrollment(differentEnrollment);
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    const failed = res as OriginStateFailed;
+    expect(failed.errorMessage).toBe(
+      "enrollment data does not match the preload list",
+    );
+  });
+
+  it("fails when signers is not an array", async () => {
+    const mutated = {
+      ...enrollment,
+      // eslint-disable-next-line
+      signers: null as any,
+    };
+
+    const mutatedHash = await computeEnrollmentHash(mutated);
+    const mutatedState = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      mutatedHash,
+    );
+
+    const res = await mutatedState.verifyEnrollment(mutated);
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    const failed = res as OriginStateFailed;
+    expect(failed.errorMessage).toBe("signers must be an array of strings");
+  });
+
+  it("fails when signers is empty", async () => {
+    const mutated = {
+      ...enrollment,
+      signers: [],
+    };
+
+    const mutatedHash = await computeEnrollmentHash(mutated);
+    const mutatedState = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      mutatedHash,
+    );
+
+    const res = await mutatedState.verifyEnrollment(mutated);
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    const failed = res as OriginStateFailed;
+    expect(failed.errorMessage).toBe("signers cannot be empty");
+  });
+
+  it("fails when threshold is not a positive integer", async () => {
+    const mutated = {
+      ...enrollment,
+      threshold: 0,
+    };
+
+    const mutatedHash = await computeEnrollmentHash(mutated);
+    const mutatedState = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      mutatedHash,
+    );
+
+    const res = await mutatedState.verifyEnrollment(mutated);
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    const failed = res as OriginStateFailed;
+    expect(failed.errorMessage).toBe("threshold must be a positive an integer");
+  });
+
+  it("fails when threshold exceeds number of signers", async () => {
+    const mutated = {
+      ...enrollment,
+      threshold: 10,
+    };
+
+    const mutatedHash = await computeEnrollmentHash(mutated);
+    const mutatedState = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      mutatedHash,
+    );
+
+    const res = await mutatedState.verifyEnrollment(mutated);
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    const failed = res as OriginStateFailed;
+    expect(failed.errorMessage).toBe(
+      "threshold cannot exceed number of signers",
+    );
+  });
+});
+
+describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
+  let enrollment: Enrollment;
+  let enrollmentHash: Uint8Array;
+  let initial: OriginStateInitial;
+  let verifiedEnrollment: OriginStateVerifiedEnrollment;
 
   const defaultCSP =
     "default-src 'none'; script-src 'self'; style-src 'self'; object-src 'none'";
-  const defaultThreshold = 2;
-  const defaultSigners = `[{"identity": "demo@web.cat", "issuer": "${Issuers.google}"}, {"identity": "test@example.com", "issuer": "${Issuers.microsoft}"}, {"identity": "identity@domain.com", "issuer": "${Issuers.github}"}]`;
+
+  let manifest: Manifest;
+  let signatures: Signatures;
 
   beforeEach(async () => {
-    originStateHolder = new OriginStateHolder(
-      new OriginStateInitial(
-        {} as SigstoreVerifier,
-        "example.com",
-        new Uint8Array([0]),
-      ),
-    );
-    const manifestResponse = await originStateHolder.current.manifestPromise;
-    // Cast current state to MutableOriginState so we can assign mutable properties.
-    const mutableState = originStateHolder.current as MutableOriginState;
-    mutableState.manifest = await manifestResponse.json();
+    enrollment = {
+      policy: TEST_POLICY_B64URL,
+      signers: [SIGNER1, SIGNER2, SIGNER3],
+      threshold: 2,
+      max_age: 3600,
+      cas_url: "https://cas.example.com",
+    };
 
-    // Create a dummy manifest that meets validation requirements.
-    const dummyManifest = {
-      app_name: "testapp",
-      app_version: "1.0",
-      comment: "",
-      files: { "index.html": "dummy content" },
-      wasm: [],
+    enrollmentHash = await computeEnrollmentHash(enrollment);
+    initial = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      enrollmentHash,
+    );
+
+    const res = await initial.verifyEnrollment(enrollment);
+    if (!(res instanceof OriginStateVerifiedEnrollment)) {
+      throw new Error(
+        "verifyEnrollment did not return OriginStateVerifiedEnrollment in test setup",
+      );
+    }
+    verifiedEnrollment = res;
+
+    manifest = {
+      name: "test-app",
+      version: "1.0.0",
       default_csp: defaultCSP,
       extra_csp: {},
+      default_index: "/index.html",
+      default_fallback: "/index.html",
+      timestamp: new Date().toISOString(),
+      files: {
+        "/index.html": "hash1",
+      },
+      wasm: [],
     };
 
-    // Set manifest_data and manifest.
-    mutableState.manifest_data = {
-      manifest: dummyManifest,
-      signatures: { demo1: {}, demo2: {} },
+    signatures = {
+      [SIGNER1]: "signature1",
+      [SIGNER2]: "signature2",
     };
-    mutableState.manifest = dummyManifest;
-
-    // Bypass signature validation by stubbing verifyManifest.
-    vi.spyOn(
-      OriginStatePopulatedManifest.prototype,
-      "verifyManifest",
-    ).mockResolvedValue(
-      new OriginStateVerifiedManifest(
-        mutableState,
-        dummyManifest,
-        [
-          { identity: "demo@web.cat", issuer: Issuers.google },
-          { identity: "test@example.com", issuer: Issuers.microsoft },
-        ],
-        new Set(["example.com"]),
-      ),
-    );
-
-    // Instantiate PopupState with the required parameters.
-    popupState = new PopupState("example.com", 1, 1, 42, 0, "1.0");
-    details = {
-      url: "https://example.com",
-      tabId: 1,
-      responseHeaders: [
-        { name: "Content-Security-Policy", value: defaultCSP },
-        { name: "X-Sigstore-Signers", value: defaultSigners },
-        { name: "X-Sigstore-Threshold", value: `${defaultThreshold}` },
-      ],
-    } as unknown as browser.webRequest._OnHeadersReceivedDetails;
   });
 
-  it("validates correct headers successfully", async () => {
-    const mutableState = originStateHolder.current as MutableOriginState;
-    mutableState.policy_hash = await generatePolicyHash(
-      details.responseHeaders,
-    );
-    await expect(
-      validateResponseHeaders(originStateHolder, popupState, details),
-    ).resolves.not.toThrow();
-    expect(popupState.valid_headers).toBe(true);
+  it("accepts a manifest when enough valid signatures are present", async () => {
+    const res = await verifiedEnrollment.verifyManifest(manifest, signatures);
+
+    expect(res).toBeInstanceOf(OriginStateVerifiedManifest);
+    const verifiedManifest = res as OriginStateVerifiedManifest;
+    expect(verifiedManifest.manifest).toEqual(manifest);
+    expect(verifiedManifest.enrollment).toEqual(enrollment);
   });
 
-  it("throws error when response headers are missing", async () => {
-    const mutableState = originStateHolder.current as MutableOriginState;
-    mutableState.policy_hash = await generatePolicyHash(
-      details.responseHeaders,
+  it("fails when not enough signatures meet the threshold", async () => {
+    const tooFewSignatures: Signatures = {
+      [SIGNER1]: "signature1",
+    };
+
+    const res = await verifiedEnrollment.verifyManifest(
+      manifest,
+      tooFewSignatures,
     );
-    // Simulate missing headers with an empty array.
-    details.responseHeaders = [];
-    await expect(
-      validateResponseHeaders(originStateHolder, popupState, details),
-    ).rejects.toThrow(
-      "Error parsing headers: Error: Missing critical header: content-security-policy",
-    );
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    const failed = res as OriginStateFailed;
+    expect(failed.errorMessage).toContain("found only 1 valid signatures");
   });
 
-  it("throws error for duplicate critical headers", async () => {
-    const mutableState = originStateHolder.current as MutableOriginState;
-    mutableState.policy_hash = await generatePolicyHash(
-      details.responseHeaders,
+  it("fails when manifest has no files", async () => {
+    const emptyFilesManifest: Manifest = {
+      ...manifest,
+      files: {},
+    };
+
+    const res = await verifiedEnrollment.verifyManifest(
+      emptyFilesManifest,
+      signatures,
     );
-    // Add a duplicate X-Sigstore-Threshold header.
-    details.responseHeaders.push({
-      name: "X-Sigstore-Threshold",
-      value: `${defaultThreshold}`,
-    });
-    await expect(
-      validateResponseHeaders(originStateHolder, popupState, details),
-    ).rejects.toThrow(
-      "Duplicate critical header detected: x-sigstore-threshold",
-    );
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    const failed = res as OriginStateFailed;
+    expect(failed.errorMessage).toBe("files list is empty.");
   });
 
-  it("throws error for invalid signers json", async () => {
-    const mutableState = originStateHolder.current as MutableOriginState;
-    mutableState.policy_hash = await generatePolicyHash(
-      details.responseHeaders,
+  it("fails when default_csp is missing or too short", async () => {
+    const badManifest: Manifest = {
+      ...manifest,
+      default_csp: "",
+    };
+
+    const res = await verifiedEnrollment.verifyManifest(
+      badManifest,
+      signatures,
     );
-    details.responseHeaders = [
-      { name: "Content-Security-Policy", value: defaultCSP },
-      { name: "X-Sigstore-Signers", value: "invalid" },
-      { name: "X-Sigstore-Threshold", value: `${defaultThreshold}` },
-    ];
-    await expect(
-      validateResponseHeaders(originStateHolder, popupState, details),
-    ).rejects.toThrow("Error parsing JSON in x-sigstore-signers SyntaxError:");
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    const failed = res as OriginStateFailed;
+    expect(failed.errorMessage).toBe("default_csp is empty or not set.");
   });
 
-  it("throws error for threshold > signers", async () => {
-    details.responseHeaders = [
-      { name: "Content-Security-Policy", value: defaultCSP },
-      { name: "X-Sigstore-Signers", value: defaultSigners },
-      { name: "X-Sigstore-Threshold", value: "5" },
-    ];
-    const mutableState = originStateHolder.current as MutableOriginState;
-    mutableState.policy_hash = await generatePolicyHash(
-      details.responseHeaders,
+  it("fails when default_index or default_fallback are invalid", async () => {
+    const badManifest: Manifest = {
+      ...manifest,
+      default_index: "/missing.html",
+    };
+
+    const res = await verifiedEnrollment.verifyManifest(
+      badManifest,
+      signatures,
     );
-    await expect(
-      validateResponseHeaders(originStateHolder, popupState, details),
-    ).rejects.toThrow(
-      "Signing threshold is greater than the number of possible signers.",
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    const failed = res as OriginStateFailed;
+    expect(failed.errorMessage).toBe(
+      "default_index or default_fallback are empty or do not reference a file.",
     );
   });
 
-  it("throws error for mismatched Sigstore signers header", async () => {
-    const mutableState = originStateHolder.current as MutableOriginState;
-    mutableState.policy_hash = await generatePolicyHash(
-      details.responseHeaders,
+  it("fails when wasm field is not set", async () => {
+    const badManifest = { ...manifest } as Manifest;
+    // @ts-expect-error simulate missing wasm
+    delete badManifest.wasm;
+
+    const res = await verifiedEnrollment.verifyManifest(
+      badManifest,
+      signatures,
     );
-    details.responseHeaders = [
-      { name: "Content-Security-Policy", value: defaultCSP },
-      {
-        name: "X-Sigstore-Signers",
-        value: `[{"identity": "eve@evil.cat", "issuer": "${Issuers.google}"}, {"identity": "eve2@evil.cat", "issuer": "${Issuers.google}"}]`,
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    const failed = res as OriginStateFailed;
+    expect(failed.errorMessage).toBe("wasm is not set.");
+  });
+});
+
+describe("OriginStateVerifiedManifest.verifyCSP", () => {
+  let enrollment: Enrollment;
+  let enrollmentHash: Uint8Array;
+  let initial: OriginStateInitial;
+  let verifiedEnrollment: OriginStateVerifiedEnrollment;
+  let verifiedManifestState: OriginStateVerifiedManifest;
+
+  const defaultCSP =
+    "default-src 'none'; script-src 'self'; style-src 'self'; object-src 'none'";
+
+  beforeEach(async () => {
+    enrollment = {
+      policy: TEST_POLICY_B64URL,
+      signers: [SIGNER1, SIGNER2],
+      threshold: 1,
+      max_age: 3600,
+      cas_url: "https://cas.example.com",
+    };
+
+    enrollmentHash = await computeEnrollmentHash(enrollment);
+    initial = new OriginStateInitial(
+      "https:",
+      "443",
+      "example.com",
+      enrollmentHash,
+    );
+    const res = await initial.verifyEnrollment(enrollment);
+    if (!(res instanceof OriginStateVerifiedEnrollment)) {
+      throw new Error(
+        "verifyEnrollment did not return OriginStateVerifiedEnrollment",
+      );
+    }
+    verifiedEnrollment = res;
+
+    const manifest: Manifest = {
+      name: "test-app",
+      version: "1.0.0",
+      default_csp: defaultCSP,
+      extra_csp: {
+        "/admin": "default-src 'none'; script-src 'self' 'unsafe-inline';",
       },
-      { name: "X-Sigstore-Threshold", value: `${defaultThreshold}` },
-    ];
-    await expect(
-      validateResponseHeaders(originStateHolder, popupState, details),
-    ).rejects.toThrow(
-      "Error validating headers: response headers do not match the preload list.",
+      default_index: "/index.html",
+      default_fallback: "/index.html",
+      timestamp: new Date().toISOString(),
+      files: {
+        "/index.html": "hash1",
+        "/admin/index.html": "hash2",
+      },
+      wasm: [],
+    };
+
+    verifiedManifestState = new OriginStateVerifiedManifest(
+      verifiedEnrollment,
+      manifest,
+      new Set(["example.com"]),
     );
   });
 
-  it("throws error for mismatched CSP header", async () => {
-    const mutableState = originStateHolder.current as MutableOriginState;
-    mutableState.policy_hash = await generatePolicyHash(
-      details.responseHeaders,
-    );
-    // Provide a CSP header that does not match the dummy manifest default_csp.
-    details.responseHeaders = [
-      {
-        name: "Content-Security-Policy",
-        value:
-          "default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'",
-      },
-      { name: "X-Sigstore-Signers", value: defaultSigners },
-      { name: "X-Sigstore-Threshold", value: `${defaultThreshold}` },
-    ];
-    await expect(
-      validateResponseHeaders(originStateHolder, popupState, details),
-    ).rejects.toThrow("Failed to match CSP with manifest value for /");
+  it("matches default CSP for root path", () => {
+    const ok = verifiedManifestState.verifyCSP(defaultCSP, "/");
+    expect(ok).toBe(true);
+  });
+
+  it("matches extra CSP for exact path", () => {
+    const csp = "default-src 'none'; script-src 'self' 'unsafe-inline';";
+    const ok = verifiedManifestState.verifyCSP(csp, "/admin");
+    expect(ok).toBe(true);
+  });
+
+  it("falls back to default CSP when no extra_csp prefix matches", () => {
+    const ok = verifiedManifestState.verifyCSP(defaultCSP, "/other");
+    expect(ok).toBe(true);
+  });
+
+  it("returns false when CSP does not match expected policy", () => {
+    const badCsp = "default-src 'self'; script-src 'self';";
+    const ok = verifiedManifestState.verifyCSP(badCsp, "/");
+    expect(ok).toBe(false);
   });
 });

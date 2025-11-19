@@ -28,12 +28,12 @@
     "vite": "^6.3.5",
     "vite-plugin-singlefile": "^2.3.0",
     "vite-plugin-web-extension": "^4.4.4",
-    "vitest": "^3.1.2"
+    "vitest": "^3.1.2",
+    "globals": "^16.3.0",
+    "@vitest/browser": "^3.1.2",
+    "playwright": "^1.54.1"
   },
   "dependencies": {
-    "@vitest/browser": "^3.1.2",
-    "globals": "^16.3.0",
-    "playwright": "^1.54.1",
-    "sigsum": "^0.2.1"
+    "sigsum": "^0.3.5"
   }
 }

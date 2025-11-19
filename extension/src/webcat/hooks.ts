@@ -333,8 +333,8 @@
     }
   }
 
-  function SHA256(data: Uint8Array): Uint8Array {
-    const h = new Hash().update(data);
+  function SHA256(data: ArrayBuffer): Uint8Array {
+    const h = new Hash().update(new Uint8Array(data));
     const digest = h.digest();
     h.clean();
     return digest;
@@ -342,8 +342,10 @@
   /* END HASH FUNCTION */
 
   // Helper: Convert ArrayBuffer digest to a hex string.
-  function arrayBufferToHex(buffer: ArrayBuffer): string {
-    const byteArray = new Uint8Array(buffer);
+  function arrayBufferToHex(buffer: ArrayBuffer | Uint8Array): string {
+    const byteArray =
+      buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+
     const hexCodes: string[] = [];
     for (const byte of byteArray) {
       const hexCode = byte.toString(16).padStart(2, "0");
@@ -367,7 +369,7 @@
 
   // Synchronous bytecode verifier: uses the synchronous SHA256(buffer).
   function verifyBytecodeSync(buffer: ArrayBuffer): void {
-    const hashHex: string = arrayBufferToHex(SHA256(new Uint8Array(buffer)));
+    const hashHex: string = arrayBufferToHex(SHA256(buffer));
     if (!ALLOWED_HASHES.includes(hashHex)) {
       throw new Error(`Unauthorized WebAssembly bytecode: ${hashHex}`);
     }
@@ -375,9 +377,7 @@
   }
 
   // Helper: Extract an ArrayBuffer from a bufferSource.
-  function extractBuffer(
-    bufferSource: ArrayBuffer | ArrayBufferView,
-  ): ArrayBuffer {
+  function extractBuffer(bufferSource: BufferSource): ArrayBuffer {
     if (bufferSource instanceof ArrayBuffer) {
       return bufferSource;
     }
@@ -434,7 +434,7 @@
   //
   const originalCompile = WebAssembly.compile;
   WebAssembly.compile = async function (
-    bufferSource: ArrayBuffer | ArrayBufferView,
+    bufferSource: BufferSource,
   ): Promise<WebAssembly.Module> {
     try {
       const buffer: ArrayBuffer = extractBuffer(bufferSource);
@@ -449,9 +449,7 @@
   // Hook WebAssembly.validate (synchronous)
   //
   const originalValidate = WebAssembly.validate;
-  WebAssembly.validate = function (
-    bufferSource: ArrayBuffer | ArrayBufferView,
-  ): boolean {
+  WebAssembly.validate = function (bufferSource: BufferSource): boolean {
     const buffer: ArrayBuffer = extractBuffer(bufferSource);
     verifyBytecodeSync(buffer);
     return originalValidate.call(this, bufferSource);
@@ -511,7 +509,7 @@
 
   function HookedModule(
     this: object,
-    bufferSource: ArrayBuffer | ArrayBufferView,
+    bufferSource: BufferSource,
   ): WebAssembly.Module {
     if (!(this instanceof HookedModule)) {
       throw new TypeError("Constructor WebAssembly.Module requires 'new'");

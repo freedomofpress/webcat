@@ -1,18 +1,11 @@
-import { version } from "./../config";
 import { origins, popups, tabs } from "./../globals";
-import {
-  getFQDNPolicy,
-  list_count,
-  list_last_checked,
-  list_version,
-} from "./db";
+import { getFQDNEnrollment } from "./db";
 import { metadataRequestSource } from "./interfaces/base";
 import {
   OriginStateHolder,
   OriginStateInitial,
 } from "./interfaces/originstate";
 import { PopupState } from "./interfaces/popupstate";
-import { sigstore } from "./listeners";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
 
@@ -24,21 +17,14 @@ export async function validateOrigin(
   tabId: number,
   type: metadataRequestSource,
 ) {
-  const policy_hash = await getFQDNPolicy(fqdn);
-  if (policy_hash.length === 0) {
+  const enrollment_hash = await getFQDNEnrollment(fqdn);
+  if (enrollment_hash.length === 0) {
     console.debug(`${url} is not enrolled, skipping...`);
     return;
   }
 
   if (type === metadataRequestSource.main_frame) {
-    const newPopupState = new PopupState(
-      fqdn,
-      tabId,
-      version,
-      list_count,
-      list_last_checked,
-      list_version.slice(0, 20),
-    );
+    const newPopupState = new PopupState(fqdn, tabId);
     popups.set(tabId, newPopupState);
     setIcon(tabId);
   }
@@ -81,16 +67,7 @@ export async function validateOrigin(
     const popupState = popups.get(tabId);
 
     if (popupState) {
-      popupState.valid_headers =
-        // We want it undefined, because we have not verified it yet
-        popupState.valid_manifest =
-          originStateHolder.current.status === "verified_manifest"
-            ? true
-            : undefined;
-      popupState.threshold = originStateHolder.current.policy?.threshold;
-      popupState.valid_signers = originStateHolder.current.valid_signers
-        ? originStateHolder.current.valid_signers
-        : [];
+      // TODO send origin information to popup (send the whole object or specific fields?)
     }
     return;
   }
@@ -105,11 +82,10 @@ export async function validateOrigin(
 
   // Policy hash is checked at the top and then later again
   const newOriginState = new OriginStateInitial(
-    sigstore,
     urlobj.protocol,
     urlobj.port,
     fqdn,
-    policy_hash,
+    enrollment_hash,
   );
   origins.set(fqdn, new OriginStateHolder(newOriginState));
 

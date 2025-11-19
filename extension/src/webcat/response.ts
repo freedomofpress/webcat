@@ -1,13 +1,17 @@
-import { hexToUint8Array, stringToUint8Array } from "../sigstore/encoding";
 import { origins } from "./../globals";
+import {
+  base64UrlToUint8Array,
+  stringToUint8Array,
+  Uint8ArrayToString,
+} from "./encoding";
 import { getHooks } from "./genhooks";
+import { Enrollment } from "./interfaces/bundle";
 import {
   OriginStateFailed,
   OriginStateHolder,
   OriginStateInitial,
-  OriginStatePopulatedManifest,
+  OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
-  OriginStateVerifiedPolicy,
 } from "./interfaces/originstate";
 import { PopupState } from "./interfaces/popupstate";
 import { logger } from "./logger";
@@ -19,55 +23,7 @@ import {
   getFQDN,
   SHA256,
 } from "./utils";
-
-export function extractAndValidateHeaders(
-  details: browser.webRequest._OnHeadersReceivedDetails,
-): Map<string, string> {
-  // Ensure that response headers exist.
-  if (!details.responseHeaders) {
-    throw new Error("Missing response headers.");
-  }
-
-  // Define the critical headers we care about.
-  const criticalHeaders = new Set([
-    "content-security-policy",
-    "x-sigstore-signers",
-    "x-sigstore-threshold",
-  ]);
-
-  // Track seen critical headers to detect duplicates.
-  const seenCriticalHeaders = new Set<string>();
-  const normalizedHeaders = new Map<string, string>();
-  const headers: string[] = [];
-
-  // Loop over each header, normalize the name, and store its value.
-  for (const header of details.responseHeaders) {
-    if (header.name && header.value) {
-      const lowerName = header.name.toLowerCase();
-
-      // Check for duplicates among critical headers.
-      if (criticalHeaders.has(lowerName)) {
-        if (seenCriticalHeaders.has(lowerName)) {
-          throw new Error(`Duplicate critical header detected: ${lowerName}`);
-        }
-        seenCriticalHeaders.add(lowerName);
-      }
-
-      normalizedHeaders.set(lowerName, header.value);
-      headers.push(lowerName);
-    }
-  }
-
-  // Ensure all critical headers are present.
-  for (const criticalHeader of criticalHeaders) {
-    if (!normalizedHeaders.has(criticalHeader)) {
-      throw new Error(`Missing critical header: ${criticalHeader}`);
-    }
-  }
-
-  // Retrieve the Content-Security-Policy (CSP) header (safe to use non-null assertion here based on the check above).
-  return normalizedHeaders;
-}
+import { extractAndValidateHeaders } from "./validators";
 
 export async function validateResponseHeaders(
   originStateHolder: OriginStateHolder,
@@ -76,7 +32,6 @@ export async function validateResponseHeaders(
 ) {
   const fqdn = originStateHolder.current.fqdn;
   // Some headers, such as CSP, needs to always be validated
-  // Some others, like the policy, just when we load the manifest for the first time
 
   logger.addLog(
     "info",
@@ -103,12 +58,31 @@ export async function validateResponseHeaders(
 
   // Step 2: Populate the required headers in the origin and check the policy
   if (originStateHolder.current.status === "request_sent") {
-    originStateHolder.current = await (
-      originStateHolder.current as OriginStateInitial
-    ).verifyPolicy(normalizedHeaders);
+    // enrollment info can be bundled with the manifest or passed in header
+    // when passed in headers we gain async time because enrollment validation
+    // becomes nonblocking, while in the other case we have for the background fetch to wait
+    const enrollment_header = normalizedHeaders.get("x-webcat-enrollment");
+    let enrollment: Enrollment;
+    if (enrollment_header) {
+      try {
+        enrollment = JSON.parse(
+          Uint8ArrayToString(base64UrlToUint8Array(enrollment_header)),
+        ) as Enrollment;
+      } catch {
+        throw new Error("Enrollment info in x-webcat-enrollment is malformed");
+      }
+      originStateHolder.current = await (
+        originStateHolder.current as OriginStateInitial
+      ).verifyEnrollment(enrollment);
+    } else {
+      originStateHolder.current = await (
+        originStateHolder.current as OriginStateInitial
+      ).verifyEnrollment();
+    }
+
     if (originStateHolder.current.status === "failed") {
       if (popupState) {
-        popupState.valid_headers = false;
+        // TODO
       }
       throw new Error(
         `Error validating headers: ${(originStateHolder.current as OriginStateFailed).errorMessage}`,
@@ -116,8 +90,7 @@ export async function validateResponseHeaders(
     }
 
     if (popupState) {
-      popupState.threshold = originStateHolder.current.policy?.threshold;
-      popupState.valid_headers = true;
+      // TODO update popupstate
     }
 
     logger.addLog(
@@ -127,19 +100,9 @@ export async function validateResponseHeaders(
       getFQDN(details.url),
     );
 
-    // Step 3: Await the manifest request we fired on origin creation
+    // Step 3: Populate and validate the manifest
     originStateHolder.current = await (
-      originStateHolder.current as OriginStateVerifiedPolicy
-    ).populateManifest();
-    if (originStateHolder.current.status === "failed") {
-      throw new Error(
-        `Error populating manifest: ${(originStateHolder.current as OriginStateFailed).errorMessage}`,
-      );
-    }
-
-    // Step 4: Validate the manifest
-    originStateHolder.current = await (
-      originStateHolder.current as OriginStatePopulatedManifest
+      originStateHolder.current as OriginStateVerifiedEnrollment
     ).verifyManifest();
     if (originStateHolder.current.status === "failed") {
       if (popupState) {
@@ -150,7 +113,7 @@ export async function validateResponseHeaders(
       );
     }
 
-    // Step 5: Ensure we are at the expected final state now
+    // Step 4: Ensure we are at the expected final state now
     if (originStateHolder.current.status !== "verified_manifest") {
       throw new Error(
         `Error with the origin state: expected origin to be in state verified_manifest, got ${originStateHolder.current.status}`,
@@ -158,10 +121,7 @@ export async function validateResponseHeaders(
     }
 
     if (popupState) {
-      popupState.valid_manifest = true;
-      popupState.valid_signers = originStateHolder.current.valid_signers
-        ? originStateHolder.current.valid_signers
-        : [];
+      // TODO
     }
 
     logger.addLog(
@@ -180,7 +140,7 @@ export async function validateResponseHeaders(
   ) {
     // Though this should never happen?
     if (popupState) {
-      popupState.valid_manifest = true;
+      // TODO
     }
     throw new Error(
       "Validating CSP, but no valid manifest for the origin has been found.",
@@ -190,10 +150,10 @@ export async function validateResponseHeaders(
 
   const pathname = new URL(details.url).pathname;
   if (
-    (originStateHolder.current as OriginStateVerifiedManifest).verifyCSP(
+    !(originStateHolder.current as OriginStateVerifiedManifest).verifyCSP(
       csp,
       pathname,
-    ) !== true
+    )
   ) {
     //console.log("CSP:", csp);
     //console.log("manifest:", originStateHolder.current.manifest.default_csp);
@@ -208,7 +168,7 @@ export async function validateResponseHeaders(
   );
 
   if (popupState) {
-    popupState.valid_csp = true;
+    // TODO
   }
 
   // TODO (performance): significant amount of time is spent calling this function
@@ -258,10 +218,24 @@ export async function validateResponseContent(
     const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
       .manifest;
 
-    const manifest_hash =
-      manifest.files[pathname] ||
-      manifest.files[pathname.substring(0, pathname.lastIndexOf("/")) + "/"] ||
-      manifest.files["/"];
+    // Following order of priority:
+    // - If there's an exact match, that should be the hash
+    // - If the paths ends in /, and there was no exact match, then use default_index
+    // - If everything else fails, it's an error or a catchall case, so attempt default_fallback
+    let manifest_hash: string;
+
+    // TODO (default index should not have starting /), this is a quick patch for developing
+    const normalizedDefaultIndex = manifest.default_index.startsWith("/")
+      ? manifest.default_index.slice(1)
+      : manifest.default_index;
+
+    if (manifest.files[pathname]) {
+      manifest_hash = manifest.files[pathname];
+    } else if (pathname.endsWith("/")) {
+      manifest_hash = manifest.files[pathname + normalizedDefaultIndex];
+    } else {
+      manifest_hash = manifest.files[manifest.default_fallback];
+    }
 
     if (!manifest_hash) {
       deny(filter);
@@ -274,7 +248,7 @@ export async function validateResponseContent(
     // Sometimes answers gets cached and we get an empty result, we shouldn't mark those as a hash mismatch
     if (
       !arraysEqual(
-        hexToUint8Array(manifest_hash),
+        base64UrlToUint8Array(manifest_hash),
         new Uint8Array(content_hash),
       ) &&
       blob.byteLength !== 0

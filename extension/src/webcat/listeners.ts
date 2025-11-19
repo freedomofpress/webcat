@@ -1,22 +1,7 @@
-import { verifyHash } from "sigsum";
-import { RawPublicKey } from "sigsum/dist/types";
-
-import {
-  tuf_sigstore_namespace,
-  tuf_sigstore_root,
-  tuf_sigstore_url,
-  update_server_key,
-  update_url,
-} from "../config";
 import { origins, popups, tabs } from "../globals";
-import { hexToUint8Array, Uint8ArrayToHex } from "../sigstore/encoding";
-import { TrustedRoot } from "../sigstore/interfaces";
-import { SigstoreVerifier } from "../sigstore/sigstore";
-import { TUFClient } from "../sigstore/tuf";
 import {
   ensureDBOpen,
-  getFQDNPolicy,
-  getListMetadata,
+  getFQDNEnrollment,
   list_db,
   updateDatabase,
   updateLastChecked,
@@ -25,31 +10,9 @@ import { metadataRequestSource } from "./interfaces/base";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { validateResponseContent, validateResponseHeaders } from "./response";
-import { errorpage, getFQDN, jsonToSigsumAscii, SHA256 } from "./utils";
-
-export let sigstore: SigstoreVerifier;
+import { errorpage, getFQDN } from "./utils";
 
 declare const __TESTING__: boolean;
-
-async function getSigstore(update: boolean = false): Promise<SigstoreVerifier> {
-  const tuf_client = await new TUFClient(
-    tuf_sigstore_url,
-    tuf_sigstore_root,
-    tuf_sigstore_namespace,
-  );
-  if (update) {
-    try {
-      await tuf_client.updateTUF();
-    } catch (e) {
-      console.log(e);
-    }
-  }
-  const newSigstore = new SigstoreVerifier();
-  await newSigstore.loadSigstoreRoot(
-    (await tuf_client.getTarget("trusted_root.json")) as TrustedRoot,
-  );
-  return newSigstore;
-}
 
 async function updateList(db: IDBDatabase) {
   if (__TESTING__) {
@@ -58,74 +21,7 @@ async function updateList(db: IDBDatabase) {
     // updateDatabase has also a __TESTING__ condition; later we might want to move everything into the same place
     await updateDatabase(db, "", 1337, new Uint8Array());
   } else {
-    const req = fetch(`${update_url}/update.json`, { cache: "no-store" });
-
-    console.log("[webcat] Running production list updater");
-
-    const metadata = await getListMetadata(db);
-
-    const response = await req;
-    if (!response.ok) {
-      throw new Error("Failed to fetch update.json from server");
-    }
-
-    const sigsumPolicyRequest = await fetch(
-      browser.runtime.getURL("assets/sigsum_policy"),
-    );
-    const policyText = await sigsumPolicyRequest.text();
-    const proofJson = await response.json();
-    const proofText = jsonToSigsumAscii(proofJson);
-    const hash = proofJson.message_hash;
-
-    console.log(hash);
-    if (
-      (await verifyHash(
-        hexToUint8Array(hash),
-        hexToUint8Array(update_server_key) as RawPublicKey,
-        policyText,
-        proofText,
-      )) !== true
-    ) {
-      throw new Error(`Failed to verify update`);
-    }
-    updateLastChecked(db);
-
-    // Here check if new hash != old hash
-    // Check if new tree_size > old tree_size
-
-    if (
-      !metadata ||
-      (hash != metadata.hash && proofJson.tree_head.size >= metadata.treeHead)
-    ) {
-      const responseList = await fetch(`${update_url}/${hash}.bin`, {
-        cache: "no-store",
-      });
-      if (!responseList.ok) {
-        throw new Error(`Failed to fetch ${update_url}/${hash}.bin`);
-      }
-
-      const binaryList = new Uint8Array(await responseList.arrayBuffer());
-      const binaryListHash = Uint8ArrayToHex(
-        new Uint8Array(await SHA256(binaryList)),
-      );
-
-      if (binaryListHash !== hash) {
-        throw new Error(
-          "Hash mismatch between signed metadata and list binary file",
-        );
-      }
-
-      await updateDatabase(
-        db,
-        binaryListHash,
-        proofJson.tree_head.size,
-        binaryList,
-      );
-
-      console.log("[webcat] List successfully updated");
-    } else {
-      console.log("[webcat] No list update is available");
-    }
+    // TODO: Update database from webcat-infra-chain lightblock
   }
 }
 
@@ -174,9 +70,6 @@ export async function startupListener() {
   } catch (e) {
     console.error(`[webcat] List updater failed: ${e}`);
   }
-
-  // Update TUF only at startup
-  sigstore = await getSigstore(true);
 }
 
 export function tabCloseListener(
@@ -192,17 +85,13 @@ export async function headersListener(
   // Skip allowed types, etensions request, and not enrolled tabs
   const fqdn = getFQDN(details.url);
 
-  if (!sigstore) {
-    sigstore = await getSigstore(false);
-  }
-
   if (
     // Skip non-enrolled tabs
     (!tabs.has(details.tabId) &&
       details.tabId > 0 &&
-      (await getFQDNPolicy(fqdn)).length === 0) ||
+      (await getFQDNEnrollment(fqdn)).length === 0) ||
     // Skip non-enrolled workers
-    (details.tabId < 0 && (await getFQDNPolicy(fqdn)).length === 0)
+    (details.tabId < 0 && (await getFQDNEnrollment(fqdn)).length === 0)
   ) {
     // This is too much noise to really log
     //console.debug(`headersListener: skipping ${details.url}`);
@@ -306,7 +195,7 @@ export async function requestListener(
   /* DEVELOPMENT GUARD */
   /*it's here for development: meaning if we reach this stage
     and the fqdn is enrolled, but a entry in the origin map has nor been created, there is a critical security bug */
-  if ((await getFQDNPolicy(fqdn)).length !== 0 && !origins.has(fqdn)) {
+  if ((await getFQDNEnrollment(fqdn)).length !== 0 && !origins.has(fqdn)) {
     console.error(
       "FATAL: loading from an enrolled origin but the state does not exists.",
     );
