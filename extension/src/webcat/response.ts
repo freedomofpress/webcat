@@ -81,7 +81,7 @@ export async function validateResponseHeaders(
         // TODO
       }
       throw new Error(
-        `Error validating headers: ${(originStateHolder.current as OriginStateFailed).errorMessage}`,
+        `${(originStateHolder.current as OriginStateFailed).error.code}`,
       );
     }
 
@@ -105,7 +105,7 @@ export async function validateResponseHeaders(
         popupState.valid_manifest = false;
       }
       throw new Error(
-        `Error validating manifest: ${(originStateHolder.current as OriginStateFailed).errorMessage}`,
+        `${(originStateHolder.current as OriginStateFailed).error.code}`,
       );
     }
 
