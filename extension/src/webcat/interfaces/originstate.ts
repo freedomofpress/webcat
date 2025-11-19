@@ -4,9 +4,13 @@ import { verifyMessageWithCompiledPolicy } from "sigsum/dist/verify";
 import { bundle_name } from "../../config";
 import { canonicalize } from "../canonicalize";
 import { base64UrlToUint8Array, stringToUint8Array } from "../encoding";
+import { headersListener, requestListener } from "../listeners";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
-import { validateCSP } from "../validators";
+import {
+  validateCSP,
+  witnessTimestampsFromCosignedTreeHead,
+} from "../validators";
 import { Bundle, Enrollment, Manifest, Signatures } from "./bundle";
 
 export class OriginStateHolder {
@@ -17,7 +21,10 @@ export class OriginStateHolder {
       | OriginStateVerifiedEnrollment
       | OriginStateVerifiedManifest
       | OriginStateFailed,
-  ) {}
+  ) {
+    const url = `${current.scheme}//${current.fqdn}:${current.port}/${bundle_name}`;
+    current.bundlePromise = fetch(url, { cache: "no-store" });
+  }
 }
 
 // The OriginState class caches origins and assumes safe defaults. We assume we are enrolled and nothing is verified.
@@ -25,20 +32,29 @@ export abstract class OriginStateBase {
   abstract status:
     | "request_sent"
     | "verified_enrollment"
-    | "populated_manifest"
     | "verified_manifest"
     | "failed";
   public readonly scheme: string;
   public readonly port: string;
   public readonly fqdn: string;
   public readonly enrollment_hash: Uint8Array;
-  public readonly bundlePromise: Promise<Response>;
+  public bundlePromise?: Promise<Response>;
   public references: number;
   public bundle?: Bundle;
   public readonly enrollment?: Enrollment;
   public readonly manifest?: Manifest;
   public readonly valid_signers?: Set<string>;
   public readonly valid_sources?: Set<string>;
+
+  // Per origin function wrappers: the extension API does not support registering
+  // the same listener multiple times with different rules. We thus want a wrapper
+  // listener per every origin for their own intercepting function
+  public onBeforeRequest?: (
+    details: browser.webRequest._OnBeforeRequestDetails,
+  ) => Promise<browser.webRequest.BlockingResponse>;
+  public onHeadersReceived?: (
+    details: browser.webRequest._OnHeadersReceivedDetails,
+  ) => Promise<browser.webRequest.BlockingResponse>;
 
   // Due to list logic, we support only one app per domain, and that should be a privileged one
   // But that is enforced in request.ts
@@ -52,9 +68,10 @@ export abstract class OriginStateBase {
     this.port = port;
     this.fqdn = fqdn;
     this.enrollment_hash = enrollment_hash;
-    const url = `${scheme}//${fqdn}:${port}/${bundle_name}`;
-    this.bundlePromise = fetch(url, { cache: "no-store" });
     this.references = 1;
+
+    this.onBeforeRequest = (details) => requestListener(details);
+    this.onHeadersReceived = (details) => headersListener(details);
   }
 
   public async awaitBundle() {
@@ -204,7 +221,9 @@ export class OriginStateInitial extends OriginStateBase {
     // parse the compiled sigsum policy once here instead of doing that
     // at every verification. Currently the sigsum-ts lib does not support that
     // and maybe more abstraction there would be useful
-    return new OriginStateVerifiedEnrollment(this, enrollment);
+    const next = new OriginStateVerifiedEnrollment(this, enrollment);
+    next.bundlePromise = this.bundlePromise;
+    return next;
   }
 }
 
@@ -215,6 +234,11 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
 
   constructor(prev: OriginStateInitial, enrollment: Enrollment) {
     super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
+    this.bundle = prev.bundle;
+    this.bundlePromise = prev.bundlePromise;
+    this.onBeforeRequest = prev.onBeforeRequest;
+    this.onHeadersReceived = prev.onHeadersReceived;
+    this.references = prev.references;
     this.enrollment = enrollment;
   }
 
@@ -271,13 +295,36 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       }
     }
 
-    // TODO SECURITY: verify timestamp in the manifest and relate it to max_age
-
     // Not enough signatures to verify the manifest
     if (validCount < this.enrollment.threshold) {
       return new OriginStateFailed(
         this,
         `found only ${validCount} valid signatures of required threshold of ${this.enrollment.threshold}.`,
+      );
+    }
+
+    if (!manifest.timestamp) {
+      return new OriginStateFailed(
+        this,
+        "no timestamp in manifest or it is too short",
+      );
+    }
+
+    const timestamps = await witnessTimestampsFromCosignedTreeHead(
+      base64UrlToUint8Array(this.enrollment.policy),
+      manifest.timestamp,
+    );
+
+    const timestamp = timestamps.sort((a, b) => a - b)[
+      Math.floor(timestamps.length / 2)
+    ];
+
+    const now = Math.floor(Date.now() / 1000);
+
+    if (now - timestamp > this.enrollment.max_age) {
+      return new OriginStateFailed(
+        this,
+        `manifest has expired (max age: ${this.enrollment.max_age}, manifest timestamp: ${timestamp}, now: ${now}).`,
       );
     }
 
@@ -295,7 +342,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     if (
       !manifest.default_index ||
       !manifest.default_fallback ||
-      !manifest.files[manifest.default_index] ||
+      !manifest.files["/" + manifest.default_index] ||
       !manifest.files[manifest.default_fallback]
     ) {
       return new OriginStateFailed(
@@ -333,8 +380,9 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
         return new OriginStateFailed(this, `extra_csp path ${path} is empty.`);
       }
     }
-
-    return new OriginStateVerifiedManifest(this, manifest, valid_sources);
+    const next = new OriginStateVerifiedManifest(this, manifest, valid_sources);
+    next.bundlePromise = this.bundlePromise;
+    return next;
   }
 }
 
@@ -350,6 +398,11 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     valid_sources: Set<string>,
   ) {
     super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
+    this.bundle = prev.bundle;
+    this.bundlePromise = prev.bundlePromise;
+    this.onBeforeRequest = prev.onBeforeRequest;
+    this.onHeadersReceived = prev.onHeadersReceived;
+    this.references = prev.references;
     this.enrollment = prev.enrollment;
     this.manifest = manifest;
     this.valid_sources = valid_sources;

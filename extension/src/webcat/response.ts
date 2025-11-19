@@ -2,6 +2,7 @@ import { origins } from "./../globals";
 import {
   base64UrlToUint8Array,
   stringToUint8Array,
+  Uint8ArrayToBase64Url,
   Uint8ArrayToString,
 } from "./encoding";
 import { getHooks } from "./genhooks";
@@ -15,14 +16,9 @@ import {
 } from "./interfaces/originstate";
 import { PopupState } from "./interfaces/popupstate";
 import { logger } from "./logger";
+import { PASS_THROUGH_TYPES } from "./resources";
 import { setOKIcon } from "./ui";
-import {
-  arrayBufferToHex,
-  arraysEqual,
-  errorpage,
-  getFQDN,
-  SHA256,
-} from "./utils";
+import { arraysEqual, errorpage, getFQDN, SHA256 } from "./utils";
 import { extractAndValidateHeaders } from "./validators";
 
 export async function validateResponseHeaders(
@@ -177,6 +173,20 @@ export async function validateResponseHeaders(
   setOKIcon(details.tabId);
 }
 
+function getVerifiedManifestState(fqdn: string): OriginStateHolder {
+  const origin = origins.get(fqdn);
+  if (
+    !origin ||
+    origin.current.status !== "verified_manifest" ||
+    !(origin.current as OriginStateVerifiedManifest).manifest
+  ) {
+    throw new Error("origin is not populated when it was expected");
+  }
+  return origin as OriginStateHolder & {
+    current: OriginStateVerifiedManifest;
+  };
+}
+
 export async function validateResponseContent(
   popupState: PopupState | undefined,
   details: browser.webRequest._OnBeforeRequestDetails,
@@ -186,7 +196,32 @@ export async function validateResponseContent(
     filter.write(new Uint8Array([68, 69, 78, 73, 69, 68]));
   }
 
+  const pathname = new URL(details.url).pathname;
   const fqdn = getFQDN(details.url);
+
+  // The goal of doing this both here and after is the following: if a resource
+  // is a media type and not in the manifest we do not want even to start filtering
+  // otherwise large file might be loaded in memory by the extension without
+  // then any real benefit
+  if (details.type != "main_frame" && details.type != "sub_frame") {
+    const originStateHolder = getVerifiedManifestState(fqdn);
+    /* Development guard */
+    // This should never happen! if we are here it means that a main or sub_frame is
+    // loading a subresource, and thus origin must be populated!
+    const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
+      .manifest;
+    if (
+      !manifest.files[pathname] &&
+      !(
+        pathname.endsWith("/") &&
+        manifest.files[pathname + manifest.default_index]
+      ) &&
+      PASS_THROUGH_TYPES.has(details.type)
+    ) {
+      return {};
+    }
+  }
+
   const filter = browser.webRequest.filterResponseData(details.requestId);
 
   const source: ArrayBuffer[] = [];
@@ -199,21 +234,8 @@ export async function validateResponseContent(
   };
 
   filter.onstop = async () => {
-    const originStateHolder = origins.get(getFQDN(details.url));
-
-    if (
-      !originStateHolder ||
-      originStateHolder.current.status !== "verified_manifest" ||
-      !(originStateHolder.current as OriginStateVerifiedManifest).manifest
-    ) {
-      deny(filter);
-      filter.close();
-      errorpage(details.tabId);
-      throw new Error("Tab context is not valid");
-    }
-
+    const originStateHolder = getVerifiedManifestState(fqdn);
     const blob = await new Blob(source).arrayBuffer();
-    const pathname = new URL(details.url).pathname;
 
     const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
       .manifest;
@@ -225,14 +247,11 @@ export async function validateResponseContent(
     let manifest_hash: string;
 
     // TODO (default index should not have starting /), this is a quick patch for developing
-    const normalizedDefaultIndex = manifest.default_index.startsWith("/")
-      ? manifest.default_index.slice(1)
-      : manifest.default_index;
 
     if (manifest.files[pathname]) {
       manifest_hash = manifest.files[pathname];
     } else if (pathname.endsWith("/")) {
-      manifest_hash = manifest.files[pathname + normalizedDefaultIndex];
+      manifest_hash = manifest.files[pathname + manifest.default_index];
     } else {
       manifest_hash = manifest.files[manifest.default_fallback];
     }
@@ -261,8 +280,9 @@ export async function validateResponseContent(
       deny(filter);
       filter.close();
       errorpage(details.tabId);
+      console.log(blob);
       throw new Error(
-        `hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${arrayBufferToHex(content_hash)}`,
+        `hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${Uint8ArrayToBase64Url(new Uint8Array(content_hash))}`,
       );
     }
     // If everything is OK then we can just write the raw blob back

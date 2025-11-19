@@ -342,16 +342,14 @@
   /* END HASH FUNCTION */
 
   // Helper: Convert ArrayBuffer digest to a hex string.
-  function arrayBufferToHex(buffer: ArrayBuffer | Uint8Array): string {
+  function arrayBuffertoBase64Url(bytes: ArrayBuffer | Uint8Array): string {
     const byteArray =
-      buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+      bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
 
-    const hexCodes: string[] = [];
-    for (const byte of byteArray) {
-      const hexCode = byte.toString(16).padStart(2, "0");
-      hexCodes.push(hexCode);
-    }
-    return hexCodes.join("");
+    return btoa(String.fromCharCode(...byteArray))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
   }
 
   // Async bytecode verifier: uses crypto.subtle.digest.
@@ -360,7 +358,7 @@
       "SHA-256",
       buffer,
     );
-    const hashHex: string = arrayBufferToHex(digestBuffer);
+    const hashHex: string = arrayBuffertoBase64Url(digestBuffer);
     if (!ALLOWED_HASHES.includes(hashHex)) {
       throw new Error(`Unauthorized WebAssembly bytecode: ${hashHex}`);
     }
@@ -369,7 +367,7 @@
 
   // Synchronous bytecode verifier: uses the synchronous SHA256(buffer).
   function verifyBytecodeSync(buffer: ArrayBuffer): void {
-    const hashHex: string = arrayBufferToHex(SHA256(buffer));
+    const hashHex: string = arrayBuffertoBase64Url(SHA256(buffer));
     if (!ALLOWED_HASHES.includes(hashHex)) {
       throw new Error(`Unauthorized WebAssembly bytecode: ${hashHex}`);
     }

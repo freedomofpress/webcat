@@ -1,3 +1,15 @@
+import {
+  verifyCosignedTreeHead,
+  verifySignedTreeHead,
+} from "sigsum/dist//crypto";
+import {
+  evalQuorumBytecode,
+  importAndHashAll,
+  parseCompiledPolicy,
+} from "sigsum/dist/compiledPolicy";
+import { parseCosignedTreeHead } from "sigsum/dist/proof";
+import { Base64KeyHash, CosignedTreeHead, KeyHash } from "sigsum/dist/types";
+
 import { getFQDNEnrollment } from "./db";
 import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDNSafe } from "./utils";
@@ -16,7 +28,7 @@ export function extractAndValidateHeaders(
   const forbiddenHeaders = new Set([
     // See https://github.com/freedomofpress/webcat/issues/23
     // Furthermore, as reported by TBD there's the risk of TBD
-    "location",
+    //"location",
     // See https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Refresh
     // It's just another way to achieve redirects
     "refresh",
@@ -33,9 +45,18 @@ export function extractAndValidateHeaders(
   for (const header of details.responseHeaders) {
     if (header.name && header.value) {
       const lowerName = header.name.toLowerCase();
+      const value = header.value;
 
       // Check and block in case of forbidden headers
-      if (forbiddenHeaders.has(lowerName)) {
+      // Special case: Location header — allow only relative redirects
+      if (lowerName === "location") {
+        if (!isSafeRelativeLocation(value)) {
+          throw new Error(
+            `Forbidden absolute redirect in Location header: ${value}`,
+          );
+        }
+        console.log(`Allowing relative redirect: ${value}`);
+      } else if (forbiddenHeaders.has(lowerName)) {
         throw new Error(`Forbidden response header detected: ${lowerName}`);
       }
 
@@ -239,7 +260,7 @@ export async function validateCSP(
   await validateDirectiveList(
     directives.ScriptSrcElem,
     parsedCSP.get(directives.ScriptSrcElem),
-    true,
+    default_src_is_none || parsedCSP.has(directives.ScriptSrc),
     [
       source_keywords.None,
       source_keywords.Self,
@@ -331,4 +352,76 @@ export async function validateCSP(
       );
     }
   }
+}
+
+export function isSafeRelativeLocation(value: string): boolean {
+  const trimmed = value.trim();
+
+  // Reject protocol-relative URLs: "//example.com"
+  if (trimmed.startsWith("//")) return false;
+
+  // Reject ANY absolute URL with a scheme: "https:", "javascript:", "data:", etc.
+  const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
+  if (SCHEME_RE.test(trimmed)) return false;
+
+  return true;
+}
+
+export async function witnessTimestampsFromCosignedTreeHead(
+  compiledPolicy: Uint8Array,
+  treeHead: string,
+): Promise<number[]> {
+  const compiled = parseCompiledPolicy(compiledPolicy);
+  const logs = await importAndHashAll(compiled.logsRaw);
+  const witnesses = await importAndHashAll(compiled.witnessesRaw);
+  const cosignedTreeHead: CosignedTreeHead = await parseCosignedTreeHead(
+    treeHead.split("\n"),
+  );
+
+  let logKeyHash: KeyHash | null = null;
+  for (const log of logs) {
+    if (
+      await verifySignedTreeHead(
+        cosignedTreeHead.SignedTreeHead,
+        log.pub,
+        log.hash,
+      )
+    ) {
+      logKeyHash = log.hash;
+      break;
+    }
+  }
+
+  if (!logKeyHash) {
+    throw new Error("no log key in policy verified the tree head");
+  }
+
+  const present = new Uint8Array(witnesses.length);
+  const timestamps: number[] = [];
+
+  for (const [i, witness] of witnesses.entries()) {
+    const cosignature = Base64KeyHash.lookup(
+      cosignedTreeHead.Cosignatures,
+      witness.b64,
+    );
+    if (!cosignature) continue;
+
+    if (
+      await verifyCosignedTreeHead(
+        cosignedTreeHead.SignedTreeHead.TreeHead,
+        witness.pub,
+        logKeyHash,
+        cosignature,
+      )
+    ) {
+      present[i] = 1;
+      timestamps.push(cosignature.Timestamp);
+    }
+  }
+
+  if (!evalQuorumBytecode(compiled.quorum, witnesses.length, present)) {
+    throw new Error("cosignature quorum not satisfied");
+  }
+
+  return timestamps;
 }

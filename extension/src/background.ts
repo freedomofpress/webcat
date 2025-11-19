@@ -23,17 +23,20 @@ browser.webRequest.onBeforeRequest.addListener(
   // We intercept http too because if a website is enrolled but not TLS enabled we want to drop
   // https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/ResourceType
   {
+    // New strategy: we detect here if a website is enrolled and then add a per-origin
+    // listener that intercwpts everything. This way we can always try to match a resource
+    // to the manifest first, including images, etc
     urls: ["http://*/*", "https://*/*"],
     types: [
       "main_frame",
-      "object",
-      "script",
-      "stylesheet",
+      //"object",
+      //"script",
+      //"stylesheet",
       "sub_frame",
-      "xslt",
-      "xml_dtd",
-      "web_manifest",
-      "other",
+      //"xslt",
+      //"xml_dtd",
+      //"web_manifest",
+      //"other",
     ],
   },
   // Allowed remaining are beacon, csp_report, font, image, imageset, media, object_subrequest, ping, speculative, websocket, xmlhttprequest
@@ -47,17 +50,18 @@ browser.webRequest.onHeadersReceived.addListener(
   // Here HTTP should no longer be a concern, we should have dropped the request before receiving headers anyway
   // However that would not be the case for .onion domains
   {
+    // Same as above, add more precise listener when something enrolled is detected
     urls: ["http://*/*", "https://*/*"],
     types: [
       "main_frame",
-      "object",
-      "script",
-      "stylesheet",
+      //"object",
+      //"script",
+      //"stylesheet",
       "sub_frame",
-      "xslt",
-      "xml_dtd",
-      "web_manifest",
-      "other",
+      //"xslt",
+      //"xml_dtd",
+      //"web_manifest",
+      //"other",
     ],
   },
   // Do we want this to be "blocking"? If we detect an anomaly we should stop

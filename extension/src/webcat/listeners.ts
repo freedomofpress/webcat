@@ -10,7 +10,7 @@ import { metadataRequestSource } from "./interfaces/base";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { validateResponseContent, validateResponseHeaders } from "./response";
-import { errorpage, getFQDN } from "./utils";
+import { errorpage, getFQDN, isExtensionRequest } from "./utils";
 
 declare const __TESTING__: boolean;
 
@@ -44,6 +44,18 @@ function cleanup(tabId: number) {
     /* END */
     originState.current.references--;
     /* Here we could check if references are 0, and delete the origin object too */
+    // TODO: if we do, we should also cleanup the listeners
+    /*
+    if (originState.current.references === 0) {
+      browser.webRequest.onBeforeRequest.removeListener(
+          originState.current.onBeforeRequest!
+      );
+      browser.webRequest.onHeadersReceived.removeListener(
+          originState.current.onHeadersReceived!
+      );
+      origins.delete(fqdn);
+    }
+    */
     tabs.delete(tabId);
     popups.delete(tabId);
   }
@@ -91,7 +103,8 @@ export async function headersListener(
       details.tabId > 0 &&
       (await getFQDNEnrollment(fqdn)).length === 0) ||
     // Skip non-enrolled workers
-    (details.tabId < 0 && (await getFQDNEnrollment(fqdn)).length === 0)
+    (details.tabId < 0 && (await getFQDNEnrollment(fqdn)).length === 0) ||
+    isExtensionRequest(details)
   ) {
     // This is too much noise to really log
     //console.debug(`headersListener: skipping ${details.url}`);
@@ -149,7 +162,10 @@ export async function requestListener(
 ): Promise<browser.webRequest.BlockingResponse> {
   const fqdn = getFQDN(details.url);
 
-  if (details.tabId < 0 && !origins.has(fqdn)) {
+  if (
+    (details.tabId < 0 && !origins.has(fqdn)) ||
+    isExtensionRequest(details)
+  ) {
     // We will always wonder, is this check reasonable?
     // Might be redundant anyway if we skip xmlhttprequest
     // But we probably want to also ensure other extensions work

@@ -24,12 +24,19 @@ vi.mock("sigsum/dist/verify", () => ({
   }),
 }));
 
-vi.mock("../../src/webcat/validators", () => ({
-  validateCSP: vi.fn(async () => {
-    // No-op; we just care that it's called and doesn't throw
-    return;
-  }),
-}));
+vi.mock("../../src/webcat/validators", async () => {
+  const defaultNow = Math.floor(Date.now() / 1000);
+
+  return {
+    validateCSP: vi.fn(async () => {
+      return;
+    }),
+
+    witnessTimestampsFromCosignedTreeHead: vi.fn(async () => {
+      return [defaultNow - 5000, defaultNow - 100000, defaultNow - 200000];
+    }),
+  };
+});
 
 // Helper: compute the *real* enrollment_hash exactly as production does.
 async function computeEnrollmentHash(
@@ -61,7 +68,7 @@ describe("OriginStateInitial.verifyEnrollment", () => {
       policy: TEST_POLICY_B64URL,
       signers: [SIGNER1, SIGNER2, SIGNER3],
       threshold: 2,
-      max_age: 3600,
+      max_age: 360000,
       cas_url: "https://cas.example.com",
     };
 
@@ -202,7 +209,7 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
       policy: TEST_POLICY_B64URL,
       signers: [SIGNER1, SIGNER2, SIGNER3],
       threshold: 2,
-      max_age: 3600,
+      max_age: 360000,
       cas_url: "https://cas.example.com",
     };
 
@@ -227,7 +234,7 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
       version: "1.0.0",
       default_csp: defaultCSP,
       extra_csp: {},
-      default_index: "/index.html",
+      default_index: "index.html",
       default_fallback: "/index.html",
       timestamp: new Date().toISOString(),
       files: {
@@ -330,6 +337,22 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     const failed = res as OriginStateFailed;
     expect(failed.errorMessage).toBe("wasm is not set.");
   });
+
+  it("fails when manifest median timestamp exceeds max_age", async () => {
+    const validators = await import("../../src/webcat/validators");
+
+    // Tell TS this is actually a mock:
+    const mockFn =
+      validators.witnessTimestampsFromCosignedTreeHead as unknown as vi.Mock;
+
+    mockFn.mockResolvedValue([10, 20, 30]);
+
+    const res = await verifiedEnrollment.verifyManifest(manifest, signatures);
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    const failed = res as OriginStateFailed;
+    expect(failed.errorMessage).toMatch("manifest has expired");
+  });
 });
 
 describe("OriginStateVerifiedManifest.verifyCSP", () => {
@@ -347,7 +370,7 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
       policy: TEST_POLICY_B64URL,
       signers: [SIGNER1, SIGNER2],
       threshold: 1,
-      max_age: 3600,
+      max_age: 360000,
       cas_url: "https://cas.example.com",
     };
 
@@ -373,7 +396,7 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
       extra_csp: {
         "/admin": "default-src 'none'; script-src 'self' 'unsafe-inline';",
       },
-      default_index: "/index.html",
+      default_index: "index.html",
       default_fallback: "/index.html",
       timestamp: new Date().toISOString(),
       files: {
