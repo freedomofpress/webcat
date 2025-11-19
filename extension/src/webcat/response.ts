@@ -210,15 +210,11 @@ export async function validateResponseContent(
     // loading a subresource, and thus origin must be populated!
     const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
       .manifest;
-
-    const normalizedDefaultIndex = manifest.default_index.startsWith("/")
-      ? manifest.default_index.slice(1)
-      : manifest.default_index;
     if (
       !manifest.files[pathname] &&
       !(
         pathname.endsWith("/") &&
-        manifest.files[pathname + normalizedDefaultIndex]
+        manifest.files[pathname + manifest.default_index]
       ) &&
       PASS_THROUGH_TYPES.has(details.type)
     ) {
@@ -251,14 +247,11 @@ export async function validateResponseContent(
     let manifest_hash: string;
 
     // TODO (default index should not have starting /), this is a quick patch for developing
-    const normalizedDefaultIndex = manifest.default_index.startsWith("/")
-      ? manifest.default_index.slice(1)
-      : manifest.default_index;
 
     if (manifest.files[pathname]) {
       manifest_hash = manifest.files[pathname];
     } else if (pathname.endsWith("/")) {
-      manifest_hash = manifest.files[pathname + normalizedDefaultIndex];
+      manifest_hash = manifest.files[pathname + manifest.default_index];
     } else {
       manifest_hash = manifest.files[manifest.default_fallback];
     }
