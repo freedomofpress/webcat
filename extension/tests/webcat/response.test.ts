@@ -33,16 +33,10 @@ vi.mock("../../src/webcat/validators", async () => {
     }),
 
     witnessTimestampsFromCosignedTreeHead: vi.fn(async () => {
-            return [
-        defaultNow - 5000,
-        defaultNow - 100000,
-        defaultNow - 200000,
-      ];;
+      return [defaultNow - 5000, defaultNow - 100000, defaultNow - 200000];
     }),
   };
 });
-
-
 
 // Helper: compute the *real* enrollment_hash exactly as production does.
 async function computeEnrollmentHash(
@@ -345,25 +339,20 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
   });
 
   it("fails when manifest median timestamp exceeds max_age", async () => {
-    const now = Math.floor(Date.now() / 1000);
     const validators = await import("../../src/webcat/validators");
 
     // Tell TS this is actually a mock:
-    const mockFn = validators.witnessTimestampsFromCosignedTreeHead as unknown as vi.Mock;
+    const mockFn =
+      validators.witnessTimestampsFromCosignedTreeHead as unknown as vi.Mock;
 
-    mockFn.mockResolvedValue([
-      10,
-      20,
-      30,
-    ]);
-  
+    mockFn.mockResolvedValue([10, 20, 30]);
+
     const res = await verifiedEnrollment.verifyManifest(manifest, signatures);
 
     expect(res).toBeInstanceOf(OriginStateFailed);
     const failed = res as OriginStateFailed;
     expect(failed.errorMessage).toMatch("manifest has expired");
   });
-
 });
 
 describe("OriginStateVerifiedManifest.verifyCSP", () => {
