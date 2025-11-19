@@ -1,6 +1,10 @@
 <!doctype html>
 <html class="in-content-page" lang="en-US">
   <head>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src chrome:; object-src 'none'"
+    />
     <link
       rel="stylesheet"
       href="chrome://global/skin/in-content/info-pages.css"
@@ -10,14 +14,11 @@
   <body>
     <div class="container">
       <div class="title">
-        <h1 class="title-text">WEBCAT Integrity Warning</h1>
+        <h1 class="title-text">WEBCAT Integrity Error</h1>
       </div>
 
       <div class="description">
-        <p>
-          WEBCAT was unable to verify the integrity of this website. There is no
-          safe action you can take to proceed from here.
-        </p>
+        <p>WEBCAT was unable to verify the integrity of this website.</p>
 
         <p>
           If you believe this is a mistake, you may report the issue to the
@@ -26,7 +27,7 @@
           >.
         </p>
 
-        <p>Error code: TBD</p>
+        <p>Error code: <code id="error-code">Loading…</code></p>
       </div>
     </div>
   </body>
