@@ -318,7 +318,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     const timestamp = timestamps.sort((a, b) => a - b)[
       Math.floor(timestamps.length / 2)
     ];
-    console.log(timestamps);
+
     const now = Math.floor(Date.now() / 1000);
 
     if (now - timestamp > this.enrollment.max_age) {
