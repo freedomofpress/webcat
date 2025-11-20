@@ -87,7 +87,7 @@ export async function validateOrigin(
 
   // We want to intercept everything for enrolled wbesites
   browser.webRequest.onBeforeRequest.addListener(
-    origin.current.onBeforeRequest!,
+    origin.current.onBeforeRequest,
     {
       urls: [`http://${fqdn}/*`, `https://${fqdn}/*`],
       types: NON_FRAME_TYPES,
@@ -96,7 +96,7 @@ export async function validateOrigin(
   );
 
   browser.webRequest.onHeadersReceived.addListener(
-    origin.current.onHeadersReceived!,
+    origin.current.onHeadersReceived,
     {
       urls: [`http://${fqdn}/*`, `https://${fqdn}/*`],
       types: NON_FRAME_TYPES,

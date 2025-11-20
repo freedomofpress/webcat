@@ -20,8 +20,13 @@ const ALL_TYPES = [
   "web_manifest",
 ] satisfies browser.webRequest.ResourceType[];
 
+export const FRAME_TYPES: browser.webRequest.ResourceType[] = [
+  "main_frame",
+  "sub_frame",
+];
+
 export const NON_FRAME_TYPES = ALL_TYPES.filter(
-  (t) => t !== "main_frame" && t !== "sub_frame",
+  (t) => !FRAME_TYPES.includes(t),
 );
 
 export const PASS_THROUGH_TYPES = new Set<browser.webRequest.ResourceType>([

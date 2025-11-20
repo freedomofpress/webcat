@@ -5,6 +5,7 @@ import {
   startupListener,
   tabCloseListener,
 } from "./webcat/listeners";
+import { FRAME_TYPES } from "./webcat/resources";
 import { setErrorIcon } from "./webcat/ui";
 
 // Let's count references to origin in case we ever need pruning policies
@@ -26,17 +27,7 @@ browser.webRequest.onBeforeRequest.addListener(
     // listener that intercwpts everything. This way we can always try to match a resource
     // to the manifest first, including images, etc
     urls: ["http://*/*", "https://*/*"],
-    types: [
-      "main_frame",
-      //"object",
-      //"script",
-      //"stylesheet",
-      "sub_frame",
-      //"xslt",
-      //"xml_dtd",
-      //"web_manifest",
-      //"other",
-    ],
+    types: FRAME_TYPES,
   },
   // Allowed remaining are beacon, csp_report, font, image, imageset, media, object_subrequest, ping, speculative, websocket, xmlhttprequest
   ["blocking"],
@@ -51,17 +42,7 @@ browser.webRequest.onHeadersReceived.addListener(
   {
     // Same as above, add more precise listener when something enrolled is detected
     urls: ["http://*/*", "https://*/*"],
-    types: [
-      "main_frame",
-      //"object",
-      //"script",
-      //"stylesheet",
-      "sub_frame",
-      //"xslt",
-      //"xml_dtd",
-      //"web_manifest",
-      //"other",
-    ],
+    types: FRAME_TYPES,
   },
   // Do we want this to be "blocking"? If we detect an anomaly we should stop
   ["blocking", "responseHeaders"],

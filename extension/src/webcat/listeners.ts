@@ -10,6 +10,7 @@ import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
+import { FRAME_TYPES } from "./resources";
 import { validateResponseContent, validateResponseHeaders } from "./response";
 import { errorpage, getFQDN, isExtensionRequest } from "./utils";
 
@@ -49,10 +50,10 @@ function cleanup(tabId: number) {
     /*
     if (originState.current.references === 0) {
       browser.webRequest.onBeforeRequest.removeListener(
-          originState.current.onBeforeRequest!
+          originState.current.onBeforeRequest
       );
       browser.webRequest.onHeadersReceived.removeListener(
-          originState.current.onHeadersReceived!
+          originState.current.onHeadersReceived
       );
       origins.delete(fqdn);
     }
@@ -170,14 +171,16 @@ export async function requestListener(
     (details.tabId < 0 && !origins.has(fqdn)) ||
     isExtensionRequest(details)
   ) {
-    // We will always wonder, is this check reasonable?
-    // Might be redundant anyway if we skip xmlhttprequest
-    // But we probably want to also ensure other extensions work
-    //console.debug(`requestListener: skipping ${details.url}`);
+    // TODO: is this still relevant? it seems like it
+    // should apply to workers (no tab id) if they do
+    // a fetch request and the origin doesn't exists
+    // To be safe maybe we should check for enrollment again?
     return {};
   }
 
-  if (details.type === "main_frame" || details.type === "sub_frame") {
+  // TODO: why does this happen for sub_frames?
+  //if (details.type === "main_frame" || details.type === "sub_frame") {
+  if (FRAME_TYPES.includes(details.type)) {
     // User is navigatin to a new context, whether is enrolled or not better to reset
     cleanup(details.tabId);
 
