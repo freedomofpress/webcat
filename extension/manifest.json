@@ -4,8 +4,8 @@
   "version": "1.0",
   "browser_specific_settings": {
     "gecko": {
-      "id": "extension@transparency.cat",
-      "strict_min_version": "134.0"
+      "id": "webcat@freedom.press",
+      "strict_min_version": "128.0"
     }
   },
   "permissions": [
