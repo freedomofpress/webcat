@@ -1,6 +1,7 @@
 import { origins, popups, tabs } from "./../globals";
 import { getFQDNEnrollment } from "./db";
 import { metadataRequestSource } from "./interfaces/base";
+import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
   OriginStateHolder,
   OriginStateInitial,
@@ -20,7 +21,7 @@ export async function validateOrigin(
 ) {
   const enrollment_hash = await getFQDNEnrollment(fqdn);
   if (enrollment_hash.length === 0) {
-    console.debug(`${url} is not enrolled, skipping...`);
+    //console.debug(`${url} is not enrolled, skipping...`);
     return;
   }
 
@@ -39,9 +40,10 @@ export async function validateOrigin(
       !["80", "443", ""].includes(urlobj.port) || // Ports 80, 443, or no port specified.
       !["http:", "https:"].includes(urlobj.protocol) // Protocol must be HTTP or HTTPS.
     ) {
-      throw new Error(
-        `Attempting to load an enrolled resource using protocol "${urlobj.protocol}" and port "${urlobj.port || "(default)"}". Only standard protocols (HTTP/HTTPS) and ports (80/443) are allowed.`,
-      );
+      return new WebcatError(WebcatErrorCode.URL.UNSUPPORTED, [
+        String(urlobj.protocol),
+        String(urlobj.port || "default"),
+      ]);
     }
 
     // If the website is enrolled but is not https force a redirect

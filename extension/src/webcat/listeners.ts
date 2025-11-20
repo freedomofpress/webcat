@@ -125,12 +125,18 @@ export async function headersListener(
       details.tabId,
       fqdn,
     );
-    await validateOrigin(
+    const result = await validateOrigin(
       fqdn,
       details.url,
       details.tabId,
       metadataRequestSource.worker,
     );
+    if (result instanceof WebcatError) {
+      origins.delete(fqdn);
+      tabs.delete(details.tabId);
+      errorpage(details.tabId, result);
+      return { cancel: true };
+    }
   }
 
   const originStateHolder = origins.get(fqdn);
@@ -188,27 +194,21 @@ export async function requestListener(
       fqdn,
     );
 
-    try {
-      // This just checks some basic stuff, like TLS/Onion usage and populate the cache if it doesnt exists
-      const redirect = await validateOrigin(
-        fqdn,
-        details.url,
-        details.tabId,
-        metadataRequestSource.main_frame,
-      );
-      if (redirect) {
-        logger.addLog("info", `Redirecting to https`, details.tabId, fqdn);
-        return redirect;
-      }
-    } catch (error) {
-      logger.addLog(
-        "error",
-        `Error loading ${details.type}: ${error}`,
-        details.tabId,
-        fqdn,
-      );
-      errorpage(details.tabId);
+    const result = await validateOrigin(
+      fqdn,
+      details.url,
+      details.tabId,
+      metadataRequestSource.main_frame,
+    );
+    if (result instanceof WebcatError) {
+      origins.delete(fqdn);
+      tabs.delete(details.tabId);
+      errorpage(details.tabId, result);
       return { cancel: true };
+    }
+    if (result) {
+      logger.addLog("info", `Redirecting to https`, details.tabId, fqdn);
+      return result;
     }
   }
 

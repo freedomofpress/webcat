@@ -68,6 +68,15 @@ export enum WebcatErrorHeaders {
   ENROLLMENT_MALFORMED = "ERR_WEBCAT_HEADERS_ENROLLMENT_MALFORMED",
 }
 
+export enum WebcatErrorURL {
+  UNSUPPORTED = "ERR_WEBCAT_URL_UNSUPPORTED",
+}
+
+export enum WebcatErrorFile {
+  MISSING = "ERR_WEBCAT_FILE_MISSING",
+  MISMATCH = "ERR_WEBCAT_FILE_MISMATCH",
+}
+
 //
 // Group wrapper (replacement for namespace WebcatErrorCode)
 //
@@ -78,6 +87,8 @@ export const WebcatErrorCode = {
   Manifest: WebcatErrorManifest,
   CSP: WebcatErrorCSP,
   Headers: WebcatErrorHeaders,
+  URL: WebcatErrorURL,
+  File: WebcatErrorFile,
 } as const;
 
 //
@@ -89,7 +100,9 @@ export type WebcatErrorCodeAny =
   | WebcatErrorEnrollment
   | WebcatErrorManifest
   | WebcatErrorCSP
-  | WebcatErrorHeaders;
+  | WebcatErrorHeaders
+  | WebcatErrorURL
+  | WebcatErrorFile;
 
 //
 // Error object

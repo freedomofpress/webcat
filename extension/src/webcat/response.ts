@@ -260,8 +260,7 @@ export async function validateResponseContent(
     if (!manifest_hash) {
       deny(filter);
       filter.close();
-      errorpage(details.tabId);
-      throw new Error("Manifest does not contain a hash for the root.");
+      errorpage(details.tabId, new WebcatError(WebcatErrorCode.File.MISSING));
     }
 
     const content_hash = await SHA256(blob);
@@ -280,12 +279,15 @@ export async function validateResponseContent(
       }
       deny(filter);
       filter.close();
-      errorpage(details.tabId);
-      console.log(blob);
-      throw new Error(
-        `hash mismatch for ${details.url} - expected: ${manifest_hash} - found: ${Uint8ArrayToBase64Url(new Uint8Array(content_hash))}`,
+      errorpage(
+        details.tabId,
+        new WebcatError(WebcatErrorCode.File.MISMATCH, [
+          String(manifest_hash),
+          String(Uint8ArrayToBase64Url(new Uint8Array(content_hash))),
+        ]),
       );
     }
+
     // If everything is OK then we can just write the raw blob back
     logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
 
