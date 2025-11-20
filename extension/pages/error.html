@@ -1,13 +1,34 @@
 <!doctype html>
-<html lang="en">
+<html class="in-content-page" lang="en-US">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Request Blocked</title>
-    <link rel="stylesheet" href="error.css" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src chrome:; object-src 'none'"
+    />
+    <link
+      rel="stylesheet"
+      href="chrome://global/skin/in-content/info-pages.css"
+    />
+    <title>Problem Loading Page</title>
   </head>
   <body>
-    <img id="icon" src="" alt="Error Icon" />
-    <p id="error-message">Something went wrong. The request was blocked.</p>
+    <div class="container">
+      <div class="title">
+        <h1 class="title-text">WEBCAT Integrity Error</h1>
+      </div>
+
+      <div class="description">
+        <p>WEBCAT was unable to verify the integrity of this website.</p>
+
+        <p>
+          If you believe this is a mistake, you may report the issue to the
+          website administrator, or open an issue in the
+          <a href="https://gthub.com/freedomofpress/webcat">WEBCAT repository</a
+          >.
+        </p>
+
+        <p>Error code: <code id="error-code">Loading…</code></p>
+      </div>
+    </div>
   </body>
 </html>

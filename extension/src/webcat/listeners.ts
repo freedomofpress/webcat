@@ -7,6 +7,7 @@ import {
   updateLastChecked,
 } from "./db";
 import { metadataRequestSource } from "./interfaces/base";
+import { WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { validateResponseContent, validateResponseHeaders } from "./response";
@@ -124,12 +125,18 @@ export async function headersListener(
       details.tabId,
       fqdn,
     );
-    await validateOrigin(
+    const result = await validateOrigin(
       fqdn,
       details.url,
       details.tabId,
       metadataRequestSource.worker,
     );
+    if (result instanceof WebcatError) {
+      origins.delete(fqdn);
+      tabs.delete(details.tabId);
+      errorpage(details.tabId, result);
+      return { cancel: true };
+    }
   }
 
   const originStateHolder = origins.get(fqdn);
@@ -139,18 +146,21 @@ export async function headersListener(
     throw new Error("No originState while starting to parse response.");
   }
 
-  try {
-    await validateResponseHeaders(originStateHolder, popupStateHolder, details);
-  } catch (error) {
+  const result = await validateResponseHeaders(
+    originStateHolder,
+    popupStateHolder,
+    details,
+  );
+  if (result instanceof WebcatError) {
     logger.addLog(
       "error",
-      `Error when parsing response headers: ${error}`,
+      `Error when parsing response headers: ${result}`,
       details.tabId,
       fqdn,
     );
     origins.delete(fqdn);
     tabs.delete(details.tabId);
-    errorpage(details.tabId);
+    errorpage(details.tabId, result);
     return { cancel: true };
   }
 
@@ -184,27 +194,21 @@ export async function requestListener(
       fqdn,
     );
 
-    try {
-      // This just checks some basic stuff, like TLS/Onion usage and populate the cache if it doesnt exists
-      const redirect = await validateOrigin(
-        fqdn,
-        details.url,
-        details.tabId,
-        metadataRequestSource.main_frame,
-      );
-      if (redirect) {
-        logger.addLog("info", `Redirecting to https`, details.tabId, fqdn);
-        return redirect;
-      }
-    } catch (error) {
-      logger.addLog(
-        "error",
-        `Error loading ${details.type}: ${error}`,
-        details.tabId,
-        fqdn,
-      );
-      errorpage(details.tabId);
+    const result = await validateOrigin(
+      fqdn,
+      details.url,
+      details.tabId,
+      metadataRequestSource.main_frame,
+    );
+    if (result instanceof WebcatError) {
+      origins.delete(fqdn);
+      tabs.delete(details.tabId);
+      errorpage(details.tabId, result);
       return { cancel: true };
+    }
+    if (result) {
+      logger.addLog("info", `Redirecting to https`, details.tabId, fqdn);
+      return result;
     }
   }
 

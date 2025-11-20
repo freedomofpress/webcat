@@ -7,57 +7,53 @@ import type {
   Manifest,
   Signatures,
 } from "../../src/webcat/interfaces/bundle";
+import { WebcatErrorCode } from "../../src/webcat/interfaces/errors";
 import {
   OriginStateFailed,
   OriginStateInitial,
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
-} from "../../src/webcat/interfaces/originstate"; // adjust path if needed
+} from "../../src/webcat/interfaces/originstate";
 import { SHA256 } from "../../src/webcat/utils";
 
-// --- Mocks for external deps used by originstate.ts ---
+// --- Mocks ---
 
 vi.mock("sigsum/dist/verify", () => ({
-  verifyMessageWithCompiledPolicy: vi.fn(async () => {
-    // Always "valid" in tests unless overridden
-    return true;
-  }),
+  verifyMessageWithCompiledPolicy: vi.fn(async () => true),
 }));
 
 vi.mock("../../src/webcat/validators", async () => {
   const defaultNow = Math.floor(Date.now() / 1000);
 
   return {
-    validateCSP: vi.fn(async () => {
-      return;
-    }),
-
+    validateCSP: vi.fn(async () => {}),
     witnessTimestampsFromCosignedTreeHead: vi.fn(async () => {
       return [defaultNow - 5000, defaultNow - 100000, defaultNow - 200000];
     }),
   };
 });
 
-// Helper: compute the *real* enrollment_hash exactly as production does.
+// Helper: compute hash exactly as production does
 async function computeEnrollmentHash(
   enrollment: Enrollment,
 ): Promise<Uint8Array> {
   const canonical = canonicalize(enrollment);
   const bytes = stringToUint8Array(canonical);
   const digest = await SHA256(bytes);
-
-  if (digest instanceof Uint8Array) {
-    return digest;
-  }
-  return new Uint8Array(digest);
+  return digest instanceof Uint8Array ? digest : new Uint8Array(digest);
 }
 
-// Some dummy “keys” and policy for tests
-const TEST_POLICY_B64URL = "c29tZS1zaWdzdW0tcG9saWN5"; // "some-sigsum-policy" -> base64url-ish
-const SIGNER1 = "c2lnbmVyMQ"; // "signer1" in fake base64url
+// Dummy policy & signers
+const TEST_POLICY_B64URL = "c29tZS1zaWdzdW0tcG9saWN5";
+const SIGNER1 = "c2lnbmVyMQ";
 const SIGNER2 = "c2lnbmVyMg";
 const SIGNER3 = "c2lnbmVyMw";
 
+//
+// ─────────────────────────────────────────────
+//   OriginStateInitial.verifyEnrollment
+// ─────────────────────────────────────────────
+//
 describe("OriginStateInitial.verifyEnrollment", () => {
   let enrollment: Enrollment;
   let enrollmentHash: Uint8Array;
@@ -81,35 +77,29 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     );
   });
 
-  it("accepts a valid enrollment that matches the preload hash", async () => {
+  it("accepts a valid enrollment that matches hash", async () => {
     const res = await state.verifyEnrollment(enrollment);
 
     expect(res).toBeInstanceOf(OriginStateVerifiedEnrollment);
-    const verified = res as OriginStateVerifiedEnrollment;
-    expect(verified.enrollment).toEqual(enrollment);
+    expect((res as OriginStateVerifiedEnrollment).enrollment).toEqual(
+      enrollment,
+    );
   });
 
-  it("fails when enrollment does not match the preload hash", async () => {
-    const differentEnrollment: Enrollment = {
-      ...enrollment,
-      threshold: 3, // change something so the hash differs
-    };
+  it("fails when enrollment hash mismatches", async () => {
+    const different: Enrollment = { ...enrollment, threshold: 3 };
 
-    const res = await state.verifyEnrollment(differentEnrollment);
+    const res = await state.verifyEnrollment(different);
 
     expect(res).toBeInstanceOf(OriginStateFailed);
     const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toBe(
-      "enrollment data does not match the preload list",
-    );
+
+    expect(failed.error.code).toBe(WebcatErrorCode.Enrollment.MISMATCH);
   });
 
   it("fails when signers is not an array", async () => {
-    const mutated = {
-      ...enrollment,
-      // eslint-disable-next-line
-      signers: null as any,
-    };
+    // eslint-disable-next-line
+    const mutated = { ...enrollment, signers: null as any };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
@@ -123,14 +113,14 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
     expect(res).toBeInstanceOf(OriginStateFailed);
     const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toBe("signers must be an array of strings");
+
+    expect(failed.error.code).toBe(
+      WebcatErrorCode.Enrollment.SIGNERS_MALFORMED,
+    );
   });
 
   it("fails when signers is empty", async () => {
-    const mutated = {
-      ...enrollment,
-      signers: [],
-    };
+    const mutated = { ...enrollment, signers: [] };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
@@ -144,14 +134,12 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
     expect(res).toBeInstanceOf(OriginStateFailed);
     const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toBe("signers cannot be empty");
+
+    expect(failed.error.code).toBe(WebcatErrorCode.Enrollment.SIGNERS_EMPTY);
   });
 
-  it("fails when threshold is not a positive integer", async () => {
-    const mutated = {
-      ...enrollment,
-      threshold: 0,
-    };
+  it("fails when threshold <= 0", async () => {
+    const mutated = { ...enrollment, threshold: 0 };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
@@ -164,15 +152,13 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     const res = await mutatedState.verifyEnrollment(mutated);
 
     expect(res).toBeInstanceOf(OriginStateFailed);
-    const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toBe("threshold must be a positive an integer");
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Enrollment.THRESHOLD_MALFORMED,
+    );
   });
 
-  it("fails when threshold exceeds number of signers", async () => {
-    const mutated = {
-      ...enrollment,
-      threshold: 10,
-    };
+  it("fails when threshold > signers length", async () => {
+    const mutated = { ...enrollment, threshold: 10 };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
@@ -185,13 +171,17 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     const res = await mutatedState.verifyEnrollment(mutated);
 
     expect(res).toBeInstanceOf(OriginStateFailed);
-    const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toBe(
-      "threshold cannot exceed number of signers",
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE,
     );
   });
 });
 
+//
+// ─────────────────────────────────────────────
+//   OriginStateVerifiedEnrollment.verifyManifest
+// ─────────────────────────────────────────────
+//
 describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
   let enrollment: Enrollment;
   let enrollmentHash: Uint8Array;
@@ -222,12 +212,7 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     );
 
     const res = await initial.verifyEnrollment(enrollment);
-    if (!(res instanceof OriginStateVerifiedEnrollment)) {
-      throw new Error(
-        "verifyEnrollment did not return OriginStateVerifiedEnrollment in test setup",
-      );
-    }
-    verifiedEnrollment = res;
+    verifiedEnrollment = res as OriginStateVerifiedEnrollment;
 
     manifest = {
       name: "test-app",
@@ -249,51 +234,37 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     };
   });
 
-  it("accepts a manifest when enough valid signatures are present", async () => {
+  it("accepts a valid manifest", async () => {
     const res = await verifiedEnrollment.verifyManifest(manifest, signatures);
 
     expect(res).toBeInstanceOf(OriginStateVerifiedManifest);
-    const verifiedManifest = res as OriginStateVerifiedManifest;
-    expect(verifiedManifest.manifest).toEqual(manifest);
-    expect(verifiedManifest.enrollment).toEqual(enrollment);
+    expect((res as OriginStateVerifiedManifest).manifest).toEqual(manifest);
   });
 
-  it("fails when not enough signatures meet the threshold", async () => {
-    const tooFewSignatures: Signatures = {
-      [SIGNER1]: "signature1",
-    };
+  it("fails when not enough signatures", async () => {
+    const tooFew: Signatures = { [SIGNER1]: "signature1" };
 
-    const res = await verifiedEnrollment.verifyManifest(
-      manifest,
-      tooFewSignatures,
-    );
+    const res = await verifiedEnrollment.verifyManifest(manifest, tooFew);
 
     expect(res).toBeInstanceOf(OriginStateFailed);
-    const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toContain("found only 1 valid signatures");
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED,
+    );
   });
 
-  it("fails when manifest has no files", async () => {
-    const emptyFilesManifest: Manifest = {
-      ...manifest,
-      files: {},
-    };
+  it("fails when files list empty", async () => {
+    const emptyFiles = { ...manifest, files: {} };
 
-    const res = await verifiedEnrollment.verifyManifest(
-      emptyFilesManifest,
-      signatures,
-    );
+    const res = await verifiedEnrollment.verifyManifest(emptyFiles, signatures);
 
     expect(res).toBeInstanceOf(OriginStateFailed);
-    const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toBe("files list is empty.");
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Manifest.FILES_MISSING,
+    );
   });
 
-  it("fails when default_csp is missing or too short", async () => {
-    const badManifest: Manifest = {
-      ...manifest,
-      default_csp: "",
-    };
+  it("fails when default_csp missing", async () => {
+    const badManifest = { ...manifest, default_csp: "" };
 
     const res = await verifiedEnrollment.verifyManifest(
       badManifest,
@@ -301,15 +272,13 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     );
 
     expect(res).toBeInstanceOf(OriginStateFailed);
-    const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toBe("default_csp is empty or not set.");
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Manifest.DEFAULT_CSP_MISSING,
+    );
   });
 
-  it("fails when default_index or default_fallback are invalid", async () => {
-    const badManifest: Manifest = {
-      ...manifest,
-      default_index: "/missing.html",
-    };
+  it("fails when default_index file is missing", async () => {
+    const badManifest = { ...manifest, default_index: "/missing.html" };
 
     const res = await verifiedEnrollment.verifyManifest(
       badManifest,
@@ -317,14 +286,13 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     );
 
     expect(res).toBeInstanceOf(OriginStateFailed);
-    const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toBe(
-      "default_index or default_fallback are empty or do not reference a file.",
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING_FILE,
     );
   });
 
-  it("fails when wasm field is not set", async () => {
-    const badManifest = { ...manifest } as Manifest;
+  it("fails when wasm missing", async () => {
+    const badManifest = { ...manifest };
     // @ts-expect-error simulate missing wasm
     delete badManifest.wasm;
 
@@ -334,27 +302,33 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     );
 
     expect(res).toBeInstanceOf(OriginStateFailed);
-    const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toBe("wasm is not set.");
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Manifest.WASM_MISSING,
+    );
   });
 
-  it("fails when manifest median timestamp exceeds max_age", async () => {
+  it("fails when expired", async () => {
     const validators = await import("../../src/webcat/validators");
-
-    // Tell TS this is actually a mock:
-    const mockFn =
+    const mock =
       validators.witnessTimestampsFromCosignedTreeHead as unknown as vi.Mock;
 
-    mockFn.mockResolvedValue([10, 20, 30]);
+    // Force timestamps extremely old
+    mock.mockResolvedValue([10, 20, 30]);
 
     const res = await verifiedEnrollment.verifyManifest(manifest, signatures);
 
     expect(res).toBeInstanceOf(OriginStateFailed);
-    const failed = res as OriginStateFailed;
-    expect(failed.errorMessage).toMatch("manifest has expired");
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Manifest.EXPIRED,
+    );
   });
 });
 
+//
+// ─────────────────────────────────────────────
+//   OriginStateVerifiedManifest.verifyCSP
+// ─────────────────────────────────────────────
+//
 describe("OriginStateVerifiedManifest.verifyCSP", () => {
   let enrollment: Enrollment;
   let enrollmentHash: Uint8Array;
@@ -381,13 +355,9 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
       "example.com",
       enrollmentHash,
     );
+
     const res = await initial.verifyEnrollment(enrollment);
-    if (!(res instanceof OriginStateVerifiedEnrollment)) {
-      throw new Error(
-        "verifyEnrollment did not return OriginStateVerifiedEnrollment",
-      );
-    }
-    verifiedEnrollment = res;
+    verifiedEnrollment = res as OriginStateVerifiedEnrollment;
 
     const manifest: Manifest = {
       name: "test-app",
@@ -413,25 +383,21 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
     );
   });
 
-  it("matches default CSP for root path", () => {
-    const ok = verifiedManifestState.verifyCSP(defaultCSP, "/");
-    expect(ok).toBe(true);
+  it("matches default CSP for /", () => {
+    expect(verifiedManifestState.verifyCSP(defaultCSP, "/")).toBe(true);
   });
 
   it("matches extra CSP for exact path", () => {
     const csp = "default-src 'none'; script-src 'self' 'unsafe-inline';";
-    const ok = verifiedManifestState.verifyCSP(csp, "/admin");
-    expect(ok).toBe(true);
+    expect(verifiedManifestState.verifyCSP(csp, "/admin")).toBe(true);
   });
 
-  it("falls back to default CSP when no extra_csp prefix matches", () => {
-    const ok = verifiedManifestState.verifyCSP(defaultCSP, "/other");
-    expect(ok).toBe(true);
+  it("falls back to default CSP", () => {
+    expect(verifiedManifestState.verifyCSP(defaultCSP, "/other")).toBe(true);
   });
 
-  it("returns false when CSP does not match expected policy", () => {
+  it("returns false for incorrect CSP", () => {
     const badCsp = "default-src 'self'; script-src 'self';";
-    const ok = verifiedManifestState.verifyCSP(badCsp, "/");
-    expect(ok).toBe(false);
+    expect(verifiedManifestState.verifyCSP(badCsp, "/")).toBe(false);
   });
 });

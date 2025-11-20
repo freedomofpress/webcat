@@ -1,3 +1,5 @@
+import { WebcatError } from "./interfaces/errors";
+
 export function getFQDN(url: string): string {
   const urlobj = new URL(url);
   return urlobj.hostname;
@@ -38,11 +40,6 @@ export async function SHA256(
   return crypto.subtle.digest("SHA-256", input);
 }
 
-export function arrayBufferToHex(buffer: Uint8Array | ArrayBuffer) {
-  const array = Array.from(new Uint8Array(buffer));
-  return array.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 export function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -51,12 +48,42 @@ export function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
-export function errorpage(tabId: number) {
-  // TODO, what if the error happens in the background? We should probably hunt all tabs with
-  // that main frame or subframe and error them
-  if (tabId > 0) {
-    browser.tabs.update(tabId, {
-      url: browser.runtime.getURL("pages/error.html"),
-    });
-  }
+export async function errorpage(tabId: number, error?: WebcatError) {
+  const code = error?.code ?? "WEBCAT_ERROR_UNDEFINED";
+  const errorPageUrl = browser.runtime.getURL("pages/error.html");
+
+  // Things that do not work:
+  // - Creating a blob dynamically
+  // - Rewriting the page without a redirect
+
+  // Things that are nice to avoid
+  // - Query/fragment parameter passing
+  // - Messaging
+
+  // Current solution is: navigate and then inject a conte script
+  // Avoids messaging, scripts in the page itself, and weird urls
+
+  // 1. Navigate to the error page
+  await browser.tabs.update(tabId, { url: errorPageUrl });
+
+  // 2. Wait until the extension page loads
+  await new Promise<void>((resolve) => {
+    const listener = (
+      updatedTabId: number,
+      changeInfo: browser.tabs._OnUpdatedChangeInfo,
+    ) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") {
+        browser.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    browser.tabs.onUpdated.addListener(listener);
+  });
+
+  // 3. Dynamically inject a script *into the error page*
+  await browser.tabs.executeScript(tabId, {
+    code: `
+      document.getElementById("error-code").textContent = ${JSON.stringify(code)};
+    `,
+  });
 }

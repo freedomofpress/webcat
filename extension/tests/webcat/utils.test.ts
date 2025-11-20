@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  arrayBufferToHex,
   arraysEqual,
   getFQDN,
   getFQDNSafe,
   isExtensionRequest,
   SHA256,
 } from "./../../src/webcat/utils";
+
+export function arrayBufferToHex(buffer: Uint8Array | ArrayBuffer) {
+  const array = Array.from(new Uint8Array(buffer));
+  return array.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 describe("getFQDN", () => {
   it("should extract the hostname from a valid URL", () => {
