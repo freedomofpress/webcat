@@ -12,13 +12,12 @@ export function setIcon(tabId: number) {
 
   logger.addLog("debug", "Setting standard icon", tabId, "");
 
-  browser.browserAction.enable(tabId);
-  browser.browserAction.setIcon({
+  browser.pageAction.show(tabId);
+  browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat.svg`,
+    path: `icons/${theme}/webcat.png`,
   });
-  browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
-  browser.browserAction.setTitle({ tabId, title: "Click for info!" });
+  browser.pageAction.setTitle({ tabId, title: "Click for info!" });
 }
 
 export function setOKIcon(tabId: number) {
@@ -29,15 +28,14 @@ export function setOKIcon(tabId: number) {
   const theme = isDarkTheme() ? "dark" : "light";
 
   logger.addLog("debug", "Setting ok icon", tabId, "");
-  browser.browserAction.enable(tabId);
-  browser.browserAction.setIcon({
+  browser.pageAction.show(tabId);
+  browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-ok.svg`,
+    path: `icons/${theme}/webcat-ok.png`,
   });
-  browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
-  browser.browserAction.setTitle({
+  browser.pageAction.setTitle({
     tabId: tabId,
-    title: "Web integrity verification successful. Click for info!",
+    title: "WEBCAT verification successful",
   });
 }
 
@@ -49,14 +47,13 @@ export function setErrorIcon(tabId: number) {
   const theme = isDarkTheme() ? "dark" : "light";
 
   logger.addLog("debug", "Setting error icon", tabId, "");
-  browser.browserAction.enable(tabId);
-  browser.browserAction.setIcon({
+  browser.pageAction.show(tabId);
+  browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-error.svg`,
+    path: `icons/${theme}/webcat-error.png`,
   });
-  browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
-  browser.browserAction.setTitle({
+  browser.pageAction.setTitle({
     tabId: tabId,
-    title: "Web integrity verification failed. Click for info!",
+    title: "WEBCAT verification failed",
   });
 }

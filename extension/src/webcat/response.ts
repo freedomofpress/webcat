@@ -15,7 +15,6 @@ import {
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
-import { PopupState } from "./interfaces/popupstate";
 import { logger } from "./logger";
 import { PASS_THROUGH_TYPES } from "./resources";
 import { setOKIcon } from "./ui";
@@ -24,7 +23,6 @@ import { extractAndValidateHeaders } from "./validators";
 
 export async function validateResponseHeaders(
   originStateHolder: OriginStateHolder,
-  popupState: PopupState | undefined,
   details: browser.webRequest._OnHeadersReceivedDetails,
 ) {
   const fqdn = originStateHolder.current.fqdn;
@@ -41,10 +39,6 @@ export async function validateResponseHeaders(
   const result = extractAndValidateHeaders(details);
 
   if (result instanceof WebcatError) {
-    // This is an error object returned without throwing
-    if (popupState) {
-      popupState.valid_headers = false;
-    }
     return result; // or wrap it
   }
 
@@ -81,14 +75,7 @@ export async function validateResponseHeaders(
     }
 
     if (originStateHolder.current.status === "failed") {
-      if (popupState) {
-        // TODO
-      }
       return (originStateHolder.current as OriginStateFailed).error;
-    }
-
-    if (popupState) {
-      // TODO update popupstate
     }
 
     logger.addLog(
@@ -103,9 +90,6 @@ export async function validateResponseHeaders(
       originStateHolder.current as OriginStateVerifiedEnrollment
     ).verifyManifest();
     if (originStateHolder.current.status === "failed") {
-      if (popupState) {
-        popupState.valid_manifest = false;
-      }
       return (originStateHolder.current as OriginStateFailed).error;
     }
 
@@ -115,10 +99,6 @@ export async function validateResponseHeaders(
       throw new Error(
         `Error with the origin state: expected origin to be in state verified_manifest, got ${originStateHolder.current.status}`,
       );
-    }
-
-    if (popupState) {
-      // TODO
     }
 
     logger.addLog(
@@ -136,9 +116,6 @@ export async function validateResponseHeaders(
     originStateHolder.current.status !== "verified_manifest"
   ) {
     // Though this should never happen?
-    if (popupState) {
-      // TODO
-    }
     throw new Error(
       "Validating CSP, but no valid manifest for the origin has been found.",
     );
@@ -164,10 +141,6 @@ export async function validateResponseHeaders(
     fqdn,
   );
 
-  if (popupState) {
-    // TODO
-  }
-
   // TODO (performance): significant amount of time is spent calling this function
   // at every loaded file, without added benefit. It should be enough to call it if
   // details.type == "main_frame", but then the icon change does not work...
@@ -189,7 +162,6 @@ function getVerifiedManifestState(fqdn: string): OriginStateHolder {
 }
 
 export async function validateResponseContent(
-  popupState: PopupState | undefined,
   details: browser.webRequest._OnBeforeRequestDetails,
 ) {
   function deny(filter: browser.webRequest.StreamFilter) {
@@ -272,11 +244,6 @@ export async function validateResponseContent(
       ) &&
       blob.byteLength !== 0
     ) {
-      if (details.type == "main_frame" && popupState) {
-        popupState.valid_index = false;
-      } else if (popupState) {
-        popupState.invalid_assets.push(pathname);
-      }
       deny(filter);
       filter.close();
       errorpage(
@@ -290,12 +257,6 @@ export async function validateResponseContent(
 
     // If everything is OK then we can just write the raw blob back
     logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
-
-    if (details.type == "main_frame" && popupState) {
-      popupState.valid_index = true;
-    } else if (popupState) {
-      popupState.loaded_assets.push(pathname);
-    }
 
     if (details.type === "script") {
       // Inject the WASM hooks in every loaded script.

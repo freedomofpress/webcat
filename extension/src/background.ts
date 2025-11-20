@@ -1,7 +1,6 @@
 import {
   headersListener,
   installListener,
-  messageListener,
   requestListener,
   startupListener,
   tabCloseListener,
@@ -68,8 +67,6 @@ browser.webRequest.onHeadersReceived.addListener(
   ["blocking", "responseHeaders"],
 );
 
-browser.runtime.onMessage.addListener(messageListener);
-
 // Not the best performance idea to act on all tab just for this
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete") {
@@ -80,6 +77,8 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 // Grey out and make page action unclickable unless a website is enrolled
-browser.tabs.onCreated.addListener(() => {
-  browser.browserAction.disable();
+browser.tabs.onCreated.addListener((tab) => {
+  if (tab.id !== undefined) {
+    browser.pageAction.hide(tab.id);
+  }
 });

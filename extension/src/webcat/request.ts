@@ -1,4 +1,4 @@
-import { origins, popups, tabs } from "./../globals";
+import { origins, tabs } from "./../globals";
 import { getFQDNEnrollment } from "./db";
 import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
@@ -6,7 +6,6 @@ import {
   OriginStateHolder,
   OriginStateInitial,
 } from "./interfaces/originstate";
-import { PopupState } from "./interfaces/popupstate";
 import { logger } from "./logger";
 import { NON_FRAME_TYPES } from "./resources";
 import { setIcon } from "./ui";
@@ -26,8 +25,6 @@ export async function validateOrigin(
   }
 
   if (type === metadataRequestSource.main_frame) {
-    const newPopupState = new PopupState(fqdn, tabId);
-    popups.set(tabId, newPopupState);
     setIcon(tabId);
   }
 
@@ -67,11 +64,6 @@ export async function validateOrigin(
   const originStateHolder = origins.get(fqdn);
   if (originStateHolder) {
     // Since we use cached info, we should still populate the popup with the cached info
-    const popupState = popups.get(tabId);
-
-    if (popupState) {
-      // TODO send origin information to popup (send the whole object or specific fields?)
-    }
     return;
   }
 

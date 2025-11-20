@@ -1,4 +1,4 @@
-import { origins, popups, tabs } from "../globals";
+import { origins, tabs } from "../globals";
 import {
   ensureDBOpen,
   getFQDNEnrollment,
@@ -58,7 +58,6 @@ function cleanup(tabId: number) {
     }
     */
     tabs.delete(tabId);
-    popups.delete(tabId);
   }
 }
 
@@ -140,17 +139,12 @@ export async function headersListener(
   }
 
   const originStateHolder = origins.get(fqdn);
-  const popupStateHolder = popups.get(details.tabId);
 
   if (!originStateHolder) {
     throw new Error("No originState while starting to parse response.");
   }
 
-  const result = await validateResponseHeaders(
-    originStateHolder,
-    popupStateHolder,
-    details,
-  );
+  const result = await validateResponseHeaders(originStateHolder, details);
   if (result instanceof WebcatError) {
     logger.addLog(
       "error",
@@ -225,80 +219,10 @@ export async function requestListener(
 
   // if we know the tab is enrolled, or it is a worker background connction then we should verify
   if (tabs.has(details.tabId) === true || details.tabId < 0) {
-    await validateResponseContent(popups.get(details.tabId), details);
+    await validateResponseContent(details);
   }
 
   // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse
   // Returning a response here is a very powerful tool, let's think about it later
   return {};
-}
-
-// sender should be of type browser.runtime.MessageSender but it's missing things... like origin
-// eslint-disable-next-line
-export function messageListener(message: any, sender: any, sendResponse: any) {
-  // First, is this coming from the hooks or the extension?
-  if (sender.id === browser.runtime.id) {
-    // And now see from which component
-    if (sender.url?.endsWith("/popup.html")) {
-      if (message.type === "populatePopup") {
-        // NOTE: for some reason using async/await here breaks the functionality
-        browser.tabs
-          .query({ active: true, currentWindow: true })
-          .then((tabs) => {
-            if (tabs.length === 0 || !tabs[0].id || !tabs[0].url) {
-              sendResponse({
-                error: "This functionality is disabled on this tab.",
-              });
-              return;
-            }
-
-            const tabId = tabs[0].id;
-            const popupState = popups.get(tabId);
-
-            if (!popupState) {
-              throw new Error("Missing popupState");
-            }
-
-            const originState = origins.get(popupState.fqdn);
-            popupState.valid_sources.add(popupState.fqdn);
-
-            function traverseValidSources(
-              source: string,
-              valid_sources: Set<string>,
-            ) {
-              valid_sources.add(source);
-
-              const sourceState = origins.get(source);
-              if (!sourceState?.current) {
-                return;
-              }
-              const newValidSources = sourceState.current.valid_sources || [];
-
-              for (const newSource of newValidSources) {
-                if (!valid_sources.has(newSource)) {
-                  traverseValidSources(newSource, valid_sources);
-                }
-              }
-            }
-
-            if (originState?.current) {
-              for (const source of originState.current.valid_sources
-                ? originState.current.valid_sources
-                : new Set<string>()) {
-                traverseValidSources(source, popupState.valid_sources);
-              }
-            }
-
-            sendResponse({ tabId: tabId, popupState: popupState });
-          })
-          .catch((error) => {
-            console.error("Error getting active tab:", error);
-            sendResponse({ error: error.message });
-          });
-        return true;
-      }
-      //} else if (sender.url?.endsWith("/settings.html")) {
-      //} else if (sender.url?.endsWith("/logs.html")) {
-    }
-  }
 }
