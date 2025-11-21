@@ -25,9 +25,8 @@ export const FRAME_TYPES: browser.webRequest.ResourceType[] = [
   "sub_frame",
 ];
 
-export const NON_FRAME_TYPES = ALL_TYPES.filter(
-  (t) => !FRAME_TYPES.includes(t),
-);
+export const NON_FRAME_TYPES: browser.webRequest.ResourceType[] =
+  ALL_TYPES.filter((t) => !FRAME_TYPES.includes(t));
 
 export const PASS_THROUGH_TYPES = new Set<browser.webRequest.ResourceType>([
   "image",
