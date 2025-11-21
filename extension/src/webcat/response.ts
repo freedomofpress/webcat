@@ -17,8 +17,8 @@ import {
 } from "./interfaces/originstate";
 import { logger } from "./logger";
 import { NON_FRAME_TYPES, PASS_THROUGH_TYPES } from "./resources";
-import { setOKIcon } from "./ui";
-import { arraysEqual, errorpage, getFQDN, SHA256 } from "./utils";
+import { errorpage, setOKIcon } from "./ui";
+import { arraysEqual, getFQDN, SHA256 } from "./utils";
 import { extractAndValidateHeaders } from "./validators";
 
 export async function validateResponseHeaders(

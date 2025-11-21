@@ -49,6 +49,7 @@ export function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 export async function errorpage(tabId: number, error?: WebcatError) {
+  console.log(tabId);
   const code = error?.code ?? "WEBCAT_ERROR_UNDEFINED";
   const errorPageUrl = browser.runtime.getURL("pages/error.html");
 
@@ -78,6 +79,19 @@ export async function errorpage(tabId: number, error?: WebcatError) {
       }
     };
     browser.tabs.onUpdated.addListener(listener);
+  });
+
+  // Wait for DOM to be fully loaded
+  await browser.tabs.executeScript(tabId, {
+    code: `
+      new Promise(resolve => {
+        if (document.readyState === "complete" || document.readyState === "interactive") {
+          resolve();
+        } else {
+          document.addEventListener("DOMContentLoaded", () => resolve(), { once: true });
+        }
+      });
+    `,
   });
 
   // 3. Dynamically inject a script *into the error page*

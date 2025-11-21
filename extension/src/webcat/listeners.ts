@@ -12,7 +12,8 @@ import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { validateResponseContent, validateResponseHeaders } from "./response";
-import { errorpage, getFQDN, isExtensionRequest } from "./utils";
+import { errorpage } from "./ui";
+import { getFQDN, isExtensionRequest } from "./utils";
 
 declare const __TESTING__: boolean;
 
