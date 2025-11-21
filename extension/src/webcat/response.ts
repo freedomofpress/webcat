@@ -16,7 +16,7 @@ import {
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
 import { logger } from "./logger";
-import { FRAME_TYPES, PASS_THROUGH_TYPES } from "./resources";
+import { FRAME_TYPES, NON_FRAME_TYPES, PASS_THROUGH_TYPES } from "./resources";
 import { setOKIcon } from "./ui";
 import { arraysEqual, errorpage, getFQDN, SHA256 } from "./utils";
 import { extractAndValidateHeaders } from "./validators";
@@ -176,7 +176,7 @@ export async function validateResponseContent(
   // is a media type and not in the manifest we do not want even to start filtering
   // otherwise large file might be loaded in memory by the extension without
   // then any real benefit
-  if (FRAME_TYPES.includes(details.type)) {
+  if (!FRAME_TYPES.includes(details.type)) {
     const originStateHolder = getVerifiedManifestState(fqdn);
     /* Development guard */
     // This should never happen! if we are here it means that a main or sub_frame is
