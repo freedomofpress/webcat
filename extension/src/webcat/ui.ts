@@ -71,8 +71,7 @@ export async function errorpage(tabId: number, error?: WebcatError) {
   // - Query/fragment parameter passing
   // - Messaging
 
-  // Current solution is: navigate and then inject a conte script
-  // Avoids messaging, scripts in the page itself, and weird urls
+  // Current solution is: navigate and then inject a content script
 
   // 1. Navigate to the error page
   await browser.tabs.update(tabId, { url: errorPageUrl });
@@ -91,20 +90,7 @@ export async function errorpage(tabId: number, error?: WebcatError) {
     browser.tabs.onUpdated.addListener(listener);
   });
 
-  // Wait for DOM to be fully loaded
-  await browser.tabs.executeScript(tabId, {
-    code: `
-      new Promise(resolve => {
-        if (document.readyState === "complete" || document.readyState === "interactive") {
-          resolve();
-        } else {
-          document.addEventListener("DOMContentLoaded", () => resolve(), { once: true });
-        }
-      });
-    `,
-  });
-
-  // 3. Dynamically inject a script *into the error page*
+  // 3. Dynamically inject the error code in the error page
   await browser.tabs.executeScript(tabId, {
     code: `
       document.getElementById("error-code").textContent = ${JSON.stringify(code)};
