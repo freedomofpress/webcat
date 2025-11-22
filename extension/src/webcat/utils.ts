@@ -1,5 +1,3 @@
-import { WebcatError } from "./interfaces/errors";
-
 export function getFQDN(url: string): string {
   const urlobj = new URL(url);
   return urlobj.hostname;
@@ -48,42 +46,19 @@ export function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
-export async function errorpage(tabId: number, error?: WebcatError) {
-  const code = error?.code ?? "WEBCAT_ERROR_UNDEFINED";
-  const errorPageUrl = browser.runtime.getURL("pages/error.html");
+export function isNewerSemver(a: string, b: string): boolean {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
 
-  // Things that do not work:
-  // - Creating a blob dynamically
-  // - Rewriting the page without a redirect
+  const len = Math.max(pa.length, pb.length);
 
-  // Things that are nice to avoid
-  // - Query/fragment parameter passing
-  // - Messaging
+  for (let i = 0; i < len; i++) {
+    const na = pa[i] ?? 0;
+    const nb = pb[i] ?? 0;
 
-  // Current solution is: navigate and then inject a conte script
-  // Avoids messaging, scripts in the page itself, and weird urls
+    if (na > nb) return true;
+    if (na < nb) return false;
+  }
 
-  // 1. Navigate to the error page
-  await browser.tabs.update(tabId, { url: errorPageUrl });
-
-  // 2. Wait until the extension page loads
-  await new Promise<void>((resolve) => {
-    const listener = (
-      updatedTabId: number,
-      changeInfo: browser.tabs._OnUpdatedChangeInfo,
-    ) => {
-      if (updatedTabId === tabId && changeInfo.status === "complete") {
-        browser.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }
-    };
-    browser.tabs.onUpdated.addListener(listener);
-  });
-
-  // 3. Dynamically inject a script *into the error page*
-  await browser.tabs.executeScript(tabId, {
-    code: `
-      document.getElementById("error-code").textContent = ${JSON.stringify(code)};
-    `,
-  });
+  return false;
 }
