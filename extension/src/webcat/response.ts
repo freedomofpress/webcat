@@ -18,7 +18,7 @@ import {
 import { logger } from "./logger";
 import { NON_FRAME_TYPES, PASS_THROUGH_TYPES } from "./resources";
 import { errorpage, setOKIcon } from "./ui";
-import { arraysEqual, getFQDN, SHA256 } from "./utils";
+import { arraysEqual, getFQDN, isNewerSemver, SHA256 } from "./utils";
 import { extractAndValidateHeaders } from "./validators";
 
 export async function validateResponseHeaders(
@@ -49,6 +49,7 @@ export async function validateResponseHeaders(
   // Extract Content-Security-Policy
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const csp = normalizedHeaders.get("content-security-policy")!;
+  const version = normalizedHeaders.get("x-webcat-version");
 
   // Step 2: Populate the required headers in the origin and check the policy
   if (originStateHolder.current.status === "request_sent") {
@@ -117,10 +118,26 @@ export async function validateResponseHeaders(
   ) {
     // Though this should never happen?
     throw new Error(
-      "Validating CSP, but no valid manifest for the origin has been found.",
+      "Validating headers, but no valid manifest for the origin has been found.",
     );
   }
   /* END DEVELOPMENT GUARD */
+
+  // We want the server to be able to tell clients that the webapp
+  // has been updated and that users should update the manifest before loading
+  if (
+    version &&
+    isNewerSemver(version, originStateHolder.current.manifest.version)
+  ) {
+    logger.addLog(
+      "info",
+      `Detected new version ${version}, current_version ${originStateHolder.current.manifest.version}`,
+      details.tabId,
+      fqdn,
+    );
+    origins.delete(fqdn);
+    browser.tabs.reload(details.tabId, { bypassCache: true });
+  }
 
   const pathname = new URL(details.url).pathname;
   if (
@@ -129,8 +146,6 @@ export async function validateResponseHeaders(
       pathname,
     )
   ) {
-    //console.log("CSP:", csp);
-    //console.log("manifest:", originStateHolder.current.manifest.default_csp);
     return new WebcatError(WebcatErrorCode.CSP.MISMATCH, [String(pathname)]);
   }
 
