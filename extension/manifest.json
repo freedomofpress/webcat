@@ -31,23 +31,11 @@
     "scripts": ["dist/bundle.js"],
     "persistent": true
   },
-  "browser_action": {
+  "page_action": {
     "default_icon": {
       "48": "icons/light/webcat.svg",
       "128": "icons/light/webcat.svg"
     },
-    "default_title": "Web integrity protections not available on this page.",
-    "theme_icons": [
-      {
-        "light": "icons/dark/webcat.svg",
-        "dark": "icons/light/webcat.svg",
-        "size": 48
-      },
-      {
-        "light": "icons/dark/webcat.svg",
-        "dark": "icons/light/webcat.svg",
-        "size": 128
-      }
-    ]
+    "default_title": "WEBCAT unavailable on this site."
   }
 }

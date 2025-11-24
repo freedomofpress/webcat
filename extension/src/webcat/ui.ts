@@ -1,3 +1,4 @@
+import { WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
 
 export function isDarkTheme(): boolean {
@@ -12,13 +13,12 @@ export function setIcon(tabId: number) {
 
   logger.addLog("debug", "Setting standard icon", tabId, "");
 
-  browser.browserAction.enable(tabId);
-  browser.browserAction.setIcon({
+  browser.pageAction.show(tabId);
+  browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat.svg`,
+    path: `icons/${theme}/webcat.png`,
   });
-  browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
-  browser.browserAction.setTitle({ tabId, title: "Click for info!" });
+  browser.pageAction.setTitle({ tabId, title: "Click for info!" });
 }
 
 export function setOKIcon(tabId: number) {
@@ -29,15 +29,14 @@ export function setOKIcon(tabId: number) {
   const theme = isDarkTheme() ? "dark" : "light";
 
   logger.addLog("debug", "Setting ok icon", tabId, "");
-  browser.browserAction.enable(tabId);
-  browser.browserAction.setIcon({
+  browser.pageAction.show(tabId);
+  browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-ok.svg`,
+    path: `icons/${theme}/webcat-ok.png`,
   });
-  browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
-  browser.browserAction.setTitle({
+  browser.pageAction.setTitle({
     tabId: tabId,
-    title: "Web integrity verification successful. Click for info!",
+    title: "WEBCAT verification successful",
   });
 }
 
@@ -49,14 +48,52 @@ export function setErrorIcon(tabId: number) {
   const theme = isDarkTheme() ? "dark" : "light";
 
   logger.addLog("debug", "Setting error icon", tabId, "");
-  browser.browserAction.enable(tabId);
-  browser.browserAction.setIcon({
+  browser.pageAction.show(tabId);
+  browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-error.svg`,
+    path: `icons/${theme}/webcat-error.png`,
   });
-  browser.browserAction.setPopup({ tabId, popup: "pages/popup.html" });
-  browser.browserAction.setTitle({
+  browser.pageAction.setTitle({
     tabId: tabId,
-    title: "Web integrity verification failed. Click for info!",
+    title: "WEBCAT verification failed",
+  });
+}
+
+export async function errorpage(tabId: number, error?: WebcatError) {
+  const code = error?.code ?? "WEBCAT_ERROR_UNDEFINED";
+  const errorPageUrl = browser.runtime.getURL("pages/error.html");
+
+  // Things that do not work:
+  // - Creating a blob dynamically
+  // - Rewriting the page without a redirect
+
+  // Things that are nice to avoid
+  // - Query/fragment parameter passing
+  // - Messaging
+
+  // Current solution is: navigate and then inject a content script
+
+  // 1. Navigate to the error page
+  await browser.tabs.update(tabId, { url: errorPageUrl });
+
+  // 2. Wait until the extension page loads
+  await new Promise<void>((resolve) => {
+    const listener = (
+      updatedTabId: number,
+      changeInfo: browser.tabs._OnUpdatedChangeInfo,
+    ) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") {
+        browser.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+    browser.tabs.onUpdated.addListener(listener);
+  });
+
+  // 3. Dynamically inject the error code in the error page
+  await browser.tabs.executeScript(tabId, {
+    code: `
+      document.getElementById("error-code").textContent = ${JSON.stringify(code)};
+    `,
   });
 }

@@ -1,6 +1,0 @@
-aws-wsgi
-flask
-joserfc
-grpcio
-protobuf
-pymysql

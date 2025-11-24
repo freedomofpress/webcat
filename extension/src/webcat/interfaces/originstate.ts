@@ -50,10 +50,10 @@ export abstract class OriginStateBase {
   // Per origin function wrappers: the extension API does not support registering
   // the same listener multiple times with different rules. We thus want a wrapper
   // listener per every origin for their own intercepting function
-  public onBeforeRequest?: (
+  public onBeforeRequest: (
     details: browser.webRequest._OnBeforeRequestDetails,
   ) => Promise<browser.webRequest.BlockingResponse>;
-  public onHeadersReceived?: (
+  public onHeadersReceived: (
     details: browser.webRequest._OnHeadersReceivedDetails,
   ) => Promise<browser.webRequest.BlockingResponse>;
 
