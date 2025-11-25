@@ -16,7 +16,7 @@ export function setIcon(tabId: number) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat.png`,
+    path: `icons/${theme}/webcat.svg`,
   });
   browser.pageAction.setTitle({ tabId, title: "Click for info!" });
 }
@@ -32,7 +32,7 @@ export function setOKIcon(tabId: number) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-ok.png`,
+    path: `icons/${theme}/webcat-ok.svg`,
   });
   browser.pageAction.setTitle({
     tabId: tabId,
@@ -51,7 +51,7 @@ export function setErrorIcon(tabId: number) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-error.png`,
+    path: `icons/${theme}/webcat-error.svg`,
   });
   browser.pageAction.setTitle({
     tabId: tabId,
