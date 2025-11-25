@@ -1,5 +1,5 @@
 import { nonOrigins, origins } from "./../globals";
-import { base64ToUint8Array } from "./encoding";
+import { base64UrlToUint8Array } from "./encoding";
 import { logger } from "./logger";
 import { SHA256 } from "./utils";
 
@@ -181,12 +181,22 @@ export async function updateDatabase(
     const rawBytes = new Uint8Array(64);
     const encoder = new TextEncoder();
 
-    const staticPolicy = base64ToUint8Array(
+    let staticPolicy = base64UrlToUint8Array(
       "TSNydkDZBv6QNZ3m7ZuBP9fFj0TD6hHDmzcwu9ulK3A",
     ); // Replace if needed
 
-    const ip = `element.nym.re`;
-    const fqdnHash = new Uint8Array(await SHA256(encoder.encode(ip)));
+    let ip = `element.nym.re`;
+    let fqdnHash = new Uint8Array(await SHA256(encoder.encode(ip)));
+    rawBytes.set(fqdnHash, 0);
+    rawBytes.set(staticPolicy, 32);
+
+    await insertBinaryData(db, rawBytes);
+
+    staticPolicy = base64UrlToUint8Array(
+      "KBqFUbjbDeUs_bL0Kux2Koraifhqi0_O0zFjR4zGvuM",
+    );
+    ip = `testapp.nym.re`;
+    fqdnHash = new Uint8Array(await SHA256(encoder.encode(ip)));
     rawBytes.set(fqdnHash, 0);
     rawBytes.set(staticPolicy, 32);
 
