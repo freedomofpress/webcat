@@ -48,3 +48,19 @@ export function Uint8ArrayToBase64Url(uint8Array: Uint8Array): string {
     .replace(/\//g, "_")
     .replace(/=+$/g, "");
 }
+
+export function hexToUint8Array(hex: string): Uint8Array {
+  if (!/^[0-9a-fA-F]*$/.test(hex)) {
+    throw new Error("Hex string contains invalid characters");
+  }
+
+  if (hex.length % 2 !== 0) {
+    throw new Error("Hex string must have an even length");
+  }
+
+  const uint8Array = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < uint8Array.length; i++) {
+    uint8Array[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return uint8Array;
+}

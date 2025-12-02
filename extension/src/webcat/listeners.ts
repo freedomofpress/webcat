@@ -1,3 +1,12 @@
+import { importCommit } from "@freedomofpress/cometbft/dist/commit";
+import { verifyCommit } from "@freedomofpress/cometbft/dist/lightclient";
+import { CommitJson, ValidatorJson } from "@freedomofpress/cometbft/dist/types";
+import { importValidators } from "@freedomofpress/cometbft/dist/validators";
+import {
+  verifyWebcatProof,
+  WebcatLeavesFile,
+} from "@freedomofpress/ics23/dist/webcat";
+
 import { origins, tabs } from "../globals";
 import {
   ensureDBOpen,
@@ -6,6 +15,7 @@ import {
   updateDatabase,
   updateLastChecked,
 } from "./db";
+import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
@@ -13,7 +23,7 @@ import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { validateResponseContent, validateResponseHeaders } from "./response";
 import { errorpage } from "./ui";
-import { getFQDN, isExtensionRequest } from "./utils";
+import { arraysEqual, getFQDN, isExtensionRequest } from "./utils";
 
 declare const __TESTING__: boolean;
 
@@ -24,7 +34,71 @@ async function updateList(db: IDBDatabase) {
     // updateDatabase has also a __TESTING__ condition; later we might want to move everything into the same place
     await updateDatabase(db, "", 1337, new Uint8Array());
   } else {
-    // TODO: Update database from webcat-infra-chain lightblock
+    // Running update procedure from webcat-infra-chain
+    // Steps:
+    // 1. Load validatorSet from disk (must be bundled with the extension for now, we could support validatorSet updates in the future)
+    // 2. Fetch latest block
+    // 3. Verify block against validatorSet
+    // 4. Check block date is > than last update block date
+    // 5. Fetch leaves file
+    // 6. Verify leaves file app_hash matches the block one
+    // 7. Verify leaves against app_hash (leaf by leaf)
+    // 8. Update local database
+
+    // 1 TODO SECURITY: load validatorSet from disk
+    console.log("[webcat] Running production list updater");
+    // 2 Fetch latest block
+    const blockResponse = await fetch(
+      "https://raw.githubusercontent.com/freedomofpress/webcat-infra-chain/refs/heads/main/test_data/block.json",
+      { cache: "no-store" },
+    );
+    const block = await blockResponse.json();
+    console.log("[webcat] Update block fetched");
+    // 3 Verify block against validatorSet
+    const { proto: vset, cryptoIndex } = await importValidators(
+      block.validator_set as ValidatorJson,
+    );
+    const sh = importCommit(block as CommitJson);
+    const out = await verifyCommit(sh, vset, cryptoIndex);
+
+    if (out.ok) {
+      console.log(
+        "[webcat] Block verified, app_hash: ",
+        Uint8ArrayToBase64(out.appHash),
+        "time: ",
+        out.headerTime,
+      );
+    } else {
+      throw new Error(`Block verification failed: out`);
+    }
+
+    // 4 TODO SECURITY: Check block date is > than last update block date
+
+    // 5 Fetch leaves file
+    const leavesResponse = await fetch(
+      "https://raw.githubusercontent.com/freedomofpress/webcat-infra-chain/refs/heads/main/test_data/leaves.json",
+      { cache: "no-store" },
+    );
+    const leaves = (await leavesResponse.json()) as WebcatLeavesFile;
+
+    // 6 Verify leaves file app_hash matches the block one
+    if (!arraysEqual(hexToUint8Array(leaves.proof.app_hash), out.appHash)) {
+      throw new Error("app hash mismatch");
+    }
+
+    // 7 Verify leaves against app_hash (leaf by leaf)
+    const ok = await verifyWebcatProof(leaves);
+    if (!ok) throw new Error("proof did not verify against app hash");
+
+    // pull the representative key/value from the leaf set
+    const { representative_key } = leaves.proof.merkle_proof;
+    const match = leaves.leaves.find(([key]) => key === representative_key);
+    if (!match) throw new Error("representative key missing from leaves");
+
+    const [key, valueHex] = match;
+    console.log("[webcat] Leaf found, key:", key, "value:", valueHex);
+
+    // TODO: 8 Update local database
   }
 }
 
