@@ -18,7 +18,7 @@ import { SHA256 } from "../../src/webcat/utils";
 
 // --- Mocks ---
 
-vi.mock("sigsum/dist/verify", () => ({
+vi.mock("@freedomofpress/sigsum/dist/verify", () => ({
   verifyMessageWithCompiledPolicy: vi.fn(async () => true),
 }));
 

@@ -1,14 +1,14 @@
 import {
   verifyCosignedTreeHead,
   verifySignedTreeHead,
-} from "sigsum/dist//crypto";
+} from "@freedomofpress/sigsum/dist//crypto";
 import {
   evalQuorumBytecode,
   importAndHashAll,
   parseCompiledPolicy,
-} from "sigsum/dist/compiledPolicy";
-import { parseCosignedTreeHead } from "sigsum/dist/proof";
-import { Base64KeyHash, CosignedTreeHead, KeyHash } from "sigsum/dist/types";
+} from "@freedomofpress/sigsum/dist/compiledPolicy";
+import { parseCosignedTreeHead } from "@freedomofpress/sigsum/dist/proof";
+import { Base64KeyHash, CosignedTreeHead, KeyHash } from "@freedomofpress/sigsum/dist/types";
 
 import { getFQDNEnrollment } from "./db";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";

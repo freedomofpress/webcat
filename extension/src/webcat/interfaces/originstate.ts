@@ -1,5 +1,5 @@
-import { RawPublicKey } from "sigsum/dist/types";
-import { verifyMessageWithCompiledPolicy } from "sigsum/dist/verify";
+import { RawPublicKey } from "@freedomofpress/sigsum/dist/types";
+import { verifyMessageWithCompiledPolicy } from "@freedomofpress/sigsum/dist/verify";
 
 import { bundle_name } from "../../config";
 import { canonicalize } from "../canonicalize";
