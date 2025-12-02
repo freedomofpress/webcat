@@ -34,6 +34,8 @@
     "playwright": "^1.54.1"
   },
   "dependencies": {
-    "sigsum": "^0.3.6"
+    "@freedomofpress/sigsum": "^0.3.7",
+    "@freedomofpress/cometbft": "^0.1.1",
+    "@freedomofpress/ics23": "^0.1.1"
   }
 }
