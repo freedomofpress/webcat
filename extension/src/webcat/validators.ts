@@ -8,7 +8,11 @@ import {
   parseCompiledPolicy,
 } from "@freedomofpress/sigsum/dist/compiledPolicy";
 import { parseCosignedTreeHead } from "@freedomofpress/sigsum/dist/proof";
-import { Base64KeyHash, CosignedTreeHead, KeyHash } from "@freedomofpress/sigsum/dist/types";
+import {
+  Base64KeyHash,
+  CosignedTreeHead,
+  KeyHash,
+} from "@freedomofpress/sigsum/dist/types";
 
 import { getFQDNEnrollment } from "./db";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";

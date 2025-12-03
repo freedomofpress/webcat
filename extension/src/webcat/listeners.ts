@@ -86,17 +86,17 @@ async function updateList(db: IDBDatabase) {
       throw new Error("app hash mismatch");
     }
 
-    // 7 Verify leaves against app_hash (leaf by leaf)
-    const ok = await verifyWebcatProof(leaves);
-    if (!ok) throw new Error("proof did not verify against app hash");
+    // 7 Verify leaves against the canonical_root_hash and app_hash
+    const verifiedLeaves = await verifyWebcatProof(leaves);
 
-    // pull the representative key/value from the leaf set
-    const { representative_key } = leaves.proof.merkle_proof;
-    const match = leaves.leaves.find(([key]) => key === representative_key);
-    if (!match) throw new Error("representative key missing from leaves");
+    if (verifiedLeaves === false) {
+      throw new Error("proof did not verify against app hash");
+    }
 
-    const [key, valueHex] = match;
-    console.log("[webcat] Leaf found, key:", key, "value:", valueHex);
+    // verifiedLeaves contains the canonical leaf-set as [key, valueHex] pairs
+    for (const [key, valueHex] of verifiedLeaves) {
+      console.log("[webcat] Valid leaf:", key, valueHex);
+    }
 
     // TODO: 8 Update local database
   }
