@@ -1,6 +1,7 @@
 import { nonOrigins, origins } from "./../globals";
 import { base64ToUint8Array } from "./encoding";
 import { logger } from "./logger";
+import { extractHostname, extractRawHash } from "./parsers";
 import { SHA256 } from "./utils";
 
 export let list_count: number;
@@ -267,6 +268,46 @@ export async function insertBinaryData(db: IDBDatabase, rawBytes: Uint8Array) {
   };
 }
 
+export async function insertWebcatLeaves(
+  db: IDBDatabase,
+  leaves: readonly (readonly [string, string])[],
+) {
+  const CHUNK_SIZE = 1000;
+  const transaction = db.transaction("list", "readwrite");
+  const store = transaction.objectStore("list");
+
+  let processed = 0;
+
+  for (let i = 0; i < leaves.length; i += CHUNK_SIZE) {
+    const chunk = leaves.slice(i, i + CHUNK_SIZE);
+
+    for (const [key, hexValue] of chunk) {
+      //
+      // 1. Extract hostname from the reverse DNS key
+      //
+      const hostname = extractHostname(key);
+      // ex: canonical/.re.nym.element → element.nym.re
+
+      //
+      // 3. Extract raw 32-byte value hash (strip ICS23 prefix)
+      //
+      const leafHash = extractRawHash(hexValue);
+
+      //
+      // 4. Insert key/value hashes into IndexedDB
+      //
+      store.add({
+        fqdnhash: hostname,
+        policyhash: leafHash,
+      });
+
+      processed++;
+    }
+  }
+
+  console.log(`[webcat] Inserted ${processed} leaves into IndexedDB`);
+}
+
 // To be used in the UI
 export async function getCount(storeName: string): Promise<number> {
   await ensureDBOpen();
@@ -307,13 +348,13 @@ export async function getFQDNEnrollment(fqdn: string): Promise<Uint8Array> {
     return new Uint8Array();
   }
 
-  const fqdn_hash = await SHA256(fqdn);
+  //const fqdn_hash = await SHA256(fqdn);
   //console.log(`Checking ${fqdn}, hash = ${arrayBufferToHex(fqdn_hash)}`)
   return new Promise((resolve, reject) => {
     const transaction = list_db.transaction("list", "readonly");
     const store = transaction.objectStore("list");
     const index = store.index("list");
-    const request = index.get(fqdn_hash);
+    const request = index.get(fqdn);
 
     request.onsuccess = () => {
       if (request.result && request.result["policyhash"]) {

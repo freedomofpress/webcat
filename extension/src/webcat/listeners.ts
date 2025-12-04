@@ -11,6 +11,7 @@ import { origins, tabs } from "../globals";
 import {
   ensureDBOpen,
   getFQDNEnrollment,
+  insertWebcatLeaves,
   list_db,
   updateDatabase,
   updateLastChecked,
@@ -47,6 +48,7 @@ async function updateList(db: IDBDatabase) {
 
     // 1 TODO SECURITY: load validatorSet from disk
     console.log("[webcat] Running production list updater");
+    const start = performance.now();
     // 2 Fetch latest block
     const blockResponse = await fetch(
       "https://raw.githubusercontent.com/freedomofpress/webcat-infra-chain/refs/heads/main/test_data/block.json",
@@ -93,12 +95,10 @@ async function updateList(db: IDBDatabase) {
       throw new Error("proof did not verify against app hash");
     }
 
-    // verifiedLeaves contains the canonical leaf-set as [key, valueHex] pairs
-    for (const [key, valueHex] of verifiedLeaves) {
-      console.log("[webcat] Valid leaf:", key, valueHex);
-    }
-
-    // TODO: 8 Update local database
+    await insertWebcatLeaves(db, verifiedLeaves);
+    updateLastChecked(db);
+    const end = performance.now();
+    console.log(`[webcat] List updated successfully in ${end - start} ms`);
   }
 }
 
