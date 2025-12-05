@@ -28,6 +28,10 @@ function cleanup(tabId: number) {
     }
     /* END */
     originState.current.references--;
+    // TODO: we should do this when an origin has 0 tabs AND gets evicted from the lru cache
+    // Theres no reason to do is as soon as all the tabs are closed, cause if it's a frequent website
+    // it will be re-added soon
+
     /* Here we could check if references are 0, and delete the origin object too */
     // TODO: if we do, we should also cleanup the listeners
     /*

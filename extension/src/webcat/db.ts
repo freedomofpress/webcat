@@ -159,7 +159,7 @@ export class WebcatDatabase {
       }
     }
 
-    // 3. Update stored count (replace-only = exact count)
+    // 3. Update stored count
     await new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(new Error("Transaction failed"));
@@ -171,9 +171,7 @@ export class WebcatDatabase {
   async getFQDNEnrollment(fqdn: string): Promise<Uint8Array> {
     const db = await this.ensureDBOpen();
 
-    //
     // 1. Positive-cache hit
-    //
     const originState = origins.get(fqdn);
     if (originState) {
       const cached = originState.current.enrollment_hash;
@@ -185,16 +183,12 @@ export class WebcatDatabase {
       return cached;
     }
 
-    //
     // 2. Negative-cache hit
-    //
     if (nonOrigins.has(fqdn)) {
       return new Uint8Array();
     }
 
-    //
     // 3. IndexedDB lookup
-    //
     return new Promise((resolve, reject) => {
       const tx = db.transaction("list", "readonly");
       const store = tx.objectStore("list");

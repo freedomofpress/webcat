@@ -81,7 +81,7 @@ export async function update(
     }
 
     // TODO: split canonical root hash verification and leaves verification in different steps
-    // So that we update the leaves only if the root hash is new
+    // So that we update the leaves only if the root hash is new. Then we can update lastchecked and lastblocktime only
 
     // 7 Verify leaves against the canonical_root_hash and app_hash
     const verifiedLeaves = await verifyWebcatProof(leaves);
@@ -93,6 +93,7 @@ export async function update(
     await db.setLastChecked();
     await db.updateList(verifiedLeaves);
     await db.setLastBlockTime(out.headerTime?.seconds);
+    await db.setRootHash(leaves.proof.canonical_root_hash);
 
     console.log(`[webcat] List updated successfully`);
   }

@@ -10,21 +10,30 @@ vi.mock("../../src/webcat/logger", () => ({
   },
 }));
 
-vi.mock("../../src/webcat/db", () => ({
-  getFQDNEnrollment: vi.fn(async (fqdn: string) => {
-    if (fqdn === "trusted.com") {
-      return new Uint8Array([0, 1, 2, 3]);
-    } else {
-      return new Uint8Array();
-    }
-  }),
-  getCount: vi.fn(async (storeName: string) => {
-    if (storeName === "list") {
-      return 42;
-    }
-    return 0;
-  }),
-}));
+vi.mock("../../src/webcat/db", () => {
+  return {
+    WebcatDatabase: vi.fn().mockImplementation(() => ({
+      getFQDNEnrollment: vi.fn(async (fqdn: string) => {
+        if (fqdn === "trusted.com") {
+          return new Uint8Array([0, 1, 2, 3]);
+        }
+        return new Uint8Array();
+      }),
+
+      getListCount: vi.fn(async () => 42),
+
+      // Include other methods your test may call
+      setLastChecked: vi.fn(),
+      getLastChecked: vi.fn(async () => Date.now()),
+
+      updateList: vi.fn(),
+      setRootHash: vi.fn(),
+      getRootHash: vi.fn(async () => "deadbeef"),
+      setLastBlockHeight: vi.fn(),
+      getLastBlockHeight: vi.fn(async () => 1337),
+    })),
+  };
+});
 
 describe("validateCSP", () => {
   let valid_sources: Set<string>;
