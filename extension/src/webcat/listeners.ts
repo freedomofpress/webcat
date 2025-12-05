@@ -1,11 +1,5 @@
-import { origins, tabs } from "../globals";
-import {
-  ensureDBOpen,
-  getFQDNEnrollment,
-  list_db,
-  updateDatabase,
-  updateLastChecked,
-} from "./db";
+import { endpoint } from "../config";
+import { db, origins, tabs } from "../globals";
 import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
@@ -13,20 +7,8 @@ import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { validateResponseContent, validateResponseHeaders } from "./response";
 import { errorpage } from "./ui";
+import { update } from "./update";
 import { getFQDN, isExtensionRequest } from "./utils";
-
-declare const __TESTING__: boolean;
-
-async function updateList(db: IDBDatabase) {
-  if (__TESTING__) {
-    console.log("[webcat] Running test list updater");
-    updateLastChecked(db);
-    // updateDatabase has also a __TESTING__ condition; later we might want to move everything into the same place
-    await updateDatabase(db, "", 1337, new Uint8Array());
-  } else {
-    // TODO: Update database from webcat-infra-chain lightblock
-  }
-}
 
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
@@ -46,6 +28,10 @@ function cleanup(tabId: number) {
     }
     /* END */
     originState.current.references--;
+    // TODO: we should do this when an origin has 0 tabs AND gets evicted from the lru cache
+    // Theres no reason to do is as soon as all the tabs are closed, cause if it's a frequent website
+    // it will be re-added soon
+
     /* Here we could check if references are 0, and delete the origin object too */
     // TODO: if we do, we should also cleanup the listeners
     /*
@@ -75,12 +61,9 @@ export async function installListener() {
 export async function startupListener() {
   console.log("[webcat] Running startupListener");
 
-  // Force the database to be initialized if it isn
-  await ensureDBOpen();
-
   // Run the list updater
   try {
-    await updateList(list_db);
+    await update(db, endpoint);
   } catch (e) {
     console.error(`[webcat] List updater failed: ${e}`);
   }
@@ -103,9 +86,9 @@ export async function headersListener(
     // Skip non-enrolled tabs
     (!tabs.has(details.tabId) &&
       details.tabId > 0 &&
-      (await getFQDNEnrollment(fqdn)).length === 0) ||
+      (await db.getFQDNEnrollment(fqdn)).length === 0) ||
     // Skip non-enrolled workers
-    (details.tabId < 0 && (await getFQDNEnrollment(fqdn)).length === 0) ||
+    (details.tabId < 0 && (await db.getFQDNEnrollment(fqdn)).length === 0) ||
     isExtensionRequest(details)
   ) {
     // This is too much noise to really log
@@ -213,7 +196,7 @@ export async function requestListener(
   /* DEVELOPMENT GUARD */
   /*it's here for development: meaning if we reach this stage
     and the fqdn is enrolled, but a entry in the origin map has nor been created, there is a critical security bug */
-  if ((await getFQDNEnrollment(fqdn)).length !== 0 && !origins.has(fqdn)) {
+  if ((await db.getFQDNEnrollment(fqdn)).length !== 0 && !origins.has(fqdn)) {
     console.error(
       "FATAL: loading from an enrolled origin but the state does not exists.",
     );

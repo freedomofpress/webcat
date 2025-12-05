@@ -36,6 +36,6 @@
   "dependencies": {
     "@freedomofpress/sigsum": "^0.3.7",
     "@freedomofpress/cometbft": "^0.1.1",
-    "@freedomofpress/ics23": "^0.1.1"
+    "@freedomofpress/ics23": "^0.1.2"
   }
 }

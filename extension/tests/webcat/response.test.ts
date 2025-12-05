@@ -17,6 +17,30 @@ import {
 import { SHA256 } from "../../src/webcat/utils";
 
 // --- Mocks ---
+vi.mock("../../src/webcat/db", () => {
+  return {
+    WebcatDatabase: vi.fn().mockImplementation(() => ({
+      getFQDNEnrollment: vi.fn(async (fqdn: string) => {
+        if (fqdn === "trusted.com") {
+          return new Uint8Array([0, 1, 2, 3]);
+        }
+        return new Uint8Array();
+      }),
+
+      getListCount: vi.fn(async () => 42),
+
+      // Include other methods your test may call
+      setLastChecked: vi.fn(),
+      getLastChecked: vi.fn(async () => Date.now()),
+
+      updateList: vi.fn(),
+      setRootHash: vi.fn(),
+      getRootHash: vi.fn(async () => "deadbeef"),
+      setLastBlockHeight: vi.fn(),
+      getLastBlockHeight: vi.fn(async () => 1337),
+    })),
+  };
+});
 
 vi.mock("@freedomofpress/sigsum/dist/verify", () => ({
   verifyMessageWithCompiledPolicy: vi.fn(async () => true),
