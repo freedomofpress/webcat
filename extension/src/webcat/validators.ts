@@ -14,7 +14,7 @@ import {
   KeyHash,
 } from "@freedomofpress/sigsum/dist/types";
 
-import { getFQDNEnrollment } from "./db";
+import { db } from "./../globals";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDNSafe } from "./utils";
@@ -210,7 +210,7 @@ export async function validateCSP(
         );
       }
 
-      if ((await getFQDNEnrollment(fqdn)).length !== 0) {
+      if ((await db.getFQDNEnrollment(fqdn)).length !== 0) {
         valid_sources.add(fqdn);
         return true;
       } else {

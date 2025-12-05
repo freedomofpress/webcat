@@ -1,5 +1,5 @@
 import { origins, tabs } from "./../globals";
-import { getFQDNEnrollment } from "./db";
+import { db } from "./../globals";
 import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
@@ -18,7 +18,7 @@ export async function validateOrigin(
   tabId: number,
   type: metadataRequestSource,
 ) {
-  const enrollment_hash = await getFQDNEnrollment(fqdn);
+  const enrollment_hash = await db.getFQDNEnrollment(fqdn);
   if (enrollment_hash.length === 0) {
     //console.debug(`${url} is not enrolled, skipping...`);
     return;

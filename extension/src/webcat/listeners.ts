@@ -1,22 +1,5 @@
-import { importCommit } from "@freedomofpress/cometbft/dist/commit";
-import { verifyCommit } from "@freedomofpress/cometbft/dist/lightclient";
-import { CommitJson, ValidatorJson } from "@freedomofpress/cometbft/dist/types";
-import { importValidators } from "@freedomofpress/cometbft/dist/validators";
-import {
-  verifyWebcatProof,
-  WebcatLeavesFile,
-} from "@freedomofpress/ics23/dist/webcat";
-
-import { origins, tabs } from "../globals";
-import {
-  ensureDBOpen,
-  getFQDNEnrollment,
-  insertWebcatLeaves,
-  list_db,
-  updateDatabase,
-  updateLastChecked,
-} from "./db";
-import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
+import { endpoint } from "../config";
+import { db, origins, tabs } from "../globals";
 import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
@@ -24,83 +7,8 @@ import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { validateResponseContent, validateResponseHeaders } from "./response";
 import { errorpage } from "./ui";
-import { arraysEqual, getFQDN, isExtensionRequest } from "./utils";
-
-declare const __TESTING__: boolean;
-
-async function updateList(db: IDBDatabase) {
-  if (__TESTING__) {
-    console.log("[webcat] Running test list updater");
-    updateLastChecked(db);
-    // updateDatabase has also a __TESTING__ condition; later we might want to move everything into the same place
-    await updateDatabase(db, "", 1337, new Uint8Array());
-  } else {
-    // Running update procedure from webcat-infra-chain
-    // Steps:
-    // 1. Load validatorSet from disk (must be bundled with the extension for now, we could support validatorSet updates in the future)
-    // 2. Fetch latest block
-    // 3. Verify block against validatorSet
-    // 4. Check block date is > than last update block date
-    // 5. Fetch leaves file
-    // 6. Verify leaves file app_hash matches the block one
-    // 7. Verify leaves against app_hash (leaf by leaf)
-    // 8. Update local database
-
-    // 1 TODO SECURITY: load validatorSet from disk
-    console.log("[webcat] Running production list updater");
-    const start = performance.now();
-    // 2 Fetch latest block
-    const blockResponse = await fetch(
-      "https://raw.githubusercontent.com/freedomofpress/webcat-infra-chain/refs/heads/main/test_data/block.json",
-      { cache: "no-store" },
-    );
-    const block = await blockResponse.json();
-    console.log("[webcat] Update block fetched");
-    // 3 Verify block against validatorSet
-    const { proto: vset, cryptoIndex } = await importValidators(
-      block.validator_set as ValidatorJson,
-    );
-    const sh = importCommit(block as CommitJson);
-    const out = await verifyCommit(sh, vset, cryptoIndex);
-
-    if (out.ok) {
-      console.log(
-        "[webcat] Block verified, app_hash: ",
-        Uint8ArrayToBase64(out.appHash),
-        "time: ",
-        out.headerTime,
-      );
-    } else {
-      throw new Error(`Block verification failed: out`);
-    }
-
-    // 4 TODO SECURITY: Check block date is > than last update block date
-
-    // 5 Fetch leaves file
-    const leavesResponse = await fetch(
-      "https://raw.githubusercontent.com/freedomofpress/webcat-infra-chain/refs/heads/main/test_data/leaves.json",
-      { cache: "no-store" },
-    );
-    const leaves = (await leavesResponse.json()) as WebcatLeavesFile;
-
-    // 6 Verify leaves file app_hash matches the block one
-    if (!arraysEqual(hexToUint8Array(leaves.proof.app_hash), out.appHash)) {
-      throw new Error("app hash mismatch");
-    }
-
-    // 7 Verify leaves against the canonical_root_hash and app_hash
-    const verifiedLeaves = await verifyWebcatProof(leaves);
-
-    if (verifiedLeaves === false) {
-      throw new Error("proof did not verify against app hash");
-    }
-
-    await insertWebcatLeaves(db, verifiedLeaves);
-    updateLastChecked(db);
-    const end = performance.now();
-    console.log(`[webcat] List updated successfully in ${end - start} ms`);
-  }
-}
+import { update } from "./update";
+import { getFQDN, isExtensionRequest } from "./utils";
 
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
@@ -149,12 +57,9 @@ export async function installListener() {
 export async function startupListener() {
   console.log("[webcat] Running startupListener");
 
-  // Force the database to be initialized if it isn
-  await ensureDBOpen();
-
   // Run the list updater
   try {
-    await updateList(list_db);
+    await update(db, endpoint);
   } catch (e) {
     console.error(`[webcat] List updater failed: ${e}`);
   }
@@ -177,9 +82,9 @@ export async function headersListener(
     // Skip non-enrolled tabs
     (!tabs.has(details.tabId) &&
       details.tabId > 0 &&
-      (await getFQDNEnrollment(fqdn)).length === 0) ||
+      (await db.getFQDNEnrollment(fqdn)).length === 0) ||
     // Skip non-enrolled workers
-    (details.tabId < 0 && (await getFQDNEnrollment(fqdn)).length === 0) ||
+    (details.tabId < 0 && (await db.getFQDNEnrollment(fqdn)).length === 0) ||
     isExtensionRequest(details)
   ) {
     // This is too much noise to really log
@@ -287,7 +192,7 @@ export async function requestListener(
   /* DEVELOPMENT GUARD */
   /*it's here for development: meaning if we reach this stage
     and the fqdn is enrolled, but a entry in the origin map has nor been created, there is a critical security bug */
-  if ((await getFQDNEnrollment(fqdn)).length !== 0 && !origins.has(fqdn)) {
+  if ((await db.getFQDNEnrollment(fqdn)).length !== 0 && !origins.has(fqdn)) {
     console.error(
       "FATAL: loading from an enrolled origin but the state does not exists.",
     );
