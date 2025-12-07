@@ -1,5 +1,7 @@
 // From https://github.com/helmetjs/content-security-policy-parser/blob/main/mod.ts
 
+import { hexToUint8Array } from "./encoding";
+
 type ParsedContentSecurityPolicy = Map<string, string[]>;
 
 // "ASCII whitespace is U+0009 TAB, U+000A LF, U+000C FF, U+000D CR, or
@@ -73,4 +75,28 @@ export function parseContentSecurityPolicy(
   }
 
   return result;
+}
+
+export function extractHostname(key: string): string {
+  // 1. strip canonical/
+  let host = key.replace(/^canonical\//, "");
+
+  // 2. strip leading dot (".re.nym.element" → "re.nym.element")
+  host = host.replace(/^\./, "");
+
+  // 3. reverse label order ("re.nym.element" → ["re","nym","element"] → ["element","nym","re"])
+  const labels = host.split(".");
+
+  // 4. reverse & join
+  return labels.reverse().join(".");
+}
+
+export function extractRawHash(hexValue: string): Uint8Array {
+  const bytes = hexToUint8Array(hexValue);
+
+  if (bytes[0] !== 0x0a) throw new Error("Unexpected ICS23 prefix");
+  const len = bytes[1];
+  const valueBytes = bytes.slice(2, 2 + len);
+
+  return valueBytes;
 }
