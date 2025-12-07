@@ -2,6 +2,7 @@ import { RawPublicKey } from "@freedomofpress/sigsum/dist/types";
 import { verifyMessageWithCompiledPolicy } from "@freedomofpress/sigsum/dist/verify";
 
 import { bundle_name } from "../../config";
+import { db } from "../../globals";
 import { canonicalize } from "../canonicalize";
 import { base64UrlToUint8Array, stringToUint8Array } from "../encoding";
 import { headersListener, requestListener } from "../listeners";
@@ -46,6 +47,7 @@ export abstract class OriginStateBase {
   public readonly manifest?: Manifest;
   public readonly valid_signers?: Set<string>;
   public readonly valid_sources?: Set<string>;
+  public readonly delegation?: string;
 
   // Per origin function wrappers: the extension API does not support registering
   // the same listener multiple times with different rules. We thus want a wrapper
@@ -144,11 +146,25 @@ export class OriginStateInitial extends OriginStateBase {
     super(scheme, port, fqdn, enrollment_hash);
   }
 
+  public async verifyDelegation(delegation: string): Promise<boolean> {
+    const delegation_hash = await db.getFQDNEnrollment(delegation);
+    return (
+      delegation_hash && arraysEqual(delegation_hash, this.enrollment_hash)
+    );
+  }
+
   public async verifyEnrollment(
     enrollment?: Enrollment,
+    delegation?: string,
   ): Promise<OriginStateVerifiedEnrollment | OriginStateFailed> {
+    let verified_delegation;
+    if (delegation && (await this.verifyDelegation(delegation))) {
+      verified_delegation = delegation;
+    }
+
     // Enrollment info can be fetched from a manifest bundle,
     // or we should support supplying it differently, such is in http headers
+
     if (!enrollment) {
       const res = await this.awaitBundle();
       if (res instanceof OriginStateFailed) {
@@ -251,7 +267,11 @@ export class OriginStateInitial extends OriginStateBase {
     // parse the compiled sigsum policy once here instead of doing that
     // at every verification. Currently the sigsum-ts lib does not support that
     // and maybe more abstraction there would be useful
-    const next = new OriginStateVerifiedEnrollment(this, enrollment);
+    const next = new OriginStateVerifiedEnrollment(
+      this,
+      enrollment,
+      verified_delegation,
+    );
     next.bundlePromise = this.bundlePromise;
     return next;
   }
@@ -260,9 +280,14 @@ export class OriginStateInitial extends OriginStateBase {
 export class OriginStateVerifiedEnrollment extends OriginStateBase {
   public readonly status = "verified_enrollment" as const;
   public readonly enrollment: Enrollment;
+  public readonly delegation?: string | undefined;
   public bundle?: Bundle;
 
-  constructor(prev: OriginStateInitial, enrollment: Enrollment) {
+  constructor(
+    prev: OriginStateInitial,
+    enrollment: Enrollment,
+    delegation: string | undefined,
+  ) {
     super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
     this.bundle = prev.bundle;
     this.bundlePromise = prev.bundlePromise;
@@ -270,6 +295,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     this.onHeadersReceived = prev.onHeadersReceived;
     this.references = prev.references;
     this.enrollment = enrollment;
+    this.delegation = delegation;
   }
 
   public async verifyManifest(
@@ -479,6 +505,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
 
 export class OriginStateVerifiedManifest extends OriginStateBase {
   public readonly status = "verified_manifest" as const;
+  public readonly delegation?: string | undefined;
   public readonly enrollment: Enrollment;
   public readonly manifest: Manifest;
   public readonly valid_sources: Set<string> = new Set();
@@ -497,6 +524,7 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     this.enrollment = prev.enrollment;
     this.manifest = manifest;
     this.valid_sources = valid_sources;
+    this.delegation = prev.delegation;
   }
 
   public verifyCSP(csp: string, pathname: string) {

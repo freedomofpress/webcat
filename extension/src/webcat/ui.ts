@@ -18,10 +18,10 @@ export function setIcon(tabId: number) {
     tabId: tabId,
     path: `icons/${theme}/webcat.png`,
   });
-  browser.pageAction.setTitle({ tabId, title: "Click for info!" });
+  browser.pageAction.setTitle({ tabId, title: "WEBCAT is running" });
 }
 
-export function setOKIcon(tabId: number) {
+export function setOKIcon(tabId: number, delegation?: string) {
   if (tabId < 0) {
     return;
   }
@@ -34,9 +34,15 @@ export function setOKIcon(tabId: number) {
     tabId: tabId,
     path: `icons/${theme}/webcat-ok.png`,
   });
+
+  let message = "WEBCAT verification successful";
+  if (delegation) {
+    message += ` (${delegation})`;
+  }
+
   browser.pageAction.setTitle({
     tabId: tabId,
-    title: "WEBCAT verification successful",
+    title: message,
   });
 }
 

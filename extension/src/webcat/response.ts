@@ -50,13 +50,16 @@ export async function validateResponseHeaders(
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   const csp = normalizedHeaders.get("content-security-policy")!;
   const version = normalizedHeaders.get("x-webcat-version");
+  const delegation = normalizedHeaders.get("x-webcat-delegation");
+  const enrollment_header = normalizedHeaders.get("x-webcat-enrollment");
 
   // Step 2: Populate the required headers in the origin and check the policy
   if (originStateHolder.current.status === "request_sent") {
+    // let's check for delegation and add it only when populating the orgin the first time
+
     // enrollment info can be bundled with the manifest or passed in header
     // when passed in headers we gain async time because enrollment validation
     // becomes nonblocking, while in the other case we have for the background fetch to wait
-    const enrollment_header = normalizedHeaders.get("x-webcat-enrollment");
     let enrollment: Enrollment;
     if (enrollment_header) {
       try {
@@ -68,11 +71,11 @@ export async function validateResponseHeaders(
       }
       originStateHolder.current = await (
         originStateHolder.current as OriginStateInitial
-      ).verifyEnrollment(enrollment);
+      ).verifyEnrollment(enrollment, delegation);
     } else {
       originStateHolder.current = await (
         originStateHolder.current as OriginStateInitial
-      ).verifyEnrollment();
+      ).verifyEnrollment(undefined, delegation);
     }
 
     if (originStateHolder.current.status === "failed") {
@@ -159,7 +162,7 @@ export async function validateResponseHeaders(
   // TODO (performance): significant amount of time is spent calling this function
   // at every loaded file, without added benefit. It should be enough to call it if
   // details.type == "main_frame", but then the icon change does not work...
-  setOKIcon(details.tabId);
+  setOKIcon(details.tabId, originStateHolder.current.delegation);
 }
 
 function getVerifiedManifestState(fqdn: string): OriginStateHolder {
@@ -282,7 +285,7 @@ export async function validateResponseContent(
     // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
     // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
     filter.close();
-    setOKIcon(details.tabId);
+    setOKIcon(details.tabId, originStateHolder.current.delegation);
     // Redirect the main frame to an error page
   };
 }
