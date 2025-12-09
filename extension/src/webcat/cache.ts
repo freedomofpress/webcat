@@ -1,10 +1,18 @@
-export class LRUCache<K, V> {
+type Destructible = { destructor?: () => void };
+
+export class LRUCache<K, V extends Destructible> {
   private cache: Map<K, V>;
   private limit: number;
 
   constructor(limit: number) {
     this.limit = limit;
     this.cache = new Map<K, V>();
+  }
+
+  private callDestructor(value: V): void {
+    if (value.destructor) {
+      value.destructor();
+    }
   }
 
   get(key: K): V | undefined {
@@ -38,7 +46,11 @@ export class LRUCache<K, V> {
     return Array.from(this.cache.keys());
   }
 
-  delete(key: K) {
+  delete(key: K): void {
+    const value = this.cache.get(key);
+    if (value !== undefined) {
+      this.callDestructor(value);
+    }
     this.cache.delete(key);
   }
 }

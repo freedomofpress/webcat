@@ -32,6 +32,17 @@ export class OriginStateHolder {
       cache: "no-store",
     });
   }
+
+  // Remove the listeners if the class det destroyed (called on cache eviction)
+  destructor(): void {
+    // Remove the Mozilla API listeners
+    browser.webRequest.onBeforeRequest.removeListener(
+      this.current.onBeforeRequest,
+    );
+    browser.webRequest.onHeadersReceived.removeListener(
+      this.current.onHeadersReceived,
+    );
+  }
 }
 
 // The OriginState class caches origins and assumes safe defaults. We assume we are enrolled and nothing is verified.
@@ -209,8 +220,9 @@ export class OriginStateInitial extends OriginStateBase {
         return res;
       }
       // Let's use the enrollment fallback
-      // eslint-disable-next-line
+
       const canonicalized_prev = stringToUint8Array(
+        // eslint-disable-next-line
         canonicalize(this.bundle!.enrollment),
       );
       const canonicalized_hash_prev = new Uint8Array(
