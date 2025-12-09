@@ -9,6 +9,7 @@ export interface ListMetadata {
 
 // Settings keys
 const KEY_LAST_CHECKED = "lastChecked";
+const KEY_LAST_UPDATED = "lastUpdated";
 const KEY_ROOT_HASH = "rootHash";
 const KEY_LAST_BLOCK_TIME = "lastBlockTime";
 const KEY_LIST_COUNT = "listCount";
@@ -98,6 +99,15 @@ export class WebcatDatabase {
 
   async getLastChecked(): Promise<number | null> {
     return this.settingsGet<number>(KEY_LAST_CHECKED);
+  }
+
+  async setLastUpdated(): Promise<void> {
+    const now = Date.now();
+    await this.settingsSet(KEY_LAST_UPDATED, now);
+  }
+
+  async getLastUpdated(): Promise<number | null> {
+    return this.settingsGet<number>(KEY_LAST_UPDATED);
   }
 
   async setRootHash(hash: string): Promise<void> {

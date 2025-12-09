@@ -7,7 +7,7 @@ import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { validateResponseContent, validateResponseHeaders } from "./response";
 import { errorpage } from "./ui";
-import { update } from "./update";
+import { initializeScheduledUpdates, retryUpdateIfFailed } from "./update";
 import { getFQDN, isExtensionRequest } from "./utils";
 
 function cleanup(tabId: number) {
@@ -45,11 +45,7 @@ export async function startupListener() {
   console.log("[webcat] Running startupListener");
 
   // Run the list updater
-  try {
-    await update(db, endpoint);
-  } catch (e) {
-    console.error(`[webcat] List updater failed: ${e}`);
-  }
+  await initializeScheduledUpdates(db, endpoint);
 }
 
 export function tabCloseListener(
@@ -157,6 +153,8 @@ export async function requestListener(
       details.tabId,
       fqdn,
     );
+
+    await retryUpdateIfFailed(db, endpoint);
 
     const result = await validateOrigin(
       fqdn,
