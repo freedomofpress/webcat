@@ -1,7 +1,7 @@
 import { RawPublicKey } from "@freedomofpress/sigsum/dist/types";
 import { verifyMessageWithCompiledPolicy } from "@freedomofpress/sigsum/dist/verify";
 
-import { bundle_name } from "../../config";
+import { bundle_name, bundle_prev_name } from "../../config";
 import { db } from "../../globals";
 import { canonicalize } from "../canonicalize";
 import { base64UrlToUint8Array, stringToUint8Array } from "../encoding";
@@ -24,8 +24,13 @@ export class OriginStateHolder {
       | OriginStateVerifiedManifest
       | OriginStateFailed,
   ) {
-    const url = `${current.scheme}//${current.fqdn}:${current.port}/${bundle_name}`;
-    current.bundlePromise = fetch(url, { cache: "no-store" });
+    const base = `${current.scheme}//${current.fqdn}:${current.port}/`;
+    current.bundlePromise = fetch(`${base}/${bundle_name}`, {
+      cache: "no-store",
+    });
+    current.bundlePrevPromise = fetch(`${base}/${bundle_prev_name}`, {
+      cache: "no-store",
+    });
   }
 }
 
@@ -41,6 +46,8 @@ export abstract class OriginStateBase {
   public readonly fqdn: string;
   public readonly enrollment_hash: Uint8Array;
   public bundlePromise?: Promise<Response>;
+  public bundlePrevPromise?: Promise<Response>;
+  public bundle_source: "current" | "previous" = "current";
   public references: number;
   public bundle?: Bundle;
   public readonly enrollment?: Enrollment;
@@ -77,20 +84,27 @@ export abstract class OriginStateBase {
     this.onHeadersReceived = (details) => headersListener(details);
   }
 
-  public async awaitBundle() {
+  public async awaitBundle(source: "current" | "previous") {
     // If we already have a bundle, consider it done
-    if (this.bundle) {
+    if (this.bundle && this.bundle_source === source) {
       return;
     }
     // If bundlePromise was awaited before and cached a failure result,
     // we don't want to re-fetch, so detect that. It should never happen
-    if (!this.bundlePromise) {
+    let promise;
+    if (source == "current") {
+      promise = this.bundlePromise;
+    } else if (source == "previous") {
+      promise = this.bundlePrevPromise;
+    }
+
+    if (!promise) {
       return new OriginStateFailed(
         this,
         new WebcatError(WebcatErrorCode.Fetch.FETCH_PROMISE_MISSING),
       );
     }
-    const bundleResponse = await this.bundlePromise;
+    const bundleResponse = await promise;
     if (bundleResponse.ok !== true) {
       return new OriginStateFailed(
         this,
@@ -117,6 +131,7 @@ export abstract class OriginStateBase {
       );
     }
     this.bundle = bundle_data;
+    this.bundle_source = source;
   }
 }
 
@@ -166,7 +181,7 @@ export class OriginStateInitial extends OriginStateBase {
     // or we should support supplying it differently, such is in http headers
 
     if (!enrollment) {
-      const res = await this.awaitBundle();
+      const res = await this.awaitBundle("current");
       if (res instanceof OriginStateFailed) {
         return res;
       }
@@ -179,11 +194,35 @@ export class OriginStateInitial extends OriginStateBase {
     const canonicalized_hash = new Uint8Array(await SHA256(canonicalized));
 
     // If it doesn't match, stop early
-    if (!arraysEqual(this.enrollment_hash, canonicalized_hash)) {
+    const match = arraysEqual(this.enrollment_hash, canonicalized_hash);
+    // In this case, we already tried both bundles and we should bail
+    if (!match && this.bundle_source == "previous") {
       return new OriginStateFailed(
         this,
         new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
       );
+      // Othweise we shpould await the previous
+    } else if (!match && this.bundle_source == "current") {
+      const res = await this.awaitBundle("previous");
+      // If we are here and the fetch fails, its fatal
+      if (res instanceof OriginStateFailed) {
+        return res;
+      }
+      // Let's use the enrollment fallback
+      // eslint-disable-next-line
+      const canonicalized_prev = stringToUint8Array(
+        canonicalize(this.bundle!.enrollment),
+      );
+      const canonicalized_hash_prev = new Uint8Array(
+        await SHA256(canonicalized_prev),
+      );
+      // If this also fails it's fatal
+      if (!arraysEqual(this.enrollment_hash, canonicalized_hash_prev)) {
+        return new OriginStateFailed(
+          this,
+          new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
+        );
+      }
     }
 
     if (typeof enrollment.policy !== "string") {
@@ -304,8 +343,10 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
   ): Promise<OriginStateVerifiedManifest | OriginStateFailed> {
     // Manifest info can be fetched from a manifest bundle,
     // or we should support supplying it differently
+    // If enrollment information is passed from headers or another source, then we do not support
+    // a fallbackm bundle at the moment
     if (!manifest || !signatures) {
-      const res = await this.awaitBundle();
+      const res = await this.awaitBundle("current");
       if (res instanceof OriginStateFailed) {
         return res;
       }
