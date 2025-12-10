@@ -132,11 +132,8 @@ async function checkAndUpdate(
 // Main update function
 async function update(db: WebcatDatabase, endpoint: string): Promise<void> {
   try {
-    console.log("[webcat] Running test list updater");
-    await db.setLastChecked();
-    await db.setLastUpdated();
-
     console.log("[webcat] Running production list updater");
+    await db.setLastChecked();
 
     // 2 Fetch latest block (with timeout)
     const blockResponse = await fetchWithTimeout(`${endpoint}block.json`);
@@ -185,7 +182,6 @@ async function update(db: WebcatDatabase, endpoint: string): Promise<void> {
       throw new Error("proof did not verify against app hash");
     }
 
-    await db.setLastChecked();
     await db.updateList(verifiedLeaves);
     await db.setLastBlockTime(out.headerTime?.seconds);
     await db.setRootHash(leaves.proof.canonical_root_hash);
