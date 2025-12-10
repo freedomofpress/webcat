@@ -1,7 +1,4 @@
 export const version = 0.2;
-// TODO: decide when to fetch what! We could obtain enrollment info earlier
-// eg. via headers, or we might have enrollment info cached but wanted to fetch
-// a new manifest
 export const enrollment_name = "/.well-known/webcat/enrollment.json";
 export const manifest_name = "/.well-known/webcat/manifest.json";
 export const bundle_name = "/.well-known/webcat/bundle.json";
