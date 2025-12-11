@@ -168,7 +168,7 @@ async function update(db: WebcatDatabase, endpoint: string): Promise<void> {
     }
 
     // 5 Fetch leaves file (with timeout)
-    const leavesResponse = await fetchWithTimeout(`${endpoint}leaves.json`);
+    const leavesResponse = await fetchWithTimeout(`${endpoint}list.json`);
     const leaves = (await leavesResponse.json()) as WebcatLeavesFile;
 
     // 6 Verify leaves file app_hash matches the block one
