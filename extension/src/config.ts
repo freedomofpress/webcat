@@ -7,6 +7,4 @@ export const bundle_prev_name = "/.well-known/webcat/bundle-prev.json";
 export const lru_cache_size = 32;
 // Items here are just the size in bytes for a domain
 export const lru_set_size = 8192;
-//export const endpoint = "https://webcat.freedom.press";
-export const endpoint =
-  "https://raw.githubusercontent.com/freedomofpress/webcat-infra-chain/refs/heads/main/test_data/";
+export const endpoint = "https://webcat.freedom.press/";
