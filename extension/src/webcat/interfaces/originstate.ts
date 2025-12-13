@@ -188,7 +188,6 @@ export class OriginStateInitial extends OriginStateBase {
       verified_delegation = delegation;
     }
 
-    const enrollmentFromBundle = !enrollment;
     // Enrollment info can be fetched from a manifest bundle,
     // or we should support supplying it differently, such is in http headers
 
@@ -210,27 +209,14 @@ export class OriginStateInitial extends OriginStateBase {
     // If it doesn't match, stop early
     const match = arraysEqual(this.enrollment_hash, canonicalized_hash);
     // In this case, we already tried both bundles and we should bail
-<<<<<<< HEAD
-    if (!match && (this.bundle_source == "previous" || !enrollmentFromBundle)) {
-=======
     // Or we got direct enrollment passed, and we shpuldn't fallback automatically
     if (!match && (this.bundle_source == "previous" || !fetched)) {
->>>>>>> 01e86cd (Fix logic when enrollment is supplied externally)
       return new OriginStateFailed(
         this,
         new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
       );
-<<<<<<< HEAD
-      // Othweise we should await the previous
-    } else if (
-      !match &&
-      this.bundle_source == "current" &&
-      enrollmentFromBundle
-    ) {
-=======
       // Otherwise we shpould await the previous
     } else if (!match && this.bundle_source == "current") {
->>>>>>> 01e86cd (Fix logic when enrollment is supplied externally)
       const res = await this.awaitBundle("previous");
       // If we are here and the fetch fails, its fatal
       if (res instanceof OriginStateFailed) {
