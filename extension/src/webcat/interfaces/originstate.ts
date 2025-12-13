@@ -191,6 +191,7 @@ export class OriginStateInitial extends OriginStateBase {
     // Enrollment info can be fetched from a manifest bundle,
     // or we should support supplying it differently, such is in http headers
 
+    let fetched = false;
     if (!enrollment) {
       const res = await this.awaitBundle("current");
       if (res instanceof OriginStateFailed) {
@@ -199,6 +200,7 @@ export class OriginStateInitial extends OriginStateBase {
       // We can assert here because the check is guaranteed in awaitBundle
       // eslint-disable-next-line
       enrollment = this.bundle!.enrollment;
+      fetched = true;
     }
 
     const canonicalized = stringToUint8Array(canonicalize(enrollment));
@@ -207,12 +209,13 @@ export class OriginStateInitial extends OriginStateBase {
     // If it doesn't match, stop early
     const match = arraysEqual(this.enrollment_hash, canonicalized_hash);
     // In this case, we already tried both bundles and we should bail
-    if (!match && this.bundle_source == "previous") {
+    // Or we got direct enrollment passed, and we shpuldn't fallback automatically
+    if (!match && (this.bundle_source == "previous" || !fetched)) {
       return new OriginStateFailed(
         this,
         new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
       );
-      // Othweise we shpould await the previous
+      // Otherwise we shpould await the previous
     } else if (!match && this.bundle_source == "current") {
       const res = await this.awaitBundle("previous");
       // If we are here and the fetch fails, its fatal
