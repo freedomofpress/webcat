@@ -9,8 +9,7 @@ import {
 import { logger } from "./logger";
 import { NON_FRAME_TYPES } from "./resources";
 import { setIcon } from "./ui";
-
-declare const __TESTING__: boolean;
+import { enforceHTTPS, validateProtocolAndPort } from "./validators";
 
 export async function validateOrigin(
   fqdn: string,
@@ -31,28 +30,16 @@ export async function validateOrigin(
   // See https://github.com/freedomofpress/webcat/issues/1
   const urlobj = new URL(url);
 
-  // In case of testing we use localhost http for convenience
-  if (!__TESTING__) {
-    if (
-      !["80", "443", ""].includes(urlobj.port) || // Ports 80, 443, or no port specified.
-      !["http:", "https:"].includes(urlobj.protocol) // Protocol must be HTTP or HTTPS.
-    ) {
-      return new WebcatError(WebcatErrorCode.URL.UNSUPPORTED, [
-        String(urlobj.protocol),
-        String(urlobj.port || "default"),
-      ]);
-    }
+  if (!validateProtocolAndPort(urlobj)) {
+    return new WebcatError(WebcatErrorCode.URL.UNSUPPORTED, [
+      String(urlobj.protocol),
+      String(urlobj.port || "default"),
+    ]);
+  }
 
-    // If the website is enrolled but is not https force a redirect
-    // Or maybe not if it's an onion website :)
-    if (
-      urlobj.protocol !== "https:" &&
-      urlobj.hostname.substring(fqdn.lastIndexOf(".")) !== ".onion"
-    ) {
-      urlobj.protocol = "https:";
-      // Redirect to HTTPS
-      return { redirectUrl: urlobj.toString() };
-    }
+  const redirect = enforceHTTPS(urlobj);
+  if (redirect) {
+    return { redirectUrl: redirect };
   }
 
   // Nothing can go wrong in this func anymore hopefully, let's add the reference

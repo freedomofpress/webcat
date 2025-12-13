@@ -435,3 +435,24 @@ export async function witnessTimestampsFromCosignedTreeHead(
 
   return timestamps;
 }
+
+export function validateProtocolAndPort(urlobj: URL): boolean {
+  if (
+    !["80", "443", ""].includes(urlobj.port) ||
+    !["http:", "https:"].includes(urlobj.protocol)
+  ) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
+export function enforceHTTPS(urlobj: URL): string | undefined {
+  if (
+    urlobj.protocol !== "https:" &&
+    urlobj.hostname.substring(urlobj.hostname.lastIndexOf(".")) !== ".onion"
+  ) {
+    urlobj.protocol = "https:";
+    return urlobj.toString();
+  }
+}
