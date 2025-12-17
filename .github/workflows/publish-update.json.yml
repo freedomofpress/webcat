@@ -1,6 +1,7 @@
 name: Publish update.json to R2
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
