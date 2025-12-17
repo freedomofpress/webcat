@@ -1,4 +1,3 @@
-export const version = 0.2;
 export const enrollment_name = "/.well-known/webcat/enrollment.json";
 export const manifest_name = "/.well-known/webcat/manifest.json";
 export const bundle_name = "/.well-known/webcat/bundle.json";

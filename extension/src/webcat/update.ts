@@ -84,8 +84,8 @@ function scheduleNextUpdate(db: WebcatDatabase, endpoint: string): void {
       nowUTC.getUTCFullYear(),
       nowUTC.getUTCMonth(),
       nowUTC.getUTCDate(),
-      1, // hour
-      10, // minute
+      0, // hour
+      15, // minute
       0, // second
       0, // millisecond
     ),
