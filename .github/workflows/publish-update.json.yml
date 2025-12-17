@@ -34,4 +34,4 @@ jobs:
           --s3-no-check-bucket
           --config="/dev/null"
           $PATH_TO_COPY
-          :s3,env_auth:$BUCKET/$PATH_TO_COPY
+          :s3,env_auth:$BUCKET/
