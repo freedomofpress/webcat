@@ -10,7 +10,6 @@
     }
   },
   "permissions": [
-    "storage",
     "webNavigation",
     "webRequest",
     "webRequestBlocking",
