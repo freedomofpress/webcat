@@ -7,6 +7,7 @@ import {
   WebcatLeavesFile,
 } from "@freedomofpress/ics23/dist/webcat";
 
+import validator_set from "../validator_set.json";
 import { WebcatDatabase } from "./db";
 import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { arraysEqual } from "./utils";
@@ -142,7 +143,7 @@ async function update(db: WebcatDatabase, endpoint: string): Promise<void> {
 
     // 3 Verify block against validatorSet
     const { proto: vset, cryptoIndex } = await importValidators(
-      block.validator_set as ValidatorJson,
+      validator_set as ValidatorJson,
     );
     const sh = importCommit(block as CommitJson);
     const out = await verifyCommit(sh, vset, cryptoIndex);

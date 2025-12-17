@@ -1,0 +1,43 @@
+{
+  "validators": [
+    {
+      "address": "48926DF1CC10DBBFAA78953F9BE38E59020DE01D",
+      "pub_key": {
+        "type": "tendermint/PubKeyEd25519",
+        "value": "zEK+pyAEhhCaoHYhhT+rrorJoc9kZbfY+JkbMtF8u5Y="
+      },
+      "power": "1",
+      "name": null
+    },
+    {
+      "address": "A39CFEBE6E8CA10B6101C46884A6EB8E62D04417",
+      "pub_key": {
+        "type": "tendermint/PubKeyEd25519",
+        "value": "8dZUej72UriKCPIDvk01c6yLaAB2ssYIli3fT3jKwSM="
+      },
+      "power": "1",
+      "name": null
+    },
+    {
+      "address": "B734AC6CC1F14AAC8315FE8DBB07402ED4E45D72",
+      "pub_key": {
+        "type": "tendermint/PubKeyEd25519",
+        "value": "WBK6Af3uKtC+VTv8x48f2TPoNnsebSXSBTIsJku/nQw="
+      },
+      "power": "1",
+      "name": null
+    }
+  ],
+  "proposer": {
+    "address": "B734AC6CC1F14AAC8315FE8DBB07402ED4E45D72",
+    "pub_key": {
+      "type": "tendermint/PubKeyEd25519",
+      "value": "WBK6Af3uKtC+VTv8x48f2TPoNnsebSXSBTIsJku/nQw="
+    },
+    "power": "1",
+    "name": null
+  },
+  "total_voting_power": "3",
+  "count": "3",
+  "total": "3"
+}
