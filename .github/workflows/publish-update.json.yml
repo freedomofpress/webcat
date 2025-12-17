@@ -16,7 +16,7 @@ jobs:
       - name: Install dependencies
         run: |
           apt-get update
-          apt-get install --yes rclone
+          apt-get install --yes rclone ca-certificates
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
