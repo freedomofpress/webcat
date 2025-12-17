@@ -1,25 +1,19 @@
 name: Publish update.json to R2
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'update.json'
 
 jobs:
   publish-update:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials for R2
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          aws_endpoint: ${{ secrets.R2_ENDPOINT }}
-
-      - name: Upload update.json to R2
-        run: |
-          aws s3 cp update.json s3://${{ secrets.R2_BUCKET_NAME }}/update.json \
-            --endpoint-url ${{ secrets.R2_ENDPOINT }} \
-            --content-type "application/json"
+    uses: freedomofpress/actionslib/.github/workflows/publish-r2.yaml@main
+    with:
+      path: update.json
+      secrets:
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        R2_BUCKET: ${{ secrets.R2_BUCKET }}
