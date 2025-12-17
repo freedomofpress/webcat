@@ -10,11 +10,28 @@ on:
 
 jobs:
   publish-update:
-    uses: freedomofpress/actionslib/.github/workflows/publish-r2.yaml@main
-    with:
-      path: update.json
-    secrets:
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+    runs-on: ubuntu-latest
+    container: debian:bookworm
+    steps:
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install --yes rclone
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Copy update.json to R2
+        env:
+          RCLONE_S3_PROVIDER: "Cloudflare"
+          RCLONE_S3_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_S3_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_S3_ENDPOINT: "https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com"
+          BUCKET: ${{ secrets.R2_BUCKET }}
+          PATH_TO_COPY: update.json
+        run: >-
+          rclone copy -v
+          --checksum
+          --s3-no-check-bucket
+          --config="/dev/null"
+          $PATH_TO_COPY
+          :s3,env_auth:$BUCKET/$PATH_TO_COPY
