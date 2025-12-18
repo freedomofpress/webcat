@@ -13,7 +13,7 @@ Only allowed attributes are:
 
 If `default-src` is not `none`, than it is required to specify `object-src`, `child-src` or `frame-src` and `worker-src`.
 
-### script-src
+### script-src, script-src-elem
 Only allowed attributes are:
  - `none`
  - `self`
@@ -21,7 +21,7 @@ Only allowed attributes are:
 
 Note `sha-abc` format, while secure, breaks some assumptions about the sandbox and how the `WebAssembly` hooks work, thus it is not allowed.
 
-### style-src
+### style-src, style-src-elem
 Only allowed attirbutes are:
  - `none`
  - `self`
