@@ -16,7 +16,7 @@ export function setIcon(tabId: number) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat.png`,
+    path: `icons/${theme}/webcat.SVG`,
   });
   browser.pageAction.setTitle({ tabId, title: "WEBCAT is running" });
 }
@@ -32,7 +32,7 @@ export function setOKIcon(tabId: number, delegation?: string) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-ok.png`,
+    path: `icons/${theme}/webcat-ok.SVG`,
   });
 
   let message = "WEBCAT verification successful";
@@ -57,7 +57,7 @@ export function setErrorIcon(tabId: number) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-error.png`,
+    path: `icons/${theme}/webcat-error.SVG`,
   });
   browser.pageAction.setTitle({
     tabId: tabId,

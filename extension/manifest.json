@@ -24,13 +24,13 @@
     "<all_urls>"
   ],
   "icons": {
-    "16": "icons/light/webcat.svg",
-    "32": "icons/light/webcat.svg",
-    "48": "icons/light/webcat.svg",
-    "64": "icons/light/webcat.svg",
-    "96": "icons/light/webcat.svg",
-    "128": "icons/light/webcat.svg",
-    "256": "icons/light/webcat.svg"
+    "16": "icons/light/webcat.SVG",
+    "32": "icons/light/webcat.SVG",
+    "48": "icons/light/webcat.SVG",
+    "64": "icons/light/webcat.SVG",
+    "96": "icons/light/webcat.SVG",
+    "128": "icons/light/webcat.SVG",
+    "256": "icons/light/webcat.SVG"
   },
   "content_security_policy": "script-src 'self'; object-src 'none';",
   "background": {
@@ -39,8 +39,8 @@
   },
   "page_action": {
     "default_icon": {
-      "48": "icons/light/webcat.svg",
-      "128": "icons/light/webcat.svg"
+      "48": "icons/light/webcat.SVG",
+      "128": "icons/light/webcat.SVG"
     },
     "default_title": "WEBCAT unavailable on this site."
   }
