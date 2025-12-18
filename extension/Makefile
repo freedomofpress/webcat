@@ -10,13 +10,19 @@ all: package
 install:
 	npm install
 
-package: install
+build:
+	npm run build
+
+build-test:
+	TESTING=true npm run build
+
+package: install build
 	find $(INPUTS) -type f -exec touch -h -t $(FIXED_MTIME) {} +
 	TZ=UTC find $(INPUTS) -type f \
 	  | LC_ALL=C sort \
 	  | zip -X -0 -@ $(OUT)
 
-package-test: install
+package-test: install build-test
 	find $(INPUTS) -type f -exec touch -h -t $(FIXED_MTIME) {} +
 	TZ=UTC find $(INPUTS) -type f \
 	  | LC_ALL=C sort \
