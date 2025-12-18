@@ -11,9 +11,7 @@
     "coverage": "npm run build:hooks && vitest --coverage",
     "test:playwright": "vitest --config vite.config.playwright.ts",
     "test:default": "vitest --config vite.config.ts",
-    "lint": "npx eslint . --fix && npx prettier --write .",
-    "package": "npm run build && node scripts/repro-zip.mjs \"$PACKAGE_OUT\"",
-    "package:test": "TESTING=true npm run build && node scripts/repro-zip.mjs \"$PACKAGE_OUT\""
+    "lint": "npx eslint . --fix && npx prettier --write ."
   },
   "author": "Giulio B",
   "license": "MIT",
