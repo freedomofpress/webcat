@@ -11,7 +11,9 @@
     "coverage": "npm run build:hooks && vitest --coverage",
     "test:playwright": "vitest --config vite.config.playwright.ts",
     "test:default": "vitest --config vite.config.ts",
-    "lint": "npx eslint . --fix && npx prettier --write ."
+    "lint": "npx eslint . --fix && npx prettier --write .",
+    "package": "npm run build && node scripts/repro-zip.mjs \"$PACKAGE_OUT\"",
+    "package:test": "TESTING=true npm run build && node scripts/repro-zip.mjs \"$PACKAGE_OUT\""
   },
   "author": "Giulio B",
   "license": "MIT",
@@ -32,11 +34,13 @@
     "vite": "^6.3.5",
     "vite-plugin-singlefile": "^2.3.0",
     "vite-plugin-web-extension": "^4.4.4",
-    "vitest": "^3.1.2"
+    "vitest": "^3.1.2",
+    "yazl": "^3.3.1"
   },
   "dependencies": {
     "@freedomofpress/cometbft": "^0.1.1",
     "@freedomofpress/ics23": "^0.1.2",
-    "@freedomofpress/sigsum": "^0.3.7"
+    "@freedomofpress/sigsum": "^0.3.7",
+    "yazl": "^3.3.1"
   }
 }
