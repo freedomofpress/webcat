@@ -42,7 +42,7 @@ for (const input of INPUTS) {
     zip.addFile(full, rel, {
       mtime: FIXED_DATE,
       mode: 0o100644,
-      compress: false,
+      compress: true,
     });
   }
 }
