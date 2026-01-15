@@ -12,12 +12,20 @@ import {
   Base64KeyHash,
   CosignedTreeHead,
   KeyHash,
+  RawPublicKey
 } from "@freedomofpress/sigsum/dist/types";
+
+import { SigsumEnrollment, SigstoreEnrollment } from "./interfaces/bundle";
+import { Identity, SigstoreVerifier } from '@freedomofpress/sigstore-browser';
 
 import { db } from "./../globals";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDNSafe } from "./utils";
+import { Manifest, Signatures } from "./interfaces/bundle";
+import { base64UrlToUint8Array, stringToUint8Array } from "./encoding";
+import { canonicalize } from "./canonicalize";
+import { verifyMessageWithCompiledPolicy } from "@freedomofpress/sigsum";
 
 export function extractAndValidateHeaders(
   details: browser.webRequest._OnHeadersReceivedDetails,
@@ -455,4 +463,303 @@ export function enforceHTTPS(urlobj: URL): string | undefined {
     urlobj.protocol = "https:";
     return urlobj.toString();
   }
+}
+
+export function validateSigsumEnrollment(
+  enrollment: SigsumEnrollment,
+): WebcatError | null {
+  if (typeof enrollment.policy !== "string") {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.POLICY_MALFORMED,
+    );
+  }
+
+  if (enrollment.policy.length === 0 || enrollment.policy.length > 8192) {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.POLICY_LENGTH,
+    );
+  }
+
+  if (!Array.isArray(enrollment.signers)) {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.SIGNERS_MALFORMED,
+    );
+  }
+
+  if (enrollment.signers.length === 0) {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.SIGNERS_EMPTY,
+    );
+  }
+
+  for (const key of enrollment.signers) {
+    if (typeof key !== "string") {
+      return new WebcatError(
+        WebcatErrorCode.Enrollment.SIGNERS_KEY_MALFORMED,
+        [String(key)],
+      );
+    }
+  }
+
+  if (
+    typeof enrollment.threshold !== "number" ||
+    !Number.isInteger(enrollment.threshold) ||
+    enrollment.threshold < 1
+  ) {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.THRESHOLD_MALFORMED,
+    );
+  }
+
+  if (enrollment.threshold > enrollment.signers.length) {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE,
+    );
+  }
+
+  if (
+    typeof enrollment.max_age !== "number" ||
+    !Number.isFinite(enrollment.max_age)
+  ) {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED,
+    );
+  }
+
+  if (
+    typeof enrollment.logs !== "object" ||
+    enrollment.logs === null ||
+    Object.keys(enrollment.logs).length === 0
+  ) {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.LOGS_MALFORMED,
+    );
+  }
+
+  for (const [pubkey, url] of Object.entries(enrollment.logs)) {
+    if (typeof pubkey !== "string" || typeof url !== "string") {
+      return new WebcatError(
+        WebcatErrorCode.Enrollment.LOGS_MALFORMED,
+      );
+    }
+  }
+
+  return null;
+}
+
+export function validateSigstoreEnrollment(
+  enrollment: SigstoreEnrollment,
+): WebcatError | null {
+  // Trusted root is mandatory
+  if (!enrollment.trusted_root) {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.TRUSTED_ROOT_MISSING,
+    );
+  }
+
+  // Issuer is mandatory (OIDC issuer / Fulcio issuer)
+  if (
+    typeof enrollment.issuer !== "string" ||
+    enrollment.issuer.length === 0
+  ) {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.IDENTITY_ISSUER_MALFORMED,
+      [String(enrollment.issuer)],
+    );
+  }
+
+  const hasIdentity =
+    typeof enrollment.identity === "string" &&
+    enrollment.identity.length > 0;
+
+  const hasClaims =
+    enrollment.claims !== undefined &&
+    typeof enrollment.claims === "object" &&
+    enrollment.claims !== null &&
+    !Array.isArray(enrollment.claims) &&
+    Object.keys(enrollment.claims).length > 0;
+
+  if (!hasIdentity && !hasClaims) {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.IDENTITY_OR_CLAIMS_REQUIRED,
+    );
+  }
+
+  if (hasClaims) {
+    for (const [k, v] of Object.entries(enrollment.claims!)) {
+      if (typeof k !== "string") {
+        return new WebcatError(
+          WebcatErrorCode.Enrollment.IDENTITY_CLAIMS_MALFORMED,
+          [`key=${String(k)}`],
+        );
+      }
+
+      if (typeof v !== "string") {
+        return new WebcatError(
+          WebcatErrorCode.Enrollment.IDENTITY_CLAIM_VALUE_MALFORMED,
+          [`${k}=${String(v)}`],
+        );
+      }
+    }
+  }
+
+  if (
+    typeof enrollment.max_age !== "number" ||
+    !Number.isFinite(enrollment.max_age)
+  ) {
+    return new WebcatError(
+      WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED,
+    );
+  }
+
+  return null;
+}
+
+
+export function validateManifest(
+  manifest: Manifest,
+): WebcatError | null {
+  if (!manifest.files || Object.keys(manifest.files).length < 1) {
+    return new WebcatError(WebcatErrorCode.Manifest.FILES_MISSING);
+  }
+
+  if (!manifest.default_csp) {
+    return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_CSP_MISSING);
+  }
+
+  if (!manifest.default_index) {
+    return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING);
+  }
+
+  if (!manifest.default_fallback) {
+    return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING);
+  }
+
+  if (!manifest.files["/" + manifest.default_index]) {
+    return new WebcatError(
+      WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING_FILE,
+    );
+  }
+
+  if (!manifest.files[manifest.default_fallback]) {
+    return new WebcatError(
+      WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING,
+    );
+  }
+
+  if (!manifest.wasm) {
+    return new WebcatError(WebcatErrorCode.Manifest.WASM_MISSING);
+  }
+
+  return null;
+}
+
+export async function verifySigsumManifest(
+  enrollment: SigsumEnrollment,
+  manifest: Manifest,
+  signatures: Signatures,
+): Promise<WebcatError | null> {
+
+  const canonicalized = stringToUint8Array(canonicalize(manifest));
+
+  // The purpose of cloning the original list of signers is to have logic to ensure
+  // that each signers can at most sign once. Since we are dealing with a lot of
+  // transformations (hex, b64, etc) and any of these can have malleability, we want to
+  // avoid a scenario where the same signature but with a different public key
+  // encoding is counted twice. By removing a signer from the set of possible signers
+  // we shold prevent this systematically.
+  const remainingSigners = new Set(enrollment.signers);
+  let validCount = 0;
+
+  for (const pubKey of Object.keys(signatures)) {
+    if (!remainingSigners.has(pubKey)) {
+      continue;
+    }
+
+    try {
+      await verifyMessageWithCompiledPolicy(
+        canonicalized,
+        new RawPublicKey(base64UrlToUint8Array(pubKey)),
+        base64UrlToUint8Array(enrollment.policy),
+        signatures[pubKey],
+      );
+    } catch (e) {
+      return new WebcatError(
+        WebcatErrorCode.Manifest.VERIFY_FAILED,
+        [String(e)],
+      );
+    }
+
+    remainingSigners.delete(pubKey);
+    validCount++;
+  }
+
+  // Threshold enforcement
+  if (validCount < enrollment.threshold) {
+    return new WebcatError(
+      WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED,
+      [String(validCount), String(enrollment.threshold)],
+    );
+  }
+
+  // Timestamp presence
+  if (!manifest.timestamp) {
+    return new WebcatError(
+      WebcatErrorCode.Manifest.TIMESTAMP_MISSING,
+    );
+  }
+
+  let timestamps: number[];
+  try {
+    timestamps = await witnessTimestampsFromCosignedTreeHead(
+      base64UrlToUint8Array(enrollment.policy),
+      manifest.timestamp,
+    );
+  } catch (e) {
+    return new WebcatError(
+      WebcatErrorCode.Manifest.TIMESTAMP_VERIFY_FAILED,
+      [String(e)],
+    );
+  }
+
+  // Median timestamp
+  const timestamp =
+    timestamps.sort((a, b) => a - b)[Math.floor(timestamps.length / 2)];
+
+  const now = Math.floor(Date.now() / 1000);
+
+  // Freshness check
+  if (now - timestamp > enrollment.max_age) {
+    return new WebcatError(
+      WebcatErrorCode.Manifest.EXPIRED,
+      [String(enrollment.max_age), String(timestamp)],
+    );
+  }
+
+  return null;
+}
+
+export async function verifySigstoreManifest(
+  enrollment: SigstoreEnrollment,
+  manifest: Manifest,
+  signatures: Signatures,
+): Promise<WebcatError | null> {
+
+  // Initialize the verifier
+  const verifier = new SigstoreVerifier();
+
+  // Or load a trusted root directly
+  await verifier.loadSigstoreRoot(enrollment.trusted_root);
+
+  let identity: string;
+  if (enrollment.identity) {
+    identity = enrollment.identity
+  } else {
+    identity = "";
+  }
+
+  verifier.verifyArtifact(identity, enrollment.issuer, signatures, manifest)
+
+
+
 }

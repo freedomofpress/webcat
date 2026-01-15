@@ -1,19 +1,17 @@
-import { RawPublicKey } from "@freedomofpress/sigsum/dist/types";
-import { verifyMessageWithCompiledPolicy } from "@freedomofpress/sigsum/dist/verify";
-
 import { bundle_name, bundle_prev_name } from "../../config";
 import { db } from "../../globals";
 import { canonicalize } from "../canonicalize";
-import { base64UrlToUint8Array, stringToUint8Array } from "../encoding";
+import { stringToUint8Array } from "../encoding";
 import { headersListener, requestListener } from "../listeners";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
 import {
   validateCSP,
-  witnessTimestampsFromCosignedTreeHead,
+  validateSigstoreEnrollment,
 } from "../validators";
-import { Bundle, Enrollment, Manifest, Signatures } from "./bundle";
+import { Bundle, Enrollment, EnrollmentTypes, Manifest, Signatures } from "./bundle";
 import { WebcatError, WebcatErrorCode } from "./errors";
+import { validateSigsumEnrollment, validateManifest, verifySigstoreManifest, verifySigsumManifest } from "../validators";
 
 export class OriginStateHolder {
   constructor(
@@ -240,70 +238,20 @@ export class OriginStateInitial extends OriginStateBase {
       }
     }
 
-    if (typeof enrollment.policy !== "string") {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.POLICY_MALFORMED),
-      );
-    }
-    if (enrollment.policy.length === 0 || enrollment.policy.length > 8192) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.POLICY_LENGTH),
+    let err: WebcatError | null = null;
+
+    if (enrollment.type === EnrollmentTypes.Sigsum) {
+      err = validateSigsumEnrollment(enrollment);
+    } else if (enrollment.type === EnrollmentTypes.Sigstore) {
+      err = validateSigstoreEnrollment(enrollment);
+    } else {
+      err = new WebcatError(
+        WebcatErrorCode.Enrollment.TYPE_INVALID,
       );
     }
 
-    if (!Array.isArray(enrollment.signers)) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_MALFORMED),
-      );
-    }
-
-    if (enrollment.signers.length === 0) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_EMPTY),
-      );
-    }
-
-    for (const key of enrollment.signers) {
-      if (typeof key !== "string") {
-        return new OriginStateFailed(
-          this,
-          new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_KEY_MALFORMED, [
-            String(key),
-          ]),
-        );
-      }
-    }
-
-    if (
-      typeof enrollment.threshold !== "number" ||
-      !Number.isInteger(enrollment.threshold) ||
-      enrollment.threshold < 1
-    ) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.THRESHOLD_MALFORMED),
-      );
-    }
-
-    if (enrollment.threshold > enrollment.signers.length) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE),
-      );
-    }
-
-    if (
-      typeof enrollment.max_age !== "number" ||
-      !Number.isFinite(enrollment.max_age)
-    ) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED),
-      );
+    if (err) {
+      return new OriginStateFailed(this, err);
     }
 
     //const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60;
@@ -372,144 +320,38 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       signatures = this.bundle!.signatures;
     }
 
-    const canonicalized = stringToUint8Array(canonicalize(manifest));
+    let verify_error: WebcatError | null = null;
 
-    // The purpose of cloning the original list of signers is to have logic to ensure
-    // that each signers can at most sign once. Since we are dealing with a lot of
-    // transformations (hex, b64, etc) and any of these can have malleability, we want to
-    // avoid a scenario where the same signature but with a different public key
-    // encoding is counted twice. By removing a signer from the set of possible signers
-    // we shold prevent this systematically.
-    const remainingSigners = new Set(this.enrollment.signers);
-    let validCount = 0;
+    switch (this.enrollment.type) {
+      case EnrollmentTypes.Sigsum:
+        verify_error = await verifySigsumManifest(
+          this.enrollment,
+          manifest,
+          signatures,
+        );
+        break;
 
-    for (const pubKey of Object.keys(signatures)) {
-      if (remainingSigners.has(pubKey)) {
-        try {
-          // Verify using Sigsum using:
-          // - The signer public key
-          // - The compiled policy in the enrollment metadata
-          // - The signature and Sigsum proof associated
-          await verifyMessageWithCompiledPolicy(
-            canonicalized,
-            new RawPublicKey(base64UrlToUint8Array(pubKey)),
-            base64UrlToUint8Array(this.enrollment.policy),
-            signatures[pubKey],
-          );
-        } catch (e) {
-          return new OriginStateFailed(
-            this,
-            new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED, [
-              String(e),
-            ]),
-          );
-        }
-        remainingSigners.delete(pubKey);
-        validCount++;
-      }
+      case EnrollmentTypes.Sigstore:
+        verify_error = await verifySigstoreManifest(
+          this.enrollment,
+          manifest,
+          signatures,
+        );
+        break;
+
+      default:
+        verify_error = new WebcatError(
+          WebcatErrorCode.Enrollment.TYPE_INVALID,
+        );
     }
 
-    // Not enough signatures to verify the manifest
-    if (validCount < this.enrollment.threshold) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED, [
-          String(validCount),
-          String(this.enrollment.threshold),
-        ]),
-      );
+    if (verify_error) {
+      return new OriginStateFailed(this, verify_error);
     }
 
-    if (!manifest.timestamp) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_MISSING),
-      );
-    }
-
-    let timestamps;
-    try {
-      timestamps = await witnessTimestampsFromCosignedTreeHead(
-        base64UrlToUint8Array(this.enrollment.policy),
-        manifest.timestamp,
-      );
-    } catch (e) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_VERIFY_FAILED, [
-          String(e),
-        ]),
-      );
-    }
-
-    const timestamp = timestamps.sort((a, b) => a - b)[
-      Math.floor(timestamps.length / 2)
-    ];
-
-    const now = Math.floor(Date.now() / 1000);
-
-    if (now - timestamp > this.enrollment.max_age) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.EXPIRED, [
-          String(this.enrollment.max_age),
-          String(timestamp),
-        ]),
-      );
-    }
-
-    // A manifest with no files should not exists
-    if (!manifest.files || Object.keys(manifest.files).length < 1) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.FILES_MISSING),
-      );
-    }
-
-    // If there is no default CSP than the manifest is incomplete
-    if (!manifest.default_csp) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_CSP_MISSING),
-      );
-    }
-
-    // If there is no default index or fallback
-    if (!manifest.default_index) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING),
-      );
-    }
-
-    if (!manifest.default_fallback) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING),
-      );
-    }
-
-    // The file referenced by default_index must be in files
-    if (!manifest.files["/" + manifest.default_index]) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING_FILE),
-      );
-    }
-
-    // The file referenced by default_fallback must be in files
-    if (!manifest.files[manifest.default_fallback]) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING),
-      );
-    }
-
-    if (!manifest.wasm) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.WASM_MISSING),
-      );
+    const format_error = validateManifest(manifest);
+    if (format_error) {
+      return new OriginStateFailed(this, format_error);
     }
 
     // ValidateCSP will populate this based on hosts presents in both
