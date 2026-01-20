@@ -1,8 +1,8 @@
-import { TrustedRoot } from "@freedomofpress/sigstore-browser"
+import { SigstoreBundle, TrustedRoot } from "@freedomofpress/sigstore-browser";
 
 export enum EnrollmentTypes {
   Sigsum = "sigsum",
-  Sigstore = "sigstore"
+  Sigstore = "sigstore",
 }
 
 export interface BaseEnrollment {
@@ -22,13 +22,10 @@ export interface SigstoreEnrollment extends BaseEnrollment {
   type: EnrollmentTypes.Sigstore;
   trusted_root: TrustedRoot;
   issuer: string;
-  identity?: string;
-  claims?: Record<string, string>;
+  identity: string;
 }
 
-export type Enrollment =
-  | SigsumEnrollment
-  | SigstoreEnrollment;
+export type Enrollment = SigsumEnrollment | SigstoreEnrollment;
 
 export interface Manifest {
   name: string;
@@ -46,12 +43,14 @@ export interface Manifest {
   wasm: string[];
 }
 
-export interface Signatures {
+export interface SigsumSignatures {
   [pubKey: string]: string;
 }
+
+export type SigstoreSignatures = SigstoreBundle[];
 
 export interface Bundle {
   enrollment: Enrollment;
   manifest: Manifest;
-  signatures: Signatures;
+  signatures: SigsumSignatures | SigstoreSignatures;
 }

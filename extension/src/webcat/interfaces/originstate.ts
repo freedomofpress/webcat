@@ -5,13 +5,22 @@ import { stringToUint8Array } from "../encoding";
 import { headersListener, requestListener } from "../listeners";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
+import { validateCSP, validateSigstoreEnrollment } from "../validators";
 import {
-  validateCSP,
-  validateSigstoreEnrollment,
+  validateManifest,
+  validateSigsumEnrollment,
+  verifySigstoreManifest,
+  verifySigsumManifest,
 } from "../validators";
-import { Bundle, Enrollment, EnrollmentTypes, Manifest, Signatures } from "./bundle";
+import {
+  Bundle,
+  Enrollment,
+  EnrollmentTypes,
+  Manifest,
+  SigstoreSignatures,
+  SigsumSignatures,
+} from "./bundle";
 import { WebcatError, WebcatErrorCode } from "./errors";
-import { validateSigsumEnrollment, validateManifest, verifySigstoreManifest, verifySigsumManifest } from "../validators";
 
 export class OriginStateHolder {
   constructor(
@@ -245,9 +254,7 @@ export class OriginStateInitial extends OriginStateBase {
     } else if (enrollment.type === EnrollmentTypes.Sigstore) {
       err = validateSigstoreEnrollment(enrollment);
     } else {
-      err = new WebcatError(
-        WebcatErrorCode.Enrollment.TYPE_INVALID,
-      );
+      err = new WebcatError(WebcatErrorCode.Enrollment.TYPE_INVALID);
     }
 
     if (err) {
@@ -302,7 +309,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
 
   public async verifyManifest(
     manifest?: Manifest,
-    signatures?: Signatures,
+    signatures?: SigsumSignatures | SigstoreSignatures,
   ): Promise<OriginStateVerifiedManifest | OriginStateFailed> {
     // Manifest info can be fetched from a manifest bundle,
     // or we should support supplying it differently
@@ -327,7 +334,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
         verify_error = await verifySigsumManifest(
           this.enrollment,
           manifest,
-          signatures,
+          signatures as SigsumSignatures,
         );
         break;
 
@@ -335,14 +342,12 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
         verify_error = await verifySigstoreManifest(
           this.enrollment,
           manifest,
-          signatures,
+          signatures as SigstoreSignatures,
         );
         break;
 
       default:
-        verify_error = new WebcatError(
-          WebcatErrorCode.Enrollment.TYPE_INVALID,
-        );
+        verify_error = new WebcatError(WebcatErrorCode.Enrollment.TYPE_INVALID);
     }
 
     if (verify_error) {

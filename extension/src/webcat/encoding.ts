@@ -64,3 +64,9 @@ export function hexToUint8Array(hex: string): Uint8Array {
   }
   return uint8Array;
 }
+
+export function Uint8ArrayToHex(uint8Array: Uint8Array): string {
+  return Array.from(uint8Array)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}

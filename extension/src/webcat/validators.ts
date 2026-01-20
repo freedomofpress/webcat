@@ -1,4 +1,14 @@
 import {
+  AllOf,
+  EXTENSION_OID_OTHERNAME,
+  OIDCIssuer,
+  PolicyError,
+  SigstoreVerifier,
+  VerificationPolicy,
+  X509Certificate,
+} from "@freedomofpress/sigstore-browser";
+import { verifyMessageWithCompiledPolicy } from "@freedomofpress/sigsum";
+import {
   verifyCosignedTreeHead,
   verifySignedTreeHead,
 } from "@freedomofpress/sigsum/dist//crypto";
@@ -12,20 +22,26 @@ import {
   Base64KeyHash,
   CosignedTreeHead,
   KeyHash,
-  RawPublicKey
+  RawPublicKey,
 } from "@freedomofpress/sigsum/dist/types";
 
-import { SigsumEnrollment, SigstoreEnrollment } from "./interfaces/bundle";
-import { Identity, SigstoreVerifier } from '@freedomofpress/sigstore-browser';
-
 import { db } from "./../globals";
+import { canonicalize } from "./canonicalize";
+import {
+  base64UrlToUint8Array,
+  stringToUint8Array,
+  Uint8ArrayToHex,
+} from "./encoding";
+import {
+  Manifest,
+  SigstoreEnrollment,
+  SigstoreSignatures,
+  SigsumEnrollment,
+  SigsumSignatures,
+} from "./interfaces/bundle";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { parseContentSecurityPolicy } from "./parsers";
-import { getFQDNSafe } from "./utils";
-import { Manifest, Signatures } from "./interfaces/bundle";
-import { base64UrlToUint8Array, stringToUint8Array } from "./encoding";
-import { canonicalize } from "./canonicalize";
-import { verifyMessageWithCompiledPolicy } from "@freedomofpress/sigsum";
+import { getFQDNSafe, SHA256 } from "./utils";
 
 export function extractAndValidateHeaders(
   details: browser.webRequest._OnHeadersReceivedDetails,
@@ -469,35 +485,26 @@ export function validateSigsumEnrollment(
   enrollment: SigsumEnrollment,
 ): WebcatError | null {
   if (typeof enrollment.policy !== "string") {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.POLICY_MALFORMED,
-    );
+    return new WebcatError(WebcatErrorCode.Enrollment.POLICY_MALFORMED);
   }
 
   if (enrollment.policy.length === 0 || enrollment.policy.length > 8192) {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.POLICY_LENGTH,
-    );
+    return new WebcatError(WebcatErrorCode.Enrollment.POLICY_LENGTH);
   }
 
   if (!Array.isArray(enrollment.signers)) {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.SIGNERS_MALFORMED,
-    );
+    return new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_MALFORMED);
   }
 
   if (enrollment.signers.length === 0) {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.SIGNERS_EMPTY,
-    );
+    return new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_EMPTY);
   }
 
   for (const key of enrollment.signers) {
     if (typeof key !== "string") {
-      return new WebcatError(
-        WebcatErrorCode.Enrollment.SIGNERS_KEY_MALFORMED,
-        [String(key)],
-      );
+      return new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_KEY_MALFORMED, [
+        String(key),
+      ]);
     }
   }
 
@@ -506,24 +513,18 @@ export function validateSigsumEnrollment(
     !Number.isInteger(enrollment.threshold) ||
     enrollment.threshold < 1
   ) {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.THRESHOLD_MALFORMED,
-    );
+    return new WebcatError(WebcatErrorCode.Enrollment.THRESHOLD_MALFORMED);
   }
 
   if (enrollment.threshold > enrollment.signers.length) {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE,
-    );
+    return new WebcatError(WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE);
   }
 
   if (
     typeof enrollment.max_age !== "number" ||
     !Number.isFinite(enrollment.max_age)
   ) {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED,
-    );
+    return new WebcatError(WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED);
   }
 
   if (
@@ -531,16 +532,12 @@ export function validateSigsumEnrollment(
     enrollment.logs === null ||
     Object.keys(enrollment.logs).length === 0
   ) {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.LOGS_MALFORMED,
-    );
+    return new WebcatError(WebcatErrorCode.Enrollment.LOGS_MALFORMED);
   }
 
   for (const [pubkey, url] of Object.entries(enrollment.logs)) {
     if (typeof pubkey !== "string" || typeof url !== "string") {
-      return new WebcatError(
-        WebcatErrorCode.Enrollment.LOGS_MALFORMED,
-      );
+      return new WebcatError(WebcatErrorCode.Enrollment.LOGS_MALFORMED);
     }
   }
 
@@ -552,16 +549,11 @@ export function validateSigstoreEnrollment(
 ): WebcatError | null {
   // Trusted root is mandatory
   if (!enrollment.trusted_root) {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.TRUSTED_ROOT_MISSING,
-    );
+    return new WebcatError(WebcatErrorCode.Enrollment.TRUSTED_ROOT_MISSING);
   }
 
   // Issuer is mandatory (OIDC issuer / Fulcio issuer)
-  if (
-    typeof enrollment.issuer !== "string" ||
-    enrollment.issuer.length === 0
-  ) {
+  if (typeof enrollment.issuer !== "string" || enrollment.issuer.length === 0) {
     return new WebcatError(
       WebcatErrorCode.Enrollment.IDENTITY_ISSUER_MALFORMED,
       [String(enrollment.issuer)],
@@ -569,56 +561,23 @@ export function validateSigstoreEnrollment(
   }
 
   const hasIdentity =
-    typeof enrollment.identity === "string" &&
-    enrollment.identity.length > 0;
+    typeof enrollment.identity === "string" && enrollment.identity.length > 0;
 
-  const hasClaims =
-    enrollment.claims !== undefined &&
-    typeof enrollment.claims === "object" &&
-    enrollment.claims !== null &&
-    !Array.isArray(enrollment.claims) &&
-    Object.keys(enrollment.claims).length > 0;
-
-  if (!hasIdentity && !hasClaims) {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.IDENTITY_OR_CLAIMS_REQUIRED,
-    );
-  }
-
-  if (hasClaims) {
-    for (const [k, v] of Object.entries(enrollment.claims!)) {
-      if (typeof k !== "string") {
-        return new WebcatError(
-          WebcatErrorCode.Enrollment.IDENTITY_CLAIMS_MALFORMED,
-          [`key=${String(k)}`],
-        );
-      }
-
-      if (typeof v !== "string") {
-        return new WebcatError(
-          WebcatErrorCode.Enrollment.IDENTITY_CLAIM_VALUE_MALFORMED,
-          [`${k}=${String(v)}`],
-        );
-      }
-    }
+  if (!hasIdentity) {
+    return new WebcatError(WebcatErrorCode.Enrollment.IDENTITY_REQUIRED);
   }
 
   if (
     typeof enrollment.max_age !== "number" ||
     !Number.isFinite(enrollment.max_age)
   ) {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED,
-    );
+    return new WebcatError(WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED);
   }
 
   return null;
 }
 
-
-export function validateManifest(
-  manifest: Manifest,
-): WebcatError | null {
+export function validateManifest(manifest: Manifest): WebcatError | null {
   if (!manifest.files || Object.keys(manifest.files).length < 1) {
     return new WebcatError(WebcatErrorCode.Manifest.FILES_MISSING);
   }
@@ -636,15 +595,11 @@ export function validateManifest(
   }
 
   if (!manifest.files["/" + manifest.default_index]) {
-    return new WebcatError(
-      WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING_FILE,
-    );
+    return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING_FILE);
   }
 
   if (!manifest.files[manifest.default_fallback]) {
-    return new WebcatError(
-      WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING,
-    );
+    return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING);
   }
 
   if (!manifest.wasm) {
@@ -657,9 +612,8 @@ export function validateManifest(
 export async function verifySigsumManifest(
   enrollment: SigsumEnrollment,
   manifest: Manifest,
-  signatures: Signatures,
+  signatures: SigsumSignatures,
 ): Promise<WebcatError | null> {
-
   const canonicalized = stringToUint8Array(canonicalize(manifest));
 
   // The purpose of cloning the original list of signers is to have logic to ensure
@@ -684,10 +638,9 @@ export async function verifySigsumManifest(
         signatures[pubKey],
       );
     } catch (e) {
-      return new WebcatError(
-        WebcatErrorCode.Manifest.VERIFY_FAILED,
-        [String(e)],
-      );
+      return new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED, [
+        String(e),
+      ]);
     }
 
     remainingSigners.delete(pubKey);
@@ -696,17 +649,15 @@ export async function verifySigsumManifest(
 
   // Threshold enforcement
   if (validCount < enrollment.threshold) {
-    return new WebcatError(
-      WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED,
-      [String(validCount), String(enrollment.threshold)],
-    );
+    return new WebcatError(WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED, [
+      String(validCount),
+      String(enrollment.threshold),
+    ]);
   }
 
   // Timestamp presence
   if (!manifest.timestamp) {
-    return new WebcatError(
-      WebcatErrorCode.Manifest.TIMESTAMP_MISSING,
-    );
+    return new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_MISSING);
   }
 
   let timestamps: number[];
@@ -716,50 +667,159 @@ export async function verifySigsumManifest(
       manifest.timestamp,
     );
   } catch (e) {
-    return new WebcatError(
-      WebcatErrorCode.Manifest.TIMESTAMP_VERIFY_FAILED,
-      [String(e)],
-    );
+    return new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_VERIFY_FAILED, [
+      String(e),
+    ]);
   }
 
   // Median timestamp
-  const timestamp =
-    timestamps.sort((a, b) => a - b)[Math.floor(timestamps.length / 2)];
+  const timestamp = timestamps.sort((a, b) => a - b)[
+    Math.floor(timestamps.length / 2)
+  ];
 
   const now = Math.floor(Date.now() / 1000);
 
   // Freshness check
   if (now - timestamp > enrollment.max_age) {
-    return new WebcatError(
-      WebcatErrorCode.Manifest.EXPIRED,
-      [String(enrollment.max_age), String(timestamp)],
-    );
+    return new WebcatError(WebcatErrorCode.Manifest.EXPIRED, [
+      String(enrollment.max_age),
+      String(timestamp),
+    ]);
   }
 
   return null;
 }
 
+// Prepare a VerificationPolicy to do the following:
+// - If the SAN is a url, we guess it's a workflow and do prefix matching
+// - If the SAN is an email, we want an exact match there
+// SECURITY TODO: The logic is fuzzy here, and automatic fallbacks
+// with partial matches are a really bad recipe. However, we either lock-in GitHub
+// or we add more metadata to enrollment?
+export class IdentityMatch implements VerificationPolicy {
+  private expected: string;
+  private issuerPolicy: OIDCIssuer | null;
+
+  constructor(options: { identity: string; issuer: string }) {
+    this.expected = options.identity;
+    this.issuerPolicy = options.issuer ? new OIDCIssuer(options.issuer) : null;
+  }
+
+  verify(cert: X509Certificate): void {
+    if (this.issuerPolicy) {
+      this.issuerPolicy.verify(cert);
+    }
+
+    const sanExt = cert.extSubjectAltName;
+    if (!sanExt) {
+      throw new PolicyError(
+        "Certificate does not contain SubjectAlternativeName extension",
+      );
+    }
+
+    let uriIdentity: string | null = null;
+
+    // Prefer the standard URI SAN
+    if (sanExt.uri) {
+      uriIdentity = sanExt.uri;
+    }
+
+    // Accept Sigstore otherName *only if* it is the sole identity
+    const otherName = sanExt.otherName(EXTENSION_OID_OTHERNAME);
+    if (otherName) {
+      if (uriIdentity && otherName !== uriIdentity) {
+        throw new PolicyError("Certificate contains multiple URI identities");
+      }
+      uriIdentity = otherName;
+    }
+
+    if (!uriIdentity) {
+      throw new PolicyError(
+        "Certificate does not contain a URI-based identity SAN",
+      );
+    }
+
+    if (!uriIdentity.startsWith(this.expected)) {
+      throw new PolicyError(
+        `URI identity "${uriIdentity}" does not match expected prefix "${this.expected}"`,
+      );
+    }
+  }
+}
+
+// See: https://github.com/sigstore/cosign/issues/2691
+// There two way to verify a worflow, check the identity
+// which lands us in tricky parsing territory, or verify the
+// cert extensions. However, in the latter case we'd need to
+// hardcode/support specific extensions and we don't want
+// vendor lock-in at this stage, especially given the possible
+// bring your own Sigstore approach
+// See: https://github.com/tinfoilsh/tinfoil-js/blob/main/packages/verifier/src/sigstore.ts
 export async function verifySigstoreManifest(
   enrollment: SigstoreEnrollment,
   manifest: Manifest,
-  signatures: Signatures,
+  signatures: SigstoreSignatures,
 ): Promise<WebcatError | null> {
-
-  // Initialize the verifier
   const verifier = new SigstoreVerifier();
-
-  // Or load a trusted root directly
   await verifier.loadSigstoreRoot(enrollment.trusted_root);
 
-  let identity: string;
-  if (enrollment.identity) {
-    identity = enrollment.identity
-  } else {
-    identity = "";
+  const policy = new AllOf([
+    new IdentityMatch({
+      issuer: enrollment.issuer, // e.g. https://token.actions.githubusercontent.com
+      identity: enrollment.identity, // e.g. https://github.com/org/repo/
+    }),
+  ]);
+
+  // Compute manifest digest (same role as `digest` in verifyAttestation)
+  const manifestHash = await Uint8ArrayToHex(
+    new Uint8Array(await SHA256(canonicalize(manifest))),
+  );
+
+  let verified = false;
+
+  // Does it make sense for this to be an array? Is there cases where the same manifest
+  // Could have information of multile bundles, and we care just about one?
+  for (const bundle of signatures) {
+    try {
+      const { payloadType, payload } = await verifier.verifyDsse(
+        bundle,
+        policy,
+      );
+
+      if (payloadType !== "application/vnd.in-toto+json") {
+        throw new Error(
+          `Unsupported payload type: ${payloadType}. Only supports In-toto.`,
+        );
+      }
+
+      const statement = JSON.parse(new TextDecoder().decode(payload));
+
+      const subject = statement.subject?.[0];
+      const attestedDigest = subject?.digest?.sha256;
+
+      if (!attestedDigest) {
+        throw new Error(
+          "Attestation does not contain a SHA-256 subject digest",
+        );
+      }
+
+      if (attestedDigest !== manifestHash) {
+        throw new Error(
+          `Manifest digest mismatch. Expected: ${manifestHash}, Got: ${attestedDigest}`,
+        );
+      }
+
+      verified = true;
+      break;
+    } catch (e) {
+      console.log(e);
+      continue;
+    }
   }
 
-  verifier.verifyArtifact(identity, enrollment.issuer, signatures, manifest)
+  if (!verified) {
+    return new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED);
+  }
 
-
-
+  return null;
 }
