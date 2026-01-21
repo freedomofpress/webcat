@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { canonicalize } from "../../src/webcat/canonicalize";
 import { stringToUint8Array } from "../../src/webcat/encoding";
+import { EnrollmentTypes } from "../../src/webcat/interfaces/bundle";
 import type {
   Enrollment,
   Manifest,
-  Signatures,
+  SigsumSignatures,
 } from "../../src/webcat/interfaces/bundle";
-import { WebcatErrorCode } from "../../src/webcat/interfaces/errors";
+import { WebcatError, WebcatErrorCode } from "../../src/webcat/interfaces/errors";
 import {
   OriginStateFailed,
   OriginStateInitial,
@@ -47,13 +48,66 @@ vi.mock("@freedomofpress/sigsum/dist/verify", () => ({
 }));
 
 vi.mock("../../src/webcat/validators", async () => {
+  const actual = await vi.importActual<
+    typeof import("../../src/webcat/validators")
+  >("../../src/webcat/validators");
   const defaultNow = Math.floor(Date.now() / 1000);
+  const witnessTimestampsFromCosignedTreeHead = vi.fn(async () => {
+    return [defaultNow - 5000, defaultNow - 100000, defaultNow - 200000];
+  });
 
   return {
+    ...actual,
     validateCSP: vi.fn(async () => {}),
-    witnessTimestampsFromCosignedTreeHead: vi.fn(async () => {
-      return [defaultNow - 5000, defaultNow - 100000, defaultNow - 200000];
-    }),
+    witnessTimestampsFromCosignedTreeHead,
+    verifySigsumManifest: vi.fn(
+      async (
+        enrollment: {
+          signers: string[];
+          threshold: number;
+          max_age: number;
+        },
+        manifest: { timestamp?: string },
+        signatures: Record<string, string>,
+      ) => {
+        let validCount = 0;
+        for (const pubKey of Object.keys(signatures)) {
+          if (enrollment.signers.includes(pubKey)) {
+            validCount++;
+          }
+        }
+
+        if (validCount < enrollment.threshold) {
+          return new WebcatError(
+            WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED,
+            [String(validCount), String(enrollment.threshold)],
+          );
+        }
+
+        if (!manifest.timestamp) {
+          return new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_MISSING);
+        }
+
+        const timestamps = await witnessTimestampsFromCosignedTreeHead(
+          new Uint8Array(),
+          manifest.timestamp,
+        );
+
+        const timestamp = timestamps.sort((a, b) => a - b)[
+          Math.floor(timestamps.length / 2)
+        ];
+        const now = Math.floor(Date.now() / 1000);
+
+        if (now - timestamp > enrollment.max_age) {
+          return new WebcatError(WebcatErrorCode.Manifest.EXPIRED, [
+            String(enrollment.max_age),
+            String(timestamp),
+          ]);
+        }
+
+        return null;
+      },
+    ),
   };
 });
 
@@ -85,11 +139,15 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
   beforeEach(async () => {
     enrollment = {
+      type: EnrollmentTypes.Sigsum,
       policy: TEST_POLICY_B64URL,
       signers: [SIGNER1, SIGNER2, SIGNER3],
       threshold: 2,
       max_age: 360000,
       cas_url: "https://cas.example.com",
+      logs: {
+        log1: "https://log.example.com",
+      },
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
@@ -216,15 +274,19 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     "default-src 'none'; script-src 'self'; style-src 'self'; object-src 'none'";
 
   let manifest: Manifest;
-  let signatures: Signatures;
+  let signatures: SigsumSignatures;
 
   beforeEach(async () => {
     enrollment = {
+      type: EnrollmentTypes.Sigsum,
       policy: TEST_POLICY_B64URL,
       signers: [SIGNER1, SIGNER2, SIGNER3],
       threshold: 2,
       max_age: 360000,
       cas_url: "https://cas.example.com",
+      logs: {
+        log1: "https://log.example.com",
+      },
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
@@ -266,7 +328,7 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
   });
 
   it("fails when not enough signatures", async () => {
-    const tooFew: Signatures = { [SIGNER1]: "signature1" };
+    const tooFew: SigsumSignatures = { [SIGNER1]: "signature1" };
 
     const res = await verifiedEnrollment.verifyManifest(manifest, tooFew);
 
@@ -365,11 +427,15 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
 
   beforeEach(async () => {
     enrollment = {
+      type: EnrollmentTypes.Sigsum,
       policy: TEST_POLICY_B64URL,
       signers: [SIGNER1, SIGNER2],
       threshold: 1,
       max_age: 360000,
       cas_url: "https://cas.example.com",
+      logs: {
+        log1: "https://log.example.com",
+      },
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
