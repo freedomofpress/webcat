@@ -699,17 +699,25 @@ export async function verifySigsumManifest(
 export class IdentityMatch implements VerificationPolicy {
   private expected: string;
   private issuerPolicy: OIDCIssuer | null;
+  private maxAgeSeconds: number;
 
-  constructor(options: { identity: string; issuer: string }) {
+  constructor(options: {
+    identity: string;
+    issuer: string;
+    maxAgeSeconds: number;
+  }) {
     this.expected = options.identity;
     this.issuerPolicy = options.issuer ? new OIDCIssuer(options.issuer) : null;
+    this.maxAgeSeconds = options.maxAgeSeconds;
   }
 
   verify(cert: X509Certificate): void {
+    // 1. Issuer verification
     if (this.issuerPolicy) {
       this.issuerPolicy.verify(cert);
     }
 
+    // 2. Identity verification
     const sanExt = cert.extSubjectAltName;
     if (!sanExt) {
       throw new PolicyError(
@@ -719,12 +727,10 @@ export class IdentityMatch implements VerificationPolicy {
 
     let uriIdentity: string | null = null;
 
-    // Prefer the standard URI SAN
     if (sanExt.uri) {
       uriIdentity = sanExt.uri;
     }
 
-    // Accept Sigstore otherName *only if* it is the sole identity
     const otherName = sanExt.otherName(EXTENSION_OID_OTHERNAME);
     if (otherName) {
       if (uriIdentity && otherName !== uriIdentity) {
@@ -742,6 +748,20 @@ export class IdentityMatch implements VerificationPolicy {
     if (!uriIdentity.startsWith(this.expected)) {
       throw new PolicyError(
         `URI identity "${uriIdentity}" does not match expected prefix "${this.expected}"`,
+      );
+    }
+
+    // 3. Freshness enforcement
+    // This is not semantically the same as Sigsum. Sigsum fetches a trusted timestamp
+    // and includes it in the message before signing. Here we validate
+    // the freshness of the identity issuance.
+    // TODO
+    const now = Math.floor(Date.now() / 1000);
+    const issued = Math.floor(cert.notBefore.getTime() / 1000);
+
+    if (now - issued > this.maxAgeSeconds) {
+      throw new PolicyError(
+        `Signing certificate is too old: issued at ${issued}, max age ${this.maxAgeSeconds}s`,
       );
     }
   }
@@ -809,6 +829,9 @@ export async function verifySigstoreManifest(
         );
       }
 
+      // We need at least one valid bundle that matches the policy,
+      // but we don't want to quit if one doesn't
+      // TODO SECURITY: better logic here
       verified = true;
       break;
     } catch (e) {
