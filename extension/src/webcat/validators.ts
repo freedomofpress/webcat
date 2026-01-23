@@ -787,6 +787,7 @@ export async function verifySigstoreManifest(
     new IdentityMatch({
       issuer: enrollment.issuer, // e.g. https://token.actions.githubusercontent.com
       identity: enrollment.identity, // e.g. https://github.com/org/repo/
+      maxAgeSeconds: enrollment.max_age,
     }),
   ]);
 
