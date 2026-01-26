@@ -22,6 +22,82 @@ import {
 } from "./bundle";
 import { WebcatError, WebcatErrorCode } from "./errors";
 
+type BundleFetch = {
+  promise: Promise<Response>;
+  error?: WebcatError;
+  value?: Bundle;
+};
+
+export class BundleFetcher implements Iterable<BundleFetch> {
+  public readonly current: BundleFetch;
+  public readonly previous: BundleFetch;
+
+  constructor(base: string) {
+    this.current = {
+      promise: fetch(`${base}${bundle_name}`, {
+        cache: "no-store",
+      }),
+    };
+
+    this.previous = {
+      promise: fetch(`${base}${bundle_prev_name}`, {
+        cache: "no-store",
+      }),
+    };
+  }
+
+  *[Symbol.iterator](): IterableIterator<BundleFetch> {
+    yield this.current;
+    yield this.previous;
+  }
+
+  public async awaitAll(): Promise<void> {
+    for (const slot of this) {
+      if (slot.value || slot.error) {
+        continue;
+      }
+
+      let response: Response;
+      try {
+        response = await slot.promise;
+      } catch {
+        slot.error = new WebcatError(WebcatErrorCode.Fetch.FETCH_ERROR);
+        continue;
+      }
+
+      if (!response.ok) {
+        slot.error = new WebcatError(WebcatErrorCode.Fetch.FETCH_ERROR);
+        continue;
+      }
+
+      let bundle: Bundle;
+      try {
+        bundle = (await response.json()) as Bundle;
+      } catch {
+        slot.error = new WebcatError(WebcatErrorCode.Bundle.MALFORMED);
+        continue;
+      }
+
+      if (!bundle.enrollment) {
+        slot.error = new WebcatError(WebcatErrorCode.Bundle.ENROLLMENT_MISSING);
+        continue;
+      }
+
+      if (!bundle.manifest) {
+        slot.error = new WebcatError(WebcatErrorCode.Bundle.MANIFEST_MISSING);
+        continue;
+      }
+
+      if (!bundle.signatures) {
+        slot.error = new WebcatError(WebcatErrorCode.Bundle.SIGNATURES_MISSING);
+        continue;
+      }
+
+      slot.value = bundle;
+    }
+  }
+}
+
 export class OriginStateHolder {
   constructor(
     public current:
@@ -31,18 +107,10 @@ export class OriginStateHolder {
       | OriginStateVerifiedManifest
       | OriginStateFailed,
   ) {
-    const base = `${current.scheme}//${current.fqdn}:${current.port}`;
-    current.bundlePromise = fetch(`${base}${bundle_name}`, {
-      cache: "no-store",
-    });
-    current.bundlePrevPromise = fetch(`${base}${bundle_prev_name}`, {
-      cache: "no-store",
-    });
+    // Empty for now
   }
 
-  // Remove the listeners if the class det destroyed (called on cache eviction)
   destructor(): void {
-    // Remove the Mozilla API listeners
     browser.webRequest.onBeforeRequest.removeListener(
       this.current.onBeforeRequest,
     );
@@ -63,11 +131,9 @@ export abstract class OriginStateBase {
   public readonly port: string;
   public readonly fqdn: string;
   public readonly enrollment_hash: Uint8Array;
-  public bundlePromise?: Promise<Response>;
-  public bundlePrevPromise?: Promise<Response>;
-  public bundle_source: "current" | "previous" = "current";
-  public references: number;
+  public fetcher: BundleFetcher;
   public bundle?: Bundle;
+  public references: number;
   public readonly enrollment?: Enrollment;
   public readonly manifest?: Manifest;
   public readonly valid_signers?: Set<string>;
@@ -87,11 +153,13 @@ export abstract class OriginStateBase {
   // Due to list logic, we support only one app per domain, and that should be a privileged one
   // But that is enforced in request.ts
   constructor(
+    fetcher: BundleFetcher,
     scheme: string,
     port: string,
     fqdn: string,
     enrollment_hash: Uint8Array,
   ) {
+    this.fetcher = fetcher;
     this.scheme = scheme;
     this.port = port;
     this.fqdn = fqdn;
@@ -101,56 +169,6 @@ export abstract class OriginStateBase {
     this.onBeforeRequest = (details) => requestListener(details);
     this.onHeadersReceived = (details) => headersListener(details);
   }
-
-  public async awaitBundle(source: "current" | "previous") {
-    // If we already have a bundle, consider it done
-    if (this.bundle && this.bundle_source === source) {
-      return;
-    }
-    // If bundlePromise was awaited before and cached a failure result,
-    // we don't want to re-fetch, so detect that. It should never happen
-    let promise;
-    if (source == "current") {
-      promise = this.bundlePromise;
-    } else if (source == "previous") {
-      promise = this.bundlePrevPromise;
-    }
-
-    if (!promise) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Fetch.FETCH_PROMISE_MISSING),
-      );
-    }
-    const bundleResponse = await promise;
-    if (bundleResponse.ok !== true) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Fetch.FETCH_ERROR),
-      );
-    }
-    const bundle_data: Bundle = (await bundleResponse.json()) as Bundle;
-    if (!bundle_data.enrollment) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Bundle.ENROLLMENT_MISSING),
-      );
-    }
-    if (!bundle_data.manifest) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Bundle.MANIFEST_MISSING),
-      );
-    }
-    if (!bundle_data.signatures) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Bundle.SIGNATURES_MISSING),
-      );
-    }
-    this.bundle = bundle_data;
-    this.bundle_source = source;
-  }
 }
 
 export class OriginStateFailed extends OriginStateBase {
@@ -158,7 +176,13 @@ export class OriginStateFailed extends OriginStateBase {
   public readonly error: WebcatError;
 
   constructor(prev: OriginStateBase, error: WebcatError) {
-    super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
+    super(
+      prev.fetcher,
+      prev.scheme,
+      prev.port,
+      prev.fqdn,
+      prev.enrollment_hash,
+    );
     Object.assign(this, prev);
     // We must set it again because we are copying
     this.status = "failed" as const;
@@ -171,12 +195,13 @@ export class OriginStateInitial extends OriginStateBase {
   public bundle?: Bundle;
 
   constructor(
+    fetcher: BundleFetcher,
     scheme: string,
     port: string,
     fqdn: string,
     enrollment_hash: Uint8Array,
   ) {
-    super(scheme, port, fqdn, enrollment_hash);
+    super(fetcher, scheme, port, fqdn, enrollment_hash);
   }
 
   public async verifyDelegation(delegation: string): Promise<boolean> {
@@ -186,6 +211,9 @@ export class OriginStateInitial extends OriginStateBase {
     );
   }
 
+  // This functiont ries to verify the enrollment information against the value in the local list
+  // It will also return errors while fetching the bundles (though they are generated in awaitBundles)
+  // and tell the next stages whether they should use the current or the previous bundle
   public async verifyEnrollment(
     enrollment?: Enrollment,
     delegation?: string,
@@ -197,17 +225,16 @@ export class OriginStateInitial extends OriginStateBase {
 
     // Enrollment info can be fetched from a manifest bundle,
     // or we should support supplying it differently, such is in http headers
-
-    let fetched = false;
     if (!enrollment) {
-      const res = await this.awaitBundle("current");
-      if (res instanceof OriginStateFailed) {
-        return res;
+      // It could mismatch because our list is outdated, but it should exists nevertheless
+      if (!this.fetcher.current.value) {
+        // eslint-disable-next-line
+        return new OriginStateFailed(this, this.fetcher.current.error!);
       }
+
       // We can assert here because the check is guaranteed in awaitBundle
-      // eslint-disable-next-line
-      enrollment = this.bundle!.enrollment;
-      fetched = true;
+
+      enrollment = this.fetcher.current.value.enrollment;
     }
 
     const canonicalized = stringToUint8Array(canonicalize(enrollment));
@@ -217,27 +244,24 @@ export class OriginStateInitial extends OriginStateBase {
     const match = arraysEqual(this.enrollment_hash, canonicalized_hash);
     // In this case, we already tried both bundles and we should bail
     // Or we got direct enrollment passed, and we shpuldn't fallback automatically
-    if (!match && (this.bundle_source == "previous" || !fetched)) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
-      );
-      // Otherwise we shpould await the previous
-    } else if (!match && this.bundle_source == "current") {
-      const res = await this.awaitBundle("previous");
-      // If we are here and the fetch fails, its fatal
-      if (res instanceof OriginStateFailed) {
-        return res;
+    if (match) {
+      this.bundle = this.fetcher.current.value;
+    } else {
+      // If we are here, and the previous fetch failed, we fail on MISMATCH
+      // because it means the main enrollment MISMATCHED and there's no fallback
+      if (!this.fetcher.previous.value) {
+        return new OriginStateFailed(
+          this,
+          new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
+        );
       }
-      // Let's use the enrollment fallback
+      enrollment = this.fetcher.previous.value.enrollment;
 
-      const canonicalized_prev = stringToUint8Array(
-        // eslint-disable-next-line
-        canonicalize(this.bundle!.enrollment),
-      );
+      const canonicalized_prev = stringToUint8Array(canonicalize(enrollment));
       const canonicalized_hash_prev = new Uint8Array(
         await SHA256(canonicalized_prev),
       );
+
       // If this also fails it's fatal
       if (!arraysEqual(this.enrollment_hash, canonicalized_hash_prev)) {
         return new OriginStateFailed(
@@ -245,6 +269,7 @@ export class OriginStateInitial extends OriginStateBase {
           new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
         );
       }
+      this.bundle = this.fetcher.previous.value;
     }
 
     let err: WebcatError | null = null;
@@ -276,13 +301,11 @@ export class OriginStateInitial extends OriginStateBase {
     // parse the compiled sigsum policy once here instead of doing that
     // at every verification. Currently the sigsum-ts lib does not support that
     // and maybe more abstraction there would be useful
-    const next = new OriginStateVerifiedEnrollment(
+    return new OriginStateVerifiedEnrollment(
       this,
       enrollment,
       verified_delegation,
     );
-    next.bundlePromise = this.bundlePromise;
-    return next;
   }
 }
 
@@ -297,14 +320,19 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     enrollment: Enrollment,
     delegation: string | undefined,
   ) {
-    super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
-    this.bundle = prev.bundle;
-    this.bundlePromise = prev.bundlePromise;
+    super(
+      prev.fetcher,
+      prev.scheme,
+      prev.port,
+      prev.fqdn,
+      prev.enrollment_hash,
+    );
     this.onBeforeRequest = prev.onBeforeRequest;
     this.onHeadersReceived = prev.onHeadersReceived;
     this.references = prev.references;
     this.enrollment = enrollment;
     this.delegation = delegation;
+    this.bundle = prev.bundle;
   }
 
   public async verifyManifest(
@@ -314,12 +342,8 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     // Manifest info can be fetched from a manifest bundle,
     // or we should support supplying it differently
     // If enrollment information is passed from headers or another source, then we do not support
-    // a fallbackm bundle at the moment
+    // a fallback bundle at the moment
     if (!manifest || !signatures) {
-      const res = await this.awaitBundle("current");
-      if (res instanceof OriginStateFailed) {
-        return res;
-      }
       // awaitBundle checks already that manifest exists
       // eslint-disable-next-line
       manifest = this.bundle!.manifest;
@@ -401,7 +425,6 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       }
     }
     const next = new OriginStateVerifiedManifest(this, manifest, valid_sources);
-    next.bundlePromise = this.bundlePromise;
     return next;
   }
 }
@@ -418,9 +441,13 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     manifest: Manifest,
     valid_sources: Set<string>,
   ) {
-    super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
-    this.bundle = prev.bundle;
-    this.bundlePromise = prev.bundlePromise;
+    super(
+      prev.fetcher,
+      prev.scheme,
+      prev.port,
+      prev.fqdn,
+      prev.enrollment_hash,
+    );
     this.onBeforeRequest = prev.onBeforeRequest;
     this.onHeadersReceived = prev.onHeadersReceived;
     this.references = prev.references;
@@ -428,6 +455,7 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     this.manifest = manifest;
     this.valid_sources = valid_sources;
     this.delegation = prev.delegation;
+    this.bundle = prev.bundle;
   }
 
   public verifyCSP(csp: string, pathname: string) {
