@@ -31,11 +31,11 @@ export class OriginStateHolder {
       | OriginStateVerifiedManifest
       | OriginStateFailed,
   ) {
-    const base = `${current.scheme}//${current.fqdn}:${current.port}/`;
-    current.bundlePromise = fetch(`${base}/${bundle_name}`, {
+    const base = `${current.scheme}//${current.fqdn}:${current.port}`;
+    current.bundlePromise = fetch(`${base}${bundle_name}`, {
       cache: "no-store",
     });
-    current.bundlePrevPromise = fetch(`${base}/${bundle_prev_name}`, {
+    current.bundlePrevPromise = fetch(`${base}${bundle_prev_name}`, {
       cache: "no-store",
     });
   }
