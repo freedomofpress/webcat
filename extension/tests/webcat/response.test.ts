@@ -15,12 +15,18 @@ import {
   WebcatErrorCode,
 } from "../../src/webcat/interfaces/errors";
 import {
+  BundleFetcher,
   OriginStateFailed,
   OriginStateInitial,
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "../../src/webcat/interfaces/originstate";
 import { SHA256 } from "../../src/webcat/utils";
+
+function makeDummyFetcher(): BundleFetcher {
+  // base URL is irrelevant, fetch will never be awaited in these tests
+  return new BundleFetcher("https://example.com");
+}
 
 // --- Mocks ---
 vi.mock("../../src/webcat/db", () => {
@@ -158,6 +164,7 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
     state = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -191,6 +198,7 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -212,6 +220,7 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -231,6 +240,7 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -250,6 +260,7 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -287,6 +298,7 @@ describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
     state = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -309,6 +321,7 @@ describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -328,6 +341,7 @@ describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -347,6 +361,7 @@ describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -394,6 +409,7 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
     initial = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -541,6 +557,7 @@ describe("OriginStateVerifiedEnrollment.verifyManifest (sigstore)", () => {
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
     initial = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -629,6 +646,7 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
     initial = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
