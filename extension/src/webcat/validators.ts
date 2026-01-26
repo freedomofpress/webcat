@@ -801,43 +801,56 @@ export async function verifySigstoreManifest(
   // Does it make sense for this to be an array? Is there cases where the same manifest
   // Could have information of multile bundles, and we care just about one?
   for (const bundle of signatures) {
-    try {
-      const { payloadType, payload } = await verifier.verifyDsse(
-        bundle,
-        policy,
-      );
-
-      if (payloadType !== "application/vnd.in-toto+json") {
-        throw new Error(
-          `Unsupported payload type: ${payloadType}. Only supports In-toto.`,
+    if (bundle.dsseEnvelope) {
+      try {
+        const { payloadType, payload } = await verifier.verifyDsse(
+          bundle,
+          policy,
         );
+
+        if (payloadType !== "application/vnd.in-toto+json") {
+          throw new Error(
+            `Unsupported payload type: ${payloadType}. Only supports In-toto.`,
+          );
+        }
+
+        const statement = JSON.parse(new TextDecoder().decode(payload));
+
+        const subject = statement.subject?.[0];
+        const attestedDigest = subject?.digest?.sha256;
+
+        if (!attestedDigest) {
+          throw new Error(
+            "Attestation does not contain a SHA-256 subject digest",
+          );
+        }
+
+        if (attestedDigest !== manifestHash) {
+          throw new Error(
+            `Manifest digest mismatch. Expected: ${manifestHash}, Got: ${attestedDigest}`,
+          );
+        }
+
+        // We need at least one valid bundle that matches the policy,
+        // but we don't want to quit if one doesn't
+        // TODO SECURITY: better logic here
+        verified = true;
+        break;
+      } catch (e) {
+        console.log(e);
+        continue;
       }
-
-      const statement = JSON.parse(new TextDecoder().decode(payload));
-
-      const subject = statement.subject?.[0];
-      const attestedDigest = subject?.digest?.sha256;
-
-      if (!attestedDigest) {
-        throw new Error(
-          "Attestation does not contain a SHA-256 subject digest",
+    } else {
+      try {
+        verified = await verifier.verifyArtifact(
+          enrollment.identity,
+          enrollment.issuer,
+          bundle,
+          stringToUint8Array(canonicalize(manifest)),
         );
+      } catch (e) {
+        console.log(e);
       }
-
-      if (attestedDigest !== manifestHash) {
-        throw new Error(
-          `Manifest digest mismatch. Expected: ${manifestHash}, Got: ${attestedDigest}`,
-        );
-      }
-
-      // We need at least one valid bundle that matches the policy,
-      // but we don't want to quit if one doesn't
-      // TODO SECURITY: better logic here
-      verified = true;
-      break;
-    } catch (e) {
-      console.log(e);
-      continue;
     }
   }
 

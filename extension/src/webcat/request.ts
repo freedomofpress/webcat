@@ -65,7 +65,7 @@ export async function validateOrigin(
 
   // Policy hash is checked at the top and then later again
   const newFetcher = new BundleFetcher(
-    `${urlobj.protocol}//${fqdn}:${urlobj.port}/`,
+    `${urlobj.protocol}//${fqdn}:${urlobj.port}`,
   );
   const newOriginState = new OriginStateInitial(
     newFetcher,
