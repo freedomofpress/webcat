@@ -5,16 +5,28 @@ import { stringToUint8Array } from "../../src/webcat/encoding";
 import type {
   Enrollment,
   Manifest,
-  Signatures,
+  SigstoreEnrollment,
+  SigstoreSignatures,
+  SigsumSignatures,
 } from "../../src/webcat/interfaces/bundle";
-import { WebcatErrorCode } from "../../src/webcat/interfaces/errors";
+import { EnrollmentTypes } from "../../src/webcat/interfaces/bundle";
 import {
+  WebcatError,
+  WebcatErrorCode,
+} from "../../src/webcat/interfaces/errors";
+import {
+  BundleFetcher,
   OriginStateFailed,
   OriginStateInitial,
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "../../src/webcat/interfaces/originstate";
 import { SHA256 } from "../../src/webcat/utils";
+
+function makeDummyFetcher(): BundleFetcher {
+  // base URL is irrelevant, fetch will never be awaited in these tests
+  return new BundleFetcher("https://example.com");
+}
 
 // --- Mocks ---
 vi.mock("../../src/webcat/db", () => {
@@ -47,13 +59,67 @@ vi.mock("@freedomofpress/sigsum/dist/verify", () => ({
 }));
 
 vi.mock("../../src/webcat/validators", async () => {
+  const actual = await vi.importActual<
+    typeof import("../../src/webcat/validators")
+  >("../../src/webcat/validators");
   const defaultNow = Math.floor(Date.now() / 1000);
+  const witnessTimestampsFromCosignedTreeHead = vi.fn(async () => {
+    return [defaultNow - 5000, defaultNow - 100000, defaultNow - 200000];
+  });
 
   return {
+    ...actual,
     validateCSP: vi.fn(async () => {}),
-    witnessTimestampsFromCosignedTreeHead: vi.fn(async () => {
-      return [defaultNow - 5000, defaultNow - 100000, defaultNow - 200000];
-    }),
+    witnessTimestampsFromCosignedTreeHead,
+    verifySigsumManifest: vi.fn(
+      async (
+        enrollment: {
+          signers: string[];
+          threshold: number;
+          max_age: number;
+        },
+        manifest: { timestamp?: string },
+        signatures: Record<string, string>,
+      ) => {
+        let validCount = 0;
+        for (const pubKey of Object.keys(signatures)) {
+          if (enrollment.signers.includes(pubKey)) {
+            validCount++;
+          }
+        }
+
+        if (validCount < enrollment.threshold) {
+          return new WebcatError(
+            WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED,
+            [String(validCount), String(enrollment.threshold)],
+          );
+        }
+
+        if (!manifest.timestamp) {
+          return new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_MISSING);
+        }
+
+        const timestamps = await witnessTimestampsFromCosignedTreeHead(
+          new Uint8Array(),
+          manifest.timestamp,
+        );
+
+        const timestamp = timestamps.sort((a, b) => a - b)[
+          Math.floor(timestamps.length / 2)
+        ];
+        const now = Math.floor(Date.now() / 1000);
+
+        if (now - timestamp > enrollment.max_age) {
+          return new WebcatError(WebcatErrorCode.Manifest.EXPIRED, [
+            String(enrollment.max_age),
+            String(timestamp),
+          ]);
+        }
+
+        return null;
+      },
+    ),
+    verifySigstoreManifest: vi.fn(async () => null),
   };
 });
 
@@ -85,15 +151,20 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
   beforeEach(async () => {
     enrollment = {
+      type: EnrollmentTypes.Sigsum,
       policy: TEST_POLICY_B64URL,
       signers: [SIGNER1, SIGNER2, SIGNER3],
       threshold: 2,
       max_age: 360000,
       cas_url: "https://cas.example.com",
+      logs: {
+        log1: "https://log.example.com",
+      },
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
     state = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -127,6 +198,7 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -148,6 +220,7 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -167,6 +240,7 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -186,6 +260,7 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -197,6 +272,107 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     expect(res).toBeInstanceOf(OriginStateFailed);
     expect((res as OriginStateFailed).error.code).toBe(
       WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE,
+    );
+  });
+});
+
+//
+// ─────────────────────────────────────────────
+//   OriginStateInitial.verifyEnrollment (sigstore)
+// ─────────────────────────────────────────────
+//
+describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
+  let enrollment: Enrollment;
+  let enrollmentHash: Uint8Array;
+  let state: OriginStateInitial;
+  const trustedRoot = {} as unknown as SigstoreEnrollment["trusted_root"];
+
+  beforeEach(async () => {
+    enrollment = {
+      type: EnrollmentTypes.Sigstore,
+      trusted_root: trustedRoot,
+      issuer: "https://issuer.example.com",
+      identity: "https://github.com/example/repo",
+      max_age: 3600,
+    };
+
+    enrollmentHash = await computeEnrollmentHash(enrollment);
+    state = new OriginStateInitial(
+      makeDummyFetcher(),
+      "https:",
+      "443",
+      "example.com",
+      enrollmentHash,
+    );
+  });
+
+  it("accepts a valid sigstore enrollment that matches hash", async () => {
+    const res = await state.verifyEnrollment(enrollment);
+
+    expect(res).toBeInstanceOf(OriginStateVerifiedEnrollment);
+    expect((res as OriginStateVerifiedEnrollment).enrollment).toEqual(
+      enrollment,
+    );
+  });
+
+  it("fails when trusted_root is missing", async () => {
+    // eslint-disable-next-line
+    const mutated: Enrollment = { ...enrollment, trusted_root: null as any };
+
+    const mutatedHash = await computeEnrollmentHash(mutated);
+    const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
+      "https:",
+      "443",
+      "example.com",
+      mutatedHash,
+    );
+
+    const res = await mutatedState.verifyEnrollment(mutated);
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Enrollment.TRUSTED_ROOT_MISSING,
+    );
+  });
+
+  it("fails when issuer is missing", async () => {
+    const mutated: Enrollment = { ...enrollment, issuer: "" };
+
+    const mutatedHash = await computeEnrollmentHash(mutated);
+    const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
+      "https:",
+      "443",
+      "example.com",
+      mutatedHash,
+    );
+
+    const res = await mutatedState.verifyEnrollment(mutated);
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Enrollment.IDENTITY_ISSUER_MALFORMED,
+    );
+  });
+
+  it("fails when identity is missing", async () => {
+    const mutated: Enrollment = { ...enrollment, identity: "" };
+
+    const mutatedHash = await computeEnrollmentHash(mutated);
+    const mutatedState = new OriginStateInitial(
+      makeDummyFetcher(),
+      "https:",
+      "443",
+      "example.com",
+      mutatedHash,
+    );
+
+    const res = await mutatedState.verifyEnrollment(mutated);
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Enrollment.IDENTITY_REQUIRED,
     );
   });
 });
@@ -216,19 +392,24 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     "default-src 'none'; script-src 'self'; style-src 'self'; object-src 'none'";
 
   let manifest: Manifest;
-  let signatures: Signatures;
+  let signatures: SigsumSignatures;
 
   beforeEach(async () => {
     enrollment = {
+      type: EnrollmentTypes.Sigsum,
       policy: TEST_POLICY_B64URL,
       signers: [SIGNER1, SIGNER2, SIGNER3],
       threshold: 2,
       max_age: 360000,
       cas_url: "https://cas.example.com",
+      logs: {
+        log1: "https://log.example.com",
+      },
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
     initial = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",
@@ -266,7 +447,7 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
   });
 
   it("fails when not enough signatures", async () => {
-    const tooFew: Signatures = { [SIGNER1]: "signature1" };
+    const tooFew: SigsumSignatures = { [SIGNER1]: "signature1" };
 
     const res = await verifiedEnrollment.verifyManifest(manifest, tooFew);
 
@@ -350,6 +531,93 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
 
 //
 // ─────────────────────────────────────────────
+//   OriginStateVerifiedEnrollment.verifyManifest (sigstore)
+// ─────────────────────────────────────────────
+//
+describe("OriginStateVerifiedEnrollment.verifyManifest (sigstore)", () => {
+  let enrollment: Enrollment;
+  let enrollmentHash: Uint8Array;
+  let initial: OriginStateInitial;
+  let verifiedEnrollment: OriginStateVerifiedEnrollment;
+  let manifest: Manifest;
+  let signatures: SigstoreSignatures;
+  const trustedRoot = {} as unknown as SigstoreEnrollment["trusted_root"];
+
+  const defaultCSP =
+    "default-src 'none'; script-src 'self'; style-src 'self'; object-src 'none'";
+
+  beforeEach(async () => {
+    enrollment = {
+      type: EnrollmentTypes.Sigstore,
+      trusted_root: trustedRoot,
+      issuer: "https://issuer.example.com",
+      identity: "https://github.com/example/repo",
+      max_age: 3600,
+    };
+
+    enrollmentHash = await computeEnrollmentHash(enrollment);
+    initial = new OriginStateInitial(
+      makeDummyFetcher(),
+      "https:",
+      "443",
+      "example.com",
+      enrollmentHash,
+    );
+
+    const res = await initial.verifyEnrollment(enrollment);
+    verifiedEnrollment = res as OriginStateVerifiedEnrollment;
+
+    manifest = {
+      name: "test-app",
+      version: "1.0.0",
+      default_csp: defaultCSP,
+      extra_csp: {},
+      default_index: "index.html",
+      default_fallback: "/index.html",
+      files: {
+        "/index.html": "hash1",
+        "/index.html.br": "hash2",
+        "/index.html.gz": "hash3",
+        "/index.html.zst": "hash4",
+        "/index.html.xz": "hash5",
+        "/index.html.bz2": "hash6",
+        "/index.html.lz4": "hash7",
+      },
+      wasm: [],
+    };
+
+    signatures = [{} as SigstoreSignatures[number]];
+  });
+
+  it("accepts a valid sigstore manifest", async () => {
+    const res = await verifiedEnrollment.verifyManifest(manifest, signatures);
+
+    expect(res).toBeInstanceOf(OriginStateVerifiedManifest);
+    expect((res as OriginStateVerifiedManifest).manifest).toEqual(manifest);
+  });
+
+  it("fails when sigstore verification fails", async () => {
+    const validators = await import("../../src/webcat/validators");
+    const mock = validators.verifySigstoreManifest as unknown as vi.Mock<
+      [Enrollment, Manifest, SigstoreSignatures],
+      Promise<WebcatError | null>
+    >;
+
+    mock.mockResolvedValueOnce(
+      new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED),
+    );
+
+    const res = await verifiedEnrollment.verifyManifest(manifest, signatures);
+
+    expect(res).toBeInstanceOf(OriginStateFailed);
+    expect((res as OriginStateFailed).error.code).toBe(
+      WebcatErrorCode.Manifest.VERIFY_FAILED,
+    );
+  });
+});
+
+//
+// ─────────────────────────────────────────────
 //   OriginStateVerifiedManifest.verifyCSP
 // ─────────────────────────────────────────────
 //
@@ -365,15 +633,20 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
 
   beforeEach(async () => {
     enrollment = {
+      type: EnrollmentTypes.Sigsum,
       policy: TEST_POLICY_B64URL,
       signers: [SIGNER1, SIGNER2],
       threshold: 1,
       max_age: 360000,
       cas_url: "https://cas.example.com",
+      logs: {
+        log1: "https://log.example.com",
+      },
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
     initial = new OriginStateInitial(
+      makeDummyFetcher(),
       "https:",
       "443",
       "example.com",

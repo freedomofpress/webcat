@@ -1,14 +1,31 @@
-export interface Enrollment {
-  policy: string;
-  // ed25519 base64url encoded public keys
-  signers: string[];
-  // >= number of signers
-  threshold: number;
-  // < 1 year
-  max_age: number;
-  // not really important here for validation
-  cas_url: string;
+import { SigstoreBundle, TrustedRoot } from "@freedomofpress/sigstore-browser";
+
+export enum EnrollmentTypes {
+  Sigsum = "sigsum",
+  Sigstore = "sigstore",
 }
+
+export interface BaseEnrollment {
+  max_age: number;
+}
+
+export interface SigsumEnrollment extends BaseEnrollment {
+  type: EnrollmentTypes.Sigsum;
+  signers: string[];
+  threshold: number;
+  policy: string;
+  cas_url: string;
+  logs: Record<string, string>;
+}
+
+export interface SigstoreEnrollment extends BaseEnrollment {
+  type: EnrollmentTypes.Sigstore;
+  trusted_root: TrustedRoot;
+  issuer: string;
+  identity: string;
+}
+
+export type Enrollment = SigsumEnrollment | SigstoreEnrollment;
 
 export interface Manifest {
   name: string;
@@ -19,19 +36,21 @@ export interface Manifest {
   };
   default_index: string;
   default_fallback: string;
-  timestamp: string;
+  timestamp?: string; // Used only for sigsum
   files: {
     [filePath: string]: string;
   };
   wasm: string[];
 }
 
-export interface Signatures {
+export interface SigsumSignatures {
   [pubKey: string]: string;
 }
+
+export type SigstoreSignatures = SigstoreBundle[];
 
 export interface Bundle {
   enrollment: Enrollment;
   manifest: Manifest;
-  signatures: Signatures;
+  signatures: SigsumSignatures | SigstoreSignatures;
 }

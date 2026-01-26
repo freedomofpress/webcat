@@ -1,19 +1,102 @@
-import { RawPublicKey } from "@freedomofpress/sigsum/dist/types";
-import { verifyMessageWithCompiledPolicy } from "@freedomofpress/sigsum/dist/verify";
-
 import { bundle_name, bundle_prev_name } from "../../config";
 import { db } from "../../globals";
 import { canonicalize } from "../canonicalize";
-import { base64UrlToUint8Array, stringToUint8Array } from "../encoding";
+import { stringToUint8Array } from "../encoding";
 import { headersListener, requestListener } from "../listeners";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
+import { validateCSP, validateSigstoreEnrollment } from "../validators";
 import {
-  validateCSP,
-  witnessTimestampsFromCosignedTreeHead,
+  validateManifest,
+  validateSigsumEnrollment,
+  verifySigstoreManifest,
+  verifySigsumManifest,
 } from "../validators";
-import { Bundle, Enrollment, Manifest, Signatures } from "./bundle";
+import {
+  Bundle,
+  Enrollment,
+  EnrollmentTypes,
+  Manifest,
+  SigstoreSignatures,
+  SigsumSignatures,
+} from "./bundle";
 import { WebcatError, WebcatErrorCode } from "./errors";
+
+type BundleFetch = {
+  promise: Promise<Response>;
+  error?: WebcatError;
+  value?: Bundle;
+};
+
+export class BundleFetcher implements Iterable<BundleFetch> {
+  public readonly current: BundleFetch;
+  public readonly previous: BundleFetch;
+
+  constructor(base: string) {
+    this.current = {
+      promise: fetch(`${base}${bundle_name}`, {
+        cache: "no-store",
+      }),
+    };
+
+    this.previous = {
+      promise: fetch(`${base}${bundle_prev_name}`, {
+        cache: "no-store",
+      }),
+    };
+  }
+
+  *[Symbol.iterator](): IterableIterator<BundleFetch> {
+    yield this.current;
+    yield this.previous;
+  }
+
+  public async awaitAll(): Promise<void> {
+    for (const slot of this) {
+      if (slot.value || slot.error) {
+        continue;
+      }
+
+      let response: Response;
+      try {
+        response = await slot.promise;
+      } catch {
+        slot.error = new WebcatError(WebcatErrorCode.Fetch.FETCH_ERROR);
+        continue;
+      }
+
+      if (!response.ok) {
+        slot.error = new WebcatError(WebcatErrorCode.Fetch.FETCH_ERROR);
+        continue;
+      }
+
+      let bundle: Bundle;
+      try {
+        bundle = (await response.json()) as Bundle;
+      } catch {
+        slot.error = new WebcatError(WebcatErrorCode.Bundle.MALFORMED);
+        continue;
+      }
+
+      if (!bundle.enrollment) {
+        slot.error = new WebcatError(WebcatErrorCode.Bundle.ENROLLMENT_MISSING);
+        continue;
+      }
+
+      if (!bundle.manifest) {
+        slot.error = new WebcatError(WebcatErrorCode.Bundle.MANIFEST_MISSING);
+        continue;
+      }
+
+      if (!bundle.signatures) {
+        slot.error = new WebcatError(WebcatErrorCode.Bundle.SIGNATURES_MISSING);
+        continue;
+      }
+
+      slot.value = bundle;
+    }
+  }
+}
 
 export class OriginStateHolder {
   constructor(
@@ -24,18 +107,10 @@ export class OriginStateHolder {
       | OriginStateVerifiedManifest
       | OriginStateFailed,
   ) {
-    const base = `${current.scheme}//${current.fqdn}:${current.port}/`;
-    current.bundlePromise = fetch(`${base}/${bundle_name}`, {
-      cache: "no-store",
-    });
-    current.bundlePrevPromise = fetch(`${base}/${bundle_prev_name}`, {
-      cache: "no-store",
-    });
+    // Empty for now
   }
 
-  // Remove the listeners if the class det destroyed (called on cache eviction)
   destructor(): void {
-    // Remove the Mozilla API listeners
     browser.webRequest.onBeforeRequest.removeListener(
       this.current.onBeforeRequest,
     );
@@ -56,11 +131,9 @@ export abstract class OriginStateBase {
   public readonly port: string;
   public readonly fqdn: string;
   public readonly enrollment_hash: Uint8Array;
-  public bundlePromise?: Promise<Response>;
-  public bundlePrevPromise?: Promise<Response>;
-  public bundle_source: "current" | "previous" = "current";
-  public references: number;
+  public fetcher: BundleFetcher;
   public bundle?: Bundle;
+  public references: number;
   public readonly enrollment?: Enrollment;
   public readonly manifest?: Manifest;
   public readonly valid_signers?: Set<string>;
@@ -80,11 +153,13 @@ export abstract class OriginStateBase {
   // Due to list logic, we support only one app per domain, and that should be a privileged one
   // But that is enforced in request.ts
   constructor(
+    fetcher: BundleFetcher,
     scheme: string,
     port: string,
     fqdn: string,
     enrollment_hash: Uint8Array,
   ) {
+    this.fetcher = fetcher;
     this.scheme = scheme;
     this.port = port;
     this.fqdn = fqdn;
@@ -94,56 +169,6 @@ export abstract class OriginStateBase {
     this.onBeforeRequest = (details) => requestListener(details);
     this.onHeadersReceived = (details) => headersListener(details);
   }
-
-  public async awaitBundle(source: "current" | "previous") {
-    // If we already have a bundle, consider it done
-    if (this.bundle && this.bundle_source === source) {
-      return;
-    }
-    // If bundlePromise was awaited before and cached a failure result,
-    // we don't want to re-fetch, so detect that. It should never happen
-    let promise;
-    if (source == "current") {
-      promise = this.bundlePromise;
-    } else if (source == "previous") {
-      promise = this.bundlePrevPromise;
-    }
-
-    if (!promise) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Fetch.FETCH_PROMISE_MISSING),
-      );
-    }
-    const bundleResponse = await promise;
-    if (bundleResponse.ok !== true) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Fetch.FETCH_ERROR),
-      );
-    }
-    const bundle_data: Bundle = (await bundleResponse.json()) as Bundle;
-    if (!bundle_data.enrollment) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Bundle.ENROLLMENT_MISSING),
-      );
-    }
-    if (!bundle_data.manifest) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Bundle.MANIFEST_MISSING),
-      );
-    }
-    if (!bundle_data.signatures) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Bundle.SIGNATURES_MISSING),
-      );
-    }
-    this.bundle = bundle_data;
-    this.bundle_source = source;
-  }
 }
 
 export class OriginStateFailed extends OriginStateBase {
@@ -151,7 +176,13 @@ export class OriginStateFailed extends OriginStateBase {
   public readonly error: WebcatError;
 
   constructor(prev: OriginStateBase, error: WebcatError) {
-    super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
+    super(
+      prev.fetcher,
+      prev.scheme,
+      prev.port,
+      prev.fqdn,
+      prev.enrollment_hash,
+    );
     Object.assign(this, prev);
     // We must set it again because we are copying
     this.status = "failed" as const;
@@ -164,12 +195,13 @@ export class OriginStateInitial extends OriginStateBase {
   public bundle?: Bundle;
 
   constructor(
+    fetcher: BundleFetcher,
     scheme: string,
     port: string,
     fqdn: string,
     enrollment_hash: Uint8Array,
   ) {
-    super(scheme, port, fqdn, enrollment_hash);
+    super(fetcher, scheme, port, fqdn, enrollment_hash);
   }
 
   public async verifyDelegation(delegation: string): Promise<boolean> {
@@ -179,6 +211,9 @@ export class OriginStateInitial extends OriginStateBase {
     );
   }
 
+  // This functiont ries to verify the enrollment information against the value in the local list
+  // It will also return errors while fetching the bundles (though they are generated in awaitBundles)
+  // and tell the next stages whether they should use the current or the previous bundle
   public async verifyEnrollment(
     enrollment?: Enrollment,
     delegation?: string,
@@ -190,17 +225,16 @@ export class OriginStateInitial extends OriginStateBase {
 
     // Enrollment info can be fetched from a manifest bundle,
     // or we should support supplying it differently, such is in http headers
-
-    let fetched = false;
     if (!enrollment) {
-      const res = await this.awaitBundle("current");
-      if (res instanceof OriginStateFailed) {
-        return res;
+      // It could mismatch because our list is outdated, but it should exists nevertheless
+      if (!this.fetcher.current.value) {
+        // eslint-disable-next-line
+        return new OriginStateFailed(this, this.fetcher.current.error!);
       }
+
       // We can assert here because the check is guaranteed in awaitBundle
-      // eslint-disable-next-line
-      enrollment = this.bundle!.enrollment;
-      fetched = true;
+
+      enrollment = this.fetcher.current.value.enrollment;
     }
 
     const canonicalized = stringToUint8Array(canonicalize(enrollment));
@@ -210,27 +244,24 @@ export class OriginStateInitial extends OriginStateBase {
     const match = arraysEqual(this.enrollment_hash, canonicalized_hash);
     // In this case, we already tried both bundles and we should bail
     // Or we got direct enrollment passed, and we shpuldn't fallback automatically
-    if (!match && (this.bundle_source == "previous" || !fetched)) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
-      );
-      // Otherwise we shpould await the previous
-    } else if (!match && this.bundle_source == "current") {
-      const res = await this.awaitBundle("previous");
-      // If we are here and the fetch fails, its fatal
-      if (res instanceof OriginStateFailed) {
-        return res;
+    if (match) {
+      this.bundle = this.fetcher.current.value;
+    } else {
+      // If we are here, and the previous fetch failed, we fail on MISMATCH
+      // because it means the main enrollment MISMATCHED and there's no fallback
+      if (!this.fetcher.previous.value) {
+        return new OriginStateFailed(
+          this,
+          new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
+        );
       }
-      // Let's use the enrollment fallback
+      enrollment = this.fetcher.previous.value.enrollment;
 
-      const canonicalized_prev = stringToUint8Array(
-        // eslint-disable-next-line
-        canonicalize(this.bundle!.enrollment),
-      );
+      const canonicalized_prev = stringToUint8Array(canonicalize(enrollment));
       const canonicalized_hash_prev = new Uint8Array(
         await SHA256(canonicalized_prev),
       );
+
       // If this also fails it's fatal
       if (!arraysEqual(this.enrollment_hash, canonicalized_hash_prev)) {
         return new OriginStateFailed(
@@ -238,72 +269,21 @@ export class OriginStateInitial extends OriginStateBase {
           new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
         );
       }
+      this.bundle = this.fetcher.previous.value;
     }
 
-    if (typeof enrollment.policy !== "string") {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.POLICY_MALFORMED),
-      );
-    }
-    if (enrollment.policy.length === 0 || enrollment.policy.length > 8192) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.POLICY_LENGTH),
-      );
+    let err: WebcatError | null = null;
+
+    if (enrollment.type === EnrollmentTypes.Sigsum) {
+      err = validateSigsumEnrollment(enrollment);
+    } else if (enrollment.type === EnrollmentTypes.Sigstore) {
+      err = validateSigstoreEnrollment(enrollment);
+    } else {
+      err = new WebcatError(WebcatErrorCode.Enrollment.TYPE_INVALID);
     }
 
-    if (!Array.isArray(enrollment.signers)) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_MALFORMED),
-      );
-    }
-
-    if (enrollment.signers.length === 0) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_EMPTY),
-      );
-    }
-
-    for (const key of enrollment.signers) {
-      if (typeof key !== "string") {
-        return new OriginStateFailed(
-          this,
-          new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_KEY_MALFORMED, [
-            String(key),
-          ]),
-        );
-      }
-    }
-
-    if (
-      typeof enrollment.threshold !== "number" ||
-      !Number.isInteger(enrollment.threshold) ||
-      enrollment.threshold < 1
-    ) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.THRESHOLD_MALFORMED),
-      );
-    }
-
-    if (enrollment.threshold > enrollment.signers.length) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE),
-      );
-    }
-
-    if (
-      typeof enrollment.max_age !== "number" ||
-      !Number.isFinite(enrollment.max_age)
-    ) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED),
-      );
+    if (err) {
+      return new OriginStateFailed(this, err);
     }
 
     //const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60;
@@ -321,13 +301,11 @@ export class OriginStateInitial extends OriginStateBase {
     // parse the compiled sigsum policy once here instead of doing that
     // at every verification. Currently the sigsum-ts lib does not support that
     // and maybe more abstraction there would be useful
-    const next = new OriginStateVerifiedEnrollment(
+    return new OriginStateVerifiedEnrollment(
       this,
       enrollment,
       verified_delegation,
     );
-    next.bundlePromise = this.bundlePromise;
-    return next;
   }
 }
 
@@ -342,29 +320,30 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     enrollment: Enrollment,
     delegation: string | undefined,
   ) {
-    super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
-    this.bundle = prev.bundle;
-    this.bundlePromise = prev.bundlePromise;
+    super(
+      prev.fetcher,
+      prev.scheme,
+      prev.port,
+      prev.fqdn,
+      prev.enrollment_hash,
+    );
     this.onBeforeRequest = prev.onBeforeRequest;
     this.onHeadersReceived = prev.onHeadersReceived;
     this.references = prev.references;
     this.enrollment = enrollment;
     this.delegation = delegation;
+    this.bundle = prev.bundle;
   }
 
   public async verifyManifest(
     manifest?: Manifest,
-    signatures?: Signatures,
+    signatures?: SigsumSignatures | SigstoreSignatures,
   ): Promise<OriginStateVerifiedManifest | OriginStateFailed> {
     // Manifest info can be fetched from a manifest bundle,
     // or we should support supplying it differently
     // If enrollment information is passed from headers or another source, then we do not support
-    // a fallbackm bundle at the moment
+    // a fallback bundle at the moment
     if (!manifest || !signatures) {
-      const res = await this.awaitBundle("current");
-      if (res instanceof OriginStateFailed) {
-        return res;
-      }
       // awaitBundle checks already that manifest exists
       // eslint-disable-next-line
       manifest = this.bundle!.manifest;
@@ -372,144 +351,36 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       signatures = this.bundle!.signatures;
     }
 
-    const canonicalized = stringToUint8Array(canonicalize(manifest));
+    let verify_error: WebcatError | null = null;
 
-    // The purpose of cloning the original list of signers is to have logic to ensure
-    // that each signers can at most sign once. Since we are dealing with a lot of
-    // transformations (hex, b64, etc) and any of these can have malleability, we want to
-    // avoid a scenario where the same signature but with a different public key
-    // encoding is counted twice. By removing a signer from the set of possible signers
-    // we shold prevent this systematically.
-    const remainingSigners = new Set(this.enrollment.signers);
-    let validCount = 0;
+    switch (this.enrollment.type) {
+      case EnrollmentTypes.Sigsum:
+        verify_error = await verifySigsumManifest(
+          this.enrollment,
+          manifest,
+          signatures as SigsumSignatures,
+        );
+        break;
 
-    for (const pubKey of Object.keys(signatures)) {
-      if (remainingSigners.has(pubKey)) {
-        try {
-          // Verify using Sigsum using:
-          // - The signer public key
-          // - The compiled policy in the enrollment metadata
-          // - The signature and Sigsum proof associated
-          await verifyMessageWithCompiledPolicy(
-            canonicalized,
-            new RawPublicKey(base64UrlToUint8Array(pubKey)),
-            base64UrlToUint8Array(this.enrollment.policy),
-            signatures[pubKey],
-          );
-        } catch (e) {
-          return new OriginStateFailed(
-            this,
-            new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED, [
-              String(e),
-            ]),
-          );
-        }
-        remainingSigners.delete(pubKey);
-        validCount++;
-      }
+      case EnrollmentTypes.Sigstore:
+        verify_error = await verifySigstoreManifest(
+          this.enrollment,
+          manifest,
+          signatures as SigstoreSignatures,
+        );
+        break;
+
+      default:
+        verify_error = new WebcatError(WebcatErrorCode.Enrollment.TYPE_INVALID);
     }
 
-    // Not enough signatures to verify the manifest
-    if (validCount < this.enrollment.threshold) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED, [
-          String(validCount),
-          String(this.enrollment.threshold),
-        ]),
-      );
+    if (verify_error) {
+      return new OriginStateFailed(this, verify_error);
     }
 
-    if (!manifest.timestamp) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_MISSING),
-      );
-    }
-
-    let timestamps;
-    try {
-      timestamps = await witnessTimestampsFromCosignedTreeHead(
-        base64UrlToUint8Array(this.enrollment.policy),
-        manifest.timestamp,
-      );
-    } catch (e) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_VERIFY_FAILED, [
-          String(e),
-        ]),
-      );
-    }
-
-    const timestamp = timestamps.sort((a, b) => a - b)[
-      Math.floor(timestamps.length / 2)
-    ];
-
-    const now = Math.floor(Date.now() / 1000);
-
-    if (now - timestamp > this.enrollment.max_age) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.EXPIRED, [
-          String(this.enrollment.max_age),
-          String(timestamp),
-        ]),
-      );
-    }
-
-    // A manifest with no files should not exists
-    if (!manifest.files || Object.keys(manifest.files).length < 1) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.FILES_MISSING),
-      );
-    }
-
-    // If there is no default CSP than the manifest is incomplete
-    if (!manifest.default_csp) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_CSP_MISSING),
-      );
-    }
-
-    // If there is no default index or fallback
-    if (!manifest.default_index) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING),
-      );
-    }
-
-    if (!manifest.default_fallback) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING),
-      );
-    }
-
-    // The file referenced by default_index must be in files
-    if (!manifest.files["/" + manifest.default_index]) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING_FILE),
-      );
-    }
-
-    // The file referenced by default_fallback must be in files
-    if (!manifest.files[manifest.default_fallback]) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING),
-      );
-    }
-
-    if (!manifest.wasm) {
-      return new OriginStateFailed(
-        this,
-        new WebcatError(WebcatErrorCode.Manifest.WASM_MISSING),
-      );
+    const format_error = validateManifest(manifest);
+    if (format_error) {
+      return new OriginStateFailed(this, format_error);
     }
 
     // ValidateCSP will populate this based on hosts presents in both
@@ -554,7 +425,6 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       }
     }
     const next = new OriginStateVerifiedManifest(this, manifest, valid_sources);
-    next.bundlePromise = this.bundlePromise;
     return next;
   }
 }
@@ -571,9 +441,13 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     manifest: Manifest,
     valid_sources: Set<string>,
   ) {
-    super(prev.scheme, prev.port, prev.fqdn, prev.enrollment_hash);
-    this.bundle = prev.bundle;
-    this.bundlePromise = prev.bundlePromise;
+    super(
+      prev.fetcher,
+      prev.scheme,
+      prev.port,
+      prev.fqdn,
+      prev.enrollment_hash,
+    );
     this.onBeforeRequest = prev.onBeforeRequest;
     this.onHeadersReceived = prev.onHeadersReceived;
     this.references = prev.references;
@@ -581,6 +455,7 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     this.manifest = manifest;
     this.valid_sources = valid_sources;
     this.delegation = prev.delegation;
+    this.bundle = prev.bundle;
   }
 
   public verifyCSP(csp: string, pathname: string) {
