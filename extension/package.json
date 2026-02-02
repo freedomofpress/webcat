@@ -39,6 +39,7 @@
     "@freedomofpress/cometbft": "^0.1.1",
     "@freedomofpress/ics23": "^0.1.2",
     "@freedomofpress/sigsum": "^0.3.7",
+    "@freedomofpress/sigstore-browser": "^0.1.11",
     "yazl": "^3.3.1"
   }
 }

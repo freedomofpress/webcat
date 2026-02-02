@@ -3,6 +3,7 @@ import { db } from "./../globals";
 import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
+  BundleFetcher,
   OriginStateHolder,
   OriginStateInitial,
 } from "./interfaces/originstate";
@@ -63,7 +64,11 @@ export async function validateOrigin(
   );
 
   // Policy hash is checked at the top and then later again
+  const newFetcher = new BundleFetcher(
+    `${urlobj.protocol}//${fqdn}:${urlobj.port}`,
+  );
   const newOriginState = new OriginStateInitial(
+    newFetcher,
     urlobj.protocol,
     urlobj.port,
     fqdn,
@@ -71,6 +76,9 @@ export async function validateOrigin(
   );
   const origin = new OriginStateHolder(newOriginState);
   origins.set(fqdn, origin);
+
+  // See https://github.com/freedomofpress/webcat/issues/95
+  await origin.current.fetcher.awaitAll();
 
   // We want to intercept everything for enrolled wbesites
   browser.webRequest.onBeforeRequest.addListener(
