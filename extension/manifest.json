@@ -15,6 +15,7 @@
       }
     }
   },
+  "incognito": "spanning",
   "permissions": [
     "webNavigation",
     "webRequest",
