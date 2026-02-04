@@ -2,6 +2,12 @@
 The purpose of this document is to lay out guidelines for compatibility of web-applications with this project.
 
 ## Conent Security Policy
+
+An example of a CSP compatible with WEBCAT:
+```
+Content-Security-Policy: object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; frame-src 'none'; worker-src 'self’; frame-ancestors 'none'; form-action 'none';
+```
+
 CSP requirements are being dicussed more in detail in https://github.com/freedomofpress/webcat/issues/9.
 
 However, some core requirements are unlinkely to change, as listed below.
