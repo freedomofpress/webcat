@@ -5,7 +5,7 @@ The purpose of this document is to lay out guidelines for compatibility of web-a
 
 An example of a CSP compatible with WEBCAT:
 ```
-Content-Security-Policy: object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; frame-src 'none'; worker-src 'self’; frame-ancestors 'none'; form-action 'none';
+Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; frame-ancestors 'none'; form-action 'none'; frame-src 'none'; object-src 'none';
 ```
 
 CSP requirements are being dicussed more in detail in https://github.com/freedomofpress/webcat/issues/9.
