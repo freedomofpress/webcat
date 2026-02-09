@@ -389,16 +389,16 @@ export async function validateCSP(
 }
 
 export function isSafeRelativeLocation(value: string): boolean {
-  const trimmed = value.trim();
+  value = value.trim();
 
-  // Reject protocol-relative URLs: "//example.com"
-  if (trimmed.startsWith("//")) return false;
-
-  // Reject ANY absolute URL with a scheme: "https:", "javascript:", "data:", etc.
-  const SCHEME_RE = /^[a-zA-Z][a-zA-Z0-9+.-]*:/;
-  if (SCHEME_RE.test(trimmed)) return false;
-
-  return true;
+  // No scheme, no protocol-relative, no backslashes
+  return (
+    (value.startsWith("/") ||
+      value.startsWith("../") ||
+      value.startsWith("./")) &&
+    !value.startsWith("//") &&
+    !value.includes("\\")
+  );
 }
 
 export async function witnessTimestampsFromCosignedTreeHead(
