@@ -377,6 +377,30 @@ describe("validateCSP", () => {
       "default-src is not none, and object-src is not defined.",
     );
   });
+
+  // See https://github.com/freedomofpress/webcat/issues/101
+  it("should throw when CSP contains a comma (multiple policies)", async () => {
+    const csp = "script-src 'unsafe-eval', script-src 'self'";
+
+    await expect(validateCSP(csp, trustedFQDN, valid_sources)).rejects.toThrow(
+      "CSP contains a comma",
+    );
+  });
+
+  it("should throw when a valid CSP is followed by a comma and garbage", async () => {
+    const csp =
+      [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self'",
+        "object-src 'none'",
+        "worker-src 'self'",
+      ].join("; ") + ", @invalid-policy";
+
+    await expect(validateCSP(csp, trustedFQDN, valid_sources)).rejects.toThrow(
+      "CSP contains a comma",
+    );
+  });
 });
 
 describe("validateProtocolAndPort", () => {
