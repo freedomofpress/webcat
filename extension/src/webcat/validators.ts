@@ -165,10 +165,12 @@ export async function validateCSP(
   // 'self' and 'none' are allowed, but they have different implications and we should tag them
   if (default_src) {
     for (const src of default_src) {
-      if (src === source_keywords.None) {
+      // See https://github.com/freedomofpress/webcat/issues/99
+      if (src === source_keywords.None && default_src.length === 1) {
         default_src_is_none = true;
         break;
-      } else if (src === source_keywords.Self) {
+        // TODO: we can probably be less restrictive here
+      } else if (src === source_keywords.Self || src === source_keywords.None) {
         // Explicitly allowed for readability
         continue;
       } else {

@@ -360,6 +360,23 @@ describe("validateCSP", () => {
       "script-src cannot contain blob: which is unsupported.",
     );
   });
+
+  // See https://github.com/freedomofpress/webcat/issues/99
+  it("should throw when default-src contains 'none' and 'self' and object-src is missing", async () => {
+    const csp = [
+      "default-src 'none' 'self'",
+      "script-src 'self'",
+      "style-src 'self'",
+      // object-src missing
+      "child-src 'self'",
+      "frame-src 'self'",
+      "worker-src 'self'",
+    ].join("; ");
+
+    await expect(validateCSP(csp, trustedFQDN, valid_sources)).rejects.toThrow(
+      "default-src is not none, and object-src is not defined.",
+    );
+  });
 });
 
 describe("validateProtocolAndPort", () => {
