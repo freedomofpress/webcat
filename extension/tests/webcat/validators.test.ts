@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   enforceHTTPS,
+  isSafeRelativeLocation,
   validateCSP,
   validateProtocolAndPort,
 } from "../../src/webcat/validators";
@@ -456,5 +457,62 @@ describe("enforceHTTPS", () => {
     expect(first).toBe("https://example.com/");
     expect(second).toBeUndefined();
     expect(url.protocol).toBe("https:");
+  });
+});
+
+describe("isSafeRelativeLocation", () => {
+  it("allows absolute-path relative locations", () => {
+    expect(isSafeRelativeLocation("/")).toBe(true);
+    expect(isSafeRelativeLocation("/login")).toBe(true);
+    expect(isSafeRelativeLocation("/a/b/c")).toBe(true);
+  });
+
+  it("allows parent-relative paths", () => {
+    expect(isSafeRelativeLocation("../login")).toBe(true);
+    expect(isSafeRelativeLocation("../a/b")).toBe(true);
+  });
+
+  it("allows same-relative paths", () => {
+    expect(isSafeRelativeLocation("./login")).toBe(true);
+  });
+
+  it("trims whitespace before validation", () => {
+    expect(isSafeRelativeLocation(" /login ")).toBe(true);
+    expect(isSafeRelativeLocation("  ../login")).toBe(true);
+  });
+
+  it("rejects protocol-relative URLs", () => {
+    expect(isSafeRelativeLocation("//evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("///evil.com")).toBe(false);
+  });
+
+  it("rejects absolute URLs with schemes", () => {
+    expect(isSafeRelativeLocation("https://evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("http://evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("ftp://evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("javascript:alert(1)")).toBe(false);
+    expect(isSafeRelativeLocation("blob:abcd")).toBe(false);
+    expect(isSafeRelativeLocation("data:text/plain,hi")).toBe(false);
+  });
+
+  it("rejects backslash-based paths", () => {
+    expect(isSafeRelativeLocation("\\evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("/\\evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("\\\\evil.com")).toBe(false);
+  });
+
+  it("rejects bare relative paths", () => {
+    expect(isSafeRelativeLocation("login")).toBe(false);
+  });
+
+  it("allows encoded slashes (no decoding is performed)", () => {
+    expect(isSafeRelativeLocation("/%2f%2fevil.com")).toBe(true);
+    expect(isSafeRelativeLocation("%2f%2fevil.com")).toBe(false);
+  });
+
+  it("allows control characters (current behavior)", () => {
+    expect(isSafeRelativeLocation("/foo\nbar")).toBe(true);
+    expect(isSafeRelativeLocation("/foo\rbar")).toBe(true);
+    expect(isSafeRelativeLocation("/foo\tbar")).toBe(true);
   });
 });
