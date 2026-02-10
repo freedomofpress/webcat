@@ -145,7 +145,7 @@ export async function validateCSP(
     UnsafeInline = "'unsafe-inline'",
     UnsafeEval = "'unsafe-eval'",
     UnsafeHashes = "'unsafe-hashes'",
-    StrictDynamic = "'strict-dynamic",
+    StrictDynamic = "'strict-dynamic'",
   }
 
   enum source_types {
@@ -153,6 +153,11 @@ export async function validateCSP(
     Blob = "blob:",
     Data = "data:",
     EnrolledOrigins = 1,
+  }
+
+  // See https://github.com/freedomofpress/webcat/issues/101
+  if (csp.includes(",")) {
+    throw new Error(`CSP contains a comma: ${csp}`);
   }
 
   // The spec (and thus the parsing function) has to lowercase the directive names
