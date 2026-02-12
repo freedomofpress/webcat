@@ -2,6 +2,14 @@
 The purpose of this document is to lay out guidelines for compatibility of web-applications with this project.
 
 ## Conent Security Policy
+
+WEBCAT only works on websites with a Content Security Policy (CSP) that restricts the loading of untrusted code. You can query your domain's CSP via [`cspresso`](https://cspresso.cafe/) or by checking HTTP response headers in your browser's developer tools.
+
+An example of a CSP compatible with WEBCAT:
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; frame-ancestors 'none'; form-action 'none'; frame-src 'none'; object-src 'none';
+```
+
 CSP requirements are being dicussed more in detail in https://github.com/freedomofpress/webcat/issues/9.
 
 However, some core requirements are unlinkely to change, as listed below.
