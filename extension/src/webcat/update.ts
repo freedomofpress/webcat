@@ -131,14 +131,35 @@ async function checkAndUpdate(
 }
 
 // Main update function
-async function update(db: WebcatDatabase, endpoint: string): Promise<void> {
+export async function update(
+  db: WebcatDatabase,
+  endpoint: string,
+  bundled = false,
+): Promise<void> {
   try {
     console.log("[webcat] Running production list updater");
     await db.setLastChecked();
 
-    // 2 Fetch latest block (with timeout)
-    const blockResponse = await fetchWithTimeout(`${endpoint}block.json`);
-    const block = await blockResponse.json();
+    let leavesUrl: string;
+    let blocksUrl: string;
+
+    if (bundled) {
+      // Use bundled files at install or update time
+      console.log("[webcat] Loading bundled update files");
+      leavesUrl = browser.runtime.getURL("data/list.json");
+      blocksUrl = browser.runtime.getURL("data/block.json");
+    } else {
+      // Use network endpoints for production
+      console.log("[webcat] Fetching update files");
+      leavesUrl = `${endpoint}list.json`;
+      blocksUrl = `${endpoint}block.json`;
+    }
+
+    const leavesResponse = fetchWithTimeout(leavesUrl);
+    const blockResponse = fetchWithTimeout(blocksUrl);
+
+    // 2 Await latest block
+    const block = await (await blockResponse).json();
     console.log("[webcat] Update block fetched");
 
     // 3 Verify block against validatorSet
@@ -165,12 +186,12 @@ async function update(db: WebcatDatabase, endpoint: string): Promise<void> {
 
     const lastBlockTime = await db.getLastBlockTime();
     if (lastBlockTime !== null && out.headerTime.seconds <= lastBlockTime) {
-      throw new Error("Block time is not newer than the last update");
+      console.log("[webcat] Block already applied, skipping");
+      return;
     }
 
     // 5 Fetch leaves file (with timeout)
-    const leavesResponse = await fetchWithTimeout(`${endpoint}list.json`);
-    const leaves = (await leavesResponse.json()) as WebcatLeavesFile;
+    const leaves = (await (await leavesResponse).json()) as WebcatLeavesFile;
 
     // 6 Verify leaves file app_hash matches the block one
     if (!arraysEqual(hexToUint8Array(leaves.proof.app_hash), out.appHash)) {
@@ -186,7 +207,9 @@ async function update(db: WebcatDatabase, endpoint: string): Promise<void> {
     await db.updateList(verifiedLeaves);
     await db.setLastBlockTime(out.headerTime?.seconds);
     await db.setRootHash(leaves.proof.canonical_root_hash);
-    await db.setLastUpdated();
+    if (!bundled) {
+      await db.setLastUpdated();
+    }
     console.log(`[webcat] List updated successfully`);
 
     // Success - clear failure flag
