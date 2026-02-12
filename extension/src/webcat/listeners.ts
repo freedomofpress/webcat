@@ -7,7 +7,11 @@ import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { validateResponseContent, validateResponseHeaders } from "./response";
 import { errorpage } from "./ui";
-import { initializeScheduledUpdates, retryUpdateIfFailed } from "./update";
+import {
+  initializeScheduledUpdates,
+  retryUpdateIfFailed,
+  update,
+} from "./update";
 import { getFQDN, isExtensionRequest } from "./utils";
 
 function cleanup(tabId: number) {
@@ -34,10 +38,15 @@ function cleanup(tabId: number) {
 
 export async function installListener() {
   console.log("[webcat] Running installListener");
+  try {
+    await update(db, endpoint, true);
+  } catch (error) {
+    console.error("[webcat] Install update failed:", error);
+  }
+
   // Initial list download here
   // We probably want do download the most recent list, verify signature and log inclusion
-  // Then index persistently in indexeddb. We do this at every startup anyway, so there is no reason for
-  // not just calling the startup listener
+  // Then index persistently in indexeddb.
   await startupListener();
 }
 
