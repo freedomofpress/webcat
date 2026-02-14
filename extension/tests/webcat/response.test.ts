@@ -291,8 +291,9 @@ describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
     enrollment = {
       type: EnrollmentTypes.Sigstore,
       trusted_root: trustedRoot,
-      issuer: "https://issuer.example.com",
-      identity: "https://github.com/example/repo",
+      claims: {
+        "2.5.29.17": "https://github.com/example/repo",
+      },
       max_age: 3600,
     };
 
@@ -336,8 +337,13 @@ describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
     );
   });
 
-  it("fails when issuer is missing", async () => {
-    const mutated: Enrollment = { ...enrollment, issuer: "" };
+  it("fails when claims is empty", async () => {
+    const mutated: Enrollment = {
+      type: EnrollmentTypes.Sigstore,
+      trusted_root: trustedRoot,
+      claims: {},
+      max_age: 3600,
+    };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
     const mutatedState = new OriginStateInitial(
@@ -352,27 +358,7 @@ describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
 
     expect(res).toBeInstanceOf(OriginStateFailed);
     expect((res as OriginStateFailed).error.code).toBe(
-      WebcatErrorCode.Enrollment.IDENTITY_ISSUER_MALFORMED,
-    );
-  });
-
-  it("fails when identity is missing", async () => {
-    const mutated: Enrollment = { ...enrollment, identity: "" };
-
-    const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginStateInitial(
-      makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
-      mutatedHash,
-    );
-
-    const res = await mutatedState.verifyEnrollment(mutated);
-
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
-      WebcatErrorCode.Enrollment.IDENTITY_REQUIRED,
+      WebcatErrorCode.Enrollment.CLAIMS_EMPTY,
     );
   });
 });
@@ -550,8 +536,9 @@ describe("OriginStateVerifiedEnrollment.verifyManifest (sigstore)", () => {
     enrollment = {
       type: EnrollmentTypes.Sigstore,
       trusted_root: trustedRoot,
-      issuer: "https://issuer.example.com",
-      identity: "https://github.com/example/repo",
+      claims: {
+        "2.5.29.17": "https://github.com/example/repo",
+      },
       max_age: 3600,
     };
 

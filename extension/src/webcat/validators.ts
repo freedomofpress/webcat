@@ -1,7 +1,6 @@
 import {
   AllOf,
   EXTENSION_OID_OTHERNAME,
-  OIDCIssuer,
   PolicyError,
   SigstoreVerifier,
   VerificationPolicy,
@@ -27,11 +26,7 @@ import {
 
 import { db } from "./../globals";
 import { canonicalize } from "./canonicalize";
-import {
-  base64UrlToUint8Array,
-  stringToUint8Array,
-  Uint8ArrayToHex,
-} from "./encoding";
+import { base64UrlToUint8Array, stringToUint8Array } from "./encoding";
 import {
   Manifest,
   SigstoreEnrollment,
@@ -41,7 +36,7 @@ import {
 } from "./interfaces/bundle";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { parseContentSecurityPolicy } from "./parsers";
-import { getFQDNSafe, SHA256 } from "./utils";
+import { getFQDNSafe } from "./utils";
 
 export function extractAndValidateHeaders(
   details: browser.webRequest._OnHeadersReceivedDetails,
@@ -552,19 +547,27 @@ export function validateSigstoreEnrollment(
     return new WebcatError(WebcatErrorCode.Enrollment.TRUSTED_ROOT_MISSING);
   }
 
-  // Issuer is mandatory (OIDC issuer / Fulcio issuer)
-  if (typeof enrollment.issuer !== "string" || enrollment.issuer.length === 0) {
-    return new WebcatError(
-      WebcatErrorCode.Enrollment.IDENTITY_ISSUER_MALFORMED,
-      [String(enrollment.issuer)],
-    );
+  if (
+    typeof enrollment.claims !== "object" ||
+    enrollment.claims === null ||
+    Array.isArray(enrollment.claims)
+  ) {
+    return new WebcatError(WebcatErrorCode.Enrollment.CLAIMS_MISSING);
   }
 
-  const hasIdentity =
-    typeof enrollment.identity === "string" && enrollment.identity.length > 0;
+  if (Object.keys(enrollment.claims).length < 1) {
+    return new WebcatError(WebcatErrorCode.Enrollment.CLAIMS_EMPTY);
+  }
 
-  if (!hasIdentity) {
-    return new WebcatError(WebcatErrorCode.Enrollment.IDENTITY_REQUIRED);
+  for (const [oid, value] of Object.entries(enrollment.claims)) {
+    if (typeof oid !== "string" || oid.length < 1) {
+      return new WebcatError(WebcatErrorCode.Enrollment.CLAIMS_MALFORMED);
+    }
+    if (typeof value !== "string" || value.length < 1) {
+      return new WebcatError(WebcatErrorCode.Enrollment.CLAIMS_MALFORMED, [
+        String(oid),
+      ]);
+    }
   }
 
   if (
@@ -690,72 +693,86 @@ export async function verifySigsumManifest(
   return null;
 }
 
-// Prepare a VerificationPolicy to do the following:
-// - If the SAN is a url, we guess it's a workflow and do prefix matching
-// - If the SAN is an email, we want an exact match there
-// SECURITY TODO: The logic is fuzzy here, and automatic fallbacks
-// with partial matches are a really bad recipe. However, we either lock-in GitHub
-// or we add more metadata to enrollment?
-export class IdentityMatch implements VerificationPolicy {
-  private expected: string;
-  private issuerPolicy: OIDCIssuer | null;
-  private maxAgeSeconds: number;
-
-  constructor(options: {
-    identity: string;
-    issuer: string;
-    maxAgeSeconds: number;
-  }) {
-    this.expected = options.identity;
-    this.issuerPolicy = options.issuer ? new OIDCIssuer(options.issuer) : null;
-    this.maxAgeSeconds = options.maxAgeSeconds;
-  }
+class ClaimPolicy implements VerificationPolicy {
+  constructor(
+    private oid: string,
+    private expected: string,
+  ) {}
 
   verify(cert: X509Certificate): void {
-    // 1. Issuer verification
-    if (this.issuerPolicy) {
-      this.issuerPolicy.verify(cert);
-    }
-
-    // 2. Identity verification
-    const sanExt = cert.extSubjectAltName;
-    if (!sanExt) {
-      throw new PolicyError(
-        "Certificate does not contain SubjectAlternativeName extension",
-      );
-    }
-
-    let uriIdentity: string | null = null;
-
-    if (sanExt.uri) {
-      uriIdentity = sanExt.uri;
-    }
-
-    const otherName = sanExt.otherName(EXTENSION_OID_OTHERNAME);
-    if (otherName) {
-      if (uriIdentity && otherName !== uriIdentity) {
-        throw new PolicyError("Certificate contains multiple URI identities");
+    // Special case: SubjectAltName (2.5.29.17) ---
+    if (this.oid === "2.5.29.17") {
+      const sanExt = cert.extSubjectAltName;
+      if (!sanExt) {
+        throw new PolicyError("Certificate missing SubjectAlternativeName");
       }
-      uriIdentity = otherName;
+
+      const allSans = new Set<string>();
+
+      if (sanExt.rfc822Name) allSans.add(sanExt.rfc822Name);
+      if (sanExt.uri) allSans.add(sanExt.uri);
+
+      // Fulcio identity lives in SAN otherName
+      const other = sanExt.otherName(EXTENSION_OID_OTHERNAME);
+      if (other) allSans.add(other);
+
+      if (!allSans.has(this.expected)) {
+        throw new PolicyError(
+          `SAN mismatch for 2.5.29.17: expected '${this.expected}'`,
+        );
+      }
+
+      return;
     }
 
-    if (!uriIdentity) {
+    // Generic extension handling
+    const ext = cert.extension(this.oid);
+    if (!ext) {
+      throw new PolicyError(`Certificate missing extension ${this.oid}`);
+    }
+
+    let got: string | undefined;
+
+    try {
+      /*
+        ext.valueObj is the ASN.1 object for extnValue.
+        For V1 Fulcio:
+            OCTET STRING → raw bytes
+        For V2 Fulcio:
+            OCTET STRING → DER UTF8String
+      */
+
+      const valueObj = ext.valueObj;
+
+      // Case 1: DER-wrapped UTF8String (Fulcio V2-style)
+      if (valueObj.subs && valueObj.subs.length > 0) {
+        const inner = valueObj.subs[0];
+
+        if (inner?.value) {
+          got = new TextDecoder().decode(inner.value);
+        }
+      }
+
+      // Case 2: Raw OCTET STRING (Fulcio V1-style)
+      if (!got) {
+        got = new TextDecoder().decode(ext.value);
+      }
+    } catch {
+      throw new PolicyError(`Unable to decode extension ${this.oid}`);
+    }
+
+    if (got !== this.expected) {
       throw new PolicyError(
-        "Certificate does not contain a URI-based identity SAN",
+        `Extension ${this.oid} mismatch: got '${got}', expected '${this.expected}'`,
       );
     }
+  }
+}
 
-    if (!uriIdentity.startsWith(this.expected)) {
-      throw new PolicyError(
-        `URI identity "${uriIdentity}" does not match expected prefix "${this.expected}"`,
-      );
-    }
+class CertFreshnessPolicy implements VerificationPolicy {
+  constructor(private maxAgeSeconds: number) {}
 
-    // 3. Freshness enforcement
-    // This is not semantically the same as Sigsum. Sigsum fetches a trusted timestamp
-    // and includes it in the message before signing. Here we validate
-    // the freshness of the identity issuance.
-    // TODO
+  verify(cert: X509Certificate): void {
     const now = Math.floor(Date.now() / 1000);
     const issued = Math.floor(cert.notBefore.getTime() / 1000);
 
@@ -783,74 +800,57 @@ export async function verifySigstoreManifest(
   const verifier = new SigstoreVerifier();
   await verifier.loadSigstoreRoot(enrollment.trusted_root);
 
-  const policy = new AllOf([
-    new IdentityMatch({
-      issuer: enrollment.issuer, // e.g. https://token.actions.githubusercontent.com
-      identity: enrollment.identity, // e.g. https://github.com/org/repo/
-      maxAgeSeconds: enrollment.max_age,
-    }),
-  ]);
+  // Support for legacy identity/issuer format
+  /*let effectiveClaims: Record<string, string> = {};
 
-  // Compute manifest digest (same role as `digest` in verifyAttestation)
-  const manifestHash = await Uint8ArrayToHex(
-    new Uint8Array(await SHA256(canonicalize(manifest))),
-  );
+  if (enrollment.claims && Object.keys(enrollment.claims).length > 0) {
+    effectiveClaims = enrollment.claims;
+  } else {
+    // Legacy fallback
+    // issuer → Fulcio OIDC issuer extension
+    // identity → SAN
+    if (
+      typeof (enrollment as any).issuer === "string" &&
+      typeof (enrollment as any).identity === "string"
+    ) {
+      effectiveClaims = {
+        // SAN (SubjectAlternativeName)
+        "2.5.29.17": (enrollment as any).identity,
+
+        // Fulcio OIDC issuer
+        // 1.3.6.1.4.1.57264.1.8 is the Fulcio issuer OID
+        "1.3.6.1.4.1.57264.1.8": (enrollment as any).issuer,
+      };
+    }
+  }*/
+
+  const claimPolicies: VerificationPolicy[] = [];
+
+  for (const [oid, expected] of Object.entries(enrollment)) {
+    claimPolicies.push(new ClaimPolicy(oid, expected));
+  }
+
+  // Keep your existing freshness behavior (previously inside IdentityMatch)
+  claimPolicies.push(new CertFreshnessPolicy(enrollment.max_age));
+
+  const policy = new AllOf(claimPolicies);
 
   let verified = false;
 
   // Does it make sense for this to be an array? Is there cases where the same manifest
   // Could have information of multile bundles, and we care just about one?
   for (const bundle of signatures) {
-    if (bundle.dsseEnvelope) {
-      try {
-        const { payloadType, payload } = await verifier.verifyDsse(
-          bundle,
-          policy,
-        );
-
-        if (payloadType !== "application/vnd.in-toto+json") {
-          throw new Error(
-            `Unsupported payload type: ${payloadType}. Only supports In-toto.`,
-          );
-        }
-
-        const statement = JSON.parse(new TextDecoder().decode(payload));
-
-        const subject = statement.subject?.[0];
-        const attestedDigest = subject?.digest?.sha256;
-
-        if (!attestedDigest) {
-          throw new Error(
-            "Attestation does not contain a SHA-256 subject digest",
-          );
-        }
-
-        if (attestedDigest !== manifestHash) {
-          throw new Error(
-            `Manifest digest mismatch. Expected: ${manifestHash}, Got: ${attestedDigest}`,
-          );
-        }
-
-        // We need at least one valid bundle that matches the policy,
-        // but we don't want to quit if one doesn't
-        // TODO SECURITY: better logic here
-        verified = true;
+    try {
+      verified = await verifier.verifyArtifactPolicy(
+        policy,
+        bundle,
+        stringToUint8Array(canonicalize(manifest)),
+      );
+      if (verified) {
         break;
-      } catch (e) {
-        console.log(e);
-        continue;
       }
-    } else {
-      try {
-        verified = await verifier.verifyArtifact(
-          enrollment.identity,
-          enrollment.issuer,
-          bundle,
-          stringToUint8Array(canonicalize(manifest)),
-        );
-      } catch (e) {
-        console.log(e);
-      }
+    } catch (e) {
+      console.log(e);
     }
   }
 
