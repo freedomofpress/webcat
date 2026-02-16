@@ -826,7 +826,7 @@ export async function verifySigstoreManifest(
 
   const claimPolicies: VerificationPolicy[] = [];
 
-  for (const [oid, expected] of Object.entries(enrollment)) {
+  for (const [oid, expected] of Object.entries(enrollment.claims)) {
     claimPolicies.push(new ClaimPolicy(oid, expected));
   }
 
