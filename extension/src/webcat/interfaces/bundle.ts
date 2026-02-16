@@ -21,8 +21,7 @@ export interface SigsumEnrollment extends BaseEnrollment {
 export interface SigstoreEnrollment extends BaseEnrollment {
   type: EnrollmentTypes.Sigstore;
   trusted_root: TrustedRoot;
-  issuer: string;
-  identity: string;
+  claims: Record<string, string>;
 }
 
 export type Enrollment = SigsumEnrollment | SigstoreEnrollment;
