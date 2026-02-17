@@ -1,5 +1,6 @@
 import { endpoint } from "../config";
 import { db, origins, tabs } from "../globals";
+import { getHooks } from "./genhooks";
 import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
@@ -129,6 +130,19 @@ export async function headersListener(
     tabs.delete(details.tabId);
     errorpage(details.tabId, result);
     return { cancel: true };
+  }
+
+  // Here we must have already validated the enrollment and the manifest
+  // and thus should have all the information, but we haven't started 
+  // sending data back, so it's a good time to hook the page
+  if (FRAME_TYPES.includes(details.type) && originStateHolder.current.manifest) {
+    await browser.tabs.executeScript(details.tabId, {
+      // We check this at manifest validation time
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      code: getHooks(originStateHolder.current.manifest?.wasm!),
+      runAt: "document_start",
+      allFrames: true
+    });
   }
 
   return {};
