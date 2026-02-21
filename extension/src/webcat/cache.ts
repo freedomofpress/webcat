@@ -53,6 +53,13 @@ export class LRUCache<K, V extends Destructible> {
     }
     this.cache.delete(key);
   }
+
+  clear(): void {
+    for (const value of this.cache.values()) {
+      this.callDestructor(value);
+    }
+    this.cache.clear();
+  }
 }
 
 export class LRUSet<T> {
@@ -88,5 +95,9 @@ export class LRUSet<T> {
 
   values(): T[] {
     return Array.from(this.cache.values());
+  }
+
+  clear(): void {
+    this.cache.clear();
   }
 }
