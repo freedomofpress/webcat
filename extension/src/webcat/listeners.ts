@@ -143,15 +143,24 @@ export async function headersListener(
     FRAME_TYPES.includes(details.type) &&
     originStateHolder.current.manifest
   ) {
-    await browser.tabs.executeScript(details.tabId, {
-      // We check this at manifest validation time
-      code: getHooks(
-        hooksType.content_script,
-        originStateHolder.current.manifest.wasm,
-      ),
-      runAt: "document_start",
-      allFrames: true,
-    });
+    const tabId = details.tabId;
+    const wasm = originStateHolder.current.manifest.wasm;
+
+    const listener = async (
+      navDetails: browser.webNavigation._OnCommittedDetails,
+    ) => {
+      if (navDetails.tabId !== tabId) return;
+
+      browser.webNavigation.onCommitted.removeListener(listener);
+
+      await browser.tabs.executeScript(tabId, {
+        code: getHooks(hooksType.content_script, wasm),
+        runAt: "document_start",
+        allFrames: true,
+      });
+    };
+
+    browser.webNavigation.onCommitted.addListener(listener);
   }
 
   return {};
