@@ -277,9 +277,7 @@ export async function validateCSP(
   }
 
   // Step 3: think about scripts
-  // Here allowing hash would break the WASM hooking; as we are no longer injecting
-  // Via a content_script, but rather at the network level on script files, having embedded
-  // JS in HTML page could break the assumptions.
+  // We can now allow inline verified scripts via sha-, see https://github.com/freedomofpress/webcat/pull/111
 
   await validateDirectiveList(
     directives.ScriptSrc,
@@ -290,7 +288,7 @@ export async function validateCSP(
       source_keywords.Self,
       source_keywords.WasmUnsafeEval,
     ],
-    [],
+    [source_types.Hash],
   );
 
   await validateDirectiveList(
@@ -302,7 +300,7 @@ export async function validateCSP(
       source_keywords.Self,
       source_keywords.WasmUnsafeEval,
     ],
-    [],
+    [source_types.Hash],
   );
 
   // Step 4: validate style-src
@@ -328,6 +326,7 @@ export async function validateCSP(
     [
       source_keywords.None,
       source_keywords.Self,
+      // TODO eventually these 2 should disappear
       source_keywords.UnsafeInline,
       source_keywords.UnsafeHashes,
     ],
