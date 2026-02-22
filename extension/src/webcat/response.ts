@@ -6,6 +6,7 @@ import {
   Uint8ArrayToString,
 } from "./encoding";
 import { getHooks } from "./genhooks";
+import { hooksType } from "./interfaces/base";
 import { Enrollment } from "./interfaces/bundle";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
@@ -277,7 +278,7 @@ export async function validateResponseContent(
     if (details.type === "script") {
       // Inject the WASM hooks in every loaded script.
 
-      const hooks = getHooks(manifest.wasm);
+      const hooks = getHooks(hooksType.page, manifest.wasm);
       filter.write(stringToUint8Array(hooks));
     }
 

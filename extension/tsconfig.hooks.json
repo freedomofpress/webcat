@@ -10,6 +10,11 @@
     "types": ["firefox-webext-browser"],
     "outDir": "./dist"
   },
-  "include": ["./src/webcat/hooks.ts", "types/**/*.d.ts"],
+  "include": [
+    "./src/webcat/hooks/core.ts",
+    "./src/webcat/hooks/entry-page.ts",
+    "./src/webcat/hooks/entry-content.ts",
+    "types/**/*.d.ts"
+  ],
   "exclude": ["node_modules"]
 }

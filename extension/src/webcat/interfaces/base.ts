@@ -3,3 +3,8 @@ export enum metadataRequestSource {
   sub_frame,
   worker,
 }
+
+export enum hooksType {
+  page,
+  content_script,
+}
