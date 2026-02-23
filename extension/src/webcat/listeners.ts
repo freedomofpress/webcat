@@ -132,10 +132,6 @@ export async function headersListener(
     return { cancel: true };
   }
 
-  console.log(
-    "injecting content script hooks: ",
-    FRAME_TYPES.includes(details.type) && originStateHolder.current.manifest,
-  );
   // Here we must have already validated the enrollment and the manifest
   // and thus should have all the information, but we haven't started
   // sending data back, so it's a good time to register a listener since
@@ -159,22 +155,20 @@ export async function headersListener(
     FRAME_TYPES.includes(details.type) &&
     originStateHolder.current.manifest
   ) {
-    const tabId = details.tabId;
-    const targetFrameId = details.frameId; // THIS is critical
     const wasm = originStateHolder.current.manifest.wasm;
 
     const listener = async (
       navDetails: browser.webNavigation._OnCommittedDetails,
     ) => {
-      if (navDetails.tabId !== tabId) return;
-      if (navDetails.frameId !== targetFrameId) return;
+      if (navDetails.tabId !== details.tabId) return;
+      if (navDetails.frameId !== details.frameId) return;
 
       browser.webNavigation.onCommitted.removeListener(listener);
 
-      await browser.tabs.executeScript(tabId, {
+      await browser.tabs.executeScript(details.tabId, {
         code: getHooks(hooksType.content_script, wasm),
         runAt: "document_start",
-        frameId: targetFrameId, // inject only that frame
+        frameId: details.frameId,
       });
     };
 
