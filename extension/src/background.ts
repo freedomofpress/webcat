@@ -63,27 +63,3 @@ browser.tabs.onCreated.addListener((tab) => {
     browser.pageAction.hide(tab.id);
   }
 });
-
-browser.webNavigation.onCommitted.addListener((details) => {
-  console.log("onCommitted:", {
-    tabId: details.tabId,
-    url: details.url,
-    frameId: details.frameId,
-  });
-});
-
-browser.webNavigation.onDOMContentLoaded.addListener((details) => {
-  console.log("onDOMContentLoaded:", {
-    tabId: details.tabId,
-    url: details.url,
-    frameId: details.frameId,
-  });
-});
-
-browser.webNavigation.onCompleted.addListener((details) => {
-  console.log("onCompleted:", {
-    tabId: details.tabId,
-    url: details.url,
-    frameId: details.frameId,
-  });
-});
