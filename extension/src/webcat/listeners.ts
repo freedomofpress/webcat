@@ -156,6 +156,7 @@ export async function headersListener(
     originStateHolder.current.manifest
   ) {
     const wasm = originStateHolder.current.manifest.wasm;
+    const hooks_key = originStateHolder.current.hooks_key;
 
     const listener = async (
       navDetails: browser.webNavigation._OnCommittedDetails,
@@ -166,7 +167,7 @@ export async function headersListener(
       browser.webNavigation.onCommitted.removeListener(listener);
 
       await browser.tabs.executeScript(details.tabId, {
-        code: getHooks(hooksType.content_script, wasm),
+        code: getHooks(hooksType.content_script, wasm, hooks_key),
         runAt: "document_start",
         frameId: details.frameId,
       });

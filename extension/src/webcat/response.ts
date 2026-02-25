@@ -278,7 +278,11 @@ export async function validateResponseContent(
     if (details.type === "script") {
       // Inject the WASM hooks in every loaded script.
 
-      const hooks = getHooks(hooksType.page, manifest.wasm);
+      const hooks = getHooks(
+        hooksType.page,
+        manifest.wasm,
+        originStateHolder.current.hooks_key,
+      );
       filter.write(stringToUint8Array(hooks));
     }
 

@@ -1,14 +1,14 @@
 declare global {
   interface Window {
-    wrappedJSObject?: unknown;
-
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    exportFunction?<T extends (...args: any[]) => any>(
-      fn: T,
-      targetScope: object,
-      options?: unknown,
-    ): T;
+    wrappedJSObject?: any;
   }
+  /* eslint-disable @typescript-eslint/no-unsafe-function-type */
+  function exportFunction<T extends Function>(
+    func: T,
+    targetScope: object,
+    options?: { defineAs?: string },
+  ): T;
 }
 
 export {};

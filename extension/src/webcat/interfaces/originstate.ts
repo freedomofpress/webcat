@@ -1,7 +1,7 @@
 import { bundle_name, bundle_prev_name } from "../../config";
 import { db } from "../../globals";
 import { canonicalize } from "../canonicalize";
-import { stringToUint8Array } from "../encoding";
+import { stringToUint8Array, Uint8ArrayToBase64Url } from "../encoding";
 import { headersListener, requestListener } from "../listeners";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
@@ -139,6 +139,7 @@ export abstract class OriginStateBase {
   public readonly valid_signers?: Set<string>;
   public readonly valid_sources?: Set<string>;
   public readonly delegation?: string;
+  public readonly hooks_key: string;
 
   // Per origin function wrappers: the extension API does not support registering
   // the same listener multiple times with different rules. We thus want a wrapper
@@ -166,6 +167,9 @@ export abstract class OriginStateBase {
     this.enrollment_hash = enrollment_hash;
     this.references = 1;
 
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    this.hooks_key = Uint8ArrayToBase64Url(bytes);
     this.onBeforeRequest = (details) => requestListener(details);
     this.onHeadersReceived = (details) => headersListener(details);
   }
