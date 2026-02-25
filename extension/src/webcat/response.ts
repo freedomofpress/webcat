@@ -160,10 +160,12 @@ export async function validateResponseHeaders(
     fqdn,
   );
 
-  // TODO (performance): significant amount of time is spent calling this function
-  // at every loaded file, without added benefit. It should be enough to call it if
-  // details.type == "main_frame", but then the icon change does not work...
-  setOKIcon(details.tabId, originStateHolder.current.delegation);
+  // Step 5: If everything is fine, we can update the icon to the OK state
+  // It's important not do do it for sub_frames, otherwise validating a subresource
+  // would display as if the entire site was verified
+  if (details.type === "main_frame") {
+    setOKIcon(details.tabId, originStateHolder.current.delegation);
+  }
 }
 
 function getVerifiedManifestState(fqdn: string): OriginStateHolder {
@@ -290,7 +292,9 @@ export async function validateResponseContent(
     // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
     // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
     filter.close();
-    setOKIcon(details.tabId, originStateHolder.current.delegation);
+    if (details.type === "main_frame") {
+      setOKIcon(details.tabId, originStateHolder.current.delegation);
+    }
     // Redirect the main frame to an error page
   };
 }

@@ -122,7 +122,7 @@ export async function headersListener(
   if (result instanceof WebcatError) {
     logger.addLog(
       "error",
-      `Error when parsing response headers: ${result}`,
+      `Error when parsing response headers: ${result}: ${result.details?.join(", ")}`,
       details.tabId,
       fqdn,
     );

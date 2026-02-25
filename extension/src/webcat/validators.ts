@@ -227,15 +227,23 @@ export async function validateCSP(
       allowed_source_types.includes(source_types.EnrolledOrigins) &&
       src.includes(".")
     ) {
+      console.log("HERE");
       let fqdn: string;
       try {
-        fqdn = getFQDNSafe(src);
+        if (src.includes("://")) {
+          const url = new URL(src);
+          fqdn = url.hostname;
+        } else {
+          // Host-only source (no scheme)
+          fqdn = getFQDNSafe(src);
+        }
       } catch (e) {
         throw new Error(
           `${directive} value ${src} was parsed as a url but it is not valid: ${e}`,
         );
       }
 
+      console.log("Validating FQDN ", fqdn);
       if ((await db.getFQDNEnrollment(fqdn)).length !== 0) {
         valid_sources.add(fqdn);
         return true;
@@ -316,7 +324,7 @@ export async function validateCSP(
       source_keywords.UnsafeInline,
       source_keywords.UnsafeHashes,
     ],
-    [source_types.Hash],
+    [source_types.Hash, source_types.EnrolledOrigins],
   );
 
   await validateDirectiveList(
@@ -330,7 +338,7 @@ export async function validateCSP(
       source_keywords.UnsafeInline,
       source_keywords.UnsafeHashes,
     ],
-    [source_types.Hash],
+    [source_types.Hash, source_types.EnrolledOrigins],
   );
 
   // Step 5: validate frame-src and child-src. They should follow the same policy and in theory one overrides the other
