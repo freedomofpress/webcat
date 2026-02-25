@@ -2,6 +2,8 @@ import { nonOrigins, origins } from "../globals"; // caching maps
 import { logger } from "./logger";
 import { extractHostname, extractRawHash } from "./parsers";
 
+type StorageMode = "indexeddb" | "memory";
+
 export interface ListMetadata {
   hash: string;
   treeHead: number;
@@ -23,33 +25,46 @@ const KEY_LIST_COUNT = "listCount";
 
 export class WebcatDatabase {
   private backendPromise: Promise<WebcatStorageBackend>;
+  public readonly storageMode: StorageMode;
 
   constructor(private readonly name = "webcat") {
-    this.backendPromise = this.createStorageBackend(this.name);
+    const { backendPromise, storageMode } = this.createStorageBackend(
+      this.name,
+    );
+    this.backendPromise = backendPromise;
+    this.storageMode = storageMode;
   }
 
   private async getBackend(): Promise<WebcatStorageBackend> {
     return this.backendPromise;
   }
 
-  private async createStorageBackend(
-    name: string,
-  ): Promise<WebcatStorageBackend> {
+  private createStorageBackend(name: string): {
+    backendPromise: Promise<WebcatStorageBackend>;
+    storageMode: StorageMode;
+  } {
     if (typeof indexedDB === "undefined") {
       console.warn("[webcat] IndexedDB unavailable, using in-memory backend");
-      return new InMemoryStorageBackend();
+      return {
+        backendPromise: Promise.resolve(new InMemoryStorageBackend()),
+        storageMode: "memory",
+      };
     }
 
-    try {
-      const db = await this.openDatabase(name);
-      return new IndexedDbStorageBackend(db);
-    } catch (e) {
-      console.warn(
-        "[webcat] Falling back to in-memory backend after IndexedDB failure",
-        e,
-      );
-      return new InMemoryStorageBackend();
-    }
+    const backendPromise = this.openDatabase(name)
+      .then((db) => new IndexedDbStorageBackend(db))
+      .catch((e) => {
+        console.warn(
+          "[webcat] Falling back to in-memory backend after IndexedDB failure",
+          e,
+        );
+        return new InMemoryStorageBackend();
+      });
+
+    return {
+      backendPromise,
+      storageMode: "indexeddb",
+    };
   }
 
   private async openDatabase(name: string): Promise<IDBDatabase> {
