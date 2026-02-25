@@ -4,21 +4,28 @@
 
 import { SHA256 } from "./sha256";
 
-type WebAssemblyWithHook = typeof WebAssembly & {
-  __hooked__?: boolean;
-};
-
-export async function installHook(globalObj: typeof globalThis) {
-  if ((globalObj.WebAssembly as WebAssemblyWithHook).__hooked__) {
-    return;
+export async function installHook() {
+  let wasm: typeof WebAssembly;
+  if (typeof window !== "undefined") {
+    wasm = window.getWebAssemblyPtr("__KEY_PLACEHOLDER__");
+    Reflect.deleteProperty(window, "getWebAssemblyPtr");
+  } else {
+    wasm = globalThis.WebAssembly;
   }
+
   // Check if the WebAssembly hook has already been injected.
-  if (
-    Object.prototype.hasOwnProperty.call(globalObj.WebAssembly, "__hooked__")
-  ) {
+  if (Object.prototype.hasOwnProperty.call(wasm, "__hooked__")) {
     console.log("WebAssembly hook already injected.");
     return;
   }
+
+  // Mark WebAssembly as hooked.
+  Object.defineProperty(wasm, "__hooked__", {
+    value: true,
+    writable: false,
+    configurable: false,
+    enumerable: false,
+  });
 
   // ServiceWorkers persistence checker
   // see https://github.com/freedomofpress/webcat/issues/18
@@ -31,7 +38,7 @@ export async function installHook(globalObj: typeof globalThis) {
     sessionStorage.setItem("__webcat_checked_sw__", "true");
     try {
       const registrations =
-        await globalObj.navigator.serviceWorker.getRegistrations();
+        await globalThis.navigator.serviceWorker.getRegistrations();
       for (const registration of registrations) {
         // Check if there's an active service worker before calling update
         if (!registration.active) {
@@ -74,15 +81,7 @@ export async function installHook(globalObj: typeof globalThis) {
     }
   }
   // Save the original crypto.subtle.
-  const originalCryptoSubtle: SubtleCrypto = globalObj.crypto.subtle;
-
-  // Mark WebAssembly as hooked.
-  Object.defineProperty(globalObj.WebAssembly, "__hooked__", {
-    value: true,
-    writable: false,
-    configurable: false,
-    enumerable: false,
-  });
+  const originalCryptoSubtle: SubtleCrypto = globalThis.crypto.subtle;
 
   // Hardcoded allowlist of allowed SHA-256 hex digests.
   const ALLOWED_HASHES: string[] = ["__HASHES_PLACEHOLDER__"];
@@ -142,7 +141,7 @@ export async function installHook(globalObj: typeof globalThis) {
   //
   // Hook WebAssembly.instantiate (async)
   //
-  const originalInstantiate = globalObj.WebAssembly.instantiate;
+  const originalInstantiate = wasm.instantiate;
   // Overloads for WebAssembly.instantiate.
   function hookedInstantiate(
     source: WebAssembly.Module,
@@ -158,7 +157,7 @@ export async function installHook(globalObj: typeof globalThis) {
     importObject?: WebAssembly.Imports,
   ): Promise<unknown> {
     // If the source is already a compiled module, bypass verification.
-    if (source instanceof globalObj.WebAssembly.Module) {
+    if (source instanceof wasm.Module) {
       return originalInstantiate.call(this, source, importObject);
     } else {
       // If source is a Promise, await it.
@@ -176,15 +175,14 @@ export async function installHook(globalObj: typeof globalThis) {
       return originalInstantiate.call(this, sourceBuffer, importObject);
     }
   }
-  globalObj.WebAssembly.instantiate =
-    hookedInstantiate as typeof WebAssembly.instantiate;
+  wasm.instantiate = hookedInstantiate as typeof WebAssembly.instantiate;
 
   //
   // Hook WebAssembly.compile (async)
   //
-  const originalCompile = globalObj.WebAssembly.compile;
-  globalObj.WebAssembly.compile = async function (
-    this: typeof globalObj.WebAssembly,
+  const originalCompile = wasm.compile;
+  wasm.compile = async function (
+    this: typeof wasm,
     bufferSource: BufferSource,
   ): Promise<WebAssembly.Module> {
     try {
@@ -199,9 +197,9 @@ export async function installHook(globalObj: typeof globalThis) {
   //
   // Hook WebAssembly.validate (synchronous)
   //
-  const originalValidate = globalObj.WebAssembly.validate;
-  globalObj.WebAssembly.validate = function (
-    this: typeof globalObj.WebAssembly,
+  const originalValidate = wasm.validate;
+  wasm.validate = function (
+    this: typeof wasm,
     bufferSource: BufferSource,
   ): boolean {
     const buffer: ArrayBuffer = extractBuffer(bufferSource);
@@ -212,10 +210,9 @@ export async function installHook(globalObj: typeof globalThis) {
   //
   // Hook WebAssembly.instantiateStreaming (async)
   //
-  const originalInstantiateStreaming =
-    globalObj.WebAssembly.instantiateStreaming;
-  globalObj.WebAssembly.instantiateStreaming = async function (
-    this: typeof globalObj.WebAssembly,
+  const originalInstantiateStreaming = wasm.instantiateStreaming;
+  wasm.instantiateStreaming = async function (
+    this: typeof wasm,
     responseOrPromise: Response | PromiseLike<Response>,
     importObject?: WebAssembly.Imports,
   ): Promise<WebAssembly.WebAssemblyInstantiatedSource> {
@@ -229,9 +226,9 @@ export async function installHook(globalObj: typeof globalThis) {
   //
   // Hook WebAssembly.compileStreaming (async)
   //
-  const originalCompileStreaming = globalObj.WebAssembly.compileStreaming;
-  globalObj.WebAssembly.compileStreaming = async function (
-    this: typeof globalObj.WebAssembly,
+  const originalCompileStreaming = wasm.compileStreaming;
+  wasm.compileStreaming = async function (
+    this: typeof wasm,
     responseOrPromise: Response | PromiseLike<Response>,
   ): Promise<WebAssembly.Module> {
     const response: Response = await Promise.resolve(responseOrPromise);
@@ -260,7 +257,7 @@ export async function installHook(globalObj: typeof globalThis) {
   };
 
   // Hook the WebAssembly.Module constructor (synchronous)
-  const OriginalModule = globalObj.WebAssembly.Module;
+  const OriginalModule = wasm.Module;
 
   function HookedModule(
     this: object,
@@ -287,19 +284,9 @@ export async function installHook(globalObj: typeof globalThis) {
   hookedModule.imports = OriginalModule.imports.bind(OriginalModule);
 
   // Finally, assign the hooked constructor to WebAssembly.Module.
-  globalObj.WebAssembly.Module =
-    hookedModule as typeof globalObj.WebAssembly.Module;
+  wasm.Module = hookedModule as typeof wasm.Module;
 
-  // Lock the WebAssembly property by making it non-configurable, non-writable.
-  Object.defineProperty(globalObj, "WebAssembly", {
-    configurable: false,
-    enumerable: true,
-    writable: false,
-    value: globalObj.WebAssembly,
-  });
-
-  // Freeze the WebAssembly object to prevent further modifications.
-  Object.freeze(globalObj.WebAssembly);
+  globalThis.WebAssembly = wasm;
 
   console.log(
     "WebAssembly successfully hooked: all bytecode entry points now require authorization.",

@@ -1,17 +1,15 @@
-import { installHook } from "./core";
-
 console.log("[WEBCAT] Installing content script hook");
 
-(function () {
-  if (typeof window === "undefined") return;
+const pageWin = window.wrappedJSObject;
+const wasm = pageWin.WebAssembly;
 
-  if (
-    typeof window.wrappedJSObject !== "undefined" &&
-    typeof window.exportFunction === "function"
-  ) {
-    const pageWindow = window.wrappedJSObject as typeof globalThis;
-
-    const exported = window.exportFunction(installHook, pageWindow);
-    exported(pageWindow);
+function getWebAssemblyPtr(pwd: string) {
+  const key = "__KEY_PLACEHOLDER__";
+  if (pwd === key) {
+    return wasm;
   }
-})();
+}
+
+exportFunction(getWebAssemblyPtr, pageWin, { defineAs: "getWebAssemblyPtr" });
+
+delete pageWin.WebAssembly;
