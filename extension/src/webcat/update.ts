@@ -75,7 +75,7 @@ function scheduleNextUpdate(db: WebcatDatabase, endpoint: string): void {
     clearTimeout(scheduledUpdateTimer);
   }
 
-  const now = Date.now();
+  /*const now = Date.now();
   const nowUTC = new Date(now);
 
   // Calculate next scheduled update time (01:10 UTC)
@@ -93,8 +93,12 @@ function scheduleNextUpdate(db: WebcatDatabase, endpoint: string): void {
 
   // If we've already passed today's scheduled time, schedule for tomorrow
   if (now >= nextScheduled) {
-    nextScheduled += 24 * 60 * 60 * 1000;
-  }
+    nextScheduled += 1 * 60 * 60 * 1000;
+  }*/
+
+  // During alpha, sechedule update an hour from now
+  const now = Date.now();
+  const nextScheduled = now + 60 * 60 * 1000;
 
   const delay = nextScheduled - now;
   console.log(
