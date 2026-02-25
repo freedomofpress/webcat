@@ -8,7 +8,7 @@ export async function installHook() {
   let wasm: typeof WebAssembly;
   if (typeof window !== "undefined") {
     wasm = window.getWebAssemblyPtr("__KEY_PLACEHOLDER__");
-    Reflect.deleteProperty(window, "getWebAssemblyPtr");
+    //Reflect.deleteProperty(window, "getWebAssemblyPtr");
   } else {
     wasm = globalThis.WebAssembly;
   }
@@ -18,14 +18,6 @@ export async function installHook() {
     console.log("WebAssembly hook already injected.");
     return;
   }
-
-  // Mark WebAssembly as hooked.
-  Object.defineProperty(wasm, "__hooked__", {
-    value: true,
-    writable: false,
-    configurable: false,
-    enumerable: false,
-  });
 
   // ServiceWorkers persistence checker
   // see https://github.com/freedomofpress/webcat/issues/18
@@ -286,9 +278,17 @@ export async function installHook() {
   // Finally, assign the hooked constructor to WebAssembly.Module.
   wasm.Module = hookedModule as typeof wasm.Module;
 
+  // Mark WebAssembly as hooked.
+  Object.defineProperty(wasm, "__hooked__", {
+    value: true,
+    writable: false,
+    configurable: false,
+    enumerable: false,
+  });
+
   globalThis.WebAssembly = wasm;
 
   console.log(
-    "WebAssembly successfully hooked: all bytecode entry points now require authorization.",
+    "[WEBCAT] WebAssembly successfully hooked: all bytecode entry points now require authorization.",
   );
 }
