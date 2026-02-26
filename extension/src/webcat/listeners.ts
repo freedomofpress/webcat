@@ -8,20 +8,8 @@ import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { validateResponseContent, validateResponseHeaders } from "./response";
 import { errorpage } from "./ui";
-import {
-  initializeScheduledUpdates,
-  retryUpdateIfFailed,
-  update,
-} from "./update";
+import { retryUpdateIfFailed } from "./update";
 import { getFQDN, isExtensionRequest } from "./utils";
-
-async function bundledUpdate() {
-  try {
-    await update(db, endpoint, true);
-  } catch (error) {
-    console.error("[webcat] Install update failed:", error);
-  }
-}
 
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
@@ -47,25 +35,14 @@ function cleanup(tabId: number) {
 
 export async function installListener() {
   console.log("[webcat] Running installListener");
-
-  // Import the liste bundled with the extension first
-  await bundledUpdate();
-
-  // Initial list download here
-  // We probably want do download the most recent list, verify signature and log inclusion
-  // Then index persistently in indexeddb.
-  await startupListener();
+  // Startupinstall logic is in globals.ts on the main thread
+  // TBB/incognito window only mode don't seem to call these listeners
 }
 
 export async function startupListener() {
   console.log("[webcat] Running startupListener");
-
-  // If there's no indexed db, we should reload the bundled list every time
-  if (db.storageMode == "memory") {
-    await bundledUpdate();
-  }
-  // Run the list updater
-  await initializeScheduledUpdates(db, endpoint);
+  // Startupinstall logic is in globals.ts on the main thread
+  // TBB/incognito window only mode don't seem to call these listeners
 }
 
 export function tabCloseListener(

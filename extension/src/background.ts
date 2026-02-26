@@ -1,3 +1,5 @@
+import { endpoint } from "./config";
+import { db } from "./globals";
 import {
   headersListener,
   installListener,
@@ -7,10 +9,24 @@ import {
 } from "./webcat/listeners";
 import { FRAME_TYPES } from "./webcat/resources";
 import { setErrorIcon } from "./webcat/ui";
+import { update } from "./webcat/update";
+import { initializeScheduledUpdates } from "./webcat/update";
+
+console.log("[webcat] Starting up background");
+
+setTimeout(async () => {
+  console.log("[webcat] Importing bundled list");
+  await update(db, endpoint, true);
+
+  console.log("[webcat] Attempting network update");
+  await initializeScheduledUpdates(db, endpoint);
+}, 0);
 
 // Let's count references to origin in case we ever need pruning policies
 browser.tabs.onRemoved.addListener(tabCloseListener);
 
+// Edit: moved the update logic directly in this file to ensure
+// it always runs
 // On first extension installation download and verify a full list
 browser.runtime.onInstalled.addListener(installListener);
 
