@@ -4,21 +4,7 @@
 
 import { SHA256 } from "./sha256";
 
-export async function installHook() {
-  let wasm: typeof WebAssembly;
-  if (typeof window !== "undefined") {
-    wasm = window.getWebAssemblyPtr("__KEY_PLACEHOLDER__");
-    //Reflect.deleteProperty(window, "getWebAssemblyPtr");
-  } else {
-    wasm = globalThis.WebAssembly;
-  }
-
-  // Check if the WebAssembly hook has already been injected.
-  if (Object.prototype.hasOwnProperty.call(wasm, "__hooked__")) {
-    console.log("WebAssembly hook already injected.");
-    return;
-  }
-
+export async function servieWorkersChecker() {
   // ServiceWorkers persistence checker
   // see https://github.com/freedomofpress/webcat/issues/18
   if (
@@ -42,18 +28,18 @@ export async function installHook() {
         try {
           await registration.update();
           console.log(
-            `Service worker at ${registration.active.scriptURL} updated successfully.`,
+            `[WEBCAT] Service worker at ${registration.active.scriptURL} updated successfully.`,
           );
         } catch (updateError) {
           console.error(
-            `Service worker update failed for ${registration.active.scriptURL}:`,
+            `[WEBCAT] Service worker update failed for ${registration.active.scriptURL}:`,
             updateError,
           );
           try {
             const success = await registration.unregister();
             if (success) {
               console.log(
-                `Service worker at ${registration.active.scriptURL} was unregistered due to update failure.`,
+                `[WEBCAT] Service worker at ${registration.active.scriptURL} was unregistered due to update failure.`,
               );
             } else {
               console.warn(
@@ -62,16 +48,36 @@ export async function installHook() {
             }
           } catch (unregisterError) {
             console.error(
-              `Error while unregistering service worker at ${registration.active.scriptURL}:`,
+              `[WEBCAT] Error while unregistering service worker at ${registration.active.scriptURL}:`,
               unregisterError,
             );
           }
         }
       }
     } catch (err) {
-      console.error("Error fetching service worker registrations:", err);
+      console.error(
+        "[WEBCAT] Error fetching service worker registrations:",
+        err,
+      );
     }
   }
+}
+
+export function wasmHook() {
+  let wasm: typeof WebAssembly;
+  if (typeof window !== "undefined") {
+    wasm = window.getWebAssemblyPtr("__KEY_PLACEHOLDER__");
+    //Reflect.deleteProperty(window, "getWebAssemblyPtr");
+  } else {
+    wasm = globalThis.WebAssembly;
+  }
+
+  // Check if the WebAssembly hook has already been injected.
+  if (Object.prototype.hasOwnProperty.call(wasm, "__hooked__")) {
+    console.log("WebAssembly hook already injected.");
+    return;
+  }
+
   // Save the original crypto.subtle.
   const originalCryptoSubtle: SubtleCrypto = globalThis.crypto.subtle;
 
@@ -97,18 +103,18 @@ export async function installHook() {
     );
     const hashHex: string = arrayBuffertoBase64Url(digestBuffer);
     if (!ALLOWED_HASHES.includes(hashHex)) {
-      throw new Error(`Unauthorized WebAssembly bytecode: ${hashHex}`);
+      throw new Error(`[WEBCAT] Unauthorized WebAssembly bytecode: ${hashHex}`);
     }
-    console.log(`Verified WASM (async) ${hashHex}`);
+    console.log(`[WEBCAT] Verified WASM (async) ${hashHex}`);
   }
 
   // Synchronous bytecode verifier: uses the synchronous SHA256(buffer).
   function verifyBytecodeSync(buffer: ArrayBuffer): void {
     const hashHex: string = arrayBuffertoBase64Url(SHA256(buffer));
     if (!ALLOWED_HASHES.includes(hashHex)) {
-      throw new Error(`Unauthorized WebAssembly bytecode: ${hashHex}`);
+      throw new Error(`[WEBCAT] Unauthorized WebAssembly bytecode: ${hashHex}`);
     }
-    console.log(`Verified WASM (sync) ${hashHex}`);
+    console.log(`[WEBCAT] Verified WASM (sync) ${hashHex}`);
   }
 
   // Helper: Extract an ArrayBuffer from a bufferSource.
@@ -122,7 +128,7 @@ export async function installHook() {
       return bufferSource.buffer as ArrayBuffer;
     }
     throw new TypeError(
-      "WebAssembly bytecode must be provided as an ArrayBuffer or typed array",
+      "[WEBCAT] WebAssembly bytecode must be provided as an ArrayBuffer or typed array",
     );
   }
 
@@ -256,7 +262,9 @@ export async function installHook() {
     bufferSource: BufferSource,
   ): WebAssembly.Module {
     if (!(this instanceof HookedModule)) {
-      throw new TypeError("Constructor WebAssembly.Module requires 'new'");
+      throw new TypeError(
+        "[WEBCAT] Constructor WebAssembly.Module requires 'new'",
+      );
     }
     const buffer: ArrayBuffer = extractBuffer(bufferSource);
     verifyBytecodeSync(buffer);

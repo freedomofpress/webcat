@@ -97,10 +97,10 @@ export async function errorpage(tabId: number, error?: WebcatError) {
   });
 
   // 3. Dynamically inject the error code in the error page
-  await browser.tabs.executeScript(tabId, {
+  browser.tabs.executeScript(tabId, {
     code: `
       document.getElementById("error-code").textContent = ${JSON.stringify(code)};
     `,
-    runAt: "document_end",
+    runAt: "document_idle",
   });
 }

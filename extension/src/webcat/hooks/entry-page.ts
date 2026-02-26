@@ -1,5 +1,6 @@
-import { installHook } from "./core";
+import { servieWorkersChecker, wasmHook } from "./core";
 
 console.log("[WEBCAT] Installing page hook");
 
-installHook();
+wasmHook();
+servieWorkersChecker();

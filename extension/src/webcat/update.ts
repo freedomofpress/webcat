@@ -191,6 +191,7 @@ export async function update(
     const lastBlockTime = await db.getLastBlockTime();
     if (lastBlockTime !== null && out.headerTime.seconds <= lastBlockTime) {
       console.log("[webcat] Block already applied, skipping");
+      lastUpdateFailed = false;
       return;
     }
 
