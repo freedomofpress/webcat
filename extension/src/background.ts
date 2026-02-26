@@ -66,10 +66,9 @@ browser.webRequest.onHeadersReceived.addListener(
 
 // Not the best performance idea to act on all tab just for this
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === "complete") {
-    if (tab.url === browser.runtime.getURL("pages/error.html")) {
-      setErrorIcon(tabId);
-    }
+  const errorUrl = browser.runtime.getURL("pages/error.html");
+  if (changeInfo.status === "complete" && tab.url?.startsWith(errorUrl)) {
+    setErrorIcon(tabId);
   }
 });
 
