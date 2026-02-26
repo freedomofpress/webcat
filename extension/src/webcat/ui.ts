@@ -101,5 +101,6 @@ export async function errorpage(tabId: number, error?: WebcatError) {
     code: `
       document.getElementById("error-code").textContent = ${JSON.stringify(code)};
     `,
+    runAt: "document_end",
   });
 }
