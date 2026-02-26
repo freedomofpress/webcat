@@ -74,7 +74,7 @@ export function wasmHook() {
 
   // Check if the WebAssembly hook has already been injected.
   if (Object.prototype.hasOwnProperty.call(wasm, "__hooked__")) {
-    console.log("WebAssembly hook already injected.");
+    console.log("[WEBCAT] WebAssembly hook already injected.");
     return;
   }
 
