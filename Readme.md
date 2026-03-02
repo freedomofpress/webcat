@@ -3,7 +3,7 @@
 ![webcat logo light](./docs/icons/light/256/webcat.png#gh-light-mode-only)
 
 > [!CAUTION]
-> This is experimental software.
+> This is experimental software and currently released as an alpha. It might slow down or interfere with web pages, and it might not yet provide the intended security guarantees.
 
 The extension is available to end-users on the Mozilla Add-ons website (AMO):
  - [Get the extension](https://addons.mozilla.org/en-US/firefox/addon/webcat/)
