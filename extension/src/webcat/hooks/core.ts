@@ -4,65 +4,6 @@
 
 import { SHA256 } from "./sha256";
 
-export async function servieWorkersChecker() {
-  // ServiceWorkers persistence checker
-  // see https://github.com/freedomofpress/webcat/issues/18
-  if (
-    typeof window !== "undefined" &&
-    "serviceWorker" in navigator &&
-    self === window &&
-    !sessionStorage.getItem("__webcat_checked_sw__")
-  ) {
-    sessionStorage.setItem("__webcat_checked_sw__", "true");
-    try {
-      const registrations =
-        await globalThis.navigator.serviceWorker.getRegistrations();
-      for (const registration of registrations) {
-        // Check if there's an active service worker before calling update
-        if (!registration.active) {
-          console.warn(
-            `No active service worker found for registration with scope: ${registration.scope}. Skipping update.`,
-          );
-          continue; // Skip this registration if there's no active worker
-        }
-        try {
-          await registration.update();
-          console.log(
-            `[WEBCAT] Service worker at ${registration.active.scriptURL} updated successfully.`,
-          );
-        } catch (updateError) {
-          console.error(
-            `[WEBCAT] Service worker update failed for ${registration.active.scriptURL}:`,
-            updateError,
-          );
-          try {
-            const success = await registration.unregister();
-            if (success) {
-              console.log(
-                `[WEBCAT] Service worker at ${registration.active.scriptURL} was unregistered due to update failure.`,
-              );
-            } else {
-              console.warn(
-                `Service worker at ${registration.active.scriptURL} could not be unregistered.`,
-              );
-            }
-          } catch (unregisterError) {
-            console.error(
-              `[WEBCAT] Error while unregistering service worker at ${registration.active.scriptURL}:`,
-              unregisterError,
-            );
-          }
-        }
-      }
-    } catch (err) {
-      console.error(
-        "[WEBCAT] Error fetching service worker registrations:",
-        err,
-      );
-    }
-  }
-}
-
 export function wasmHook() {
   let wasm: typeof WebAssembly;
   if (typeof window !== "undefined") {
