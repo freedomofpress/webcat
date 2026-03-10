@@ -29,6 +29,16 @@ function makeDummyFetcher(): BundleFetcher {
 }
 
 // --- Mocks ---
+vi.stubGlobal("browser", {
+  browsingData: {
+    remove: vi.fn().mockResolvedValue(undefined),
+  },
+  webRequest: {
+    onBeforeRequest: { removeListener: vi.fn() },
+    onHeadersReceived: { removeListener: vi.fn() },
+  },
+});
+
 vi.mock("../../src/webcat/db", () => {
   return {
     WebcatDatabase: vi.fn().mockImplementation(() => ({

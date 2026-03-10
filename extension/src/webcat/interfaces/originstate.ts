@@ -133,6 +133,7 @@ export abstract class OriginStateBase {
   public readonly enrollment_hash: Uint8Array;
   public fetcher: BundleFetcher;
   public bundle?: Bundle;
+  public sw_cleanup?: Promise<void>;
   public references: number;
   public readonly enrollment?: Enrollment;
   public readonly manifest?: Manifest;
@@ -172,6 +173,13 @@ export abstract class OriginStateBase {
     this.hooks_key = Uint8ArrayToBase64Url(bytes);
     this.onBeforeRequest = (details) => requestListener(details);
     this.onHeadersReceived = (details) => headersListener(details);
+
+    // Cleanup service workers, see https://github.com/freedomofpress/webcat/issues/18
+    // and upcoming MPI/CISPA paper
+    this.sw_cleanup = browser.browsingData.remove(
+      { hostnames: [fqdn] },
+      { serviceWorkers: true },
+    );
   }
 }
 
@@ -428,6 +436,8 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
         );
       }
     }
+    // This is a good moment to enforce this: no response will be forwarded before
+    await this.sw_cleanup;
     const next = new OriginStateVerifiedManifest(this, manifest, valid_sources);
     return next;
   }
