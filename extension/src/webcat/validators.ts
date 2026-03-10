@@ -713,6 +713,15 @@ class ClaimPolicy implements VerificationPolicy {
     private expected: string,
   ) {}
 
+  private claimMatches(got: string): boolean {
+    if (this.expected.startsWith("^")) {
+      const expectedPrefix = this.expected.slice(1);
+      return got.startsWith(expectedPrefix);
+    }
+
+    return got === this.expected;
+  }
+
   verify(cert: X509Certificate): void {
     // Special case: SubjectAltName (2.5.29.17) ---
     if (this.oid === "2.5.29.17") {
@@ -730,7 +739,9 @@ class ClaimPolicy implements VerificationPolicy {
       const other = sanExt.otherName(EXTENSION_OID_OTHERNAME);
       if (other) allSans.add(other);
 
-      if (!allSans.has(this.expected)) {
+      const sanMatches = [...allSans].some((san) => this.claimMatches(san));
+
+      if (!sanMatches) {
         throw new PolicyError(
           `SAN mismatch for 2.5.29.17: expected '${this.expected}'`,
         );
@@ -775,7 +786,7 @@ class ClaimPolicy implements VerificationPolicy {
       throw new PolicyError(`Unable to decode extension ${this.oid}`);
     }
 
-    if (got !== this.expected) {
+    if (!this.claimMatches(got)) {
       throw new PolicyError(
         `Extension ${this.oid} mismatch: got '${got}', expected '${this.expected}'`,
       );
