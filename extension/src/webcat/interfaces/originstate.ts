@@ -178,7 +178,7 @@ export abstract class OriginStateBase {
     // and upcoming MPI/CISPA paper
     this.sw_cleanup = browser.browsingData.remove(
       { hostnames: [fqdn] },
-      { serviceWorkers: true },
+      { serviceWorkers: true, cache: true },
     );
   }
 }
