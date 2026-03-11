@@ -1,7 +1,7 @@
 {
   "name": "webcat",
   "type": "module",
-  "version": "0.1",
+  "version": "2.6.2",
   "description": "",
   "main": "src/background.ts",
   "scripts": {
@@ -36,10 +36,9 @@
     "yazl": "^3.3.1"
   },
   "dependencies": {
-    "@freedomofpress/cometbft": "^0.1.3",
+    "@freedomofpress/cometbft": "^0.1.4",
     "@freedomofpress/ics23": "^0.1.3",
     "@freedomofpress/sigsum": "^0.3.7",
-    "@freedomofpress/sigstore-browser": "^0.1.13",
-    "yazl": "^3.3.1"
+    "@freedomofpress/sigstore-browser": "^0.1.13"
   }
 }
