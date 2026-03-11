@@ -46,10 +46,9 @@ export async function validateResponseHeaders(
   // Otherwise it's the header map
   const normalizedHeaders = result;
 
-  // The null assertion is checked in the loop above
-  // Extract Content-Security-Policy
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const csp = normalizedHeaders.get("content-security-policy")!;
+  // Extract Content-Security-Policy. This may be missing on fully cached
+  // responses (Firefox behavior), even if the policy is still applied.
+  const csp = normalizedHeaders.get("content-security-policy");
   const version = normalizedHeaders.get("x-webcat-version");
   const delegation = normalizedHeaders.get("x-webcat-delegation");
   const enrollment_header = normalizedHeaders.get("x-webcat-enrollment");
@@ -144,21 +143,34 @@ export async function validateResponseHeaders(
   }
 
   const pathname = new URL(details.url).pathname;
-  if (
-    !(originStateHolder.current as OriginStateVerifiedManifest).verifyCSP(
-      csp,
-      pathname,
-    )
-  ) {
-    return new WebcatError(WebcatErrorCode.CSP.MISMATCH, [String(pathname)]);
-  }
+  if (csp) {
+    if (
+      !(originStateHolder.current as OriginStateVerifiedManifest).verifyCSP(
+        csp,
+        pathname,
+      )
+    ) {
+      return new WebcatError(WebcatErrorCode.CSP.MISMATCH, [String(pathname)]);
+    }
 
-  logger.addLog(
-    "info",
-    `CSP validated for path ${pathname}`,
-    details.tabId,
-    fqdn,
-  );
+    logger.addLog(
+      "info",
+      `CSP validated for path ${pathname}`,
+      details.tabId,
+      fqdn,
+    );
+  } else if (details.fromCache === true || details.statusCode === 304) {
+    logger.addLog(
+      "debug",
+      `Skipping CSP check for cached/304 response on path ${pathname}`,
+      details.tabId,
+      fqdn,
+    );
+  } else {
+    return new WebcatError(WebcatErrorCode.Headers.MISSING_CRITICAL, [
+      "content-security-policy",
+    ]);
+  }
 
   // Step 5: If everything is fine, we can update the icon to the OK state
   // It's important not do do it for sub_frames, otherwise validating a subresource

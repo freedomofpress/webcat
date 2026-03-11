@@ -14,7 +14,7 @@
     "./src/webcat/hooks/core.ts",
     "./src/webcat/hooks/entry-page.ts",
     "./src/webcat/hooks/entry-content.ts",
-    "types/**/*.d.ts"
+    "types/*.d.ts"
   ],
   "exclude": ["node_modules"]
 }

@@ -100,12 +100,16 @@ export function extractAndValidateHeaders(
     }
   }
 
-  // Ensure all critical headers are present.
-  for (const criticalHeader of criticalHeaders) {
-    if (!normalizedHeaders.has(criticalHeader)) {
-      return new WebcatError(WebcatErrorCode.Headers.MISSING_CRITICAL, [
-        String(criticalHeader),
-      ]);
+  // Firefox may omit CSP from extension events for responses that are
+  // satisfied by cache, including some 304 revalidation flows.
+  if (details.fromCache !== true && details.statusCode !== 304) {
+    // Ensure all critical headers are present.
+    for (const criticalHeader of criticalHeaders) {
+      if (!normalizedHeaders.has(criticalHeader)) {
+        return new WebcatError(WebcatErrorCode.Headers.MISSING_CRITICAL, [
+          String(criticalHeader),
+        ]);
+      }
     }
   }
 

@@ -1,8 +1,10 @@
 // validateCSP.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { WebcatErrorCode } from "../../src/webcat/interfaces/errors";
 import {
   enforceHTTPS,
+  extractAndValidateHeaders,
   isSafeRelativeLocation,
   validateCSP,
   validateProtocolAndPort,
@@ -555,5 +557,50 @@ describe("isSafeRelativeLocation", () => {
     expect(isSafeRelativeLocation("/foo\nbar")).toBe(true);
     expect(isSafeRelativeLocation("/foo\rbar")).toBe(true);
     expect(isSafeRelativeLocation("/foo\tbar")).toBe(true);
+  });
+});
+
+describe("extractAndValidateHeaders", () => {
+  it("requires CSP for non-cached responses", () => {
+    const details = {
+      responseHeaders: [{ name: "x-webcat-version", value: "1.2.3" }],
+      fromCache: false,
+    } as browser.webRequest._OnHeadersReceivedDetails;
+
+    const result = extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as { code: string }).code).toBe(
+      WebcatErrorCode.Headers.MISSING_CRITICAL,
+    );
+  });
+
+  it("allows missing CSP for fully cached responses", () => {
+    const details = {
+      responseHeaders: [{ name: "x-webcat-version", value: "1.2.3" }],
+      fromCache: true,
+    } as browser.webRequest._OnHeadersReceivedDetails;
+
+    const result = extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Map);
+    expect((result as Map<string, string>).has("content-security-policy")).toBe(
+      false,
+    );
+  });
+
+  it("allows missing CSP for 304 responses", () => {
+    const details = {
+      responseHeaders: [{ name: "x-webcat-version", value: "1.2.3" }],
+      fromCache: false,
+      statusCode: 304,
+    } as browser.webRequest._OnHeadersReceivedDetails;
+
+    const result = extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Map);
+    expect((result as Map<string, string>).has("content-security-policy")).toBe(
+      false,
+    );
   });
 });
