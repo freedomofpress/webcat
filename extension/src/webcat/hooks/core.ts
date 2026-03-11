@@ -6,11 +6,15 @@ import { SHA256 } from "./sha256";
 
 export function wasmHook() {
   let wasm: typeof WebAssembly;
-  if (typeof window !== "undefined") {
-    wasm = window.getWebAssemblyPtr("__KEY_PLACEHOLDER__");
-    //Reflect.deleteProperty(window, "getWebAssemblyPtr");
-  } else {
+
+  if (typeof window === "undefined") {
     wasm = globalThis.WebAssembly;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } else if ((window as any).getWebAssemblyPtr) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    wasm = (window as any).getWebAssemblyPtr("__KEY_PLACEHOLDER__");
+  } else {
+    return;
   }
 
   // Check if the WebAssembly hook has already been injected.
