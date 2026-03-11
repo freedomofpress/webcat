@@ -227,7 +227,6 @@ export async function validateCSP(
       allowed_source_types.includes(source_types.EnrolledOrigins) &&
       src.includes(".")
     ) {
-      console.log("HERE");
       let fqdn: string;
       try {
         if (src.includes("://")) {
@@ -243,7 +242,6 @@ export async function validateCSP(
         );
       }
 
-      console.log("Validating FQDN ", fqdn);
       if ((await db.getFQDNEnrollment(fqdn)).length !== 0) {
         valid_sources.add(fqdn);
         return true;
