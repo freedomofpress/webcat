@@ -94,7 +94,7 @@ export async function headersListener(
     if (result instanceof WebcatError) {
       origins.delete(fqdn);
       tabs.delete(details.tabId);
-      errorpage(details.tabId, result);
+      errorpage(details.tabId, fqdn, result);
       return { cancel: true };
     }
   }
@@ -115,7 +115,7 @@ export async function headersListener(
     );
     origins.delete(fqdn);
     tabs.delete(details.tabId);
-    errorpage(details.tabId, result);
+    errorpage(details.tabId, fqdn, result);
     return { cancel: true };
   }
 
@@ -206,7 +206,7 @@ export async function requestListener(
     if (result instanceof WebcatError) {
       origins.delete(fqdn);
       tabs.delete(details.tabId);
-      errorpage(details.tabId, result);
+      errorpage(details.tabId, fqdn, result);
       return { cancel: true };
     }
     if (result) {

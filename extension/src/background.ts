@@ -49,6 +49,9 @@ browser.webRequest.onBeforeRequest.addListener(
   ["blocking"],
 );
 
+// See https://github.com/freedomofpress/webcat/issues/137
+browser.webRequest.handlerBehaviorChanged();
+
 // To check if the headers were modified by another extension and abort, we could use
 // https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/onResponseStarted
 browser.webRequest.onHeadersReceived.addListener(
