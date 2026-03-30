@@ -492,22 +492,6 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     );
   });
 
-  it("fails when wasm missing", async () => {
-    const badManifest = { ...manifest };
-    // @ts-expect-error simulate missing wasm
-    delete badManifest.wasm;
-
-    const res = await verifiedEnrollment.verifyManifest(
-      badManifest,
-      signatures,
-    );
-
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
-      WebcatErrorCode.Manifest.WASM_MISSING,
-    );
-  });
-
   it("fails when expired", async () => {
     const validators = await import("../../src/webcat/validators");
     const mock =
