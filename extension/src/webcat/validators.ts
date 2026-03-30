@@ -621,10 +621,6 @@ export function validateManifest(manifest: Manifest): WebcatError | null {
     return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING);
   }
 
-  if (!manifest.wasm) {
-    return new WebcatError(WebcatErrorCode.Manifest.WASM_MISSING);
-  }
-
   return null;
 }
 

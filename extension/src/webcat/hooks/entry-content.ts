@@ -1,15 +1,17 @@
 console.log("[WEBCAT] Installing content script hook");
+const wabt = window.wrappedJSObject.WebAssembly;
 
-const pageWin = window.wrappedJSObject;
-const wasm = pageWin.WebAssembly;
+wabt.compile = exportFunction(function () {
+  console.log("[WEBCAT] Blocked execution of WebAssembly.compile");
+  throw new Error("WebAssembly.compile blocked");
+}, window);
 
-function getWebAssemblyPtr(pwd: string) {
-  const key = "__KEY_PLACEHOLDER__";
-  if (pwd === key) {
-    return wasm;
-  }
-}
+wabt.instantiate = exportFunction(function () {
+  console.log("[WEBCAT] Blocked execution of WebAssembly.instantiate");
+  throw new Error("WebAssembly.instantiate blocked");
+}, window);
 
-exportFunction(getWebAssemblyPtr, pageWin, { defineAs: "getWebAssemblyPtr" });
-
-delete pageWin.WebAssembly;
+wabt.Module = exportFunction(function () {
+  console.log("[WEBCAT] Blocked execution of WebAssembly.Module");
+  throw new Error("WebAssembly.Module blocked");
+}, window);

@@ -195,7 +195,7 @@ function getVerifiedManifestState(fqdn: string): OriginStateHolder {
 }
 
 export async function validateResponseContent(
-  details: browser.webRequest._OnBeforeRequestDetails,
+  details: browser.webRequest._OnHeadersReceivedDetails,
 ) {
   function deny(filter: browser.webRequest.StreamFilter) {
     // DENIED
@@ -204,6 +204,16 @@ export async function validateResponseContent(
 
   const pathname = new URL(details.url).pathname;
   const fqdn = getFQDN(details.url);
+
+  // TODO this is duplicated when checking headers
+  const result = extractAndValidateHeaders(details);
+
+  if (result instanceof WebcatError) {
+    return result; // or wrap it
+  }
+
+  const normalizedHeaders = result;
+  const isWasm = normalizedHeaders.get("content-type") === "application/wasm";
 
   // The goal of doing this both here and after is the following: if a resource
   // is a media type and not in the manifest we do not want even to start filtering
@@ -217,12 +227,14 @@ export async function validateResponseContent(
     const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
       .manifest;
     if (
-      !manifest.files[pathname] &&
-      !(
-        pathname.endsWith("/") &&
-        manifest.files[pathname + manifest.default_index]
-      ) &&
-      PASS_THROUGH_TYPES.has(details.type)
+      (!manifest.files[pathname] &&
+        !(
+          pathname.endsWith("/") &&
+          manifest.files[pathname + manifest.default_index]
+        ) &&
+        !isWasm &&
+        PASS_THROUGH_TYPES.has(details.type)) ||
+      details.statusCode === 304
     ) {
       return {};
     }
@@ -260,12 +272,6 @@ export async function validateResponseContent(
       manifest_hash = manifest.files[manifest.default_fallback];
     }
 
-    if (!manifest_hash) {
-      deny(filter);
-      filter.close();
-      errorpage(details.tabId, fqdn, new WebcatError(WebcatErrorCode.File.MISSING));
-    }
-
     const content_hash = await SHA256(blob);
     // Sometimes answers gets cached and we get an empty result, we shouldn't mark those as a hash mismatch
     if (
@@ -273,30 +279,45 @@ export async function validateResponseContent(
         base64UrlToUint8Array(manifest_hash),
         new Uint8Array(content_hash),
       ) &&
-      blob.byteLength !== 0
+      !(
+        // For compatibility with old manifests that still uses the wasm[] array
+        // instead of just having the .wasm files in the list
+        (
+          manifest.wasm.includes(
+            Uint8ArrayToBase64Url(new Uint8Array(content_hash)),
+          ) &&
+          isWasm &&
+          PASS_THROUGH_TYPES.has(details.type)
+        )
+        // End
+      )
     ) {
       deny(filter);
       filter.close();
+      logger.addLog(
+        "error",
+        `Failed to verify ${pathname}.`,
+        details.tabId,
+        fqdn,
+      );
       errorpage(
-        details.tabId, fqdn,
+        details.tabId,
+        fqdn,
         new WebcatError(WebcatErrorCode.File.MISMATCH, [
           String(manifest_hash),
           String(Uint8ArrayToBase64Url(new Uint8Array(content_hash))),
         ]),
       );
+      return { cancel: true };
     }
 
     // If everything is OK then we can just write the raw blob back
     logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
 
-    if (details.type === "script") {
+    if (details.type === "script" && details.tabId < 0) {
       // Inject the WASM hooks in every loaded script.
 
-      const hooks = getHooks(
-        hooksType.page,
-        manifest.wasm,
-        originStateHolder.current.hooks_key,
-      );
+      const hooks = getHooks(hooksType.page);
       filter.write(stringToUint8Array(hooks));
     }
 
