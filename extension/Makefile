@@ -5,7 +5,7 @@ OUT_TEST  := $(DIST)/webcat-extension-test.zip
 INPUTS := manifest.json dist icons pages data
 FIXED_MTIME := 198001010000
 
-all: package
+all: package package-test
 
 install:
 	npm install

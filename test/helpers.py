@@ -138,7 +138,6 @@ class Server:
             def do_GET(self):
                 if self.path in hooks:
                     self.send_response(200)
-                    for k, v in headers.items(): self.send_header(k, v)
                     self.send_header("Content-Type", "text/plain")
                     self.end_headers()
                     self.wfile.write(hooks[self.path])
@@ -161,3 +160,34 @@ class Server:
         self.thread.join()
 
     def url(self): return f"http://127.0.0.1:{self.port}"
+
+class DB:
+    hosts = {}
+
+    def start(db):
+        class Handler(http.server.SimpleHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/testing-list":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(db.hosts).encode())
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, *a): pass  # suppress logs
+
+        db.httpd = socketserver.TCPServer(("127.0.0.1", 1234), Handler, False)
+        db.httpd.allow_reuse_address = True
+        db.httpd.server_bind()
+        db.httpd.server_activate()
+        db.thread = threading.Thread(target=db.httpd.serve_forever, daemon=True)
+        db.thread.start()
+
+    def stop(db):
+        db.httpd.shutdown()
+        db.thread.join()
+
+    def set(db, host, hash):
+        db.hosts[host] = hash

@@ -1,5 +1,10 @@
 import os
 import pytest
+import json
+import canonicaljson
+import hashlib
+
+from helpers import DB
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -16,3 +21,18 @@ def addon_path(request):
     if not os.path.exists(abs_path):
         pytest.exit(f"Error: Addon path does not exist: {abs_path}")
     return abs_path
+
+@pytest.fixture(scope="session")
+def db():
+    db = DB()
+    db.start()
+    return db
+
+@pytest.fixture(scope="function")
+def root(db, request):
+    with open(f'{request.param}/.well-known/webcat/bundle.json') as bundle:
+        enrollment = json.load(bundle)["enrollment"]
+        canonical_enrollment = canonicaljson.encode_canonical_json(enrollment)
+        enrollment_hash = hashlib.sha256(canonical_enrollment).hexdigest()
+        db.set("127.0.0.1", enrollment_hash)
+    return request.param

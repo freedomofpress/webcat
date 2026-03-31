@@ -1,7 +1,8 @@
 {
-    "app_name": "Webcat Demo App",
-    "app_version": "0.1",
-    "comment": "https://github.com/freedomdofpress/webcat/apps/testapp",
+    "app": "https://github.com/freedomofpress/webcat/tree/main/apps/testapp",
+    "version": "0.1",
+    "default_index": "/index.html",
+    "default_fallback": "/index.html",
     "wasm": [],
     "default_csp": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; frame-src 'none'; worker-src 'self';",
     "extra_csp": {}
