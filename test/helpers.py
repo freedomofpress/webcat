@@ -8,6 +8,7 @@ import os
 import threading
 import http.server
 import socketserver
+from base64 import b64decode
 
 # --- Patch subprocess.Popen to discard Firefox output ---
 _original_popen = subprocess.Popen
@@ -122,6 +123,13 @@ class Browser:
 
         return value
 
+class Blob:
+    def __init__(self, data, type="text/plain", base64=False):
+        if base64:
+            self.data = b64decode(data)
+        else:
+            self.data = data
+        self.type = type
 
 class Server:
     def __init__(self, root=".", headers=None, hooks=None):
@@ -140,9 +148,16 @@ class Server:
             def do_GET(self):
                 if self.path in hooks:
                     self.send_response(200)
-                    self.send_header("Content-Type", "text/plain")
-                    self.end_headers()
-                    self.wfile.write(hooks[self.path])
+                    hook = hooks[self.path]
+                    if type(hook) is bytes:
+                        self.send_header("Content-Type", "text/plain")
+                        self.end_headers()
+                        self.wfile.write(hook)
+                    else:
+                        self.send_header("Content-Type", hook.type)
+                        self.end_headers()
+                        self.wfile.write(hook.data)
+
                 else:
                     super().do_GET()
 
