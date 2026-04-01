@@ -38,6 +38,8 @@ class Browser:
         self.pm.create(self.profile_name)
         profile = self.pm.get_profile_by_name(self.profile_name)
         profile.set_required_configs()
+        profile.set_config("browser.shell.checkDefaultBrowser", False)
+        profile.set_config("browser.startup.couldRestoreSession.count", -1)
         logging.info(f"Profile {self.profile_name} created.")
         if headless:
             flags.append("-headless")
