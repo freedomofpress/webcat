@@ -5,6 +5,7 @@ import canonicaljson
 import hashlib
 
 from helpers import DB
+from sigsum import generate_bundle
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -28,8 +29,9 @@ def db():
     db.start()
     return db
 
-@pytest.fixture(scope="function")
+@pytest.fixture(scope="session")
 def root(db, request):
+    generate_bundle(request.param)
     with open(f'{request.param}/.well-known/webcat/bundle.json') as bundle:
         enrollment = json.load(bundle)["enrollment"]
         canonical_enrollment = canonicaljson.encode_canonical_json(enrollment)

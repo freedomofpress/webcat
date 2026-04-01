@@ -1,2 +1,3 @@
 dist/
 extension/data/
+apps/*/.well-known/webcat/
