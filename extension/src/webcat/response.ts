@@ -263,7 +263,11 @@ export async function validateResponseContent(
     if (!manifest_hash) {
       deny(filter);
       filter.close();
-      errorpage(details.tabId, fqdn, new WebcatError(WebcatErrorCode.File.MISSING));
+      errorpage(
+        details.tabId,
+        fqdn,
+        new WebcatError(WebcatErrorCode.File.MISSING),
+      );
     }
 
     const content_hash = await SHA256(blob);
@@ -278,7 +282,8 @@ export async function validateResponseContent(
       deny(filter);
       filter.close();
       errorpage(
-        details.tabId, fqdn,
+        details.tabId,
+        fqdn,
         new WebcatError(WebcatErrorCode.File.MISMATCH, [
           String(manifest_hash),
           String(Uint8ArrayToBase64Url(new Uint8Array(content_hash))),

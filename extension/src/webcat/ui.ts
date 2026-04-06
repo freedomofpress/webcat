@@ -65,7 +65,11 @@ export function setErrorIcon(tabId: number) {
   });
 }
 
-export async function errorpage(tabId: number, fqdn: string, error?: WebcatError) {
+export async function errorpage(
+  tabId: number,
+  fqdn: string,
+  error?: WebcatError,
+) {
   const code = error?.code ?? "WEBCAT_ERROR_UNDEFINED";
 
   const errorPageUrl =
@@ -74,6 +78,6 @@ export async function errorpage(tabId: number, fqdn: string, error?: WebcatError
   await browser.tabs.update(tabId, { url: errorPageUrl });
 
   // See https://github.com/freedomofpress/webcat/issues/137
-  await browser.browsingData.remove( { hostnames: [fqdn] }, { cache: true });
+  await browser.browsingData.remove({ hostnames: [fqdn] }, { cache: true });
   await browser.webRequest.handlerBehaviorChanged();
 }
