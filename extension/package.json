@@ -11,7 +11,8 @@
     "coverage": "npm run build:hooks && vitest --coverage",
     "test:playwright": "vitest --config vite.config.playwright.ts",
     "test:default": "vitest --config vite.config.ts",
-    "lint": "npx eslint . --fix && npx prettier --write ."
+    "lint": "npx eslint . --fix && npx prettier --write .",
+    "lint:check": "npx eslint . && npx prettier --check ."
   },
   "author": "Giulio B",
   "license": "MIT",

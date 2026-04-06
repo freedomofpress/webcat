@@ -32,9 +32,13 @@ npm run test:playwright
 
 ### Linting
 
-The project currently use [eslint](eslint.config.mjs) for linting and prettifier for sorting imports and style consistency. Both are run together with:
+The project uses [eslint](eslint.config.mjs) for linting and [prettier](https://prettier.io/) for sorting imports and style consistency. Both are run together with:
 
 `npm run lint`
+
+To check for issues without auto-fixing (this is what CI runs):
+
+`npm run lint:check`
 
 ### Decision tree
 

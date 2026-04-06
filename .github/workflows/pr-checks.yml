@@ -31,7 +31,7 @@ jobs:
         run: npm ci
 
       - name: Run Linter
-        run: npm run lint
+        run: npm run lint:check
 
   test:
     name: Tests
