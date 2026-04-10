@@ -1,6 +1,6 @@
 import pytest
 from time import sleep
-from helpers import Browser, Server, Blob
+from helpers import TorBrowser, Server, Blob
 import logging
 
 logging.getLogger("geckordp").setLevel(logging.CRITICAL)
@@ -13,7 +13,8 @@ def setup_browser_and_server(root, headers=None, hooks=None, extension_path=None
         headers=headers or {},
         hooks=hooks or {}
     )
-    browser = Browser(headless=headless)
+    browser = TorBrowser(allowed_addons=["webcat@freedom.press"])
+    browser.start(headless)
     if extension_path:
         browser.install_extension(extension_path)
         sleep(7)

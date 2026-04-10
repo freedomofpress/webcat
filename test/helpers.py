@@ -9,6 +9,7 @@ import threading
 import http.server
 import socketserver
 from base64 import b64decode
+from pathlib import Path
 
 # --- Patch subprocess.Popen to discard Firefox output ---
 _original_popen = subprocess.Popen
@@ -31,32 +32,39 @@ from geckordp.profile import ProfileManager
 from geckordp.rdp_client import RDPClient
 
 class Browser:
-    def __init__(self, headless=False, start="about:blank", flags=[], port=6000):
-        self.port = port
+    def __init__(self, override_firefox_path="", override_profiles_path="", additional_configs={}):
         self.host = "127.0.0.1"
         self.profile_name = f"geckordp-{uuid.uuid4()}"
-        self.pm = ProfileManager()
+        self.override_firefox_path = override_firefox_path
+        self.pm = ProfileManager(override_firefox_path, override_profiles_path)
         self.pm.create(self.profile_name)
         profile = self.pm.get_profile_by_name(self.profile_name)
+        self.profile_path = profile.path
         profile.set_required_configs()
         profile.set_config("browser.shell.checkDefaultBrowser", False)
         profile.set_config("browser.startup.couldRestoreSession.count", -1)
+        for key, value in additional_configs.items():
+            profile.set_config(key, value)
         logging.info(f"Profile {self.profile_name} created.")
+        subprocess.Popen(["pkill", "-f", f'\\-P {self.profile_name}']) # TBB hack
+
+    def start(self, headless=False, start="about:blank", flags=[], port=6000):
+        self.port = port
         if headless:
             flags.append("-headless")
-        Firefox.start(start, self.port, self.profile_name, flags)
+        Firefox.start(start, self.port, self.profile_name, flags, self.override_firefox_path, False)
         logging.info("Firefox started.")
         self.client = RDPClient()
         self.client.connect(self.host, self.port)
         logging.info("RDP connection established.")
         self.root = RootActor(self.client)
-
     
     def destroy(self):
         self.client.disconnect()
         logging.info("RDP disconnected.")
         try:
             _kill_instances()
+            subprocess.Popen(["pkill", "-f", f'\\-p {self.profile_name}']) # TBB hack
             logging.info("Firefox process killed.")
         except:
             pass
@@ -122,6 +130,37 @@ class Browser:
             value = result_field
 
         return value
+    
+class TorBrowser(Browser):
+    @staticmethod
+    def get_binary_path():
+        try:
+            return Path(subprocess.check_output(["which", "start-tor-browser"]).decode().strip())
+        except subprocess.CalledProcessError:
+            raise RuntimeError("'start-tor-browser' not found in $PATH")
+    
+    @staticmethod
+    def get_profiles_path():
+        return Path(os.path.dirname(TorBrowser.get_binary_path())).joinpath("TorBrowser/Data/Browser/")
+
+    def __init__(self, override_tbb_path="", override_profiles_path="", additional_configs={}, allowed_addons=[]):
+        if override_tbb_path == "":
+            override_tbb_path = TorBrowser.get_binary_path()
+        if override_profiles_path == "":
+            override_profiles_path = TorBrowser.get_profiles_path()
+        additional_configs["network.proxy.allow_hijacking_localhost"] = False
+        super().__init__(override_tbb_path, override_profiles_path, additional_configs)
+        if len(allowed_addons) > 0:
+            with open(self.profile_path.joinpath("extension-preferences.json"), "r") as file:
+                prefs = json.load(file)
+            for addon in allowed_addons:
+                prefs[addon] = {
+                    "permissions": ["internal:privateBrowsingAllowed"],
+                    "origins": [],
+                    "data_collection": []
+                }
+            with open(self.profile_path.joinpath("extension-preferences.json"), "w") as file:
+                json.dump(prefs, file)
 
 class Blob:
     def __init__(self, data, type="text/plain", base64=False):
