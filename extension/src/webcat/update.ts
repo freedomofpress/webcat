@@ -41,80 +41,41 @@ async function fetchWithTimeout(
   }
 }
 
-// Check if we should do scheduled daily update
-function shouldDoScheduledUpdate(lastUpdated: number | null): boolean {
-  const now = Date.now();
-  const nowUTC = new Date(now);
+// During alpha, update every hour. Wall-clock based so that sleep/suspend
+// doesn't silently postpone updates.
+export const UPDATE_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+export const CHECK_INTERVAL_MS = 5 * 60 * 1000; // poll every 5 minutes
 
-  // Calculate today's scheduled update time (01:10 UTC)
-  const todayScheduled = new Date(
-    Date.UTC(
-      nowUTC.getUTCFullYear(),
-      nowUTC.getUTCMonth(),
-      nowUTC.getUTCDate(),
-      1, // hour
-      10, // minute
-      0, // second
-      0, // millisecond
-    ),
-  ).getTime();
-
-  // If we haven't passed today's scheduled time yet, check yesterday's
-  const scheduledTime =
-    now >= todayScheduled
-      ? todayScheduled
-      : todayScheduled - 24 * 60 * 60 * 1000;
-
-  // Update if we've never updated, or if last update was before the most recent scheduled time
-  return lastUpdated === null || lastUpdated < scheduledTime;
+// Check if we should do an update at startup (overdue check)
+export function shouldDoScheduledUpdate(lastUpdated: number | null): boolean {
+  return lastUpdated === null || Date.now() - lastUpdated >= UPDATE_INTERVAL_MS;
 }
 
-// Schedule the next daily update check
+// Start the wall-clock polling loop for scheduled updates.
 function scheduleNextUpdate(db: WebcatDatabase, endpoint: string): void {
   if (scheduledUpdateTimer !== null) {
     clearTimeout(scheduledUpdateTimer);
   }
 
-  /*const now = Date.now();
-  const nowUTC = new Date(now);
-
-  // Calculate next scheduled update time (01:10 UTC)
-  let nextScheduled = new Date(
-    Date.UTC(
-      nowUTC.getUTCFullYear(),
-      nowUTC.getUTCMonth(),
-      nowUTC.getUTCDate(),
-      0, // hour
-      15, // minute
-      0, // second
-      0, // millisecond
-    ),
-  ).getTime();
-
-  // If we've already passed today's scheduled time, schedule for tomorrow
-  if (now >= nextScheduled) {
-    nextScheduled += 1 * 60 * 60 * 1000;
-  }*/
-
-  // During alpha, sechedule update an hour from now
-  const now = Date.now();
-  const nextScheduled = now + 60 * 60 * 1000;
-
-  const delay = nextScheduled - now;
-  console.log(
-    `[webcat] Scheduling next update in ${Math.round(delay / 1000 / 60)} minutes`,
-  );
-
   scheduledUpdateTimer = setTimeout(async () => {
-    console.log("[webcat] Running scheduled daily update");
     try {
-      await update(db, endpoint);
-    } catch (error) {
-      console.error("[webcat] Scheduled update failed:", error);
+      const lastUpdated = await db.getLastUpdated();
+      if (
+        lastUpdated === null ||
+        Date.now() - lastUpdated >= UPDATE_INTERVAL_MS
+      ) {
+        console.log("[webcat] Running scheduled update (wall-clock check)");
+        try {
+          await update(db, endpoint);
+        } catch (error) {
+          console.error("[webcat] Scheduled update failed:", error);
+        }
+      }
+    } finally {
+      // Always re-schedule the next check
+      scheduleNextUpdate(db, endpoint);
     }
-    // Schedule the next one
-    scheduleNextUpdate(db, endpoint);
-  }, delay) as unknown as number;
+  }, CHECK_INTERVAL_MS) as unknown as number;
 }
 
 // Check and run update if needed
