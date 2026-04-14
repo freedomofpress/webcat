@@ -1,3 +1,4 @@
 canonicaljson
 geckordp
 pytest
+pytest-benchmark

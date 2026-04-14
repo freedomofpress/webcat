@@ -6,6 +6,8 @@ import hashlib
 
 from helpers import Browser, DB, Server, TorBrowser
 from sigsum import generate_bundle
+from pytest_benchmark.fixture import BenchmarkFixture
+from pytest_benchmark.utils import NameWrapper
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -15,6 +17,10 @@ def pytest_addoption(parser):
     parser.addoption(
         "--headless", action="store_true",
         help="Run the browser in headless mode"
+    )
+    parser.addoption(
+        "--iterations", type=int, default=20,
+        help="Number of iterations per test"
     )
 
 @pytest.fixture(scope="session")
@@ -61,7 +67,32 @@ def browser(request):
     elif request.param == "tor":
         b = TorBrowser(allowed_addons=["webcat@freedom.press"])
     else:
-        raise RuntimeError(f'unrecognized brwser \'{request.param}\'')
+        raise RuntimeError(f'unrecognized browser \'{request.param}\'')
     b.start(request.config.getoption("--headless"))
     yield b
     b.destroy()
+
+class ExternallyTimedBenchmarkFixture(BenchmarkFixture):
+    def _make_runner(self, function_to_benchmark, args, kwargs):
+        def runner(loops_range):
+            start, end, result = function_to_benchmark(loops_range, *args, **kwargs)
+            return end - start, result
+
+        return runner
+
+@pytest.fixture
+def benchmark(request):
+    bs = request.config._benchmarksession
+    node = request.node
+    fixture = ExternallyTimedBenchmarkFixture(
+        node,
+        add_stats=bs.benchmarks.append,
+        logger=bs.logger,
+        warner=request.node.warn,
+        disabled=bs.disabled,
+        **dict(bs.options,
+               warmup=False,
+               min_rounds=123),
+    )
+    yield fixture
+    fixture._cleanup()
