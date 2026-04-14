@@ -25,7 +25,7 @@ test: install
 	$(PYTEST) -v tests.py $(TESTARGS)
 
 benchmark: install
-	$(PYTHON) benchmarks.py $(TESTARGS) $(BENCHARGS)
+	$(PYTEST) -v benchmarks.py $(TESTARGS) $(BENCHARGS)
 
 clean:
 	rm -rf $(VENV) __pycache__ .pytest_cache
