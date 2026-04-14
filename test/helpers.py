@@ -70,7 +70,7 @@ class Browser:
             pass
         try:
             self.pm.remove(self.profile_name)
-            logging.info("Profile {self.profile_name} removed.")
+            logging.info(f"Profile {self.profile_name} removed.")
         except:
             pass
 
