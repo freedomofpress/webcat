@@ -5,6 +5,7 @@ import queue
 import logging
 import subprocess
 import os
+import sys
 import threading
 import http.server
 import socketserver
@@ -134,13 +135,20 @@ class Browser:
 class TorBrowser(Browser):
     @staticmethod
     def get_binary_path():
+        if sys.platform == "darwin":
+            path = Path("/Applications/Tor Browser.app/Contents/MacOS/firefox")
+            if path.exists():
+                return path
+            raise RuntimeError("Tor Browser.app not found in /Applications")
         try:
             return Path(subprocess.check_output(["which", "start-tor-browser"]).decode().strip())
         except subprocess.CalledProcessError:
             raise RuntimeError("'start-tor-browser' not found in $PATH")
-    
+
     @staticmethod
     def get_profiles_path():
+        if sys.platform == "darwin":
+            return Path.home() / "Library" / "Application Support" / "TorBrowser-Data" / "Browser"
         return Path(os.path.dirname(TorBrowser.get_binary_path())).joinpath("TorBrowser/Data/Browser/")
 
     def __init__(self, override_tbb_path="", override_profiles_path="", additional_configs={}, allowed_addons=[]):
