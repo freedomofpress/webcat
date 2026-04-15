@@ -72,7 +72,8 @@ class PerformanceTester:
         url = f"http://{self.host}:{srv.port}/"
 
         def setup_browser():
-            browser = Browser(self.headless)
+            browser = Browser()
+            browser.start(self.headless)
             if self.addon_path:
                 try:
                     browser.install_extension(self.addon_path)

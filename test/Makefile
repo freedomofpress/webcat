@@ -3,6 +3,13 @@ PYTHON=$(VENV)/bin/python
 PIP=$(VENV)/bin/pip
 PYTEST=$(VENV)/bin/pytest
 
+TESTARGS ?= --addon ../dist/webcat-extension-test.zip
+BENCHARGS ?= --iterations 5
+
+ifdef HEADLESS
+	TESTARGS += --headless
+endif
+
 .PHONY: all venv install test clean
 
 all: test
@@ -15,10 +22,10 @@ install: venv
 	$(PIP) install -r requirements.txt
 
 test: install
-	$(PYTEST) -v tests.py --addon ../dist/webcat-extension-test.zip
+	$(PYTEST) -v tests.py $(TESTARGS)
 
 benchmark: install
-	$(PYTHON) benchmarks.py --addon ../dist/webcat-extension-test.zip --iterations 5
+	$(PYTHON) benchmarks.py $(TESTARGS) $(BENCHARGS)
 
 clean:
 	rm -rf $(VENV) __pycache__ .pytest_cache

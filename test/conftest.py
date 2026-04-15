@@ -4,13 +4,17 @@ import json
 import canonicaljson
 import hashlib
 
-from helpers import DB
+from helpers import Browser, DB, Server, TorBrowser
 from sigsum import generate_bundle
 
 def pytest_addoption(parser):
     parser.addoption(
         "--addon", action="store", default=None,
         help="Path to the webcat test addon zip file"
+    )
+    parser.addoption(
+        "--headless", action="store_true",
+        help="Run the browser in headless mode"
     )
 
 @pytest.fixture(scope="session")
@@ -38,3 +42,26 @@ def root(db, request):
         enrollment_hash = hashlib.sha256(canonical_enrollment).hexdigest()
         db.set("127.0.0.1", enrollment_hash)
     return request.param
+
+@pytest.fixture(scope="function")
+def server(root, headers, hooks):
+    s = Server(
+        root=root,
+        headers=headers or {},
+        hooks=hooks or {}
+    )
+    s.start()
+    yield s
+    s.stop()
+
+@pytest.fixture(scope="function")
+def browser(request):
+    if request.param == "firefox":
+        b = Browser()
+    elif request.param == "tor":
+        b = TorBrowser(allowed_addons=["webcat@freedom.press"])
+    else:
+        raise RuntimeError(f'unrecognized brwser \'{request.param}\'')
+    b.start(request.config.getoption("--headless"))
+    yield b
+    b.destroy()
