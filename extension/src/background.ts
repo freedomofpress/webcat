@@ -9,18 +9,33 @@ import {
 } from "./webcat/listeners";
 import { FRAME_TYPES } from "./webcat/resources";
 import { setErrorIcon } from "./webcat/ui";
-import { update } from "./webcat/update";
-import { initializeScheduledUpdates } from "./webcat/update";
+import {
+  handleUpdateAlarm,
+  initializeScheduledUpdates,
+  update,
+} from "./webcat/update";
 
 console.log("[webcat] Starting up background");
 
-setTimeout(async () => {
-  console.log("[webcat] Importing bundled list");
-  await update(db, endpoint, true);
+// Import bundled list and initialize scheduled updates
+(async () => {
+  try {
+    console.log("[webcat] Importing bundled list");
+    await update(db, endpoint, true);
+  } catch (error) {
+    console.error("[webcat] Bundled list import failed:", error);
+  }
 
   console.log("[webcat] Attempting network update");
   await initializeScheduledUpdates(db, endpoint);
-}, 0);
+})();
+
+// Listen for the update alarm
+browser.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "webcat-scheduled-update") {
+    handleUpdateAlarm(db, endpoint);
+  }
+});
 
 // Let's count references to origin in case we ever need pruning policies
 browser.tabs.onRemoved.addListener(tabCloseListener);

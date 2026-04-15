@@ -7,15 +7,19 @@ import {
   WebcatLeavesFile,
 } from "@freedomofpress/ics23/dist/webcat";
 
+import {
+  CHECK_INTERVAL_MS,
+  FETCH_TIMEOUT_MS,
+  UPDATE_INTERVAL_MS,
+} from "../config";
 import validator_set from "../validator_set.json";
 import { WebcatDatabase } from "./db";
 import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { arraysEqual } from "./utils";
 
 let lastUpdateFailed = false;
-const FETCH_TIMEOUT_MS = 3000; // 3 second timeout for fetches
 
-let scheduledUpdateTimer: number | null = null;
+const ALARM_NAME = "webcat-scheduled-update";
 
 // Helper function to fetch with timeout
 async function fetchWithTimeout(
@@ -41,41 +45,43 @@ async function fetchWithTimeout(
   }
 }
 
-// During alpha, update every hour. Wall-clock based so that sleep/suspend
-// doesn't silently postpone updates.
-export const UPDATE_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
-export const CHECK_INTERVAL_MS = 5 * 60 * 1000; // poll every 5 minutes
-
 // Check if we should do an update at startup (overdue check)
 export function shouldDoScheduledUpdate(lastUpdated: number | null): boolean {
   return lastUpdated === null || Date.now() - lastUpdated >= UPDATE_INTERVAL_MS;
 }
 
-// Start the wall-clock polling loop for scheduled updates.
-function scheduleNextUpdate(db: WebcatDatabase, endpoint: string): void {
-  if (scheduledUpdateTimer !== null) {
-    clearTimeout(scheduledUpdateTimer);
-  }
-
-  scheduledUpdateTimer = setTimeout(async () => {
-    try {
-      const lastUpdated = await db.getLastUpdated();
-      if (
-        lastUpdated === null ||
-        Date.now() - lastUpdated >= UPDATE_INTERVAL_MS
-      ) {
-        console.log("[webcat] Running scheduled update (wall-clock check)");
-        try {
-          await update(db, endpoint);
-        } catch (error) {
-          console.error("[webcat] Scheduled update failed:", error);
-        }
+// Handle the alarm firing: check if an update is due and run it
+export async function handleUpdateAlarm(
+  db: WebcatDatabase,
+  endpoint: string,
+): Promise<void> {
+  try {
+    const lastUpdated = await db.getLastUpdated();
+    if (
+      lastUpdated === null ||
+      Date.now() - lastUpdated >= UPDATE_INTERVAL_MS
+    ) {
+      console.log("[webcat] Running scheduled update (alarm check)");
+      try {
+        await update(db, endpoint);
+      } catch (error) {
+        console.error("[webcat] Scheduled update failed:", error);
       }
-    } finally {
-      // Always re-schedule the next check
-      scheduleNextUpdate(db, endpoint);
     }
-  }, CHECK_INTERVAL_MS) as unknown as number;
+  } catch (error) {
+    console.error("[webcat] Error in update alarm handler:", error);
+  }
+}
+
+// Create a periodic alarm for update checks (works in both MV2 and MV3).
+async function ensureUpdateAlarm(): Promise<void> {
+  const existing = await browser.alarms.get(ALARM_NAME);
+  if (!existing) {
+    browser.alarms.create(ALARM_NAME, {
+      periodInMinutes: CHECK_INTERVAL_MS / 60000,
+    });
+    console.log("[webcat] Created update alarm");
+  }
 }
 
 // Check and run update if needed
@@ -122,6 +128,9 @@ export async function update(
 
     const leavesResponse = fetchWithTimeout(leavesUrl);
     const blockResponse = fetchWithTimeout(blocksUrl);
+
+    // Prevent unhandled rejection if block fetch fails before leaves is awaited
+    leavesResponse.catch(() => {});
 
     // 2 Await latest block
     const block = await (await blockResponse).json();
@@ -193,10 +202,14 @@ export async function initializeScheduledUpdates(
   endpoint: string,
 ): Promise<void> {
   // Check if we need to update now
-  await checkAndUpdate(db, endpoint);
+  try {
+    await checkAndUpdate(db, endpoint);
+  } catch (error) {
+    console.error("[webcat] Error during startup update check:", error);
+  }
 
-  // Schedule future updates
-  scheduleNextUpdate(db, endpoint);
+  // Ensure the periodic alarm exists for future checks
+  await ensureUpdateAlarm();
 }
 
 // Public API: Try to update if last one failed (call on main_frame navigation)

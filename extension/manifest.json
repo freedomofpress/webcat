@@ -16,6 +16,7 @@
   },
   "incognito": "spanning",
   "permissions": [
+    "alarms",
     "browsingData",
     "webNavigation",
     "webRequest",
