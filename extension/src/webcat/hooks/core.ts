@@ -4,27 +4,29 @@
 
 import { SHA256 } from "./sha256";
 
-export function wasmHook() {
-  let wasm: typeof WebAssembly;
-
-  if (typeof window === "undefined") {
-    wasm = globalThis.WebAssembly;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } else if ((window as any).getWebAssemblyPtr) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    wasm = (window as any).getWebAssemblyPtr("__KEY_PLACEHOLDER__");
-  } else {
-    return;
-  }
+// Hook the WebAssembly object in either a content script or a Worker.
+// In a content script, scope must be the the wrapped (Xray vision) window object,
+// unwrappedScope the unwrapped (no Xray vision) window object, and exportFunction the
+// built-in content script exportFunction. In a Worker, scope and unwrappedScope must
+// be globalThis and exportFunction a function that assigns func directly to
+// targetScope[options.defineAs].
+export function wasmHook(
+  scope: typeof globalThis,
+  unwrappedScope: typeof globalThis,
+  baseURI: string,
+  exportFunction: (
+    func: Function, // eslint-disable-line @typescript-eslint/no-unsafe-function-type
+    targetScope: object,
+    options: { defineAs: string },
+  ) => Function, // eslint-disable-line @typescript-eslint/no-unsafe-function-type
+) {
+  const wasm = unwrappedScope.WebAssembly;
 
   // Check if the WebAssembly hook has already been injected.
   if (Object.prototype.hasOwnProperty.call(wasm, "__hooked__")) {
     console.log("[WEBCAT] WebAssembly hook already injected.");
     return;
   }
-
-  // Save the original crypto.subtle.
-  const originalCryptoSubtle: SubtleCrypto = globalThis.crypto.subtle;
 
   // Hardcoded allowlist of allowed SHA-256 hex digests.
   const ALLOWED_HASHES: string[] = ["__HASHES_PLACEHOLDER__"];
@@ -40,24 +42,33 @@ export function wasmHook() {
       .replace(/=+$/, "");
   }
 
-  // Async bytecode verifier: uses crypto.subtle.digest.
-  async function verifyBytecodeAsync(buffer: ArrayBuffer): Promise<void> {
-    const digestBuffer: ArrayBuffer = await originalCryptoSubtle.digest(
-      "SHA-256",
-      buffer,
-    );
-    const hashHex: string = arrayBuffertoBase64Url(digestBuffer);
-    if (!ALLOWED_HASHES.includes(hashHex)) {
-      throw new Error(`[WEBCAT] Unauthorized WebAssembly bytecode: ${hashHex}`);
+  // Async bytecode verifier: uses crypto.subtle.digest. Must always return
+  // a scope.Promise, may never throw.
+  function verifyBytecodeAsync(bufferSource: BufferSource): Promise<void> {
+    try {
+      const buffer = extractBuffer(bufferSource);
+      return crypto.subtle.digest("SHA-256", buffer).then((digestBuffer) => {
+        const hashHex: string = arrayBuffertoBase64Url(digestBuffer);
+        if (!ALLOWED_HASHES.includes(hashHex)) {
+          throw new scope.Error(
+            `[WEBCAT] Unauthorized WebAssembly bytecode: ${hashHex}`,
+          );
+        }
+        console.log(`[WEBCAT] Verified WASM (async) ${hashHex}`);
+      });
+    } catch (e) {
+      return scope.Promise.reject(e);
     }
-    console.log(`[WEBCAT] Verified WASM (async) ${hashHex}`);
   }
 
   // Synchronous bytecode verifier: uses the synchronous SHA256(buffer).
-  function verifyBytecodeSync(buffer: ArrayBuffer): void {
+  function verifyBytecodeSync(bufferSource: BufferSource): void {
+    const buffer = extractBuffer(bufferSource);
     const hashHex: string = arrayBuffertoBase64Url(SHA256(buffer));
     if (!ALLOWED_HASHES.includes(hashHex)) {
-      throw new Error(`[WEBCAT] Unauthorized WebAssembly bytecode: ${hashHex}`);
+      throw new scope.Error(
+        `[WEBCAT] Unauthorized WebAssembly bytecode: ${hashHex}`,
+      );
     }
     console.log(`[WEBCAT] Verified WASM (sync) ${hashHex}`);
   }
@@ -66,13 +77,13 @@ export function wasmHook() {
   function extractBuffer(
     bufferSource: BufferSource | WebAssembly.Module,
   ): ArrayBuffer {
-    if (bufferSource instanceof ArrayBuffer) {
+    if (bufferSource instanceof scope.ArrayBuffer) {
       return bufferSource;
     }
-    if (ArrayBuffer.isView(bufferSource)) {
+    if (scope.ArrayBuffer.isView(bufferSource)) {
       return bufferSource.buffer as ArrayBuffer;
     }
-    throw new TypeError(
+    throw new scope.TypeError(
       "[WEBCAT] WebAssembly bytecode must be provided as an ArrayBuffer or typed array",
     );
   }
@@ -81,109 +92,95 @@ export function wasmHook() {
   // Hooking WebAssembly Methods
   // ============================
 
-  //
   // Hook WebAssembly.instantiate (async)
-  //
   const originalInstantiate = wasm.instantiate;
-  // Overloads for WebAssembly.instantiate.
   function hookedInstantiate(
-    source: WebAssembly.Module,
+    this: typeof WebAssembly,
+    source: WebAssembly.Module | BufferSource,
     importObject?: WebAssembly.Imports,
-  ): Promise<WebAssembly.Instance>;
-  function hookedInstantiate(
-    source: BufferSource | Promise<BufferSource>,
-    importObject?: WebAssembly.Imports,
-  ): Promise<WebAssembly.WebAssemblyInstantiatedSource>;
-  async function hookedInstantiate(
-    this: unknown,
-    source: WebAssembly.Module | BufferSource | Promise<BufferSource>,
-    importObject?: WebAssembly.Imports,
+    compileOptions?: object,
   ): Promise<unknown> {
     // If the source is already a compiled module, bypass verification.
     if (source instanceof wasm.Module) {
-      return originalInstantiate.call(this, source, importObject);
+      return originalInstantiate.call(
+        this,
+        source,
+        importObject,
+        compileOptions,
+      );
     } else {
-      // If source is a Promise, await it.
-      const sourceBuffer:
-        | WebAssembly.Module
-        | BufferSource
-        | Promise<BufferSource> =
-        source instanceof Promise ? await source : source;
-      const buffer: ArrayBuffer = extractBuffer(sourceBuffer);
-      try {
-        await verifyBytecodeAsync(buffer);
-      } catch (e) {
-        return Promise.reject(e);
-      }
-      return originalInstantiate.call(this, sourceBuffer, importObject);
+      return verifyBytecodeAsync(source).then(
+        originalInstantiate.bind(this, source, importObject, compileOptions),
+      );
     }
   }
-  wasm.instantiate = hookedInstantiate as typeof WebAssembly.instantiate;
+  exportFunction(hookedInstantiate, wasm, { defineAs: "instantiate" });
 
-  //
   // Hook WebAssembly.compile (async)
-  //
   const originalCompile = wasm.compile;
-  wasm.compile = async function (
+  function hookedCompile(
     this: typeof wasm,
     bufferSource: BufferSource,
+    compileOptions?: object,
   ): Promise<WebAssembly.Module> {
-    try {
-      const buffer: ArrayBuffer = extractBuffer(bufferSource);
-      await verifyBytecodeAsync(buffer);
-    } catch (e) {
-      return Promise.reject(e);
-    }
-    return originalCompile.call(this, bufferSource);
-  };
+    return verifyBytecodeAsync(bufferSource).then(
+      originalCompile.bind(this, bufferSource, compileOptions),
+    );
+  }
+  exportFunction(hookedCompile, wasm, { defineAs: "compile" });
 
-  //
   // Hook WebAssembly.validate (synchronous)
-  //
   const originalValidate = wasm.validate;
-  wasm.validate = function (
+  function hookedValidate(
     this: typeof wasm,
     bufferSource: BufferSource,
   ): boolean {
-    const buffer: ArrayBuffer = extractBuffer(bufferSource);
-    verifyBytecodeSync(buffer);
+    verifyBytecodeSync(bufferSource);
     return originalValidate.call(this, bufferSource);
-  };
+  }
+  exportFunction(hookedValidate, wasm, { defineAs: "validate" });
 
-  //
   // Hook WebAssembly.instantiateStreaming (async)
-  //
   const originalInstantiateStreaming = wasm.instantiateStreaming;
-  wasm.instantiateStreaming = async function (
+  function hookedInstantiateStreaming(
     this: typeof wasm,
-    responseOrPromise: Response | PromiseLike<Response>,
+    source: Response | PromiseLike<Response>,
     importObject?: WebAssembly.Imports,
+    compileOptions?: object,
   ): Promise<WebAssembly.WebAssemblyInstantiatedSource> {
-    const response: Response = await Promise.resolve(responseOrPromise);
-    const clonedResponse: Response = response.clone();
-    const buffer: ArrayBuffer = await clonedResponse.arrayBuffer();
-    await verifyBytecodeAsync(buffer);
-    return originalInstantiateStreaming.call(this, response, importObject);
-  };
+    return scope.Promise.resolve(source)
+      .then((response) => response.clone().arrayBuffer())
+      .then(verifyBytecodeAsync)
+      .then(
+        originalInstantiateStreaming.bind(
+          this,
+          source,
+          importObject,
+          compileOptions,
+        ),
+      );
+  }
+  exportFunction(hookedInstantiateStreaming, wasm, {
+    defineAs: "instantiateStreaming",
+  });
 
-  //
   // Hook WebAssembly.compileStreaming (async)
-  //
   const originalCompileStreaming = wasm.compileStreaming;
-  wasm.compileStreaming = async function (
+  function hookedCompileStreaming(
     this: typeof wasm,
-    responseOrPromise: Response | PromiseLike<Response>,
+    source: Response | PromiseLike<Response>,
+    compileOptions?: object,
   ): Promise<WebAssembly.Module> {
-    const response: Response = await Promise.resolve(responseOrPromise);
-    const clonedResponse: Response = response.clone();
-    const buffer: ArrayBuffer = await clonedResponse.arrayBuffer();
-    await verifyBytecodeAsync(buffer);
-    return originalCompileStreaming.call(this, response);
-  };
+    return scope.Promise.resolve(source)
+      .then((response) => response.clone().arrayBuffer())
+      .then(verifyBytecodeAsync)
+      .then(originalCompileStreaming.bind(this, source, compileOptions));
+  }
+  exportFunction(hookedCompileStreaming, wasm, {
+    defineAs: "compileStreaming",
+  });
 
-  //
   // Hook the WebAssembly.Module constructor (synchronous)
-  //
   type WebAssemblyModuleConstructor = {
     new (bytes: BufferSource): WebAssembly.Module;
     prototype: WebAssembly.Module;
@@ -201,7 +198,6 @@ export function wasmHook() {
 
   // Hook the WebAssembly.Module constructor (synchronous)
   const OriginalModule = wasm.Module;
-
   function HookedModule(
     this: object,
     bufferSource: BufferSource,
@@ -211,25 +207,31 @@ export function wasmHook() {
         "[WEBCAT] Constructor WebAssembly.Module requires 'new'",
       );
     }
-    const buffer: ArrayBuffer = extractBuffer(bufferSource);
-    verifyBytecodeSync(buffer);
+    verifyBytecodeSync(bufferSource);
     return new OriginalModule(bufferSource);
   }
-
-  // Set up the prototype.
-  HookedModule.prototype = OriginalModule.prototype;
-
-  // Cast HookedModule to our complete constructor type.
   const hookedModule = HookedModule as unknown as WebAssemblyModuleConstructor;
-
-  // Now assign the static methods.
   hookedModule.customSections =
     OriginalModule.customSections.bind(OriginalModule);
   hookedModule.exports = OriginalModule.exports.bind(OriginalModule);
   hookedModule.imports = OriginalModule.imports.bind(OriginalModule);
+  exportFunction(hookedModule, wasm, { defineAs: "Module" });
+  wasm.Module.prototype = OriginalModule.prototype;
 
-  // Finally, assign the hooked constructor to WebAssembly.Module.
-  wasm.Module = hookedModule as typeof wasm.Module;
+  // Hook Worker to mark worker scripts for further hooking
+  if ("Worker" in unwrappedScope) {
+    const OriginalWorker = unwrappedScope.Worker;
+    function HookedWorker(this: object, url: string, options: object) {
+      if (!(this instanceof HookedWorker)) {
+        throw new TypeError("[WEBCAT] Constructor Worker requires 'new'");
+      }
+      const parsedUrl = new URL(url, baseURI);
+      parsedUrl.hash = "#__WEBCAT_hooked_worker__";
+      return new OriginalWorker(parsedUrl.toString(), options);
+    }
+    exportFunction(HookedWorker, unwrappedScope, { defineAs: "Worker" });
+    unwrappedScope.Worker.prototype = OriginalWorker.prototype;
+  }
 
   // Mark WebAssembly as hooked.
   Object.defineProperty(wasm, "__hooked__", {
@@ -238,8 +240,6 @@ export function wasmHook() {
     configurable: false,
     enumerable: false,
   });
-
-  globalThis.WebAssembly = wasm;
 
   console.log(
     "[WEBCAT] WebAssembly successfully hooked: all bytecode entry points now require authorization.",
