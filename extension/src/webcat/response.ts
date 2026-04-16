@@ -294,14 +294,13 @@ export async function validateResponseContent(
     // If everything is OK then we can just write the raw blob back
     logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
 
-    if (details.type === "script") {
-      // Inject the WASM hooks in every loaded script.
-
-      const hooks = getHooks(
-        hooksType.page,
-        manifest.wasm,
-        originStateHolder.current.hooks_key,
-      );
+    if (
+      details.type === "script" &&
+      (details.tabId < 0 || // is this a ServiceWorker or a SharedWorker?
+        details.url.endsWith("#__WEBCAT_hooked_worker__")) // ...or a dedicated Worker?
+    ) {
+      // Inject the WASM hooks
+      const hooks = getHooks(hooksType.page, manifest.wasm);
       filter.write(stringToUint8Array(hooks));
     }
 
