@@ -56,5 +56,6 @@ def test_benchmark(root, warm, addon_installed, enrolled, addon_path, request, b
         result = json.loads(result_raw)
         return result['startTime']/1000, result['loadEventEnd']/1000, result['webcat_executed']
 
+    benchmark.group = "warm" if warm else "cold"
     result = benchmark.pedantic(run, setup=setup, teardown=teardown, rounds=request.config.getoption("--iterations"))
     assert result == (addon_installed and enrolled)
