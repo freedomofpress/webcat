@@ -75,7 +75,12 @@ export async function errorpage(
   if (tabId < 0) {
     const tabs = await browser.tabs.query({});
     for (const tab of tabs) {
-      if (tab.url && tab.id && /https?:\/\//i.test(tab.url) && fqdn === getFQDN(tab.url)) {
+      if (
+        tab.url &&
+        tab.id &&
+        /https?:\/\//i.test(tab.url) &&
+        fqdn === getFQDN(tab.url)
+      ) {
         tabIds.push(tab.id);
       }
     }
@@ -88,7 +93,9 @@ export async function errorpage(
   const errorPageUrl =
     browser.runtime.getURL("pages/error.html") + `#${encodeURIComponent(code)}`;
 
-  const tabUpdates = tabIds.map(tabId => browser.tabs.update(tabId, { url: errorPageUrl }));
+  const tabUpdates = tabIds.map((tabId) =>
+    browser.tabs.update(tabId, { url: errorPageUrl }),
+  );
   await Promise.all(tabUpdates);
 
   // See https://github.com/freedomofpress/webcat/issues/137
