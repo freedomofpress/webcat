@@ -2,6 +2,7 @@ import pytest
 from time import sleep
 from helpers import Browser, Server, Blob
 import logging
+import json
 
 logging.getLogger("geckordp").setLevel(logging.CRITICAL)
 logging.getLogger("psutil").setLevel(logging.CRITICAL)
@@ -20,40 +21,100 @@ WEBCAT_ICON = Blob(
     "ZnkAMjAyNC0xMC0yMlQxNDo1Mzo0MyswMDowMGXvS2oAAAAASUVORK5CYII=",
     type="image/png", base64=True)
 
+BAD_WASM = Blob(
+    "AGFzbQEAAAABCgJgAABgAn9/AX8DAwIAAQQFAXABAQEFBgEBggKCAgcRBAFhAgABYgAAAWMAAQFk"
+    "AQAKCQICAAsEAEEACw==", type="applicaiton/wasm", base64=True)
+
+[
+    LOGENTRY_ALERT,
+    LOGENTRY_CSP,
+    LOGENTRY_WASM_FETCH,
+    LOGENTRY_WASM,
+    LOGENTRY_IMPORT,
+    LOGENTRY_LOAD_WORKER,
+    LOGENTRY_LOAD_SHAREDWORKER,
+    LOGENTRY_LOAD_WASMWORKER
+] = EXPECTED_LOGS = [
+    ["alert.js:",True],
+    ["csp.js",True],
+    ["wasm_fetch.js:",True],
+    ["wasm.js:",True],
+    ["import.js",True],
+    ["load_worker.js:",True],
+    ["load_sharedworker.js:",True],
+    ["load_wasmworker.js:",True]
+]
+
+def setdiff(a: list, b: list):
+    a = a.copy()
+    for el in b:
+        try:
+            a.remove(el)
+        except:
+            pass
+    return a
+
 @pytest.mark.parametrize("browser", ["firefox", "tor"], indirect=True)
-@pytest.mark.parametrize("root, headers, hooks, expected", [
+@pytest.mark.parametrize("root, headers, hooks, expected, logs, errors, rejections", [
+
     # Basic correct execution
     ("cases/testapp", {
         "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {}, "Hello!"),
+    }, { }, "Hello!", EXPECTED_LOGS, [], []),
 
     # Wrong CSP
     ("cases/testapp", {
         "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {}, "ERR_WEBCAT_CSP_MISMATCH"),
+    }, {}, "ERR_WEBCAT_CSP_MISMATCH", [], [], []),
 
     # Missing CSP
     ("cases/testapp", {
         # No CSP header
-    }, {}, "ERR_WEBCAT_HEADERS_MISSING_CRITICAL"),
+    }, {}, "ERR_WEBCAT_HEADERS_MISSING_CRITICAL", [], [], []),
 
     # Hook / with static content
     ("cases/testapp", {
         "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH"),
+    }, {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+
     # Hook /.well-known/webcat/bundle.json
     ("cases/testapp", {
         "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/.well-known/webcat/bundle.json": b'{"a":"b"}'}, "ERR_WEBCAT_BUNDLE_MISSING_ENROLLMENT"),
+    }, {"/.well-known/webcat/bundle.json": b'{"a":"b"}'}, "ERR_WEBCAT_BUNDLE_MISSING_ENROLLMENT", [], [], []),
+
     # Hook /js/alert.js
     ("cases/testapp", {
         "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH"),
+    }, {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+
+    # Hook /wasm/addTwo.wasm
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
+    }, {"/wasm/addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM]), [], [
+        ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
+    ]),
+
+    # Hook /wasm/addThree.wasm
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
+    }, {"/wasm/addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FETCH]), [], [
+        ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
+    ]),
+
+    # Hook /wasm/reverseSub.wasm
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
+    }, {"/wasm/reverseSub.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_WASMWORKER]), [
+        ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/wasm_worker.js']
+    ], []),
 
 ], ids=[
     "basic_test",
@@ -61,15 +122,27 @@ WEBCAT_ICON = Blob(
     "missing_csp_test",
     "corrupted_index_test",
     "corrupted_manifest_test",
-    "corrupted_js_test"
+    "corrupted_js_test",
+    "corrupted_wasm_test",
+    "corrupted_wasm_fetch_test",
+    "corrupted_wasm_worker_test",
 ], indirect=["root"])
-def test_webcat(browser, server, expected, addon_path):
+def test_webcat(browser, server, expected, logs, errors, rejections, addon_path):
     browser.install_extension(addon_path)
     sleep(7)
     browser.navigate(server.url())
     sleep(2)
     res = browser.execute("document.body.innerText")
     assert expected in res
+    res = json.loads(browser.execute("JSON.stringify(window.capture?.logs || [])"))
+    for log in res: assert log in logs
+    for log in logs: assert log in res
+    res = json.loads(browser.execute("JSON.stringify(window.capture?.errors || [])"))
+    for err in res: assert err in errors
+    for err in errors: assert err in res
+    res = json.loads(browser.execute("JSON.stringify(window.capture?.rejections || [])"))
+    for err in res: assert err in rejections
+    for err in rejections: assert err in res
 
 @pytest.mark.parametrize("browser", ["firefox", "tor"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
