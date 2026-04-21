@@ -1,5 +1,6 @@
 import { WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
+import { getFQDN } from "./utils";
 
 export function isDarkTheme(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -70,12 +71,25 @@ export async function errorpage(
   fqdn: string,
   error?: WebcatError,
 ) {
+  const tabIds = [];
+  if (tabId < 0) {
+    const tabs = await browser.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.url && tab.id && /https?:\/\//i.test(tab.url) && fqdn === getFQDN(tab.url)) {
+        tabIds.push(tab.id);
+      }
+    }
+  } else {
+    tabIds.push(tabId);
+  }
+
   const code = error?.code ?? "WEBCAT_ERROR_UNDEFINED";
 
   const errorPageUrl =
     browser.runtime.getURL("pages/error.html") + `#${encodeURIComponent(code)}`;
 
-  await browser.tabs.update(tabId, { url: errorPageUrl });
+  const tabUpdates = tabIds.map(tabId => browser.tabs.update(tabId, { url: errorPageUrl }));
+  await Promise.all(tabUpdates);
 
   // See https://github.com/freedomofpress/webcat/issues/137
   await browser.browsingData.remove({ hostnames: [fqdn] }, { cache: true });
