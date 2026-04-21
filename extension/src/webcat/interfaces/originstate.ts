@@ -1,8 +1,12 @@
 import { bundle_name, bundle_prev_name } from "../../config";
 import { db } from "../../globals";
 import { canonicalize } from "../canonicalize";
-import { stringToUint8Array, Uint8ArrayToBase64Url } from "../encoding";
-import { headersListener, requestListener } from "../listeners";
+import { stringToUint8Array } from "../encoding";
+import {
+  beforeHeadersListener,
+  headersListener,
+  requestListener,
+} from "../listeners";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
 import { validateCSP, validateSigstoreEnrollment } from "../validators";
@@ -114,6 +118,9 @@ export class OriginStateHolder {
     browser.webRequest.onBeforeRequest.removeListener(
       this.current.onBeforeRequest,
     );
+    browser.webRequest.onBeforeSendHeaders.removeListener(
+      this.current.onBeforeSendHeaders,
+    );
     browser.webRequest.onHeadersReceived.removeListener(
       this.current.onHeadersReceived,
     );
@@ -140,13 +147,15 @@ export abstract class OriginStateBase {
   public readonly valid_signers?: Set<string>;
   public readonly valid_sources?: Set<string>;
   public readonly delegation?: string;
-  public readonly hooks_key: string;
 
   // Per origin function wrappers: the extension API does not support registering
   // the same listener multiple times with different rules. We thus want a wrapper
   // listener per every origin for their own intercepting function
   public onBeforeRequest: (
     details: browser.webRequest._OnBeforeRequestDetails,
+  ) => Promise<browser.webRequest.BlockingResponse>;
+  public onBeforeSendHeaders: (
+    details: browser.webRequest._OnBeforeSendHeadersDetails,
   ) => Promise<browser.webRequest.BlockingResponse>;
   public onHeadersReceived: (
     details: browser.webRequest._OnHeadersReceivedDetails,
@@ -168,10 +177,8 @@ export abstract class OriginStateBase {
     this.enrollment_hash = enrollment_hash;
     this.references = 1;
 
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    this.hooks_key = Uint8ArrayToBase64Url(bytes);
     this.onBeforeRequest = (details) => requestListener(details);
+    this.onBeforeSendHeaders = (details) => beforeHeadersListener(details);
     this.onHeadersReceived = (details) => headersListener(details);
 
     // Cleanup service workers, see https://github.com/freedomofpress/webcat/issues/18
@@ -340,6 +347,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       prev.enrollment_hash,
     );
     this.onBeforeRequest = prev.onBeforeRequest;
+    this.onBeforeSendHeaders = prev.onBeforeSendHeaders;
     this.onHeadersReceived = prev.onHeadersReceived;
     this.references = prev.references;
     this.enrollment = enrollment;
@@ -463,6 +471,7 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
       prev.enrollment_hash,
     );
     this.onBeforeRequest = prev.onBeforeRequest;
+    this.onBeforeSendHeaders = prev.onBeforeSendHeaders;
     this.onHeadersReceived = prev.onHeadersReceived;
     this.references = prev.references;
     this.enrollment = prev.enrollment;

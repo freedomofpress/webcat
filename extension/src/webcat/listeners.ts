@@ -6,7 +6,11 @@ import { WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
-import { validateResponseContent, validateResponseHeaders } from "./response";
+import {
+  hookResponseContent,
+  validateResponseContent,
+  validateResponseHeaders,
+} from "./response";
 import { errorpage } from "./ui";
 import { retryUpdateIfFailed } from "./update";
 import { getFQDN, isExtensionRequest } from "./utils";
@@ -143,7 +147,6 @@ export async function headersListener(
     originStateHolder.current.manifest
   ) {
     const wasm = originStateHolder.current.manifest.wasm;
-    const hooks_key = originStateHolder.current.hooks_key;
 
     const listener = async (
       navDetails: browser.webNavigation._OnCommittedDetails,
@@ -154,7 +157,7 @@ export async function headersListener(
       browser.webNavigation.onCommitted.removeListener(listener);
 
       await browser.tabs.executeScript(details.tabId, {
-        code: getHooks(hooksType.content_script, wasm, hooks_key),
+        code: getHooks(hooksType.content_script, wasm),
         runAt: "document_start",
         frameId: details.frameId,
       });
@@ -163,6 +166,31 @@ export async function headersListener(
     browser.webNavigation.onCommitted.addListener(listener);
   }
 
+  return {};
+}
+
+export async function beforeHeadersListener(
+  details: browser.webRequest._OnBeforeSendHeadersDetails,
+): Promise<browser.webRequest.BlockingResponse> {
+  // this listener is only added for script requests, i.e.
+  // here we already know details.type === "script"
+  if (!details.requestHeaders) {
+    console.error("FATAL: request headers not available");
+    return { cancel: true };
+  }
+  for (const header of details.requestHeaders) {
+    if (header.name.toLowerCase() === "sec-fetch-dest") {
+      switch (header.value) {
+        case "worker":
+        case "serviceworker":
+        case "sharedworker":
+        case "audioworklet":
+        case "paintworklet":
+          await hookResponseContent(details);
+      }
+      break;
+    }
+  }
   return {};
 }
 
