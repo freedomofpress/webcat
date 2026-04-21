@@ -90,6 +90,15 @@ export async function validateOrigin(
     ["blocking"],
   );
 
+  browser.webRequest.onBeforeSendHeaders.addListener(
+    origin.current.onBeforeSendHeaders,
+    {
+      urls: [`http://${fqdn}/*`, `https://${fqdn}/*`],
+      types: ["script"],
+    },
+    ["blocking", "requestHeaders"],
+  );
+
   browser.webRequest.onHeadersReceived.addListener(
     origin.current.onHeadersReceived,
     {
