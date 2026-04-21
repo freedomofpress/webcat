@@ -1,6 +1,6 @@
 import pytest
 from time import sleep
-from helpers import Browser, Server, Blob
+from helpers import Browser, TorBrowser, Server, Blob
 import logging
 import json
 
@@ -116,6 +116,24 @@ def setdiff(a: list, b: list):
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/wasm_worker.js']
     ], []),
 
+    # Hook /workers/worker.js
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
+    }, {"/workers/worker.js": Blob(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+
+    # Hook /workers/sharedworker.js
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
+    }, {"/workers/sharedworker.js": Blob(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+
+    # Hook /workers/serviceworker.js
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
+    }, {"/workers/serviceworker.js": Blob(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+
 ], ids=[
     "basic_test",
     "wrong_csp_test",
@@ -126,8 +144,14 @@ def setdiff(a: list, b: list):
     "corrupted_wasm_test",
     "corrupted_wasm_fetch_test",
     "corrupted_wasm_worker_test",
+    "corrupted_worker_test",
+    "corrupted_sharedworker_test",
+    "corrupted_serviceworker_test",
 ], indirect=["root"])
-def test_webcat(browser, server, expected, logs, errors, rejections, addon_path):
+def test_webcat(browser, server, expected, logs, errors, rejections, addon_path, request):
+    if request.node.callspec.id == "corrupted_serviceworker_test-tor":
+        pytest.skip("ServiceWorkers not supported in Tor Browser")
+    
     browser.install_extension(addon_path)
     sleep(7)
     browser.navigate(server.url())
