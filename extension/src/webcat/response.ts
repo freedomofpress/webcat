@@ -268,6 +268,7 @@ export async function validateResponseContent(
         fqdn,
         new WebcatError(WebcatErrorCode.File.MISSING),
       );
+      return;
     }
 
     const content_hash = await SHA256(blob);
@@ -289,6 +290,7 @@ export async function validateResponseContent(
           String(Uint8ArrayToBase64Url(new Uint8Array(content_hash))),
         ]),
       );
+      return;
     }
 
     // If everything is OK then we can just write the raw blob back
