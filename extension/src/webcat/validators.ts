@@ -36,6 +36,7 @@ import {
 } from "./interfaces/bundle";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { parseContentSecurityPolicy } from "./parsers";
+import { FRAME_TYPES } from "./resources";
 import { getFQDNSafe } from "./utils";
 
 export function extractAndValidateHeaders(
@@ -72,8 +73,16 @@ export function extractAndValidateHeaders(
       const value = header.value;
 
       // Check and block in case of forbidden headers
-      // Special case: Location header — allow only relative redirects
+      // Location header: block entirely for sub-resources (redirects would
+      // cause the resource to be matched against the destination path,
+      // allowing a server to swap or reorder resources). Only main
+      // navigations (main_frame / sub_frame) may use safe relative redirects.
       if (lowerName === "location") {
+        if (!FRAME_TYPES.includes(details.type)) {
+          return new WebcatError(WebcatErrorCode.Headers.LOCATION_SUBRESOURCE, [
+            String(value),
+          ]);
+        }
         if (!isSafeRelativeLocation(value)) {
           return new WebcatError(WebcatErrorCode.Headers.LOCATION_EXTERNAL, [
             String(value),
