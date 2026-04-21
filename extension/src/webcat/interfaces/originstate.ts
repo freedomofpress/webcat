@@ -2,7 +2,11 @@ import { bundle_name, bundle_prev_name } from "../../config";
 import { db } from "../../globals";
 import { canonicalize } from "../canonicalize";
 import { stringToUint8Array } from "../encoding";
-import { headersListener, requestListener } from "../listeners";
+import {
+  beforeHeadersListener,
+  headersListener,
+  requestListener,
+} from "../listeners";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
 import { validateCSP, validateSigstoreEnrollment } from "../validators";
@@ -114,6 +118,9 @@ export class OriginStateHolder {
     browser.webRequest.onBeforeRequest.removeListener(
       this.current.onBeforeRequest,
     );
+    browser.webRequest.onBeforeSendHeaders.removeListener(
+      this.current.onBeforeSendHeaders,
+    );
     browser.webRequest.onHeadersReceived.removeListener(
       this.current.onHeadersReceived,
     );
@@ -147,6 +154,9 @@ export abstract class OriginStateBase {
   public onBeforeRequest: (
     details: browser.webRequest._OnBeforeRequestDetails,
   ) => Promise<browser.webRequest.BlockingResponse>;
+  public onBeforeSendHeaders: (
+    details: browser.webRequest._OnBeforeSendHeadersDetails,
+  ) => Promise<browser.webRequest.BlockingResponse>;
   public onHeadersReceived: (
     details: browser.webRequest._OnHeadersReceivedDetails,
   ) => Promise<browser.webRequest.BlockingResponse>;
@@ -168,6 +178,7 @@ export abstract class OriginStateBase {
     this.references = 1;
 
     this.onBeforeRequest = (details) => requestListener(details);
+    this.onBeforeSendHeaders = (details) => beforeHeadersListener(details);
     this.onHeadersReceived = (details) => headersListener(details);
 
     // Cleanup service workers, see https://github.com/freedomofpress/webcat/issues/18
@@ -336,6 +347,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       prev.enrollment_hash,
     );
     this.onBeforeRequest = prev.onBeforeRequest;
+    this.onBeforeSendHeaders = prev.onBeforeSendHeaders;
     this.onHeadersReceived = prev.onHeadersReceived;
     this.references = prev.references;
     this.enrollment = enrollment;
@@ -459,6 +471,7 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
       prev.enrollment_hash,
     );
     this.onBeforeRequest = prev.onBeforeRequest;
+    this.onBeforeSendHeaders = prev.onBeforeSendHeaders;
     this.onHeadersReceived = prev.onHeadersReceived;
     this.references = prev.references;
     this.enrollment = prev.enrollment;

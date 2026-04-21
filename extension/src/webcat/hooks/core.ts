@@ -218,21 +218,6 @@ export function wasmHook(
   exportFunction(hookedModule, wasm, { defineAs: "Module" });
   wasm.Module.prototype = OriginalModule.prototype;
 
-  // Hook Worker to mark worker scripts for further hooking
-  if ("Worker" in unwrappedScope) {
-    const OriginalWorker = unwrappedScope.Worker;
-    function HookedWorker(this: object, url: string, options: object) {
-      if (!(this instanceof HookedWorker)) {
-        throw new TypeError("[WEBCAT] Constructor Worker requires 'new'");
-      }
-      const parsedUrl = new URL(url, baseURI);
-      parsedUrl.hash = "#__WEBCAT_hooked_worker__";
-      return new OriginalWorker(parsedUrl.toString(), options);
-    }
-    exportFunction(HookedWorker, unwrappedScope, { defineAs: "Worker" });
-    unwrappedScope.Worker.prototype = OriginalWorker.prototype;
-  }
-
   // Mark WebAssembly as hooked.
   Object.defineProperty(wasm, "__hooked__", {
     value: true,

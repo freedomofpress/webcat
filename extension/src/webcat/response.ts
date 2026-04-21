@@ -1,4 +1,4 @@
-import { origins } from "./../globals";
+import { hookMarker, origins } from "./../globals";
 import {
   base64UrlToUint8Array,
   stringToUint8Array,
@@ -7,7 +7,7 @@ import {
 } from "./encoding";
 import { getHooks } from "./genhooks";
 import { hooksType } from "./interfaces/base";
-import { Enrollment } from "./interfaces/bundle";
+import { Enrollment, Manifest } from "./interfaces/bundle";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
   OriginStateFailed,
@@ -228,23 +228,31 @@ export async function validateResponseContent(
     }
   }
 
+  let originStateHolder: OriginStateHolder;
+  let manifest: Manifest;
   const filter = browser.webRequest.filterResponseData(details.requestId);
+  filter.onstart = () => {
+      originStateHolder = getVerifiedManifestState(fqdn);
+      manifest = (originStateHolder.current as OriginStateVerifiedManifest)
+        .manifest;
+  }
 
   const source: ArrayBuffer[] = [];
   filter.ondata = (event: { data: ArrayBuffer }) => {
     // The data here is usually chunked; normally it would be streamed down as we get it
     // but since we can hash the content only at the end, we have to wait until we have everything
     // before deciding if the response content matches the manifest or not. So we are saving it and we will
-    // build a blob later
-    source.push(event.data);
+    // build a blob later. If the data is the hook marker, we immediately inject the WASM hooks instead.
+    if (arraysEqual(hookMarker, new Uint8Array(event.data))) {
+      const hooks = getHooks(hooksType.page, manifest.wasm);
+      filter.write(stringToUint8Array(hooks));
+    } else {
+      source.push(event.data);
+    }
   };
 
   filter.onstop = async () => {
-    const originStateHolder = getVerifiedManifestState(fqdn);
     const blob = await new Blob(source).arrayBuffer();
-
-    const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
-      .manifest;
 
     // Following order of priority:
     // - If there's an exact match, that should be the hash
@@ -294,16 +302,6 @@ export async function validateResponseContent(
     // If everything is OK then we can just write the raw blob back
     logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
 
-    if (
-      details.type === "script" &&
-      (details.tabId < 0 || // is this a ServiceWorker or a SharedWorker?
-        details.url.endsWith("#__WEBCAT_hooked_worker__")) // ...or a dedicated Worker?
-    ) {
-      // Inject the WASM hooks
-      const hooks = getHooks(hooksType.page, manifest.wasm);
-      filter.write(stringToUint8Array(hooks));
-    }
-
     filter.write(blob);
     // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
     // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
@@ -312,5 +310,17 @@ export async function validateResponseContent(
       setOKIcon(details.tabId, originStateHolder.current.delegation);
     }
     // Redirect the main frame to an error page
+  };
+}
+
+export async function hookResponseContent(
+  details: browser.webRequest._OnBeforeSendHeadersDetails,
+) {
+  const filter = browser.webRequest.filterResponseData(details.requestId);
+  filter.onstart = () => {
+    // insert hook marker, later replaced with
+    // the actual hook in the validation filter
+    filter.write(hookMarker);
+    filter.disconnect();
   };
 }
