@@ -232,10 +232,10 @@ export async function validateResponseContent(
   let manifest: Manifest;
   const filter = browser.webRequest.filterResponseData(details.requestId);
   filter.onstart = () => {
-      originStateHolder = getVerifiedManifestState(fqdn);
-      manifest = (originStateHolder.current as OriginStateVerifiedManifest)
-        .manifest;
-  }
+    originStateHolder = getVerifiedManifestState(fqdn);
+    manifest = (originStateHolder.current as OriginStateVerifiedManifest)
+      .manifest;
+  };
 
   const source: ArrayBuffer[] = [];
   filter.ondata = (event: { data: ArrayBuffer }) => {
