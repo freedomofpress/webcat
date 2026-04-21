@@ -603,4 +603,106 @@ describe("extractAndValidateHeaders", () => {
       false,
     );
   });
+
+  it("blocks Location header on sub-resource requests (script)", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "/other.js" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "script",
+    } as browser.webRequest._OnHeadersReceivedDetails;
+
+    const result = extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as { code: string }).code).toBe(
+      WebcatErrorCode.Headers.LOCATION_SUBRESOURCE,
+    );
+  });
+
+  it("blocks Location header on sub-resource requests (stylesheet)", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "/other.css" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "stylesheet",
+    } as browser.webRequest._OnHeadersReceivedDetails;
+
+    const result = extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as { code: string }).code).toBe(
+      WebcatErrorCode.Headers.LOCATION_SUBRESOURCE,
+    );
+  });
+
+  it("blocks Location header on sub-resource requests (xmlhttprequest)", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "/api/other" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "xmlhttprequest",
+    } as browser.webRequest._OnHeadersReceivedDetails;
+
+    const result = extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as { code: string }).code).toBe(
+      WebcatErrorCode.Headers.LOCATION_SUBRESOURCE,
+    );
+  });
+
+  it("allows safe relative Location header on main_frame", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "/login" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "main_frame",
+    } as browser.webRequest._OnHeadersReceivedDetails;
+
+    const result = extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Map);
+  });
+
+  it("allows safe relative Location header on sub_frame", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "/embed" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "sub_frame",
+    } as browser.webRequest._OnHeadersReceivedDetails;
+
+    const result = extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Map);
+  });
+
+  it("blocks external Location header even on main_frame", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "https://evil.com" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "main_frame",
+    } as browser.webRequest._OnHeadersReceivedDetails;
+
+    const result = extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as { code: string }).code).toBe(
+      WebcatErrorCode.Headers.LOCATION_EXTERNAL,
+    );
+  });
 });
