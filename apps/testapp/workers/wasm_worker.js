@@ -12,6 +12,7 @@ self.addEventListener('message', (event) => {
       })
       .catch(err => {
         console.error("Error loading WASM:", err);
+        postMessage(err);
       });
   }
 });
