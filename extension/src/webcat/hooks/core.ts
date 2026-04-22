@@ -13,12 +13,12 @@ import { SHA256 } from "./sha256";
 export function wasmHook(
   scope: typeof globalThis,
   unwrappedScope: typeof globalThis,
-  baseURI: string,
   exportFunction: (
     func: Function, // eslint-disable-line @typescript-eslint/no-unsafe-function-type
     targetScope: object,
     options: { defineAs: string },
   ) => Function, // eslint-disable-line @typescript-eslint/no-unsafe-function-type
+  notifyBackground: () => void,
 ) {
   const wasm = unwrappedScope.WebAssembly;
 
@@ -50,6 +50,7 @@ export function wasmHook(
       return crypto.subtle.digest("SHA-256", buffer).then((digestBuffer) => {
         const hashHex: string = arrayBuffertoBase64Url(digestBuffer);
         if (!ALLOWED_HASHES.includes(hashHex)) {
+          notifyBackground();
           throw new scope.Error(
             `[WEBCAT] Unauthorized WebAssembly bytecode: ${hashHex}`,
           );
@@ -66,6 +67,7 @@ export function wasmHook(
     const buffer = extractBuffer(bufferSource);
     const hashHex: string = arrayBuffertoBase64Url(SHA256(buffer));
     if (!ALLOWED_HASHES.includes(hashHex)) {
+      notifyBackground();
       throw new scope.Error(
         `[WEBCAT] Unauthorized WebAssembly bytecode: ${hashHex}`,
       );

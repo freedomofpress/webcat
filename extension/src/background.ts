@@ -3,6 +3,7 @@ import { db } from "./globals";
 import {
   headersListener,
   installListener,
+  messageListener,
   requestListener,
   startupListener,
   tabCloseListener,
@@ -96,3 +97,6 @@ browser.tabs.onCreated.addListener((tab) => {
     browser.pageAction.hide(tab.id);
   }
 });
+
+// Handle messages from WASM hooks
+browser.runtime.onMessage.addListener(messageListener);
