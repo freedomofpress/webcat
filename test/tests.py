@@ -33,7 +33,8 @@ BAD_WASM = Blob(
     LOGENTRY_IMPORT,
     LOGENTRY_LOAD_WORKER,
     LOGENTRY_LOAD_SHAREDWORKER,
-    LOGENTRY_LOAD_WASMWORKER
+    LOGENTRY_LOAD_WASMWORKER,
+    LOGENTRY_LOAD_AUDIOWORKLET,
 ] = EXPECTED_LOGS = [
     ["alert.js:",True],
     ["csp.js",True],
@@ -42,7 +43,8 @@ BAD_WASM = Blob(
     ["import.js",True],
     ["load_worker.js:",True],
     ["load_sharedworker.js:",True],
-    ["load_wasmworker.js:",True]
+    ["load_wasmworker.js:",True],
+    ["load_audioworklet.js:",True],
 ]
 
 def setdiff(a: list, b: list):
@@ -134,6 +136,20 @@ def setdiff(a: list, b: list):
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
     }, {"/workers/serviceworker.js": Blob(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
+    # Hook /workers/audioworklet.js
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
+    }, {"/workers/audioworklet.js": Blob(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    
+    # Hook /wasm/aw_addTwo.wasm
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
+    }, {"/wasm/aw_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_AUDIOWORKLET]), [
+        ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/audioworklet.js']
+    ], []),
+
 ], ids=[
     "basic_test",
     "wrong_csp_test",
@@ -147,6 +163,8 @@ def setdiff(a: list, b: list):
     "corrupted_worker_test",
     "corrupted_sharedworker_test",
     "corrupted_serviceworker_test",
+    "corrupted_audioworklet_test",
+    "corrupted_wasm_audioworklet_test",
 ], indirect=["root"])
 def test_webcat(browser, server, expected, logs, errors, rejections, addon_path, request):
     if request.node.callspec.id == "corrupted_serviceworker_test-tor":
