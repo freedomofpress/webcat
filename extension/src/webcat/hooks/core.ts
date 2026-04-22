@@ -13,7 +13,6 @@ import { SHA256 } from "./sha256";
 export function wasmHook(
   scope: typeof globalThis,
   unwrappedScope: typeof globalThis,
-  baseURI: string,
   exportFunction: (
     func: Function, // eslint-disable-line @typescript-eslint/no-unsafe-function-type
     targetScope: object,
@@ -35,17 +34,22 @@ export function wasmHook(
   function arrayBuffertoBase64Url(bytes: ArrayBuffer | Uint8Array): string {
     const byteArray =
       bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-
-    return btoa(String.fromCharCode(...byteArray))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
+    const options = new unwrappedScope.Object() as {
+      alphabet?: "base64" | "base64url";
+      omitPadding?: boolean;
+    };
+    options.alphabet = "base64url";
+    options.omitPadding = true;
+    return byteArray.toBase64(options);
   }
 
-  // Async bytecode verifier: uses crypto.subtle.digest. Must always return
-  // a scope.Promise, may never throw.
+  // Async bytecode verifier: uses crypto.subtle.digest with a synchronous
+  // fallback for Worklets. Must always return a scope.Promise, may never throw.
   function verifyBytecodeAsync(bufferSource: BufferSource): Promise<void> {
     try {
+      if (!("crypto" in globalThis)) {
+        return Promise.resolve(verifyBytecodeSync(bufferSource));
+      }
       const buffer = extractBuffer(bufferSource);
       return crypto.subtle.digest("SHA-256", buffer).then((digestBuffer) => {
         const hashHex: string = arrayBuffertoBase64Url(digestBuffer);
