@@ -2,7 +2,7 @@ import { endpoint } from "../config";
 import { db, origins, tabs } from "../globals";
 import { getHooks } from "./genhooks";
 import { hooksType, metadataRequestSource } from "./interfaces/base";
-import { WebcatError } from "./interfaces/errors";
+import { asWebcatErrorCode, WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
@@ -262,4 +262,18 @@ export async function requestListener(
   // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse
   // Returning a response here is a very powerful tool, let's think about it later
   return {};
+}
+
+export function messageListener(
+  message: { error?: string },
+  sender: browser.runtime.MessageSender,
+) {
+  const error_code = asWebcatErrorCode(message.error);
+  if (error_code && sender.tab && sender.tab.id && sender.tab.url) {
+    errorpage(
+      sender.tab.id,
+      getFQDN(sender.tab?.url),
+      new WebcatError(error_code),
+    );
+  }
 }

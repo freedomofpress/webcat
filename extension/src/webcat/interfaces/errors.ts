@@ -135,3 +135,11 @@ export class WebcatError extends Error {
     this.name = "WebcatError";
   }
 }
+
+export function asWebcatErrorCode(
+  maybeCode: string | undefined,
+): WebcatErrorCodeAny | undefined {
+  const codeEnums = Object.values(WebcatErrorCode);
+  const codes = codeEnums.map((codes) => Object.values(codes)).flat();
+  return codes.find((code) => code === maybeCode);
+}
