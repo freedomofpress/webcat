@@ -70,6 +70,19 @@ jobs:
           tar -xf tbb.tar.xz
           echo "$PWD/tor-browser/Browser" >> "$GITHUB_PATH"
 
+      - name: Set up virtual display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb
+          Xvfb :99 -screen 0 1024x768x24 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Initialize Firefox profile
+        if: ${{ !matrix.tor }}
+        run: |
+          firefox --headless -CreateProfile "default" 2>/dev/null || true
+          timeout 5 firefox --headless || true
+
       - name: Build test extension
         working-directory: extension
         run: make package-test
