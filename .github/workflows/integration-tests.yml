@@ -37,6 +37,19 @@ jobs:
         with:
           node-version: '23'
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Install sigsum
+        run: |
+          go install sigsum.org/sigsum-go/cmd/sigsum-key@latest
+          go install sigsum.org/sigsum-go/cmd/sigsum-submit@latest
+
+      - name: Install webcat CLI
+        run: npm install -g @freedomofpress/webcat-cli
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
