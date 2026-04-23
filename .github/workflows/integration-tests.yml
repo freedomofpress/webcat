@@ -1,0 +1,75 @@
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Firefox (latest)
+            firefox-version: latest
+            test-filter: firefox
+          - name: Firefox ESR
+            firefox-version: latest-esr
+            test-filter: firefox
+          - name: Tor Browser
+            test-filter: tor
+            tor: true
+
+    name: ${{ matrix.name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '23'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Firefox ${{ matrix.firefox-version }}
+        if: ${{ !matrix.tor }}
+        uses: browser-actions/setup-firefox@v1
+        with:
+          firefox-version: ${{ matrix.firefox-version }}
+
+      - name: Install Tor Browser
+        if: matrix.tor
+        run: |
+          TBB_URL=$(curl -s https://aus1.torproject.org/torbrowser/update_3/release/download-linux-x86_64.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['binary'])")
+          echo "Installing Tor Browser from ${TBB_URL}"
+          curl -fsSL "${TBB_URL}" -o tbb.tar.xz
+          tar -xf tbb.tar.xz
+          echo "$PWD/tor-browser/Browser" >> "$GITHUB_PATH"
+
+      - name: Build test extension
+        working-directory: extension
+        run: make package-test
+
+      - name: Install test dependencies
+        working-directory: test
+        run: make install
+
+      - name: Run integration tests
+        working-directory: test
+        run: |
+          .venv/bin/pytest -v tests.py \
+            --addon ../dist/webcat-extension-test.zip \
+            --headless \
+            -k "${{ matrix.test-filter }}"
+
