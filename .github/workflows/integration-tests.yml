@@ -9,6 +9,9 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  MOZ_LEGACY_HOME: 1
+
 jobs:
   integration-tests:
     runs-on: ubuntu-latest
