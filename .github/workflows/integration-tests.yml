@@ -86,14 +86,6 @@ jobs:
           firefox --headless -CreateProfile "default" 2>/dev/null || true
           timeout 5 firefox --headless || true
 
-      - name: Build test extension
-        working-directory: extension
-        run: make package-test
-
-      - name: Install test dependencies
-        working-directory: test
-        run: make install
-
       - name: Run integration tests
         run: |
           make test TESTARGS="--addon ../dist/webcat-extension-test.zip \
