@@ -2,7 +2,7 @@ import { nonOrigins, origins } from "../globals"; // caching maps
 import { logger } from "./logger";
 import { extractHostname, extractRawHash } from "./parsers";
 
-type StorageMode = "indexeddb" | "memory";
+type StorageMode = "indexeddb" | "storage.local" | "memory";
 
 export interface ListMetadata {
   hash: string;
@@ -43,28 +43,83 @@ export class WebcatDatabase {
     backendPromise: Promise<WebcatStorageBackend>;
     storageMode: StorageMode;
   } {
-    if (typeof indexedDB === "undefined") {
-      console.warn("[webcat] IndexedDB unavailable, using in-memory backend");
-      return {
-        backendPromise: Promise.resolve(new InMemoryStorageBackend()),
-        storageMode: "memory",
-      };
-    }
-
-    const backendPromise = this.openDatabase(name)
-      .then((db) => new IndexedDbStorageBackend(db))
+    const backendPromise = this.tryIndexedDB(name)
+      .then((backend) => {
+        console.log("[webcat] Using IndexedDB backend");
+        return { backend, mode: "indexeddb" as StorageMode };
+      })
+      .catch((e) => {
+        console.warn("[webcat] IndexedDB unusable:", e);
+        return this.tryBrowserStorage().then((backend) => {
+          console.log("[webcat] Using browser.storage.local backend");
+          return { backend, mode: "storage.local" as StorageMode };
+        });
+      })
       .catch((e) => {
         console.warn(
-          "[webcat] Falling back to in-memory backend after IndexedDB failure",
+          "[webcat] browser.storage.local unusable, falling back to in-memory backend:",
           e,
         );
-        return new InMemoryStorageBackend();
+        return {
+          backend: new InMemoryStorageBackend() as WebcatStorageBackend,
+          mode: "memory" as StorageMode,
+        };
       });
 
+    backendPromise.then(({ mode }) => {
+      (this as { storageMode: StorageMode }).storageMode = mode;
+    });
+
     return {
-      backendPromise,
-      storageMode: "indexeddb",
+      backendPromise: backendPromise.then(({ backend }) => backend),
+      storageMode: "indexeddb", // optimistic default, updated above
     };
+  }
+
+  /** Try to open IndexedDB and verify it is writable (not read-only). */
+  private async tryIndexedDB(name: string): Promise<WebcatStorageBackend> {
+    if (typeof indexedDB === "undefined") {
+      throw new Error("indexedDB is undefined");
+    }
+
+    const db = await this.openDatabase(name);
+
+    // Probe: attempt a real write+delete to detect read-only mode (Tor Browser)
+    await new Promise<void>((resolve, reject) => {
+      try {
+        const tx = db.transaction("settings", "readwrite");
+        const store = tx.objectStore("settings");
+        const req = store.put({ key: "__webcat_probe", value: 1 });
+        req.onsuccess = () => {
+          store.delete("__webcat_probe");
+          resolve();
+        };
+        req.onerror = () => reject(new Error("IndexedDB write probe failed"));
+        tx.onerror = () =>
+          reject(new Error("IndexedDB write probe transaction failed"));
+      } catch (e) {
+        reject(e);
+      }
+    });
+
+    return new IndexedDbStorageBackend(db);
+  }
+
+  /** Try to use browser.storage.local and verify it is writable. */
+  private async tryBrowserStorage(): Promise<WebcatStorageBackend> {
+    if (
+      typeof browser === "undefined" ||
+      !browser.storage ||
+      !browser.storage.local
+    ) {
+      throw new Error("browser.storage.local is unavailable");
+    }
+
+    // Probe: verify we can actually write
+    await browser.storage.local.set({ __webcat_probe: 1 });
+    await browser.storage.local.remove("__webcat_probe");
+
+    return new BrowserStorageBackend();
   }
 
   private async openDatabase(name: string): Promise<IDBDatabase> {
@@ -286,6 +341,77 @@ class IndexedDbStorageBackend implements WebcatStorageBackend {
         reject(new Uint8Array());
       };
     });
+  }
+}
+
+class BrowserStorageBackend implements WebcatStorageBackend {
+  private readonly prefix = "webcat_";
+
+  private key(k: string): string {
+    return `${this.prefix}${k}`;
+  }
+
+  async settingsSet(
+    key: string,
+    value: number | string | bigint,
+  ): Promise<void> {
+    // bigint is not JSON-serializable, convert to string with a marker
+    const stored =
+      typeof value === "bigint"
+        ? { __bigint: true, value: value.toString() }
+        : value;
+    await browser.storage.local.set({ [this.key(key)]: stored });
+  }
+
+  async settingsGet<T>(key: string): Promise<T | null> {
+    const result = await browser.storage.local.get(this.key(key));
+    const stored = result[this.key(key)];
+    if (stored === undefined) return null;
+    if (stored && typeof stored === "object" && stored.__bigint) {
+      return BigInt(stored.value) as T;
+    }
+    return stored as T;
+  }
+
+  async replaceList(
+    leaves: readonly (readonly [string, string])[],
+  ): Promise<number> {
+    // Remove old list entries
+    const all = await browser.storage.local.get(null);
+    const oldKeys = Object.keys(all).filter((k) =>
+      k.startsWith(`${this.prefix}list_`),
+    );
+    if (oldKeys.length > 0) {
+      await browser.storage.local.remove(oldKeys);
+    }
+
+    // Store new entries in chunks to avoid exceeding message size limits
+    const CHUNK_SIZE = 500;
+    let processed = 0;
+    for (let i = 0; i < leaves.length; i += CHUNK_SIZE) {
+      const chunk = leaves.slice(i, i + CHUNK_SIZE);
+      const batch: Record<string, number[]> = {};
+      for (const [reverseKey, hexHash] of chunk) {
+        const hostname = extractHostname(reverseKey);
+        const rawHash = extractRawHash(hexHash);
+        batch[`${this.prefix}list_${hostname}`] = Array.from(rawHash);
+        processed++;
+      }
+      await browser.storage.local.set(batch);
+    }
+
+    return processed;
+  }
+
+  async getEnrollmentByFqdn(fqdn: string): Promise<Uint8Array> {
+    const key = `${this.prefix}list_${fqdn}`;
+    const result = await browser.storage.local.get(key);
+    const stored = result[key];
+    if (stored) {
+      return new Uint8Array(stored);
+    }
+    nonOrigins.add(fqdn);
+    return new Uint8Array();
   }
 }
 
