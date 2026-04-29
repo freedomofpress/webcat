@@ -1,10 +1,11 @@
 import os
+import tempfile
 import pytest
 import json
 import canonicaljson
 import hashlib
 
-from helpers import Browser, DB, Server, TorBrowser
+from helpers import Browser, DB, Server, TorBrowser, generate_ssl_cert
 from sigsum import generate_bundle
 from pytest_benchmark.fixture import BenchmarkFixture
 
@@ -33,6 +34,12 @@ def addon_path(request):
     return abs_path
 
 @pytest.fixture(scope="session")
+def ssl_cert():
+    tmpdir = tempfile.mkdtemp()
+    cert_path, key_path = generate_ssl_cert(tmpdir)
+    return cert_path, key_path
+
+@pytest.fixture(scope="session")
 def db():
     db = DB()
     db.start()
@@ -49,18 +56,22 @@ def root(db, request):
     return request.param
 
 @pytest.fixture(scope="function")
-def server(root, headers, hooks):
+def server(root, headers, hooks, ssl_cert):
+    cert_path, key_path = ssl_cert
     s = Server(
         root=root,
         headers=headers or {},
-        hooks=hooks or {}
+        hooks=hooks or {},
+        ssl_cert=cert_path,
+        ssl_key=key_path,
     )
     s.start()
     yield s
     s.stop()
 
 @pytest.fixture(scope="function")
-def browser(request):
+def browser(request, ssl_cert, server):
+    cert_path, _ = ssl_cert
     if request.param == "firefox":
         b = Browser()
     elif request.param == "tbb":
@@ -71,6 +82,7 @@ def browser(request):
         b = TorBrowser(allowed_addons=["webcat@freedom.press"], security_level=TorBrowser.SecurityLevel.Safest)
     else:
         raise RuntimeError(f'unrecognized browser \'{request.param}\'')
+    b.trust_cert(cert_path, server.port)
     b.start(request.config.getoption("--headless"))
     yield b
     b.destroy()

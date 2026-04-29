@@ -26,7 +26,7 @@ jobs:
             firefox-version: latest-esr
             test-filter: firefox
           - name: Tor Browser
-            test-filter: tbb
+            test-filter: tbb and not tbb_safer and not tbb_safest
             tor: true
           - name: Tor Browser (Safer)
             test-filter: tbb_safer
@@ -79,10 +79,10 @@ jobs:
           tar -xf tbb.tar.xz
           echo "$PWD/tor-browser/Browser" >> "$GITHUB_PATH"
 
-      - name: Set up virtual display
+      - name: Set up virtual display and dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb
+          sudo apt-get install -y -qq xvfb libnss3-tools
           Xvfb :99 -screen 0 1024x768x24 &
           echo "DISPLAY=:99" >> "$GITHUB_ENV"
 

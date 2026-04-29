@@ -5,12 +5,22 @@ import queue
 import logging
 import subprocess
 import os
+import ssl
 import sys
+import tempfile
 import threading
 import http.server
 import socketserver
-from base64 import b64decode
+import hashlib
+import datetime
+import ipaddress
+from base64 import b64decode, b64encode
 from pathlib import Path
+
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 # --- Patch subprocess.Popen to discard Firefox output ---
 _original_popen = subprocess.Popen
@@ -74,6 +84,18 @@ class Browser:
             logging.info(f"Profile {self.profile_name} removed.")
         except:
             pass
+
+    def trust_cert(self, cert_path, port):
+        """Add a certificate override for 127.0.0.1:port via cert_override.txt."""
+        with open(cert_path, "rb") as f:
+            cert = x509.load_pem_x509_certificate(f.read())
+        der_data = cert.public_bytes(serialization.Encoding.DER)
+        sha256 = hashlib.sha256(der_data).hexdigest()
+        fingerprint = ":".join(sha256[i:i+2].upper() for i in range(0, len(sha256), 2))
+        db_key = b64encode(der_data).decode("ascii")
+        override_file = self.profile_path / "cert_override.txt"
+        with open(override_file, "a") as f:
+            f.write(f"127.0.0.1:{port}\tOID.2.16.840.1.101.3.4.2.1\t{fingerprint}\t{db_key}\n")
 
     def install_extension(self, path):
         root_actor_ids = self.root.get_root()
@@ -186,8 +208,7 @@ class TorBrowser(Browser):
         if override_profiles_path == "":
             override_profiles_path = TorBrowser.get_profiles_path()
         additional_configs["network.proxy.allow_hijacking_localhost"] = False
-        if security_level != TorBrowser.SecurityLevel.Standard:
-            additional_configs.update(TorBrowser.SecurityLevel._get_config(security_level))
+        additional_configs.update(TorBrowser.SecurityLevel._get_config(security_level))
         super().__init__(override_tbb_path, override_profiles_path, additional_configs)
         if len(allowed_addons) > 0:
             with open(self.profile_path.joinpath("extension-preferences.json"), "r") as file:
@@ -210,10 +231,12 @@ class Blob:
         self.type = type
 
 class Server:
-    def __init__(self, root=".", headers=None, hooks=None):
+    def __init__(self, root=".", headers=None, hooks=None, ssl_cert=None, ssl_key=None):
         self.root = os.path.abspath(root)
         self.headers = headers or {}
         self.hooks = hooks or {}
+        self.ssl_cert = ssl_cert
+        self.ssl_key = ssl_key
         self.port = None
 
     def start(self):
@@ -246,6 +269,10 @@ class Server:
             def log_message(self, *a): pass  # suppress logs
 
         self.httpd = socketserver.TCPServer(("127.0.0.1", 0), Handler)
+        if self.ssl_cert and self.ssl_key:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(self.ssl_cert, self.ssl_key)
+            self.httpd.socket = context.wrap_socket(self.httpd.socket, server_side=True)
         self.port = self.httpd.server_address[1]
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
@@ -254,7 +281,39 @@ class Server:
         self.httpd.shutdown()
         self.thread.join()
 
-    def url(self): return f"http://127.0.0.1:{self.port}"
+    def url(self):
+        scheme = "https" if self.ssl_cert else "http"
+        return f"{scheme}://127.0.0.1:{self.port}"
+
+def generate_ssl_cert(output_dir):
+    """Generate a self-signed certificate for 127.0.0.1."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
+        .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1))
+        .add_extension(
+            x509.SubjectAlternativeName([x509.IPAddress(ipaddress.IPv4Address("127.0.0.1"))]),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+    cert_path = os.path.join(output_dir, "cert.pem")
+    key_path = os.path.join(output_dir, "key.pem")
+    with open(cert_path, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+    with open(key_path, "wb") as f:
+        f.write(key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.TraditionalOpenSSL,
+            serialization.NoEncryption(),
+        ))
+    return cert_path, key_path
 
 class DB:
     hosts = {}

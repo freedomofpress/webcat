@@ -167,8 +167,33 @@ def setdiff(a: list, b: list):
     "corrupted_wasm_audioworklet_test",
 ], indirect=["root"])
 def test_webcat(browser, server, expected, logs, errors, rejections, addon_path, request):
-    if request.node.callspec.id == "corrupted_serviceworker_test-tbb":
-        pytest.skip("ServiceWorkers not supported in Tor Browser")
+    callspec_id = request.node.callspec.id
+    browser_id = request.node.callspec.params["browser"]
+    test_case = callspec_id.removesuffix(f"-{browser_id}")
+    tbb_skips = {"corrupted_serviceworker_test": "ServiceWorkers not supported in Tor Browser"}
+    tbb_safer_skips = {
+        "basic_test": "WebAssembly not available at this security level",
+        "corrupted_wasm_test": "WebAssembly not available at this security level",
+        "corrupted_wasm_fetch_test": "WebAssembly not available at this security level",
+        "corrupted_wasm_worker_test": "WebAssembly not available at this security level",
+        "corrupted_wasm_audioworklet_test": "WebAssembly not available at this security level",
+    }
+    tbb_safest_skips = {
+        "corrupted_js_test": "JavaScript fully disabled at this security level",
+        "corrupted_worker_test": "JavaScript fully disabled at this security level",
+        "corrupted_sharedworker_test": "JavaScript fully disabled at this security level",
+        "corrupted_audioworklet_test": "JavaScript fully disabled at this security level",
+    }
+    if browser_id == "tbb":
+        skips = tbb_skips
+    elif browser_id == "tbb_safer":
+        skips = {**tbb_skips, **tbb_safer_skips}
+    elif browser_id == "tbb_safest":
+        skips = {**tbb_skips, **tbb_safer_skips, **tbb_safest_skips}
+    else:
+        skips = {}
+    if test_case in skips:
+        pytest.skip(skips[test_case])
     
     browser.install_extension(addon_path)
     sleep(7)
