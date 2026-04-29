@@ -23,6 +23,7 @@
     "webRequestBlocking",
     "webRequestFilterResponse.serviceWorkerScript",
     "storage",
+    "unlimitedStorage",
     "tabs",
     "<all_urls>"
   ],
