@@ -23,7 +23,7 @@ WEBCAT_ICON = Blob(
 
 BAD_WASM = Blob(
     "AGFzbQEAAAABCgJgAABgAn9/AX8DAwIAAQQFAXABAQEFBgEBggKCAgcRBAFhAgABYgAAAWMAAQFk"
-    "AQAKCQICAAsEAEEACw==", type="applicaiton/wasm", base64=True)
+    "AQAKCQICAAsEAEEACw==", type="application/wasm", base64=True)
 
 [
     LOGENTRY_ALERT,

@@ -11,3 +11,6 @@ export const db = new WebcatDatabase("webcat");
 export const hookMarker = stringToUint8Array(
   `__WEBCAT_HOOK__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
 );
+export const endMarker = stringToUint8Array(
+  `__WEBCAT_END__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
+);

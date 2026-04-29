@@ -1,4 +1,4 @@
-import { hookMarker, origins } from "./../globals";
+import { endMarker, hookMarker, origins } from "./../globals";
 import {
   base64UrlToUint8Array,
   stringToUint8Array,
@@ -242,10 +242,14 @@ export async function validateResponseContent(
     // The data here is usually chunked; normally it would be streamed down as we get it
     // but since we can hash the content only at the end, we have to wait until we have everything
     // before deciding if the response content matches the manifest or not. So we are saving it and we will
-    // build a blob later. If the data is the hook marker, we immediately inject the WASM hooks instead.
+    // build a blob later. If the data is the hook marker, replace it with the WASM hooks, and if it is the
+    // end marker, flush all buffered data
     if (arraysEqual(hookMarker, new Uint8Array(event.data))) {
       const hooks = getHooks(hooksType.page, manifest.wasm);
-      filter.write(stringToUint8Array(hooks));
+      source.push(stringToUint8Array(hooks).buffer);
+    } else if (arraysEqual(endMarker, new Uint8Array(event.data))) {
+      source.forEach((hook) => filter.write(hook));
+      source.length = 0;
     } else {
       source.push(event.data);
     }
@@ -315,14 +319,34 @@ export async function validateResponseContent(
   };
 }
 
-export async function hookResponseContent(
+export function hookResponseContent(
   details: browser.webRequest._OnBeforeSendHeadersDetails,
 ) {
-  const filter = browser.webRequest.filterResponseData(details.requestId);
-  filter.onstart = () => {
-    // insert hook marker, later replaced with
+  const hookMarkerInjector = browser.webRequest.filterResponseData(
+    details.requestId,
+  );
+  hookMarkerInjector.onstart = () => {
+    // Inject hook marker, later replaced with
     // the actual hook in the validation filter
-    filter.write(hookMarker);
-    filter.disconnect();
+    hookMarkerInjector.write(hookMarker);
+    hookMarkerInjector.disconnect();
+  };
+}
+
+export function markResponseContent(
+  details: browser.webRequest._OnHeadersReceivedDetails,
+) {
+  if (PASS_THROUGH_TYPES.has(details.type)) return;
+  // Install a marking filter at the last possible moment: after
+  // all extensions, including WEBCAT and NoScript, have injected their
+  // hooks, but before receiving any code from the network
+  const endMarkerInjector = browser.webRequest.filterResponseData(
+    details.requestId,
+  );
+  endMarkerInjector.onstart = () => {
+    // Inject the end marker, signaling the end of extension hooks and
+    // the start of code that should be validated
+    endMarkerInjector.write(endMarker);
+    endMarkerInjector.disconnect();
   };
 }

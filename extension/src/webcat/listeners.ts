@@ -8,6 +8,7 @@ import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import {
   hookResponseContent,
+  markResponseContent,
   validateResponseContent,
   validateResponseHeaders,
 } from "./response";
@@ -122,6 +123,8 @@ export async function headersListener(
     errorpage(details.tabId, fqdn, result);
     return { cancel: true };
   }
+
+  markResponseContent(details);
 
   // Here we must have already validated the enrollment and the manifest
   // and thus should have all the information, but we haven't started

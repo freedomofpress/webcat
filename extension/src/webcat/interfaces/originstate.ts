@@ -482,6 +482,10 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
   }
 
   public verifyCSP(csp: string, pathname: string) {
+    // Consider only the first CSP. See
+    // https://github.com/freedomofpress/webcat/issues/160
+    csp = csp.split(",")[0];
+
     const extraCSP = this.manifest.extra_csp || {};
     const defaultCSP = this.manifest.default_csp;
 
