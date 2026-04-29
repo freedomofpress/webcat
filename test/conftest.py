@@ -63,8 +63,12 @@ def server(root, headers, hooks):
 def browser(request):
     if request.param == "firefox":
         b = Browser()
-    elif request.param == "tor":
+    elif request.param == "tbb":
         b = TorBrowser(allowed_addons=["webcat@freedom.press"])
+    elif request.param == "tbb_safer":
+        b = TorBrowser(allowed_addons=["webcat@freedom.press"], security_level=TorBrowser.SecurityLevel.Safer)
+    elif request.param == "tbb_safest":
+        b = TorBrowser(allowed_addons=["webcat@freedom.press"], security_level=TorBrowser.SecurityLevel.Safest)
     else:
         raise RuntimeError(f'unrecognized browser \'{request.param}\'')
     b.start(request.config.getoption("--headless"))

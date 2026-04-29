@@ -26,7 +26,13 @@ jobs:
             firefox-version: latest-esr
             test-filter: firefox
           - name: Tor Browser
-            test-filter: tor
+            test-filter: tbb
+            tor: true
+          - name: Tor Browser (Safer)
+            test-filter: tbb_safer
+            tor: true
+          - name: Tor Browser (Safest)
+            test-filter: tbb_safest
             tor: true
 
     name: ${{ matrix.name }}
