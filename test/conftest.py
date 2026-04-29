@@ -7,7 +7,6 @@ import hashlib
 from helpers import Browser, DB, Server, TorBrowser
 from sigsum import generate_bundle
 from pytest_benchmark.fixture import BenchmarkFixture
-from pytest_benchmark.utils import NameWrapper
 
 def pytest_addoption(parser):
     parser.addoption(

@@ -131,8 +131,37 @@ class Browser:
             value = result_field
 
         return value
-    
-class TorBrowser(Browser):
+
+class TorBrowser(Browser): 
+    class SecurityLevel:
+        Standard = 4
+        Safer = 2
+        Safest = 1
+
+        @staticmethod
+        def _get_config(level):
+            if level < TorBrowser.SecurityLevel.Safest or level > TorBrowser.SecurityLevel.Standard:
+                raise RuntimeError(f"unrecognized security level '{level}'")
+            defaults = {
+                # https://gitlab.torproject.org/tpo/applications/tor-browser/-/blob/tor-browser-150.0a1-16.0-2/toolkit/components/securitylevel/SecurityLevel.sys.mjs?ref_type=heads#L253
+                "javascript.options.ion":                   [ None, False, False, False,  True ],
+                "javascript.options.baselinejit":           [ None, False, False, False,  True ],
+                "javascript.options.native_regexp":         [ None, False, False, False,  True ],
+                "mathml.disabled":                          [ None,  True,  True,  True, False ],
+                "gfx.font_rendering.graphite.enabled":      [ None, False, False, False,  True ],
+                "gfx.font_rendering.opentype_svg.enabled":  [ None, False, False, False,  True ],
+                "svg.disabled":                             [ None,  True, False, False, False ],
+                "javascript.options.asmjs":                 [ None, False, False, False, False ],
+                "javascript.options.wasm":                  [ None,  True,  True,  True,  True ],
+            }
+            config = {
+                "browser.security_level.security_slider": level,
+                "browser.security_level.noscript_inited": False,
+            }
+            for key, values in defaults.items():
+                config[key] = values[level]
+            return config
+
     @staticmethod
     def get_binary_path():
         if sys.platform == "darwin":
@@ -151,12 +180,14 @@ class TorBrowser(Browser):
             return Path.home() / "Library" / "Application Support" / "TorBrowser-Data" / "Browser"
         return Path(os.path.dirname(TorBrowser.get_binary_path())).joinpath("TorBrowser/Data/Browser/")
 
-    def __init__(self, override_tbb_path="", override_profiles_path="", additional_configs={}, allowed_addons=[]):
+    def __init__(self, override_tbb_path="", override_profiles_path="", additional_configs={}, allowed_addons=[], security_level=4):
         if override_tbb_path == "":
             override_tbb_path = TorBrowser.get_binary_path()
         if override_profiles_path == "":
             override_profiles_path = TorBrowser.get_profiles_path()
         additional_configs["network.proxy.allow_hijacking_localhost"] = False
+        if security_level != TorBrowser.SecurityLevel.Standard:
+            additional_configs.update(TorBrowser.SecurityLevel._get_config(security_level))
         super().__init__(override_tbb_path, override_profiles_path, additional_configs)
         if len(allowed_addons) > 0:
             with open(self.profile_path.joinpath("extension-preferences.json"), "r") as file:

@@ -20,7 +20,7 @@ export function Uint8ArrayToBase64(uint8Array: Uint8Array): string {
   return btoa(binaryString);
 }
 
-export function stringToUint8Array(str: string): Uint8Array {
+export function stringToUint8Array(str: string): Uint8Array<ArrayBuffer> {
   // Defaults to utf-8, but utf-8 is ascii compatible
   const encoder = new TextEncoder();
   return encoder.encode(str);
