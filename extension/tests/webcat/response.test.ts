@@ -49,17 +49,15 @@ vi.mock("../../src/webcat/db", () => {
         return new Uint8Array();
       }),
 
-      getListCount: vi.fn(async () => 42),
-
       // Include other methods your test may call
       setLastChecked: vi.fn(),
       getLastChecked: vi.fn(async () => Date.now()),
 
       updateList: vi.fn(),
-      setRootHash: vi.fn(),
-      getRootHash: vi.fn(async () => "deadbeef"),
-      setLastBlockHeight: vi.fn(),
-      getLastBlockHeight: vi.fn(async () => 1337),
+      getBlockMeta: vi.fn(async () => ({
+        blockTime: 1337,
+        rootHash: "deadbeef",
+      })),
     })),
   };
 });

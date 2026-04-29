@@ -158,8 +158,8 @@ export async function update(
       throw new Error("Block verification did not return a time");
     }
 
-    const lastBlockTime = await db.getLastBlockTime();
-    if (lastBlockTime !== null && out.headerTime.seconds <= lastBlockTime) {
+    const meta = await db.getBlockMeta();
+    if (meta !== null && out.headerTime.seconds <= meta.blockTime) {
       console.log("[webcat] Block already applied, skipping");
       lastUpdateFailed = false;
       return;
@@ -179,9 +179,10 @@ export async function update(
       throw new Error("proof did not verify against app hash");
     }
 
-    await db.updateList(verifiedLeaves);
-    await db.setLastBlockTime(out.headerTime?.seconds);
-    await db.setRootHash(leaves.proof.canonical_root_hash);
+    await db.updateList(verifiedLeaves, {
+      blockTime: Number(out.headerTime.seconds),
+      rootHash: leaves.proof.canonical_root_hash,
+    });
     if (!bundled) {
       await db.setLastUpdated();
     }
