@@ -9,6 +9,36 @@ from helpers import Browser, DB, Server, TorBrowser, generate_ssl_cert
 from sigsum import generate_bundle
 from pytest_benchmark.fixture import BenchmarkFixture
 
+_tbb_skips = {"corrupted_serviceworker_test": "ServiceWorkers not supported in Tor Browser"}
+_tbb_safer_skips = {
+    "basic_test": "WebAssembly not available at this security level",
+    "corrupted_wasm_test": "WebAssembly not available at this security level",
+    "corrupted_wasm_fetch_test": "WebAssembly not available at this security level",
+    "corrupted_wasm_worker_test": "WebAssembly not available at this security level",
+    "corrupted_wasm_audioworklet_test": "WebAssembly not available at this security level",
+}
+_tbb_safest_skips = {
+    "corrupted_js_test": "JavaScript fully disabled at this security level",
+    "corrupted_worker_test": "JavaScript fully disabled at this security level",
+    "corrupted_sharedworker_test": "JavaScript fully disabled at this security level",
+    "corrupted_audioworklet_test": "JavaScript fully disabled at this security level",
+}
+_browser_skips = {
+    "tbb": _tbb_skips,
+    "tbb_safer": {**_tbb_skips, **_tbb_safer_skips},
+    "tbb_safest": {**_tbb_skips, **_tbb_safer_skips, **_tbb_safest_skips},
+}
+
+def pytest_collection_modifyitems(items):
+    for item in items:
+        if not hasattr(item, "callspec"):
+            continue
+        browser_id = item.callspec.params.get("browser")
+        skips = _browser_skips.get(browser_id, {})
+        test_case = item.callspec.id.removesuffix(f"-{browser_id}")
+        if test_case in skips:
+            item.add_marker(pytest.mark.skip(reason=skips[test_case]))
+
 def pytest_addoption(parser):
     parser.addoption(
         "--addon", action="store", default=None,
