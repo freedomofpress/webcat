@@ -65,9 +65,7 @@ function createMockDb() {
     setLastChecked: vi.fn(),
     setLastUpdated: vi.fn(),
     getLastUpdated: vi.fn(),
-    getLastBlockTime: vi.fn(),
-    setLastBlockTime: vi.fn(),
-    setRootHash: vi.fn(),
+    getBlockMeta: vi.fn(),
     updateList: vi.fn(),
   };
 }
@@ -155,7 +153,7 @@ describe("update", () => {
 
   beforeEach(() => {
     db = createMockDb();
-    db.getLastBlockTime.mockResolvedValue(null);
+    db.getBlockMeta.mockResolvedValue(null);
     setupFetchMock();
   });
 
@@ -210,19 +208,19 @@ describe("update", () => {
   it("updates the list and block time on success", async () => {
     await update(db as never, "https://example.com/");
 
-    expect(db.updateList).toHaveBeenCalledWith([["example.com", "abc123"]]);
-    expect(db.setLastBlockTime).toHaveBeenCalledWith(1000n);
-    expect(db.setRootHash).toHaveBeenCalledWith("aabbcc");
+    expect(db.updateList).toHaveBeenCalledWith([["example.com", "abc123"]], {
+      blockTime: 1000,
+      rootHash: "aabbcc",
+    });
   });
 
   it("skips update when block is already applied", async () => {
     // Block time from verifyCommit mock returns 1000n
-    db.getLastBlockTime.mockResolvedValue(1000n);
+    db.getBlockMeta.mockResolvedValue({ blockTime: 1000 });
 
     await update(db as never, "https://example.com/");
 
     expect(db.updateList).not.toHaveBeenCalled();
-    expect(db.setLastBlockTime).not.toHaveBeenCalled();
   });
 
   it("throws and sets failure flag on block verification failure", async () => {
@@ -265,7 +263,7 @@ describe("handleUpdateAlarm", () => {
   beforeEach(() => {
     db = createMockDb();
     setupFetchMock();
-    db.getLastBlockTime.mockResolvedValue(null);
+    db.getBlockMeta.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -320,7 +318,7 @@ describe("retryUpdateIfFailed", () => {
   beforeEach(() => {
     db = createMockDb();
     setupFetchMock();
-    db.getLastBlockTime.mockResolvedValue(null);
+    db.getBlockMeta.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -371,7 +369,7 @@ describe("initializeScheduledUpdates", () => {
   beforeEach(() => {
     db = createMockDb();
     setupFetchMock();
-    db.getLastBlockTime.mockResolvedValue(null);
+    db.getBlockMeta.mockResolvedValue(null);
     mockAlarms.get.mockResolvedValue(undefined);
     mockAlarms.create.mockReturnValue(undefined);
   });

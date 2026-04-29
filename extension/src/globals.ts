@@ -7,7 +7,7 @@ import { OriginStateHolder } from "./webcat/interfaces/originstate";
 export const origins = new LRUCache<string, OriginStateHolder>(lru_set_size);
 export const nonOrigins = new LRUSet<string>(lru_cache_size);
 export const tabs: Map<number, string> = new Map();
-export const db = new WebcatDatabase("webcat");
+export const db = new WebcatDatabase();
 export const hookMarker = stringToUint8Array(
   `__WEBCAT_HOOK__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
 );
