@@ -56,7 +56,7 @@ def setdiff(a: list, b: list):
             pass
     return a
 
-@pytest.mark.parametrize("browser", ["firefox", "tor"], indirect=True)
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected, logs, errors, rejections", [
 
     # Basic correct execution
@@ -167,7 +167,7 @@ def setdiff(a: list, b: list):
     "corrupted_wasm_audioworklet_test",
 ], indirect=["root"])
 def test_webcat(browser, server, expected, logs, errors, rejections, addon_path, request):
-    if request.node.callspec.id == "corrupted_serviceworker_test-tor":
+    if request.node.callspec.id == "corrupted_serviceworker_test-tbb":
         pytest.skip("ServiceWorkers not supported in Tor Browser")
     
     browser.install_extension(addon_path)
@@ -186,7 +186,7 @@ def test_webcat(browser, server, expected, logs, errors, rejections, addon_path,
     for err in res: assert err in rejections
     for err in rejections: assert err in res
 
-@pytest.mark.parametrize("browser", ["firefox", "tor"], indirect=True)
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
     ("cases/testapp", {
         "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
