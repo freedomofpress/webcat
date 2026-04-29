@@ -1,4 +1,5 @@
 canonicaljson
+cryptography
 geckordp
 pytest
 pytest-benchmark
