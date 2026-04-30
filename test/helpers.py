@@ -208,7 +208,8 @@ class TorBrowser(Browser):
         if override_profiles_path == "":
             override_profiles_path = TorBrowser.get_profiles_path()
         additional_configs["network.proxy.allow_hijacking_localhost"] = False
-        additional_configs.update(TorBrowser.SecurityLevel._get_config(security_level))
+        if security_level != TorBrowser.SecurityLevel.Standard:
+            additional_configs.update(TorBrowser.SecurityLevel._get_config(security_level))
         super().__init__(override_tbb_path, override_profiles_path, additional_configs)
         if len(allowed_addons) > 0:
             with open(self.profile_path.joinpath("extension-preferences.json"), "r") as file:

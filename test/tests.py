@@ -65,6 +65,27 @@ def setdiff(a: list, b: list):
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
     }, { }, "Hello!", EXPECTED_LOGS, [], []),
 
+    # Correct execution without WebAssembly or Workers
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
+    }, {
+        "/js/wasm.js": b"",
+        "/js/wasm_fetch.js": b"",
+        "/js/load_worker.js": b"",
+        "/js/load_sharedworker.js": b"",
+        "/js/load_wasmworker.js": b"",
+        "/js/load_audioworklet.js": b"",
+    }, "Hello!", setdiff(
+        EXPECTED_LOGS, [
+            LOGENTRY_WASM,
+            LOGENTRY_WASM_FETCH,
+            LOGENTRY_LOAD_WORKER,
+            LOGENTRY_LOAD_SHAREDWORKER,
+            LOGENTRY_LOAD_WASMWORKER,
+            LOGENTRY_LOAD_AUDIOWORKLET,
+        ]), [], []),
+
     # Wrong CSP
     ("cases/testapp", {
         "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
@@ -152,6 +173,7 @@ def setdiff(a: list, b: list):
 
 ], ids=[
     "basic_test",
+    "no_wasm_test",
     "wrong_csp_test",
     "missing_csp_test",
     "corrupted_index_test",
