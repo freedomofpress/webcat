@@ -3,6 +3,7 @@ import { db, origins, tabs } from "../globals";
 import { getHooks } from "./genhooks";
 import { hooksType, metadataRequestSource } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
+import { BundleFetcher } from "./interfaces/originstate";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
@@ -94,6 +95,7 @@ export async function headersListener(
       details.url,
       details.tabId,
       metadataRequestSource.worker,
+      details.originUrl,
     );
     if (result instanceof WebcatError) {
       origins.delete(fqdn);
@@ -230,6 +232,7 @@ export async function requestListener(
       details.url,
       details.tabId,
       metadataRequestSource.main_frame,
+      details.originUrl,
     );
     if (result instanceof WebcatError) {
       origins.delete(fqdn);
@@ -261,5 +264,34 @@ export async function requestListener(
 
   // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse
   // Returning a response here is a very powerful tool, let's think about it later
+  return {};
+}
+
+export async function torCircuitListener(
+  details: browser.webRequest._OnBeforeSendHeadersDetails,
+): Promise<browser.webRequest.BlockingResponse> {
+  if (!details.requestHeaders) {
+    console.error("FATAL: request headers not available");
+    return { cancel: true };
+  }
+  if (isExtensionRequest(details)) {
+    let headers: browser.webRequest.HttpHeaders;
+    if ((await browser.runtime.getBrowserInfo()).vendor === "Tor Project") {
+      headers = details.requestHeaders.map((header) => {
+        if (header.name === BundleFetcher.CircuitHeader) {
+          return {
+            name: BundleFetcher.SecureCircuitHeader,
+            value: header.value,
+          };
+        }
+        return header;
+      });
+    } else {
+      headers = details.requestHeaders.filter((header) => {
+        return header.name !== BundleFetcher.CircuitHeader;
+      });
+    }
+    return { requestHeaders: headers };
+  }
   return {};
 }

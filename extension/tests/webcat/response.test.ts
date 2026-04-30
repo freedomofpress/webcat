@@ -25,7 +25,7 @@ import { SHA256 } from "../../src/webcat/utils";
 
 function makeDummyFetcher(): BundleFetcher {
   // base URL is irrelevant, fetch will never be awaited in these tests
-  return new BundleFetcher("https://example.com");
+  return new BundleFetcher("https://example.com", "https://example.com");
 }
 
 // --- Mocks ---

@@ -33,19 +33,29 @@ type BundleFetch = {
 };
 
 export class BundleFetcher implements Iterable<BundleFetch> {
+  public static readonly CircuitHeader = "X-WEBCAT-Circuit-Hint";
+  public static readonly SecureCircuitHeader = "Sec-Tor-Circuit-Hint";
+
   public readonly current: BundleFetch;
   public readonly previous: BundleFetch;
 
-  constructor(base: string) {
+  constructor(base: string, originUrl: string | undefined) {
+    const origin = new URL(originUrl || "").origin;
     this.current = {
       promise: fetch(`${base}${bundle_name}`, {
         cache: "no-store",
+        headers: {
+          [BundleFetcher.CircuitHeader]: origin,
+        },
       }),
     };
 
     this.previous = {
       promise: fetch(`${base}${bundle_prev_name}`, {
         cache: "no-store",
+        headers: {
+          [BundleFetcher.CircuitHeader]: origin,
+        },
       }),
     };
   }

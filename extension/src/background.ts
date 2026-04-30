@@ -1,4 +1,4 @@
-import { endpoint } from "./config";
+import { bundle_name, bundle_prev_name, endpoint } from "./config";
 import { db } from "./globals";
 import {
   headersListener,
@@ -6,6 +6,7 @@ import {
   requestListener,
   startupListener,
   tabCloseListener,
+  torCircuitListener,
 } from "./webcat/listeners";
 import { FRAME_TYPES } from "./webcat/resources";
 import { setErrorIcon } from "./webcat/ui";
@@ -80,6 +81,22 @@ browser.webRequest.onHeadersReceived.addListener(
   },
   // Do we want this to be "blocking"? If we detect an anomaly we should stop
   ["blocking", "responseHeaders"],
+);
+
+// In TBB we send circuit hints from the BundleFetcher; this listener maps the hints from the internal
+// format to the secure header expected by TBB that cannot be set directly via fetch
+browser.webRequest.onBeforeSendHeaders.addListener(
+  torCircuitListener,
+  {
+    urls: [
+      `http://*${bundle_name}`,
+      `https://*${bundle_name}`,
+      `http://*${bundle_prev_name}`,
+      `https://*${bundle_prev_name}`,
+    ],
+    types: ["xmlhttprequest"],
+  },
+  ["blocking", "requestHeaders"],
 );
 
 // Not the best performance idea to act on all tab just for this

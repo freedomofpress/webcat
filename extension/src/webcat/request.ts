@@ -17,6 +17,7 @@ export async function validateOrigin(
   url: string,
   tabId: number,
   type: metadataRequestSource,
+  originUrl: string | undefined,
 ) {
   const enrollment_hash = await db.getFQDNEnrollment(fqdn);
   if (enrollment_hash.length === 0) {
@@ -63,9 +64,30 @@ export async function validateOrigin(
     fqdn,
   );
 
+  // Determine the origin URL to pass to the BundleFetcher, i.e.
+  // the (scheme, hostname, port) triple of the associated top level frame
+  switch (type) {
+    case metadataRequestSource.main_frame:
+      // If this is main frame navigation, the origin string is the origin of
+      // the target URL
+      originUrl = urlobj.origin;
+      break;
+    case metadataRequestSource.sub_frame:
+      // If this is sub frame navigation, the origin string is the origin
+      // of the tab's top frame
+      originUrl = new URL((await browser.tabs.get(tabId)).url || "").origin;
+      break;
+    case metadataRequestSource.worker:
+      // If this is a request associated with a worker, the origin is the
+      // origin of the worker
+      originUrl = new URL(originUrl || "").origin;
+      break;
+  }
+
   // Policy hash is checked at the top and then later again
   const newFetcher = new BundleFetcher(
     `${urlobj.protocol}//${fqdn}:${urlobj.port}`,
+    originUrl,
   );
   const newOriginState = new OriginStateInitial(
     newFetcher,
