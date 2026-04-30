@@ -40,7 +40,7 @@ export class BundleFetcher implements Iterable<BundleFetch> {
   public readonly previous: BundleFetch;
 
   constructor(base: string, originUrl: string | undefined) {
-    const origin = new URL(originUrl || "").origin; // this may fail, but shouldn't
+    const origin = new URL(originUrl || "").origin;
     this.current = {
       promise: fetch(`${base}${bundle_name}`, {
         cache: "no-store",
