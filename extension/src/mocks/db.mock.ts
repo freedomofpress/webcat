@@ -34,6 +34,15 @@ export class WebcatDatabase extends OriginalWebcatDatabase {
     console.log(`[TESTING] No enrollment found for ${fqdn}`);
     return new Uint8Array();
   }
+
+  async listAllFQDNs(): Promise<string[]> {
+    if (!listLoaded) {
+      await load();
+    }
+    const fqdns = Object.keys(list);
+    console.log(`[TESTING] listAllFQDNs returning ${fqdns.length} entries`);
+    return fqdns;
+  }
 }
 
 console.log("[TESTING] Mock db module loaded");

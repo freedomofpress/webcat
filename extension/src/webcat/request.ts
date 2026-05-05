@@ -8,7 +8,6 @@ import {
   OriginStateInitial,
 } from "./interfaces/originstate";
 import { logger } from "./logger";
-import { NON_FRAME_TYPES } from "./resources";
 import { setIcon } from "./ui";
 import { enforceHTTPS, validateProtocolAndPort } from "./validators";
 
@@ -79,34 +78,6 @@ export async function validateOrigin(
 
   // See https://github.com/freedomofpress/webcat/issues/95
   await origin.current.fetcher.awaitAll();
-
-  // We want to intercept everything for enrolled wbesites
-  browser.webRequest.onBeforeRequest.addListener(
-    origin.current.onBeforeRequest,
-    {
-      urls: [`http://${fqdn}/*`, `https://${fqdn}/*`],
-      types: NON_FRAME_TYPES,
-    },
-    ["blocking"],
-  );
-
-  browser.webRequest.onBeforeSendHeaders.addListener(
-    origin.current.onBeforeSendHeaders,
-    {
-      urls: [`http://${fqdn}/*`, `https://${fqdn}/*`],
-      types: ["script"],
-    },
-    ["blocking", "requestHeaders"],
-  );
-
-  browser.webRequest.onHeadersReceived.addListener(
-    origin.current.onHeadersReceived,
-    {
-      urls: [`http://${fqdn}/*`, `https://${fqdn}/*`],
-      types: NON_FRAME_TYPES,
-    },
-    ["blocking", "responseHeaders"],
-  );
 
   return;
 

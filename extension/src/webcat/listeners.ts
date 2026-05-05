@@ -1,5 +1,6 @@
 import { endpoint } from "../config";
 import { db, origins, tabs } from "../globals";
+import type { WebcatDatabase } from "./db";
 import { getHooks } from "./genhooks";
 import { hooksType, metadataRequestSource } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
@@ -265,4 +266,107 @@ export async function requestListener(
   // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse
   // Returning a response here is a very powerful tool, let's think about it later
   return {};
+}
+
+// Single global webRequest listener registration that scopes to the union
+// of currently enrolled FQDNs. We re-register the listeners on every list
+// update; we always add the new listener before removing the old one, so
+// there is no window with no listener.
+type RegisteredListeners = {
+  before?: (
+    details: browser.webRequest._OnBeforeRequestDetails,
+  ) => Promise<browser.webRequest.BlockingResponse>;
+  beforeHeaders?: (
+    details: browser.webRequest._OnBeforeSendHeadersDetails,
+  ) => Promise<browser.webRequest.BlockingResponse>;
+  headers?: (
+    details: browser.webRequest._OnHeadersReceivedDetails,
+  ) => Promise<browser.webRequest.BlockingResponse>;
+};
+
+let currentListeners: RegisteredListeners = {};
+
+function buildUrlPatterns(fqdns: string[]): string[] {
+  const urls: string[] = [];
+  for (const fqdn of fqdns) {
+    urls.push(`http://${fqdn}/*`);
+    urls.push(`https://${fqdn}/*`);
+  }
+  return urls;
+}
+
+function removeListeners(listeners: RegisteredListeners): void {
+  if (listeners.before) {
+    browser.webRequest.onBeforeRequest.removeListener(listeners.before);
+  }
+  if (listeners.beforeHeaders) {
+    browser.webRequest.onBeforeSendHeaders.removeListener(
+      listeners.beforeHeaders,
+    );
+  }
+  if (listeners.headers) {
+    browser.webRequest.onHeadersReceived.removeListener(listeners.headers);
+  }
+}
+
+export async function installEnrolledListeners(
+  database: WebcatDatabase,
+): Promise<void> {
+  let fqdns: string[];
+  try {
+    fqdns = await database.listAllFQDNs();
+  } catch (error) {
+    console.error("[webcat] listAllFQDNs failed:", error);
+    return;
+  }
+
+  if (fqdns.length === 0) {
+    if (
+      currentListeners.before ||
+      currentListeners.beforeHeaders ||
+      currentListeners.headers
+    ) {
+      removeListeners(currentListeners);
+      currentListeners = {};
+      browser.webRequest.handlerBehaviorChanged();
+    }
+    console.log("[webcat] installEnrolledListeners: 0 enrolled FQDNs");
+    return;
+  }
+
+  const urls = buildUrlPatterns(fqdns);
+
+  // The registration needs to be different from the existing one
+  const before = (details: browser.webRequest._OnBeforeRequestDetails) =>
+    requestListener(details);
+  const beforeHeaders = (
+    details: browser.webRequest._OnBeforeSendHeadersDetails,
+  ) => beforeHeadersListener(details);
+  const headers = (details: browser.webRequest._OnHeadersReceivedDetails) =>
+    headersListener(details);
+
+  // Add new listeners first, then remove the old ones
+  browser.webRequest.onBeforeRequest.addListener(before, { urls }, [
+    "blocking",
+  ]);
+  browser.webRequest.onBeforeSendHeaders.addListener(
+    beforeHeaders,
+    { urls, types: ["script"] },
+    ["blocking", "requestHeaders"],
+  );
+  browser.webRequest.onHeadersReceived.addListener(headers, { urls }, [
+    "blocking",
+    "responseHeaders",
+  ]);
+
+  const previous = currentListeners;
+  currentListeners = { before, beforeHeaders, headers };
+  removeListeners(previous);
+
+  // See https://github.com/freedomofpress/webcat/issues/137
+  browser.webRequest.handlerBehaviorChanged();
+
+  console.log(
+    `[webcat] installEnrolledListeners: registered listeners for ${fqdns.length} FQDN(s)`,
+  );
 }
