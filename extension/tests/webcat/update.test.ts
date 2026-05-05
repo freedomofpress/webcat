@@ -36,6 +36,8 @@ vi.mock("@freedomofpress/ics23/dist/webcat", () => ({
 vi.mock("../../src/webcat/encoding", () => ({
   hexToUint8Array: vi.fn(() => new Uint8Array([1, 2, 3])),
   Uint8ArrayToBase64: vi.fn(() => "AQID"),
+  stringToUint8Array: vi.fn((s: string) => new TextEncoder().encode(s)),
+  Uint8ArrayToBase64Url: vi.fn(() => "AQID"),
 }));
 
 vi.mock("../../src/webcat/utils", () => ({
