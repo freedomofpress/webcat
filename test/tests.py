@@ -1,6 +1,6 @@
 import pytest
 from time import sleep
-from helpers import Browser, TorBrowser, Server, Blob
+from helpers import Browser, Server, Hook
 import logging
 import json
 
@@ -8,7 +8,7 @@ logging.getLogger("geckordp").setLevel(logging.CRITICAL)
 logging.getLogger("psutil").setLevel(logging.CRITICAL)
 logging.getLogger().setLevel(logging.WARNING)
 
-WEBCAT_ICON = Blob(
+WEBCAT_ICON = Hook(
     "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAABGdBTUEAALGPC/xhBQAAACBjSFJN"
     "AAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QA/4ePzL8AAAAHdElN"
     "RQfoChYSHzod9YOfAAABNUlEQVQoz1XRv0ubARDG8c+bvMFW/BFfaAMupZWKgoPULQWXgg3orFBE"
@@ -21,7 +21,7 @@ WEBCAT_ICON = Blob(
     "ZnkAMjAyNC0xMC0yMlQxNDo1Mzo0MyswMDowMGXvS2oAAAAASUVORK5CYII=",
     type="image/png", base64=True)
 
-BAD_WASM = Blob(
+BAD_WASM = Hook(
     "AGFzbQEAAAABCgJgAABgAn9/AX8DAwIAAQQFAXABAQEFBgEBggKCAgcRBAFhAgABYgAAAWMAAQFk"
     "AQAKCQICAAsEAEEACw==", type="application/wasm", base64=True)
 
@@ -143,25 +143,25 @@ def setdiff(a: list, b: list):
     ("cases/testapp", {
         "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/workers/worker.js": Blob(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    }, {"/workers/worker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /workers/sharedworker.js
     ("cases/testapp", {
         "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/workers/sharedworker.js": Blob(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    }, {"/workers/sharedworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /workers/serviceworker.js
     ("cases/testapp", {
         "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/workers/serviceworker.js": Blob(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    }, {"/workers/serviceworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /workers/audioworklet.js
     ("cases/testapp", {
         "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/workers/audioworklet.js": Blob(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    }, {"/workers/audioworklet.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
     
     # Hook /wasm/aw_addTwo.wasm
     ("cases/testapp", {
@@ -220,5 +220,29 @@ def test_in_memory_cache(browser, server, expected, addon_path):
     sleep(7)
     browser.navigate(f'{server.url()}/console_log.png')
     sleep(2)
+    res = browser.execute("document.body.innerText")
+    assert expected in res
+
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks, expected", [
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';",
+    }, {
+        "/": Hook(open("cases/testapp/index.html", "rb").read(), type="text/html", delay=2),
+        "/js/alert.js": Hook(b"alert('hacked');", type="text/javascript"),
+        "/x": Hook(b"", type="text/html", headers={"refresh": "0"}),
+    }, "ERR_WEBCAT_FILE_MISMATCH"),
+], indirect=["root"], ids=[
+    "corrupted_js_with_induced_error_test",
+])
+def test_multiple_tabs(browser: Browser, server: Server, expected, addon_path):
+    browser.install_extension(addon_path)
+    sleep(7)
+    browser.execute(
+        f"window.open('{server.url()}');"
+        f"setTimeout(() => location.href = '{server.url()}/x', 1000)"
+    )
+    sleep(3)
     res = browser.execute("document.body.innerText")
     assert expected in res
