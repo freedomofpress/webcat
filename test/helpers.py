@@ -7,7 +7,6 @@ import subprocess
 import os
 import ssl
 import sys
-import tempfile
 import threading
 import http.server
 import socketserver
@@ -16,6 +15,7 @@ import datetime
 import ipaddress
 from base64 import b64decode, b64encode
 from pathlib import Path
+from time import sleep
 
 from cryptography import x509
 from cryptography.x509.oid import NameOID
@@ -54,6 +54,7 @@ class Browser:
         profile.set_required_configs()
         profile.set_config("browser.shell.checkDefaultBrowser", False)
         profile.set_config("browser.startup.couldRestoreSession.count", -1)
+        profile.set_config("dom.disable_open_during_load", False)
         for key, value in additional_configs.items():
             profile.set_config(key, value)
         logging.info(f"Profile {self.profile_name} created.")
@@ -223,8 +224,9 @@ class TorBrowser(Browser):
             with open(self.profile_path.joinpath("extension-preferences.json"), "w") as file:
                 json.dump(prefs, file)
 
-class Blob:
-    def __init__(self, data, type="text/plain", base64=False):
+class Hook:
+    def __init__(self, data, type="text/plain", base64=False, delay=0, headers={}):
+        self.delay, self.headers = delay, headers
         if base64:
             self.data = b64decode(data)
         else:
@@ -257,14 +259,17 @@ class Server:
                         self.wfile.write(hook)
                     else:
                         self.send_header("Content-Type", hook.type)
-                        self.end_headers()
+                        self.end_headers(hook.headers)
                         self.wfile.write(hook.data)
+                        sleep(hook.delay)
 
                 else:
                     super().do_GET()
 
-            def end_headers(self):
-                for k, v in headers.items(): self.send_header(k, v)
+            def end_headers(self, override={}):
+                h = headers.copy()
+                h.update(override)
+                for k, v in h.items(): self.send_header(k, v)
                 super().end_headers()
 
             def log_message(self, *a): pass  # suppress logs
