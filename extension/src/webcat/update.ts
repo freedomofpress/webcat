@@ -15,6 +15,7 @@ import {
 import validator_set from "../validator_set.json";
 import { WebcatDatabase } from "./db";
 import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
+import { installEnrolledListeners } from "./listeners";
 import { arraysEqual } from "./utils";
 
 let lastUpdateFailed = false;
@@ -187,6 +188,15 @@ export async function update(
       await db.setLastUpdated();
     }
     console.log(`[webcat] List updated successfully`);
+
+    try {
+      await installEnrolledListeners(db);
+    } catch (error) {
+      console.error(
+        "[webcat] Failed to refresh enrolled listeners after update:",
+        error,
+      );
+    }
 
     // Success - clear failure flag
     lastUpdateFailed = false;

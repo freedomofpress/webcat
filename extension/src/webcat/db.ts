@@ -36,6 +36,11 @@ export class WebcatDatabase {
     return (result[META_KEY] as BlockMeta) ?? null;
   }
 
+  async listAllFQDNs(): Promise<string[]> {
+    const all = await browser.storage.local.get(null);
+    return Object.keys(all).filter((k) => k !== META_KEY);
+  }
+
   async getFQDNEnrollment(fqdn: string): Promise<Uint8Array> {
     // 1. Positive-cache hit
     const originState = origins.get(fqdn);
