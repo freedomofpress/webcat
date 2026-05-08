@@ -203,11 +203,12 @@ class TorBrowser(Browser):
             return Path.home() / "Library" / "Application Support" / "TorBrowser-Data" / "Browser"
         return Path(os.path.dirname(TorBrowser.get_binary_path())).joinpath("TorBrowser/Data/Browser/")
 
-    def __init__(self, override_tbb_path="", override_profiles_path="", additional_configs={}, allowed_addons=[], security_level=4):
+    def __init__(self, override_tbb_path="", override_profiles_path="", additional_configs:dict={}, allowed_addons=[], security_level=4):
         if override_tbb_path == "":
             override_tbb_path = TorBrowser.get_binary_path()
         if override_profiles_path == "":
             override_profiles_path = TorBrowser.get_profiles_path()
+        additional_configs = additional_configs.copy()
         additional_configs["network.proxy.allow_hijacking_localhost"] = False
         if security_level != TorBrowser.SecurityLevel.Standard:
             additional_configs.update(TorBrowser.SecurityLevel._get_config(security_level))

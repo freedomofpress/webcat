@@ -16,6 +16,7 @@ _tbb_safer_skips = {
     "corrupted_wasm_fetch_test": "WebAssembly not available at this security level",
     "corrupted_wasm_worker_test": "WebAssembly not available at this security level",
     "corrupted_wasm_audioworklet_test": "WebAssembly not available at this security level",
+    "corrupted_wasm_inline_test": "WebAssembly not available at this security level",
 }
 _tbb_safest_skips = {
     "no_wasm_test": "JavaScript fully disabled at this security level",

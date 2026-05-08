@@ -366,6 +366,29 @@ export async function installEnrolledListeners(
   // See https://github.com/freedomofpress/webcat/issues/137
   browser.webRequest.handlerBehaviorChanged();
 
+  // Look up existing content scripts and add the ones that are missing
+  const scriptIds = (await browser.scripting.getRegisteredContentScripts()).map(
+    (script) => script.id,
+  );
+  await browser.scripting.registerContentScripts(
+    fqdns
+      .filter((fqdn) => {
+        return !scriptIds.includes(fqdn);
+      })
+      .map((fqdn) => {
+        return {
+          id: fqdn,
+          js: ["dist/hooks/content.js"],
+          matches: buildUrlPatterns([fqdn]),
+          runAt: "document_start",
+        };
+      }),
+  );
+  // Remove the content scripts whose fqdn is no longer enrolled
+  await browser.scripting.unregisterContentScripts({
+    ids: scriptIds.filter((id) => !fqdns.includes(id)),
+  });
+
   console.log(
     `[webcat] installEnrolledListeners: registered listeners for ${fqdns.length} FQDN(s)`,
   );

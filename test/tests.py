@@ -26,6 +26,7 @@ BAD_WASM = Hook(
     "AQAKCQICAAsEAEEACw==", type="application/wasm", base64=True)
 
 [
+    LOGENTRY_INLINE,
     LOGENTRY_ALERT,
     LOGENTRY_CSP,
     LOGENTRY_WASM_FETCH,
@@ -36,6 +37,7 @@ BAD_WASM = Hook(
     LOGENTRY_LOAD_WASMWORKER,
     LOGENTRY_LOAD_AUDIOWORKLET,
 ] = EXPECTED_LOGS = [
+    ["inline:",True],
     ["alert.js:",True],
     ["csp.js",True],
     ["wasm_fetch.js:",True],
@@ -46,6 +48,12 @@ BAD_WASM = Hook(
     ["load_wasmworker.js:",True],
     ["load_audioworklet.js:",True],
 ]
+
+EXPECTED_CSP = {
+    "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval' "
+                               "'sha256-8v/OW9iF85cNAUqC+rgYqRupd4JxPlE79PTiDRC0AJk='; "
+                               "style-src 'self'; frame-src 'none'; worker-src 'self';"
+}
 
 def setdiff(a: list, b: list):
     a = a.copy()
@@ -60,16 +68,10 @@ def setdiff(a: list, b: list):
 @pytest.mark.parametrize("root, headers, hooks, expected, logs, errors, rejections", [
 
     # Basic correct execution
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, { }, "Hello!", EXPECTED_LOGS, [], []),
+    ("cases/testapp", EXPECTED_CSP, { }, "Hello!", EXPECTED_LOGS, [], []),
 
     # Correct execution without WebAssembly or Workers
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {
+    ("cases/testapp", EXPECTED_CSP, {
         "/js/wasm.js": b"",
         "/js/wasm_fetch.js": b"",
         "/js/load_worker.js": b"",
@@ -98,77 +100,49 @@ def setdiff(a: list, b: list):
     }, {}, "ERR_WEBCAT_HEADERS_MISSING_CRITICAL", [], [], []),
 
     # Hook / with static content
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /.well-known/webcat/bundle.json
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/.well-known/webcat/bundle.json": b'{"a":"b"}'}, "ERR_WEBCAT_BUNDLE_MISSING_ENROLLMENT", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, {"/.well-known/webcat/bundle.json": b'{"a":"b"}'}, "ERR_WEBCAT_BUNDLE_MISSING_ENROLLMENT", [], [], []),
 
     # Hook /js/alert.js
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /wasm/addTwo.wasm
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/wasm/addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM]), [], [
+    ("cases/testapp", EXPECTED_CSP, {"/wasm/addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM]), [], [
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
     ]),
 
     # Hook /wasm/addThree.wasm
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/wasm/addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FETCH]), [], [
+    ("cases/testapp", EXPECTED_CSP, {"/wasm/addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FETCH]), [], [
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
     ]),
 
     # Hook /wasm/reverseSub.wasm
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/wasm/reverseSub.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_WASMWORKER]), [
+    ("cases/testapp", EXPECTED_CSP, {"/wasm/reverseSub.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_WASMWORKER]), [
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/wasm_worker.js']
     ], []),
 
     # Hook /workers/worker.js
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/workers/worker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, {"/workers/worker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /workers/sharedworker.js
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/workers/sharedworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, {"/workers/sharedworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /workers/serviceworker.js
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/workers/serviceworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, {"/workers/serviceworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /workers/audioworklet.js
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/workers/audioworklet.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, {"/workers/audioworklet.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
     
     # Hook /wasm/aw_addTwo.wasm
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {"/wasm/aw_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_AUDIOWORKLET]), [
+    ("cases/testapp", EXPECTED_CSP, {"/wasm/aw_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_AUDIOWORKLET]), [
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/audioworklet.js']
+    ], []),
+
+    # Hook /wasm/inline_addTwo.wasm
+    ("cases/testapp", EXPECTED_CSP, {"/wasm/inline_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_INLINE]), [
+        ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
     ], []),
 
 ], ids=[
@@ -187,6 +161,7 @@ def setdiff(a: list, b: list):
     "corrupted_serviceworker_test",
     "corrupted_audioworklet_test",
     "corrupted_wasm_audioworklet_test",
+    "corrupted_wasm_inline_test",
 ], indirect=["root"])
 def test_webcat(browser, server, expected, logs, errors, rejections, addon_path):
     browser.install_extension(addon_path)
@@ -207,9 +182,7 @@ def test_webcat(browser, server, expected, logs, errors, rejections, addon_path)
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';",
+    ("cases/testapp", EXPECTED_CSP | {
         "cache-control": "max-age=180"
     }, {"/console_log.png": WEBCAT_ICON}, "ERR_WEBCAT_FILE_MISMATCH"),
 ], indirect=["root"])
@@ -225,10 +198,7 @@ def test_in_memory_cache(browser, server, expected, addon_path):
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
-    ("cases/testapp", {
-        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                   "style-src 'self'; frame-src 'none'; worker-src 'self';",
-    }, {
+    ("cases/testapp", EXPECTED_CSP, {
         "/": Hook(open("cases/testapp/index.html", "rb").read(), type="text/html", delay=2),
         "/js/alert.js": Hook(b"alert('hacked');", type="text/javascript"),
         "/x": Hook(b"", type="text/html", headers={"refresh": "0"}),

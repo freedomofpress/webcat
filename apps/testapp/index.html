@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+	<script>
+		WebAssembly.instantiateStreaming(fetch("wasm/inline_addTwo.wasm")).then(result => {
+			console.log("inline:", "addTwo" in result.instance.exports);
+		}).catch(e => {
+			// rethrow after load to make sure the error is visible in tests
+			window.addEventListener("DOMContentLoaded", () => { throw e; });
+		});
+	</script>
 	<script src="js/capture.js"></script>
 	<script src="js/alert.js"></script>
 	<script src="js/wasm.js"></script>

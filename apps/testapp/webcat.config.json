@@ -4,6 +4,6 @@
     "default_index": "/index.html",
     "default_fallback": "/index.html",
     "wasm": [],
-    "default_csp": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; frame-src 'none'; worker-src 'self';",
+    "default_csp": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-8v/OW9iF85cNAUqC+rgYqRupd4JxPlE79PTiDRC0AJk='; style-src 'self'; frame-src 'none'; worker-src 'self';",
     "extra_csp": {}
 }
