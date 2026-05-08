@@ -86,6 +86,7 @@ def setdiff(a: list, b: list):
             LOGENTRY_LOAD_SHAREDWORKER,
             LOGENTRY_LOAD_WASMWORKER,
             LOGENTRY_LOAD_AUDIOWORKLET,
+            LOGENTRY_INLINE,
         ]), [], []),
 
     # Wrong CSP
