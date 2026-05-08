@@ -235,6 +235,9 @@ class Hook:
         self.type = type
 
 class Server:
+    class MultiThreadedServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+        pass
+
     def __init__(self, root=".", headers=None, hooks=None, ssl_cert=None, ssl_key=None):
         self.root = os.path.abspath(root)
         self.headers = headers or {}
@@ -275,7 +278,7 @@ class Server:
 
             def log_message(self, *a): pass  # suppress logs
 
-        self.httpd = socketserver.TCPServer(("127.0.0.1", 0), Handler)
+        self.httpd = Server.MultiThreadedServer(("127.0.0.1", 0), Handler)
         if self.ssl_cert and self.ssl_key:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.load_cert_chain(self.ssl_cert, self.ssl_key)

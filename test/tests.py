@@ -78,6 +78,7 @@ def setdiff(a: list, b: list):
         "/js/load_sharedworker.js": b"",
         "/js/load_wasmworker.js": b"",
         "/js/load_audioworklet.js": b"",
+        "/wasm/inline_addTwo.wasm": Hook(b"", delay=5),
     }, "Hello!", setdiff(
         EXPECTED_LOGS, [
             LOGENTRY_WASM,
