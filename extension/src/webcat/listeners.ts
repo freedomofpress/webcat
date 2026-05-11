@@ -1,9 +1,13 @@
 import { endpoint } from "../config";
-import { db, origins, tabs } from "../globals";
+import { db, origins, pendingOrigins, tabs } from "../globals";
 import type { WebcatDatabase } from "./db";
 import { getHooks } from "./genhooks";
 import { hooksType, metadataRequestSource } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
+import {
+  OriginStateHolder,
+  OriginStateVerifiedManifest,
+} from "./interfaces/originstate";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
@@ -15,7 +19,24 @@ import {
 } from "./response";
 import { errorpage } from "./ui";
 import { retryUpdateIfFailed } from "./update";
-import { getFQDN, isExtensionRequest } from "./utils";
+import { getFQDN, isExtensionRequest, isNewerSemver } from "./utils";
+
+function commitVerifiedOrigin(fqdn: string, holder: OriginStateHolder): void {
+  if (holder.current.status !== "verified_manifest") {
+    return;
+  }
+  const incoming = (holder.current as OriginStateVerifiedManifest).manifest
+    .version;
+  const existing = origins.get(fqdn);
+  if (existing && existing.current.status === "verified_manifest") {
+    const current = (existing.current as OriginStateVerifiedManifest).manifest
+      .version;
+    if (!isNewerSemver(incoming, current)) {
+      return;
+    }
+  }
+  origins.set(fqdn, holder);
+}
 
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
@@ -27,14 +48,11 @@ function cleanup(tabId: number) {
         "When deleting a tab, we found an enrolled tab with fqdn",
       );
     }
-    const originState = origins.get(fqdn);
-    if (!originState) {
-      throw new Error(
-        "When deleting a tab, we found an enrolled tab with no associated originState",
-      );
-    }
     /* END */
-    originState.current.references--;
+    const originState = origins.get(fqdn);
+    if (originState) {
+      originState.current.references--;
+    }
     tabs.delete(tabId);
   }
 }
@@ -83,7 +101,10 @@ export async function headersListener(
   //const fqdn = tabs.get(details.tabId);
   // So instead let's get that again
 
-  if (!origins.has(fqdn)) {
+  let originStateHolder =
+    pendingOrigins.get(details.requestId) ?? origins.get(fqdn);
+
+  if (!originStateHolder) {
     // We are dealing with a background request, probably a serviceworker
     logger.addLog(
       "info",
@@ -96,16 +117,16 @@ export async function headersListener(
       details.url,
       details.tabId,
       metadataRequestSource.worker,
+      details.requestId,
     );
     if (result instanceof WebcatError) {
-      origins.delete(fqdn);
+      pendingOrigins.delete(details.requestId);
       tabs.delete(details.tabId);
       errorpage(details.tabId, fqdn, result);
       return { cancel: true };
     }
+    originStateHolder = pendingOrigins.get(details.requestId);
   }
-
-  const originStateHolder = origins.get(fqdn);
 
   if (!originStateHolder) {
     throw new Error("No originState while starting to parse response.");
@@ -119,10 +140,15 @@ export async function headersListener(
       details.tabId,
       fqdn,
     );
-    origins.delete(fqdn);
+    pendingOrigins.delete(details.requestId);
     tabs.delete(details.tabId);
     errorpage(details.tabId, fqdn, result);
     return { cancel: true };
+  }
+
+  if (pendingOrigins.has(details.requestId)) {
+    commitVerifiedOrigin(fqdn, originStateHolder);
+    pendingOrigins.delete(details.requestId);
   }
 
   markResponseContent(details);
@@ -234,9 +260,10 @@ export async function requestListener(
       details.url,
       details.tabId,
       metadataRequestSource.main_frame,
+      details.requestId,
     );
     if (result instanceof WebcatError) {
-      origins.delete(fqdn);
+      pendingOrigins.delete(details.requestId);
       tabs.delete(details.tabId);
       errorpage(details.tabId, fqdn, result);
       return { cancel: true };
@@ -249,8 +276,13 @@ export async function requestListener(
 
   /* DEVELOPMENT GUARD */
   /*it's here for development: meaning if we reach this stage
-    and the fqdn is enrolled, but a entry in the origin map has nor been created, there is a critical security bug */
-  if ((await db.getFQDNEnrollment(fqdn)).length !== 0 && !origins.has(fqdn)) {
+    and the fqdn is enrolled, but neither a verified origin entry exists nor an in-progress
+    one has been stashed, there is a critical security bug */
+  if (
+    (await db.getFQDNEnrollment(fqdn)).length !== 0 &&
+    !origins.has(fqdn) &&
+    !pendingOrigins.has(details.requestId)
+  ) {
     console.error(
       "FATAL: loading from an enrolled origin but the state does not exists.",
     );
@@ -268,6 +300,12 @@ export async function requestListener(
   return {};
 }
 
+function errorOccurredListener(
+  details: browser.webRequest._OnErrorOccurredDetails,
+): void {
+  pendingOrigins.delete(details.requestId);
+}
+
 // Single global webRequest listener registration that scopes to the union
 // of currently enrolled FQDNs. We re-register the listeners on every list
 // update; we always add the new listener before removing the old one, so
@@ -282,6 +320,7 @@ type RegisteredListeners = {
   headers?: (
     details: browser.webRequest._OnHeadersReceivedDetails,
   ) => Promise<browser.webRequest.BlockingResponse>;
+  errorOccurred?: (details: browser.webRequest._OnErrorOccurredDetails) => void;
 };
 
 let currentListeners: RegisteredListeners = {};
@@ -307,6 +346,9 @@ function removeListeners(listeners: RegisteredListeners): void {
   if (listeners.headers) {
     browser.webRequest.onHeadersReceived.removeListener(listeners.headers);
   }
+  if (listeners.errorOccurred) {
+    browser.webRequest.onErrorOccurred.removeListener(listeners.errorOccurred);
+  }
 }
 
 export async function installEnrolledListeners(
@@ -324,7 +366,8 @@ export async function installEnrolledListeners(
     if (
       currentListeners.before ||
       currentListeners.beforeHeaders ||
-      currentListeners.headers
+      currentListeners.headers ||
+      currentListeners.errorOccurred
     ) {
       removeListeners(currentListeners);
       currentListeners = {};
@@ -344,6 +387,8 @@ export async function installEnrolledListeners(
   ) => beforeHeadersListener(details);
   const headers = (details: browser.webRequest._OnHeadersReceivedDetails) =>
     headersListener(details);
+  const errorOccurred = (details: browser.webRequest._OnErrorOccurredDetails) =>
+    errorOccurredListener(details);
 
   // Add new listeners first, then remove the old ones
   browser.webRequest.onBeforeRequest.addListener(before, { urls }, [
@@ -358,9 +403,10 @@ export async function installEnrolledListeners(
     "blocking",
     "responseHeaders",
   ]);
+  browser.webRequest.onErrorOccurred.addListener(errorOccurred, { urls });
 
   const previous = currentListeners;
-  currentListeners = { before, beforeHeaders, headers };
+  currentListeners = { before, beforeHeaders, headers, errorOccurred };
   removeListeners(previous);
 
   // See https://github.com/freedomofpress/webcat/issues/137

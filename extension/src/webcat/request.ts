@@ -1,4 +1,4 @@
-import { origins, tabs } from "./../globals";
+import { origins, pendingOrigins, tabs } from "./../globals";
 import { db } from "./../globals";
 import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
@@ -16,6 +16,7 @@ export async function validateOrigin(
   url: string,
   tabId: number,
   type: metadataRequestSource,
+  requestId: string,
 ) {
   const enrollment_hash = await db.getFQDNEnrollment(fqdn);
   if (enrollment_hash.length === 0) {
@@ -47,10 +48,7 @@ export async function validateOrigin(
     tabs.set(tabId, fqdn);
   }
 
-  // If origin metadata are already loaded, just skip doing it again and return early
-  const originStateHolder = origins.get(fqdn);
-  if (originStateHolder) {
-    // Since we use cached info, we should still populate the popup with the cached info
+  if (origins.get(fqdn)) {
     return;
   }
 
@@ -74,7 +72,7 @@ export async function validateOrigin(
     enrollment_hash,
   );
   const origin = new OriginStateHolder(newOriginState);
-  origins.set(fqdn, origin);
+  pendingOrigins.set(requestId, origin);
 
   // See https://github.com/freedomofpress/webcat/issues/95
   await origin.current.fetcher.awaitAll();
