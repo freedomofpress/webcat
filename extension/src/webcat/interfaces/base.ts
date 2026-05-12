@@ -1,6 +1,7 @@
 export enum metadataRequestSource {
   main_frame,
   sub_frame,
+  sub_resource,
   worker,
 }
 

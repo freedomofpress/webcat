@@ -227,21 +227,12 @@ export async function requestListener(
 ): Promise<browser.webRequest.BlockingResponse> {
   const fqdn = getFQDN(details.url);
 
-  if (
-    (details.tabId < 0 && !origins.has(fqdn)) ||
-    isExtensionRequest(details)
-  ) {
-    // TODO: is this still relevant? it seems like it
-    // should apply to workers (no tab id) if they do
-    // a fetch request and the origin doesn't exists
-    // To be safe maybe we should check for enrollment again?
-    return {};
-  }
+  const isFrame = FRAME_TYPES.includes(details.type);
 
-  // TODO: why does this happen for sub_frames?
-  //if (details.type === "main_frame" || details.type === "sub_frame") {
-  if (FRAME_TYPES.includes(details.type)) {
-    // User is navigatin to a new context, whether is enrolled or not better to reset
+  // Frame-only pre-setup: reset the tab's origin state and retry pending
+  // list updates
+  if (isFrame) {
+    // User is navigating to a new context, whether is enrolled or not better to reset
     cleanup(details.tabId);
 
     logger.addLog(
@@ -252,45 +243,50 @@ export async function requestListener(
     );
 
     await retryUpdateIfFailed(db, endpoint);
-
-    const result = await validateOrigin(
-      fqdn,
-      details.url,
-      details.tabId,
-      metadataRequestSource.main_frame,
-      details.requestId,
-    );
-    if (result instanceof WebcatError) {
-      pendingOrigins.delete(details.requestId);
-      tabs.delete(details.tabId);
-      errorpage(details.tabId, fqdn, result);
-      return { cancel: true };
-    }
-    if (result) {
-      logger.addLog("info", `Redirecting to https`, details.tabId, fqdn);
-      return result;
-    }
   }
 
-  // Resolve the holder once for the lifetime of this request
-  let originStateHolder = pendingOrigins.get(details.requestId);
-  if (!originStateHolder) {
+  let originStateHolder: OriginStateHolder | undefined;
+  if (!isFrame) {
     originStateHolder = origins.get(fqdn);
     if (originStateHolder) {
       pendingOrigins.set(details.requestId, originStateHolder);
     }
   }
 
-  // if we know the tab is enrolled, or it is a worker background connction then we should verify
-  if (
-    (tabs.has(details.tabId) === true || details.tabId < 0) &&
-    originStateHolder
-  ) {
-    await validateResponseContent(details, originStateHolder);
+  if (!originStateHolder) {
+    const result = await validateOrigin(
+      fqdn,
+      details.url,
+      details.tabId,
+      isFrame
+        ? metadataRequestSource.main_frame
+        : metadataRequestSource.sub_resource,
+      details.requestId,
+    );
+    if (result instanceof WebcatError) {
+      pendingOrigins.delete(details.requestId);
+      if (isFrame) {
+        tabs.delete(details.tabId);
+        errorpage(details.tabId, fqdn, result);
+      }
+      return { cancel: true };
+    }
+    if (result) {
+      // HTTPS redirect; browser reissues under a fresh requestId.
+      if (isFrame) {
+        logger.addLog("info", `Redirecting to https`, details.tabId, fqdn);
+      }
+      return result;
+    }
+    originStateHolder = pendingOrigins.get(details.requestId);
   }
 
-  // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse
-  // Returning a response here is a very powerful tool, let's think about it later
+  // No holder means the fqdn isn't enrolled
+  if (!originStateHolder) {
+    return {};
+  }
+
+  await validateResponseContent(details, originStateHolder);
   return {};
 }
 

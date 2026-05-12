@@ -209,9 +209,10 @@ export async function validateResponseContent(
   const pathname = new URL(details.url).pathname;
   const fqdn = getFQDN(details.url);
 
-  // The holder was pulled from the LRU and is guaranteed to be in
-  // verified_manifest state
-  if (NON_FRAME_TYPES.includes(details.type)) {
+  if (
+    NON_FRAME_TYPES.includes(details.type) &&
+    originStateHolder.current.status === "verified_manifest"
+  ) {
     const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
       .manifest;
     // If a pass-through media type isn't in the manifest, bail before installing
