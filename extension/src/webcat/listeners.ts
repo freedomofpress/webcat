@@ -22,6 +22,9 @@ import { retryUpdateIfFailed } from "./update";
 import { getFQDN, isExtensionRequest, isNewerSemver } from "./utils";
 
 function commitVerifiedOrigin(fqdn: string, holder: OriginStateHolder): void {
+  if (holder.stale) {
+    return;
+  }
   if (holder.current.status !== "verified_manifest") {
     return;
   }
@@ -96,13 +99,8 @@ export async function headersListener(
     return {};
   }
 
-  // We checked for enrollment back when the request was fired
-  // For tabs only we could do this, but for workers nope
-  //const fqdn = tabs.get(details.tabId);
-  // So instead let's get that again
-
-  let originStateHolder =
-    pendingOrigins.get(details.requestId) ?? origins.get(fqdn);
+  // pendingOrigins is populated by requestListener
+  let originStateHolder = pendingOrigins.get(details.requestId);
 
   if (!originStateHolder) {
     // We are dealing with a background request, probably a serviceworker
@@ -274,25 +272,21 @@ export async function requestListener(
     }
   }
 
-  /* DEVELOPMENT GUARD */
-  /*it's here for development: meaning if we reach this stage
-    and the fqdn is enrolled, but neither a verified origin entry exists nor an in-progress
-    one has been stashed, there is a critical security bug */
-  if (
-    (await db.getFQDNEnrollment(fqdn)).length !== 0 &&
-    !origins.has(fqdn) &&
-    !pendingOrigins.has(details.requestId)
-  ) {
-    console.error(
-      "FATAL: loading from an enrolled origin but the state does not exists.",
-    );
-    return { cancel: true };
+  // Resolve the holder once for the lifetime of this request
+  let originStateHolder = pendingOrigins.get(details.requestId);
+  if (!originStateHolder) {
+    originStateHolder = origins.get(fqdn);
+    if (originStateHolder) {
+      pendingOrigins.set(details.requestId, originStateHolder);
+    }
   }
-  /* END */
 
   // if we know the tab is enrolled, or it is a worker background connction then we should verify
-  if (tabs.has(details.tabId) === true || details.tabId < 0) {
-    await validateResponseContent(details);
+  if (
+    (tabs.has(details.tabId) === true || details.tabId < 0) &&
+    originStateHolder
+  ) {
+    await validateResponseContent(details, originStateHolder);
   }
 
   // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse
@@ -300,8 +294,15 @@ export async function requestListener(
   return {};
 }
 
+// Ensure pending objects do not leak
 function errorOccurredListener(
   details: browser.webRequest._OnErrorOccurredDetails,
+): void {
+  pendingOrigins.delete(details.requestId);
+}
+
+function completedListener(
+  details: browser.webRequest._OnCompletedDetails,
 ): void {
   pendingOrigins.delete(details.requestId);
 }
@@ -321,6 +322,7 @@ type RegisteredListeners = {
     details: browser.webRequest._OnHeadersReceivedDetails,
   ) => Promise<browser.webRequest.BlockingResponse>;
   errorOccurred?: (details: browser.webRequest._OnErrorOccurredDetails) => void;
+  completed?: (details: browser.webRequest._OnCompletedDetails) => void;
 };
 
 let currentListeners: RegisteredListeners = {};
@@ -349,6 +351,9 @@ function removeListeners(listeners: RegisteredListeners): void {
   if (listeners.errorOccurred) {
     browser.webRequest.onErrorOccurred.removeListener(listeners.errorOccurred);
   }
+  if (listeners.completed) {
+    browser.webRequest.onCompleted.removeListener(listeners.completed);
+  }
 }
 
 export async function installEnrolledListeners(
@@ -367,7 +372,8 @@ export async function installEnrolledListeners(
       currentListeners.before ||
       currentListeners.beforeHeaders ||
       currentListeners.headers ||
-      currentListeners.errorOccurred
+      currentListeners.errorOccurred ||
+      currentListeners.completed
     ) {
       removeListeners(currentListeners);
       currentListeners = {};
@@ -389,6 +395,8 @@ export async function installEnrolledListeners(
     headersListener(details);
   const errorOccurred = (details: browser.webRequest._OnErrorOccurredDetails) =>
     errorOccurredListener(details);
+  const completed = (details: browser.webRequest._OnCompletedDetails) =>
+    completedListener(details);
 
   // Add new listeners first, then remove the old ones
   browser.webRequest.onBeforeRequest.addListener(before, { urls }, [
@@ -404,9 +412,16 @@ export async function installEnrolledListeners(
     "responseHeaders",
   ]);
   browser.webRequest.onErrorOccurred.addListener(errorOccurred, { urls });
+  browser.webRequest.onCompleted.addListener(completed, { urls });
 
   const previous = currentListeners;
-  currentListeners = { before, beforeHeaders, headers, errorOccurred };
+  currentListeners = {
+    before,
+    beforeHeaders,
+    headers,
+    errorOccurred,
+    completed,
+  };
   removeListeners(previous);
 
   // See https://github.com/freedomofpress/webcat/issues/137

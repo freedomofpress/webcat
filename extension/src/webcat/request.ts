@@ -48,7 +48,10 @@ export async function validateOrigin(
     tabs.set(tabId, fqdn);
   }
 
-  if (origins.get(fqdn)) {
+  const cached = origins.get(fqdn);
+  if (cached) {
+    // Pin the holder to this request so later stages cannot race against LRU eviction
+    pendingOrigins.set(requestId, cached);
     return;
   }
 
