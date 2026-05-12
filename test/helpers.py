@@ -86,7 +86,7 @@ class Browser:
         except:
             pass
 
-    def trust_cert(self, cert_path, port):
+    def trust_cert(self, cert_path, port, dnsnames = []):
         """Add a certificate override for 127.0.0.1:port via cert_override.txt."""
         with open(cert_path, "rb") as f:
             cert = x509.load_pem_x509_certificate(f.read())
@@ -97,6 +97,8 @@ class Browser:
         override_file = self.profile_path / "cert_override.txt"
         with open(override_file, "a") as f:
             f.write(f"127.0.0.1:{port}\tOID.2.16.840.1.101.3.4.2.1\t{fingerprint}\t{db_key}\n")
+            for name in dnsnames:
+                f.write(f"{name}:{port}\tOID.2.16.840.1.101.3.4.2.1\t{fingerprint}\t{db_key}\n")
 
     def install_extension(self, path):
         root_actor_ids = self.root.get_root()
@@ -234,6 +236,9 @@ class Hook:
         self.type = type
 
 class Server:
+    class MultiThreadedServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+        pass
+
     def __init__(self, root=".", headers=None, hooks=None, ssl_cert=None, ssl_key=None):
         self.root = os.path.abspath(root)
         self.headers = headers or {}
@@ -274,7 +279,7 @@ class Server:
 
             def log_message(self, *a): pass  # suppress logs
 
-        self.httpd = socketserver.TCPServer(("127.0.0.1", 0), Handler)
+        self.httpd = Server.MultiThreadedServer(("127.0.0.1", 0), Handler)
         if self.ssl_cert and self.ssl_key:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.load_cert_chain(self.ssl_cert, self.ssl_key)
@@ -291,10 +296,12 @@ class Server:
         scheme = "https" if self.ssl_cert else "http"
         return f"{scheme}://127.0.0.1:{self.port}"
 
-def generate_ssl_cert(output_dir):
+def generate_ssl_cert(output_dir, dnsnames=[]):
     """Generate a self-signed certificate for 127.0.0.1."""
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
+    names = [x509.IPAddress(ipaddress.IPv4Address("127.0.0.1"))]
+    names.extend(map(lambda name: x509.DNSName(name), dnsnames))
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -303,10 +310,7 @@ def generate_ssl_cert(output_dir):
         .serial_number(x509.random_serial_number())
         .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
         .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1))
-        .add_extension(
-            x509.SubjectAlternativeName([x509.IPAddress(ipaddress.IPv4Address("127.0.0.1"))]),
-            critical=False,
-        )
+        .add_extension(x509.SubjectAlternativeName(names), critical=False)
         .sign(key, hashes.SHA256())
     )
     cert_path = os.path.join(output_dir, "cert.pem")
