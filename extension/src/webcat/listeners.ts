@@ -225,6 +225,10 @@ export async function beforeHeadersListener(
 export async function requestListener(
   details: browser.webRequest._OnBeforeRequestDetails,
 ): Promise<browser.webRequest.BlockingResponse> {
+  if (isExtensionRequest(details)) {
+    return {};
+  }
+
   const fqdn = getFQDN(details.url);
 
   const isFrame = FRAME_TYPES.includes(details.type);
