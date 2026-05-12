@@ -246,3 +246,35 @@ def test_multiple_tabs(browser: Browser, server: Server, expected, addon_path):
     sleep(3)
     res = browser.execute("document.body.innerText")
     assert expected in res
+
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks, expected", [
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';",
+    }, {
+        "/": Hook(open("cases/testapp/index.html", "rb").read(), type="text/html", delay=2),
+        "/js/alert.js": Hook(b"alert('hacked');", type="text/javascript"),
+    }, "ERR_WEBCAT_FILE_MISMATCH"),
+], indirect=["root"], ids=[
+    "corrupted_js_with_cache_eviction_test",
+])
+def test_cache_eviction(browser: Browser, server: Server, expected, addon_path):
+    browser.install_extension(addon_path)
+    sleep(7)
+    sites = [
+        server.url(),
+        server.url().replace("127.0.0.1", "site1.localhost"),
+        server.url().replace("127.0.0.1", "site2.localhost"),
+    ]
+    browser.execute(
+         "const w = window.open();"
+        f"window.open('{sites[0]}');"
+         "setTimeout(() => {"
+        f"    w.location.href = '{sites[1]}/console_log.png';"
+        f"    location.href = '{sites[2]}/console_log.png';"
+         "}, 1000)"
+    )
+    sleep(3)
+    res = browser.execute("document.body.innerText")
+    assert expected in res
