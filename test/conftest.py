@@ -66,9 +66,16 @@ def addon_path(request):
     return abs_path
 
 @pytest.fixture(scope="session")
-def ssl_cert():
+def dnsnames():
+    return [
+        "site1.localhost",
+        "site2.localhost",
+    ]
+
+@pytest.fixture(scope="session")
+def ssl_cert(dnsnames):
     tmpdir = tempfile.mkdtemp()
-    cert_path, key_path = generate_ssl_cert(tmpdir)
+    cert_path, key_path = generate_ssl_cert(tmpdir, dnsnames)
     return cert_path, key_path
 
 @pytest.fixture(scope="session")
@@ -78,13 +85,15 @@ def db():
     return db
 
 @pytest.fixture(scope="session")
-def root(db, request):
+def root(db, dnsnames, request):
     generate_bundle(request.param)
     with open(f'{request.param}/.well-known/webcat/bundle.json') as bundle:
         enrollment = json.load(bundle)["enrollment"]
         canonical_enrollment = canonicaljson.encode_canonical_json(enrollment)
         enrollment_hash = hashlib.sha256(canonical_enrollment).hexdigest()
         db.set("127.0.0.1", enrollment_hash)
+        for name in dnsnames:
+            db.set(name, enrollment_hash)
     return request.param
 
 @pytest.fixture(scope="function")
@@ -102,7 +111,7 @@ def server(root, headers, hooks, ssl_cert):
     s.stop()
 
 @pytest.fixture(scope="function")
-def browser(request, ssl_cert, server):
+def browser(request, ssl_cert, server, dnsnames):
     cert_path, _ = ssl_cert
     if request.param == "firefox":
         b = Browser()
@@ -114,7 +123,7 @@ def browser(request, ssl_cert, server):
         b = TorBrowser(allowed_addons=["webcat@freedom.press"], security_level=TorBrowser.SecurityLevel.Safest)
     else:
         raise RuntimeError(f'unrecognized browser \'{request.param}\'')
-    b.trust_cert(cert_path, server.port)
+    b.trust_cert(cert_path, server.port, dnsnames)
     b.start(request.config.getoption("--headless"))
     yield b
     b.destroy()

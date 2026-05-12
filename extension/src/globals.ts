@@ -4,9 +4,9 @@ import { WebcatDatabase } from "./webcat/db";
 import { stringToUint8Array, Uint8ArrayToBase64Url } from "./webcat/encoding";
 import { OriginStateHolder } from "./webcat/interfaces/originstate";
 
-export const origins = new LRUCache<string, OriginStateHolder>(lru_set_size);
+export const origins = new LRUCache<string, OriginStateHolder>(lru_cache_size);
 export const pendingOrigins: Map<string, OriginStateHolder> = new Map();
-export const nonOrigins = new LRUSet<string>(lru_cache_size);
+export const nonOrigins = new LRUSet<string>(lru_set_size);
 export const tabs: Map<number, string> = new Map();
 export const db = new WebcatDatabase();
 export const hookMarker = stringToUint8Array(
