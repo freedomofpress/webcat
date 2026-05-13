@@ -258,10 +258,11 @@ def test_multiple_tabs(browser: Browser, server: Server, expected, addon_path):
 ], indirect=["root"], ids=[
     "non_enrolled_loads_enrolled_subresource_test",
 ])
-def test_non_enrolled_subresource(browser: Browser, server: Server, expected, addon_path, non_enrolled_dnsnames):
-    enrolled_url = server.url()
+def test_non_enrolled_subresource(browser: Browser, server: Server, expected, addon_path, dnsnames, non_enrolled_dnsnames):
+    enrolled_url = server.url().replace("127.0.0.1", dnsnames[0])
+    non_enrolled_url = server.url().replace("127.0.0.1", non_enrolled_dnsnames[0])
     # Non-enrolled landing page that loads a single sub-resource cross-origin
-    # from the enrolled domain
+    # from the enrolled domain.
     server.hooks["/"] = Hook(
         b'<!DOCTYPE html><html><body>'
         b'<p>non-enrolled</p>'
@@ -272,7 +273,6 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, expected, ad
     )
     browser.install_extension(addon_path)
     sleep(7)
-    non_enrolled_url = enrolled_url.replace("127.0.0.1", non_enrolled_dnsnames[0])
     browser.navigate(non_enrolled_url)
     sleep(5)
     res = browser.execute("document.body.innerText")
