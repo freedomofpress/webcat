@@ -24,6 +24,7 @@ _tbb_safest_skips = {
     "corrupted_sharedworker_test": "JavaScript fully disabled at this security level",
     "corrupted_audioworklet_test": "JavaScript fully disabled at this security level",
     "corrupted_js_with_induced_error_test": "JavaScript fully disabled at this security level",
+    "non_enrolled_loads_enrolled_subresource_test": "JavaScript fully disabled at this security level",
 }
 _browser_skips = {
     "tbb": _tbb_skips,
@@ -73,9 +74,15 @@ def dnsnames():
     ]
 
 @pytest.fixture(scope="session")
-def ssl_cert(dnsnames):
+def non_enrolled_dnsnames():
+    return [
+        "nonenrolled.localhost",
+    ]
+
+@pytest.fixture(scope="session")
+def ssl_cert(dnsnames, non_enrolled_dnsnames):
     tmpdir = tempfile.mkdtemp()
-    cert_path, key_path = generate_ssl_cert(tmpdir, dnsnames)
+    cert_path, key_path = generate_ssl_cert(tmpdir, dnsnames + non_enrolled_dnsnames)
     return cert_path, key_path
 
 @pytest.fixture(scope="session")
@@ -111,7 +118,7 @@ def server(root, headers, hooks, ssl_cert):
     s.stop()
 
 @pytest.fixture(scope="function")
-def browser(request, ssl_cert, server, dnsnames):
+def browser(request, ssl_cert, server, dnsnames, non_enrolled_dnsnames):
     cert_path, _ = ssl_cert
     if request.param == "firefox":
         b = Browser()
@@ -123,7 +130,7 @@ def browser(request, ssl_cert, server, dnsnames):
         b = TorBrowser(allowed_addons=["webcat@freedom.press"], security_level=TorBrowser.SecurityLevel.Safest)
     else:
         raise RuntimeError(f'unrecognized browser \'{request.param}\'')
-    b.trust_cert(cert_path, server.port, dnsnames)
+    b.trust_cert(cert_path, server.port, dnsnames + non_enrolled_dnsnames)
     b.start(request.config.getoption("--headless"))
     yield b
     b.destroy()
