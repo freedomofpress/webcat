@@ -95,18 +95,11 @@ export function wasmHook(
   }
 
   // Helper: Extract an ArrayBuffer from a bufferSource.
-  function extractBuffer(
-    bufferSource: BufferSource | WebAssembly.Module,
-  ): ArrayBuffer {
-    if (bufferSource instanceof scope.ArrayBuffer) {
-      return bufferSource;
-    }
+  function extractBuffer(bufferSource: BufferSource): ArrayBuffer {
     if (scope.ArrayBuffer.isView(bufferSource)) {
       return bufferSource.buffer as ArrayBuffer;
     }
-    throw new scope.TypeError(
-      "[WEBCAT] WebAssembly bytecode must be provided as an ArrayBuffer or typed array",
-    );
+    return bufferSource as ArrayBuffer;
   }
 
   // ============================

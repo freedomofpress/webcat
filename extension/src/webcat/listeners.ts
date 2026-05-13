@@ -366,6 +366,8 @@ export async function installEnrolledListeners(
           id: fqdn,
           js: ["dist/hooks/content.js"],
           matches: buildUrlPatterns([fqdn]),
+          matchOriginAsFallback: true,
+          allFrames: true,
           runAt: "document_start",
         };
       }),

@@ -36,6 +36,7 @@ BAD_WASM = Hook(
     LOGENTRY_LOAD_SHAREDWORKER,
     LOGENTRY_LOAD_WASMWORKER,
     LOGENTRY_LOAD_AUDIOWORKLET,
+    LOGENTRY_WASM_FRAME,
 ] = EXPECTED_LOGS = [
     ["inline:",True],
     ["alert.js:",True],
@@ -47,6 +48,7 @@ BAD_WASM = Hook(
     ["load_sharedworker.js:",True],
     ["load_wasmworker.js:",True],
     ["load_audioworklet.js:",True],
+    ["wasm_frame.js:",True],
 ]
 
 EXPECTED_CSP = {
@@ -76,6 +78,7 @@ def setdiff(a: list, b: list):
         "/js/wasm_fetch.js": b"",
         "/js/load_worker.js": b"",
         "/js/load_sharedworker.js": b"",
+        "/js/load_wasmframe.js": b"",
         "/js/load_wasmworker.js": b"",
         "/js/load_audioworklet.js": b"",
         "/wasm/inline_addTwo.wasm": Hook(b"", delay=5),
@@ -85,6 +88,7 @@ def setdiff(a: list, b: list):
             LOGENTRY_WASM_FETCH,
             LOGENTRY_LOAD_WORKER,
             LOGENTRY_LOAD_SHAREDWORKER,
+            LOGENTRY_WASM_FRAME,
             LOGENTRY_LOAD_WASMWORKER,
             LOGENTRY_LOAD_AUDIOWORKLET,
             LOGENTRY_INLINE,
@@ -147,6 +151,11 @@ def setdiff(a: list, b: list):
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
     ], []),
 
+    # Hook /wasm/frame_addThree.wasm
+    ("cases/testapp", EXPECTED_CSP, {"/wasm/frame_addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FRAME]), [], [
+        ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
+    ]),
+
 ], ids=[
     "basic_test",
     "no_wasm_test",
@@ -164,6 +173,7 @@ def setdiff(a: list, b: list):
     "corrupted_audioworklet_test",
     "corrupted_wasm_audioworklet_test",
     "corrupted_wasm_inline_test",
+    "corrupted_wasm_frame_test",
 ], indirect=["root"])
 def test_webcat(browser, server, expected, logs, errors, rejections, addon_path):
     browser.install_extension(addon_path)

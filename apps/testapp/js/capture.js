@@ -7,17 +7,19 @@ window.capture = { logs: [], errors: [], rejections: [] };
   }
   const log = console.log;
   console.log = function () {
-    capture.logs.push([...arguments]);
+    top.postMessage({ type: 'logs', value: [...arguments] });
     log.apply(console, arguments);
   }
   window.addEventListener('error',
-    ({ error }) => capture.errors.push([ error.toString(), relative(error.fileName) ]));
+    ({ error }) => top.postMessage({ type: 'errors', value: [ error.toString(), relative(error.fileName) ] }));
   window.addEventListener('unhandledrejection',
     ({ reason }) => {
       if (reason instanceof Error) {
-        capture.rejections.push([ reason.toString(), relative(reason.fileName) ]);
+        top.postMessage({ type: 'rejections', value: [ reason.toString(), relative(reason.fileName) ] });
       } else {
-        capture.rejections.push([ reason.toString() ]);
+        top.postMessage({ type: 'rejections', value: [ reason.toString() ] });
       }
     });
+  window.addEventListener('message',
+    ({ data }) => capture[data.type].push(data.value));
 }(window.capture));
