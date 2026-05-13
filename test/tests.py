@@ -253,6 +253,36 @@ def test_multiple_tabs(browser: Browser, server: Server, expected, addon_path):
         "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';",
     }, {
+        "/js/alert.js": Hook(b"alert('hacked');", type="text/javascript"),
+    }, "ERR_WEBCAT_FILE_MISMATCH"),
+], indirect=["root"], ids=[
+    "non_enrolled_loads_enrolled_subresource_test",
+])
+def test_non_enrolled_subresource(browser: Browser, server: Server, expected, addon_path, non_enrolled_dnsnames):
+    enrolled_url = server.url()
+    # Non-enrolled landing page that loads a single sub-resource cross-origin
+    # from the enrolled domain
+    server.hooks["/"] = Hook(
+        b'<!DOCTYPE html><html><head>'
+        b'<script src="' + enrolled_url.encode() + b'/js/alert.js"></script>'
+        b'</head><body></body></html>',
+        type="text/html",
+        headers={"content-security-policy": "script-src *"},
+    )
+    browser.install_extension(addon_path)
+    sleep(7)
+    non_enrolled_url = enrolled_url.replace("127.0.0.1", non_enrolled_dnsnames[0])
+    browser.navigate(non_enrolled_url)
+    sleep(3)
+    res = browser.execute("document.body.innerText")
+    assert expected in res
+
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks, expected", [
+    ("cases/testapp", {
+        "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+                                   "style-src 'self'; frame-src 'none'; worker-src 'self';",
+    }, {
         "/": Hook(open("cases/testapp/index.html", "rb").read(), type="text/html", delay=2),
         "/js/alert.js": Hook(b"alert('hacked');", type="text/javascript"),
     }, "ERR_WEBCAT_FILE_MISMATCH"),
