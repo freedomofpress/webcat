@@ -263,9 +263,10 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, expected, ad
     # Non-enrolled landing page that loads a single sub-resource cross-origin
     # from the enrolled domain
     server.hooks["/"] = Hook(
-        b'<!DOCTYPE html><html><head>'
+        b'<!DOCTYPE html><html><body>'
+        b'<p>non-enrolled</p>'
         b'<script src="' + enrolled_url.encode() + b'/js/alert.js"></script>'
-        b'</head><body></body></html>',
+        b'</body></html>',
         type="text/html",
         headers={"content-security-policy": "script-src *"},
     )
@@ -273,7 +274,7 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, expected, ad
     sleep(7)
     non_enrolled_url = enrolled_url.replace("127.0.0.1", non_enrolled_dnsnames[0])
     browser.navigate(non_enrolled_url)
-    sleep(3)
+    sleep(5)
     res = browser.execute("document.body.innerText")
     assert expected in res
 
