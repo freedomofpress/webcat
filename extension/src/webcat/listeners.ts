@@ -320,20 +320,6 @@ export async function installEnrolledListeners(
     return;
   }
 
-  if (fqdns.length === 0) {
-    if (
-      currentListeners.before ||
-      currentListeners.beforeHeaders ||
-      currentListeners.headers
-    ) {
-      removeListeners(currentListeners);
-      currentListeners = {};
-      browser.webRequest.handlerBehaviorChanged();
-    }
-    console.log("[webcat] installEnrolledListeners: 0 enrolled FQDNs");
-    return;
-  }
-
   const urls = buildUrlPatterns(fqdns);
 
   // The registration needs to be different from the existing one
