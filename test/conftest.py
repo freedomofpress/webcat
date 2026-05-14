@@ -37,6 +37,7 @@ _tbb_safest_skips = {
     "corrupted_audioworklet_test": "JavaScript fully disabled at this security level",
     "corrupted_js_with_induced_error_test": "JavaScript fully disabled at this security level",
     "non_enrolled_loads_enrolled_subresource_test": "JavaScript fully disabled at this security level",
+    "corrupted_js_with_cache_eviction_test": "JavaScript fully disabled at this security level",
 }
 _browser_skips = {
     "tbb": _tbb_skips,
