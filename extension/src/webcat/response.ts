@@ -1,4 +1,4 @@
-import { endMarker, hookMarker, origins } from "./../globals";
+import { endMarker, hookMarker, origins, pendingOrigins } from "./../globals";
 import {
   base64UrlToUint8Array,
   stringToUint8Array,
@@ -139,6 +139,10 @@ export async function validateResponseHeaders(
       fqdn,
     );
     origins.delete(fqdn);
+    // Mark the holder so any sibling request that shares it won't re-insert
+    // it via commitVerifiedOrigin later
+    originStateHolder.stale = true;
+    pendingOrigins.delete(details.requestId);
     browser.tabs.reload(details.tabId, { bypassCache: true });
   }
 
@@ -180,22 +184,22 @@ export async function validateResponseHeaders(
   }
 }
 
-function getVerifiedManifestState(fqdn: string): OriginStateHolder {
-  const origin = origins.get(fqdn);
+function assertVerifiedManifest(
+  holder: OriginStateHolder,
+): asserts holder is OriginStateHolder & {
+  current: OriginStateVerifiedManifest;
+} {
   if (
-    !origin ||
-    origin.current.status !== "verified_manifest" ||
-    !(origin.current as OriginStateVerifiedManifest).manifest
+    holder.current.status !== "verified_manifest" ||
+    !(holder.current as OriginStateVerifiedManifest).manifest
   ) {
     throw new Error("origin is not populated when it was expected");
   }
-  return origin as OriginStateHolder & {
-    current: OriginStateVerifiedManifest;
-  };
 }
 
 export async function validateResponseContent(
   details: browser.webRequest._OnBeforeRequestDetails,
+  originStateHolder: OriginStateHolder,
 ) {
   function deny(filter: browser.webRequest.StreamFilter) {
     // DENIED
@@ -205,17 +209,14 @@ export async function validateResponseContent(
   const pathname = new URL(details.url).pathname;
   const fqdn = getFQDN(details.url);
 
-  // The goal of doing this both here and after is the following: if a resource
-  // is a media type and not in the manifest we do not want even to start filtering
-  // otherwise large file might be loaded in memory by the extension without
-  // then any real benefit
-  if (NON_FRAME_TYPES.includes(details.type)) {
-    const originStateHolder = getVerifiedManifestState(fqdn);
-    /* Development guard */
-    // This should never happen! if we are here it means that a main or sub_frame is
-    // loading a subresource, and thus origin must be populated!
+  if (
+    NON_FRAME_TYPES.includes(details.type) &&
+    originStateHolder.current.status === "verified_manifest"
+  ) {
     const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
       .manifest;
+    // If a pass-through media type isn't in the manifest, bail before installing
+    // a filter so large files don't get buffered into the extension for nothing.
     if (
       !manifest.files[pathname] &&
       !(
@@ -228,13 +229,11 @@ export async function validateResponseContent(
     }
   }
 
-  let originStateHolder: OriginStateHolder;
-  let manifest: Manifest;
+  let manifest!: Manifest;
   const filter = browser.webRequest.filterResponseData(details.requestId);
   filter.onstart = () => {
-    originStateHolder = getVerifiedManifestState(fqdn);
-    manifest = (originStateHolder.current as OriginStateVerifiedManifest)
-      .manifest;
+    assertVerifiedManifest(originStateHolder);
+    manifest = originStateHolder.current.manifest;
   };
 
   const source: ArrayBuffer[] = [];

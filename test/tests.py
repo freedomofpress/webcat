@@ -182,11 +182,11 @@ def setdiff(a: list, b: list):
     "corrupted_wasm_inline_test",
     "corrupted_wasm_frame_test",
 ], indirect=["root"])
-def test_webcat(browser, in_frame, server, expected, logs, errors, rejections, addon_path):
+def test_webcat(browser, in_frame, server, expected, logs, errors, rejections, addon_path, non_enrolled_dnsnames):
     browser.install_extension(addon_path)
     sleep(7)
     if in_frame:
-        browser.navigate(f"{server.url("localhost")}/framehost.html?url={server.url()}")
+        browser.navigate(f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url()}")
     else:
         browser.navigate(server.url())
     sleep(3)
@@ -235,6 +235,58 @@ def test_multiple_tabs(browser: Browser, server: Server, expected, addon_path):
     browser.execute(
         f"window.open('{server.url()}');"
         f"setTimeout(() => location.href = '{server.url()}/x', 1000)"
+    )
+    sleep(3)
+    res = browser.execute("document.body.innerText")
+    assert expected in res
+
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks, expected", [
+    ("cases/testapp", EXPECTED_CSP, {
+        "/js/alert.js": Hook(b"alert('hacked');", type="text/javascript"),
+    }, "ERR_WEBCAT_FILE_MISMATCH"),
+], indirect=["root"], ids=[
+    "non_enrolled_loads_enrolled_subresource_test",
+])
+def test_non_enrolled_subresource(browser: Browser, server: Server, expected, addon_path, dnsnames, non_enrolled_dnsnames):
+    enrolled_url = server.url(dnsnames[0])
+    non_enrolled_url = server.url(non_enrolled_dnsnames[0])
+    # Non-enrolled landing page that loads a single sub-resource cross-origin
+    # from the enrolled domain.
+    server.hooks["/"] = Hook(
+        b'<!DOCTYPE html><html><body>'
+        b'<p>non-enrolled</p>'
+        b'<script src="' + enrolled_url.encode() + b'/js/alert.js"></script>'
+        b'</body></html>',
+        type="text/html",
+        headers={"content-security-policy": "script-src *"},
+    )
+    browser.install_extension(addon_path)
+    sleep(7)
+    browser.navigate(non_enrolled_url)
+    sleep(5)
+    res = browser.execute("document.body.innerText")
+    assert expected in res
+
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks, expected", [
+    ("cases/testapp", EXPECTED_CSP, {
+        "/": Hook(open("cases/testapp/index.html", "rb").read(), type="text/html", delay=2),
+        "/js/alert.js": Hook(b"alert('hacked');", type="text/javascript"),
+    }, "ERR_WEBCAT_FILE_MISMATCH"),
+], indirect=["root"], ids=[
+    "corrupted_js_with_cache_eviction_test",
+])
+def test_cache_eviction(browser: Browser, server: Server, expected, addon_path, dnsnames):
+    browser.install_extension(addon_path)
+    sleep(7)
+    browser.execute(
+         "const w = window.open();"
+        f"window.open('{server.url()}');"
+         "setTimeout(() => {"
+        f"    w.location.href = '{server.url(dnsnames[0])}/console_log.png';"
+        f"    location.href = '{server.url(dnsnames[1])}/console_log.png';"
+         "}, 1000)"
     )
     sleep(3)
     res = browser.execute("document.body.innerText")

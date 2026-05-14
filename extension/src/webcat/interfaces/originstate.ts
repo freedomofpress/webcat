@@ -98,6 +98,8 @@ export class BundleFetcher implements Iterable<BundleFetch> {
 }
 
 export class OriginStateHolder {
+  public stale: boolean = false;
+
   constructor(
     public current:
       | OriginStateBase

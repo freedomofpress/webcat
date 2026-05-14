@@ -32,6 +32,9 @@ export default defineConfig({
         },
       }
     : {},
+  define: {
+    __IS_TESTING__: isTesting,
+  },
   plugins: [viteSingleFile()],
   test: {
     globals: true,

@@ -1,9 +1,13 @@
 import { endpoint } from "../config";
-import { db, origins, tabs } from "../globals";
+import { db, origins, pendingOrigins, tabs } from "../globals";
 import type { WebcatDatabase } from "./db";
 import { getHooks } from "./genhooks";
 import { hooksType, metadataRequestSource } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
+import {
+  OriginStateHolder,
+  OriginStateVerifiedManifest,
+} from "./interfaces/originstate";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
@@ -15,7 +19,27 @@ import {
 } from "./response";
 import { errorpage } from "./ui";
 import { retryUpdateIfFailed } from "./update";
-import { getFQDN, isExtensionRequest } from "./utils";
+import { getFQDN, isExtensionRequest, isNewerSemver } from "./utils";
+
+function commitVerifiedOrigin(fqdn: string, holder: OriginStateHolder): void {
+  if (holder.stale) {
+    return;
+  }
+  if (holder.current.status !== "verified_manifest") {
+    return;
+  }
+  const incoming = (holder.current as OriginStateVerifiedManifest).manifest
+    .version;
+  const existing = origins.get(fqdn);
+  if (existing && existing.current.status === "verified_manifest") {
+    const current = (existing.current as OriginStateVerifiedManifest).manifest
+      .version;
+    if (!isNewerSemver(incoming, current)) {
+      return;
+    }
+  }
+  origins.set(fqdn, holder);
+}
 
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
@@ -27,14 +51,11 @@ function cleanup(tabId: number) {
         "When deleting a tab, we found an enrolled tab with fqdn",
       );
     }
-    const originState = origins.get(fqdn);
-    if (!originState) {
-      throw new Error(
-        "When deleting a tab, we found an enrolled tab with no associated originState",
-      );
-    }
     /* END */
-    originState.current.references--;
+    const originState = origins.get(fqdn);
+    if (originState) {
+      originState.current.references--;
+    }
     tabs.delete(tabId);
   }
 }
@@ -78,12 +99,10 @@ export async function headersListener(
     return {};
   }
 
-  // We checked for enrollment back when the request was fired
-  // For tabs only we could do this, but for workers nope
-  //const fqdn = tabs.get(details.tabId);
-  // So instead let's get that again
+  // pendingOrigins is populated by requestListener
+  let originStateHolder = pendingOrigins.get(details.requestId);
 
-  if (!origins.has(fqdn)) {
+  if (!originStateHolder) {
     // We are dealing with a background request, probably a serviceworker
     logger.addLog(
       "info",
@@ -96,16 +115,16 @@ export async function headersListener(
       details.url,
       details.tabId,
       metadataRequestSource.worker,
+      details.requestId,
     );
     if (result instanceof WebcatError) {
-      origins.delete(fqdn);
+      pendingOrigins.delete(details.requestId);
       tabs.delete(details.tabId);
       errorpage(details.tabId, fqdn, result);
       return { cancel: true };
     }
+    originStateHolder = pendingOrigins.get(details.requestId);
   }
-
-  const originStateHolder = origins.get(fqdn);
 
   if (!originStateHolder) {
     throw new Error("No originState while starting to parse response.");
@@ -119,10 +138,15 @@ export async function headersListener(
       details.tabId,
       fqdn,
     );
-    origins.delete(fqdn);
+    pendingOrigins.delete(details.requestId);
     tabs.delete(details.tabId);
     errorpage(details.tabId, fqdn, result);
     return { cancel: true };
+  }
+
+  if (pendingOrigins.has(details.requestId)) {
+    commitVerifiedOrigin(fqdn, originStateHolder);
+    pendingOrigins.delete(details.requestId);
   }
 
   markResponseContent(details);
@@ -201,23 +225,18 @@ export async function beforeHeadersListener(
 export async function requestListener(
   details: browser.webRequest._OnBeforeRequestDetails,
 ): Promise<browser.webRequest.BlockingResponse> {
-  const fqdn = getFQDN(details.url);
-
-  if (
-    (details.tabId < 0 && !origins.has(fqdn)) ||
-    isExtensionRequest(details)
-  ) {
-    // TODO: is this still relevant? it seems like it
-    // should apply to workers (no tab id) if they do
-    // a fetch request and the origin doesn't exists
-    // To be safe maybe we should check for enrollment again?
+  if (isExtensionRequest(details)) {
     return {};
   }
 
-  // TODO: why does this happen for sub_frames?
-  //if (details.type === "main_frame" || details.type === "sub_frame") {
-  if (FRAME_TYPES.includes(details.type)) {
-    // User is navigatin to a new context, whether is enrolled or not better to reset
+  const fqdn = getFQDN(details.url);
+
+  const isFrame = FRAME_TYPES.includes(details.type);
+
+  // Frame-only pre-setup: reset the tab's origin state and retry pending
+  // list updates
+  if (isFrame) {
+    // User is navigating to a new context, whether is enrolled or not better to reset
     cleanup(details.tabId);
 
     logger.addLog(
@@ -228,44 +247,64 @@ export async function requestListener(
     );
 
     await retryUpdateIfFailed(db, endpoint);
+  }
 
+  let originStateHolder: OriginStateHolder | undefined;
+  if (!isFrame) {
+    originStateHolder = origins.get(fqdn);
+    if (originStateHolder) {
+      pendingOrigins.set(details.requestId, originStateHolder);
+    }
+  }
+
+  if (!originStateHolder) {
     const result = await validateOrigin(
       fqdn,
       details.url,
       details.tabId,
-      metadataRequestSource.main_frame,
+      isFrame
+        ? metadataRequestSource.main_frame
+        : metadataRequestSource.sub_resource,
+      details.requestId,
     );
     if (result instanceof WebcatError) {
-      origins.delete(fqdn);
-      tabs.delete(details.tabId);
-      errorpage(details.tabId, fqdn, result);
+      pendingOrigins.delete(details.requestId);
+      if (isFrame) {
+        tabs.delete(details.tabId);
+        errorpage(details.tabId, fqdn, result);
+      }
       return { cancel: true };
     }
     if (result) {
-      logger.addLog("info", `Redirecting to https`, details.tabId, fqdn);
+      // HTTPS redirect; browser reissues under a fresh requestId.
+      if (isFrame) {
+        logger.addLog("info", `Redirecting to https`, details.tabId, fqdn);
+      }
       return result;
     }
+    originStateHolder = pendingOrigins.get(details.requestId);
   }
 
-  /* DEVELOPMENT GUARD */
-  /*it's here for development: meaning if we reach this stage
-    and the fqdn is enrolled, but a entry in the origin map has nor been created, there is a critical security bug */
-  if ((await db.getFQDNEnrollment(fqdn)).length !== 0 && !origins.has(fqdn)) {
-    console.error(
-      "FATAL: loading from an enrolled origin but the state does not exists.",
-    );
-    return { cancel: true };
-  }
-  /* END */
-
-  // if we know the tab is enrolled, or it is a worker background connction then we should verify
-  if (tabs.has(details.tabId) === true || details.tabId < 0) {
-    await validateResponseContent(details);
+  // No holder means the fqdn isn't enrolled
+  if (!originStateHolder) {
+    return {};
   }
 
-  // See https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse
-  // Returning a response here is a very powerful tool, let's think about it later
+  await validateResponseContent(details, originStateHolder);
   return {};
+}
+
+// Ensure pending objects do not leak
+function errorOccurredListener(
+  details: browser.webRequest._OnErrorOccurredDetails,
+): void {
+  pendingOrigins.delete(details.requestId);
+}
+
+function completedListener(
+  details: browser.webRequest._OnCompletedDetails,
+): void {
+  pendingOrigins.delete(details.requestId);
 }
 
 // Single global webRequest listener registration that scopes to the union
@@ -282,6 +321,8 @@ type RegisteredListeners = {
   headers?: (
     details: browser.webRequest._OnHeadersReceivedDetails,
   ) => Promise<browser.webRequest.BlockingResponse>;
+  errorOccurred?: (details: browser.webRequest._OnErrorOccurredDetails) => void;
+  completed?: (details: browser.webRequest._OnCompletedDetails) => void;
 };
 
 let currentListeners: RegisteredListeners = {};
@@ -307,6 +348,12 @@ function removeListeners(listeners: RegisteredListeners): void {
   if (listeners.headers) {
     browser.webRequest.onHeadersReceived.removeListener(listeners.headers);
   }
+  if (listeners.errorOccurred) {
+    browser.webRequest.onErrorOccurred.removeListener(listeners.errorOccurred);
+  }
+  if (listeners.completed) {
+    browser.webRequest.onCompleted.removeListener(listeners.completed);
+  }
 }
 
 export async function installEnrolledListeners(
@@ -330,6 +377,10 @@ export async function installEnrolledListeners(
   ) => beforeHeadersListener(details);
   const headers = (details: browser.webRequest._OnHeadersReceivedDetails) =>
     headersListener(details);
+  const errorOccurred = (details: browser.webRequest._OnErrorOccurredDetails) =>
+    errorOccurredListener(details);
+  const completed = (details: browser.webRequest._OnCompletedDetails) =>
+    completedListener(details);
 
   // Add new listeners first, then remove the old ones
   browser.webRequest.onBeforeRequest.addListener(before, { urls }, [
@@ -344,9 +395,17 @@ export async function installEnrolledListeners(
     "blocking",
     "responseHeaders",
   ]);
+  browser.webRequest.onErrorOccurred.addListener(errorOccurred, { urls });
+  browser.webRequest.onCompleted.addListener(completed, { urls });
 
   const previous = currentListeners;
-  currentListeners = { before, beforeHeaders, headers };
+  currentListeners = {
+    before,
+    beforeHeaders,
+    headers,
+    errorOccurred,
+    completed,
+  };
   removeListeners(previous);
 
   // See https://github.com/freedomofpress/webcat/issues/137
