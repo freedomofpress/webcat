@@ -182,11 +182,11 @@ def setdiff(a: list, b: list):
     "corrupted_wasm_inline_test",
     "corrupted_wasm_frame_test",
 ], indirect=["root"])
-def test_webcat(browser, in_frame, server, expected, logs, errors, rejections, addon_path, non_enrolled_dnsnames):
+def test_webcat(browser, in_frame, server, expected, logs, errors, rejections, addon_path, dnsnames, non_enrolled_dnsnames):
     browser.install_extension(addon_path)
     sleep(7)
     if in_frame:
-        browser.navigate(f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url()}")
+        browser.navigate(f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url(dnsnames[0])}")
     else:
         browser.navigate(server.url())
     sleep(3)
