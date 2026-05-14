@@ -3,11 +3,16 @@
 <head>
 	<link rel="stylesheet" href="/css/styles.css">
 	<script>
+		const chan = new MessageChannel();
 		WebAssembly.instantiateStreaming(fetch("wasm/inline_addTwo.wasm")).then(result => {
 			console.log("inline:", "addTwo" in result.instance.exports);
 		}).catch(e => {
-			// rethrow after load to make sure the error is visible in tests
-			window.addEventListener("DOMContentLoaded", () => { throw e; });
+			// rethrow outside the Promise after load to
+			// make sure the error is visible in tests
+			chan.port2.postMessage(e);
+		});
+		window.addEventListener("DOMContentLoaded", () => {
+			chan.port1.onmessage = ({ data }) => { throw data };
 		});
 	</script>
 	<script src="js/capture.js"></script>

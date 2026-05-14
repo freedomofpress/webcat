@@ -71,7 +71,8 @@ export async function errorpage(
   fqdn: string,
   error?: WebcatError,
 ) {
-  const tabIds = [];
+  const tabIds = new Set<number>();
+  const frameLookups = [];
   if (tabId < 0) {
     const tabs = await browser.tabs.query({});
     for (const tab of tabs) {
@@ -81,11 +82,25 @@ export async function errorpage(
         /https?:\/\//i.test(tab.url) &&
         fqdn === getFQDN(tab.url)
       ) {
-        tabIds.push(tab.id);
+        tabIds.add(tab.id);
+      } else if (tab.id) {
+        frameLookups.push(
+          browser.webNavigation.getAllFrames({ tabId: tab.id }).then((frames) =>
+            frames.forEach((frame) => {
+              if (
+                /https?:\/\//i.test(frame.url) &&
+                fqdn === getFQDN(frame.url)
+              ) {
+                tabIds.add(frame.tabId);
+              }
+            }),
+          ),
+        );
       }
     }
+    await Promise.all(frameLookups);
   } else {
-    tabIds.push(tabId);
+    tabIds.add(tabId);
   }
 
   const code = error?.code ?? "WEBCAT_ERROR_UNDEFINED";
@@ -93,8 +108,9 @@ export async function errorpage(
   const errorPageUrl =
     browser.runtime.getURL("pages/error.html") + `#${encodeURIComponent(code)}`;
 
-  const tabUpdates = tabIds.map((tabId) =>
-    browser.tabs.update(tabId, { url: errorPageUrl }),
+  const tabUpdates: Promise<browser.tabs.Tab>[] = [];
+  tabIds.forEach((tabId) =>
+    tabUpdates.push(browser.tabs.update(tabId, { url: errorPageUrl })),
   );
   await Promise.all(tabUpdates);
 

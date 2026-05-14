@@ -53,8 +53,14 @@ BAD_WASM = Hook(
 
 EXPECTED_CSP = {
     "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval' "
-                               "'sha256-8v/OW9iF85cNAUqC+rgYqRupd4JxPlE79PTiDRC0AJk='; "
+                               "'sha256-oiHtO61BAW24D+FpLSqz2Jnv6Wv67XDn90HOTlaklfQ='; "
                                "style-src 'self'; frame-src 'none'; worker-src 'self';"
+}
+
+FRAMEHOST_HOOK = {
+    "/framehost.html": Hook(open("cases/testapp/framehost.html", "rb").read(), type="text/html", headers={
+        "content-security-policy": "",
+    }),
 }
 
 def setdiff(a: list, b: list):
@@ -67,13 +73,14 @@ def setdiff(a: list, b: list):
     return a
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("in_frame", [False, True], ids=["plain","in_frame"])
 @pytest.mark.parametrize("root, headers, hooks, expected, logs, errors, rejections", [
 
     # Basic correct execution
-    ("cases/testapp", EXPECTED_CSP, { }, "Hello!", EXPECTED_LOGS, [], []),
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK, "Hello!", EXPECTED_LOGS, [], []),
 
     # Correct execution without WebAssembly or Workers
-    ("cases/testapp", EXPECTED_CSP, {
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {
         "/js/wasm.js": b"",
         "/js/wasm_fetch.js": b"",
         "/js/load_worker.js": b"",
@@ -98,61 +105,61 @@ def setdiff(a: list, b: list):
     ("cases/testapp", {
         "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                    "style-src 'self'; frame-src 'none'; worker-src 'self';"
-    }, {}, "ERR_WEBCAT_CSP_MISMATCH", [], [], []),
+    }, FRAMEHOST_HOOK, "ERR_WEBCAT_CSP_MISMATCH", [], [], []),
 
     # Missing CSP
     ("cases/testapp", {
         # No CSP header
-    }, {}, "ERR_WEBCAT_HEADERS_MISSING_CRITICAL", [], [], []),
+    }, FRAMEHOST_HOOK, "ERR_WEBCAT_HEADERS_MISSING_CRITICAL", [], [], []),
 
     # Hook / with static content
-    ("cases/testapp", EXPECTED_CSP, {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /.well-known/webcat/bundle.json
-    ("cases/testapp", EXPECTED_CSP, {"/.well-known/webcat/bundle.json": b'{"a":"b"}'}, "ERR_WEBCAT_BUNDLE_MISSING_ENROLLMENT", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/.well-known/webcat/bundle.json": b'{"a":"b"}'}, "ERR_WEBCAT_BUNDLE_MISSING_ENROLLMENT", [], [], []),
 
     # Hook /js/alert.js
-    ("cases/testapp", EXPECTED_CSP, {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /wasm/addTwo.wasm
-    ("cases/testapp", EXPECTED_CSP, {"/wasm/addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM]), [], [
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM]), [], [
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
     ]),
 
     # Hook /wasm/addThree.wasm
-    ("cases/testapp", EXPECTED_CSP, {"/wasm/addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FETCH]), [], [
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FETCH]), [], [
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
     ]),
 
     # Hook /wasm/reverseSub.wasm
-    ("cases/testapp", EXPECTED_CSP, {"/wasm/reverseSub.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_WASMWORKER]), [
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/reverseSub.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_WASMWORKER]), [
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/wasm_worker.js']
     ], []),
 
     # Hook /workers/worker.js
-    ("cases/testapp", EXPECTED_CSP, {"/workers/worker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/worker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /workers/sharedworker.js
-    ("cases/testapp", EXPECTED_CSP, {"/workers/sharedworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/sharedworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /workers/serviceworker.js
-    ("cases/testapp", EXPECTED_CSP, {"/workers/serviceworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/serviceworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
 
     # Hook /workers/audioworklet.js
-    ("cases/testapp", EXPECTED_CSP, {"/workers/audioworklet.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/audioworklet.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], []),
     
     # Hook /wasm/aw_addTwo.wasm
-    ("cases/testapp", EXPECTED_CSP, {"/wasm/aw_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_AUDIOWORKLET]), [
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/aw_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_AUDIOWORKLET]), [
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/audioworklet.js']
     ], []),
 
     # Hook /wasm/inline_addTwo.wasm
-    ("cases/testapp", EXPECTED_CSP, {"/wasm/inline_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_INLINE]), [
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/inline_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_INLINE]), [
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
     ], []),
 
     # Hook /wasm/frame_addThree.wasm
-    ("cases/testapp", EXPECTED_CSP, {"/wasm/frame_addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FRAME]), [], [
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/frame_addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FRAME]), [], [
         ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
     ]),
 
@@ -175,13 +182,17 @@ def setdiff(a: list, b: list):
     "corrupted_wasm_inline_test",
     "corrupted_wasm_frame_test",
 ], indirect=["root"])
-def test_webcat(browser, server, expected, logs, errors, rejections, addon_path):
+def test_webcat(browser, in_frame, server, expected, logs, errors, rejections, addon_path):
     browser.install_extension(addon_path)
     sleep(7)
-    browser.navigate(server.url())
-    sleep(2)
-    res = browser.execute("document.body.innerText")
-    assert expected in res
+    if in_frame:
+        browser.navigate(f"{server.url("localhost")}/framehost.html?url={server.url()}")
+    else:
+        browser.navigate(server.url())
+    sleep(3)
+    if not in_frame:
+        res = browser.execute("document.body.innerText")
+        assert expected in res
     res = json.loads(browser.execute("JSON.stringify(window.capture?.logs || [])"))
     for log in res: assert log in logs
     for log in logs: assert log in res

@@ -97,6 +97,7 @@ class Browser:
         override_file = self.profile_path / "cert_override.txt"
         with open(override_file, "a") as f:
             f.write(f"127.0.0.1:{port}\tOID.2.16.840.1.101.3.4.2.1\t{fingerprint}\t{db_key}\n")
+            f.write(f"localhost:{port}\tOID.2.16.840.1.101.3.4.2.1\t{fingerprint}\t{db_key}\n")
 
     def install_extension(self, path):
         root_actor_ids = self.root.get_root()
@@ -254,9 +255,10 @@ class Server:
                 return os.path.join(root, path.lstrip("/").split("?", 1)[0])
 
             def do_GET(self):
-                if self.path in hooks:
+                path = self.path.split("?", 1)[0]
+                if path in hooks:
                     self.send_response(200)
-                    hook = hooks[self.path]
+                    hook = hooks[path]
                     if type(hook) is bytes:
                         self.send_header("Content-Type", "text/plain")
                         self.end_headers()
@@ -291,9 +293,9 @@ class Server:
         self.httpd.shutdown()
         self.thread.join()
 
-    def url(self):
+    def url(self, hostname="127.0.0.1"):
         scheme = "https" if self.ssl_cert else "http"
-        return f"{scheme}://127.0.0.1:{self.port}"
+        return f"{scheme}://{hostname}:{self.port}"
 
 def generate_ssl_cert(output_dir):
     """Generate a self-signed certificate for 127.0.0.1."""
@@ -308,7 +310,10 @@ def generate_ssl_cert(output_dir):
         .not_valid_before(datetime.datetime.now(datetime.timezone.utc))
         .not_valid_after(datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1))
         .add_extension(
-            x509.SubjectAlternativeName([x509.IPAddress(ipaddress.IPv4Address("127.0.0.1"))]),
+            x509.SubjectAlternativeName([
+                x509.IPAddress(ipaddress.IPv4Address("127.0.0.1")),
+                x509.DNSName("localhost")
+            ]),
             critical=False,
         )
         .sign(key, hashes.SHA256())

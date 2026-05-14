@@ -153,12 +153,12 @@ export async function headersListener(
     const wasm = originStateHolder.current.manifest.wasm;
 
     const listener = async (
-      navDetails: browser.webNavigation._OnCommittedDetails,
+      navDetails: browser.webNavigation._OnDOMContentLoadedDetails,
     ) => {
       if (navDetails.tabId !== details.tabId) return;
       if (navDetails.frameId !== details.frameId) return;
 
-      browser.webNavigation.onCommitted.removeListener(listener);
+      browser.webNavigation.onDOMContentLoaded.removeListener(listener);
 
       await browser.tabs.executeScript(details.tabId, {
         code: getHooks(hooksType.content_script, wasm),
@@ -167,7 +167,7 @@ export async function headersListener(
       });
     };
 
-    browser.webNavigation.onCommitted.addListener(listener);
+    browser.webNavigation.onDOMContentLoaded.addListener(listener);
   }
 
   return {};
