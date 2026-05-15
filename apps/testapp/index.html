@@ -1,10 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+	<link rel="stylesheet" href="/css/styles.css">
+	<script>
+		const chan = new MessageChannel();
+		WebAssembly.instantiateStreaming(fetch("wasm/inline_addTwo.wasm")).then(result => {
+			console.log("inline:", "addTwo" in result.instance.exports);
+		}).catch(e => {
+			// rethrow outside the Promise after load to
+			// make sure the error is visible in tests
+			chan.port2.postMessage(e);
+		});
+		window.addEventListener("DOMContentLoaded", () => {
+			chan.port1.onmessage = ({ data }) => { throw data };
+		});
+	</script>
 	<script src="js/capture.js"></script>
 	<script src="js/alert.js"></script>
 	<script src="js/wasm.js"></script>
 	<script src="js/wasm_fetch.js"></script>
+	<script src="js/load_wasmframe.js"></script>
 	<script src="js/load_serviceworker.js"></script>
 	<script src="js/load_sharedworker.js"></script>
 	<script src="js/load_worker.js"></script>

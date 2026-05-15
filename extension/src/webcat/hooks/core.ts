@@ -18,17 +18,36 @@ export function wasmHook(
     targetScope: object,
     options: { defineAs: string },
   ) => Function, // eslint-disable-line @typescript-eslint/no-unsafe-function-type
+  localScope: object & { ALLOWED_HASHES?: string[]; ready?: Promise<void> },
 ) {
   const wasm = unwrappedScope.WebAssembly;
+
+  // Hardcoded allowlist of allowed SHA-256 hex digests.
+  let ALLOWED_HASHES = ["__HASHES_PLACEHOLDER__"];
 
   // Check if the WebAssembly hook has already been injected.
   if (Object.prototype.hasOwnProperty.call(wasm, "__hooked__")) {
     console.log("[WEBCAT] WebAssembly hook already injected.");
+    localScope.ALLOWED_HASHES = ALLOWED_HASHES; // update hashes
     return;
   }
 
-  // Hardcoded allowlist of allowed SHA-256 hex digests.
-  const ALLOWED_HASHES: string[] = ["__HASHES_PLACEHOLDER__"];
+  // Allow updating ALLOWED_HASHES through localScope
+  const { promise, resolve } = scope.Promise.withResolvers<void>();
+  localScope.ready = promise;
+  Object.defineProperty(localScope, "ALLOWED_HASHES", {
+    set: (v) => {
+      ALLOWED_HASHES = v;
+      resolve();
+    },
+    get: () => ALLOWED_HASHES,
+  });
+  if (
+    ALLOWED_HASHES.length != 1 ||
+    ALLOWED_HASHES[0] !== "__HASHES_PLACEHOLDER__"
+  ) {
+    localScope.ALLOWED_HASHES = ALLOWED_HASHES;
+  }
 
   // Helper: Convert ArrayBuffer digest to a hex string.
   function arrayBuffertoBase64Url(bytes: ArrayBuffer | Uint8Array): string {
@@ -46,7 +65,7 @@ export function wasmHook(
   // Async bytecode verifier: uses crypto.subtle.digest with a synchronous
   // fallback for Worklets. Must always return a scope.Promise, may never throw.
   function verifyBytecodeAsync(bufferSource: BufferSource): Promise<void> {
-    try {
+    return localScope.ready.then(() => {
       if (!("crypto" in globalThis)) {
         return Promise.resolve(verifyBytecodeSync(bufferSource));
       }
@@ -60,9 +79,7 @@ export function wasmHook(
         }
         console.log(`[WEBCAT] Verified WASM (async) ${hashHex}`);
       });
-    } catch (e) {
-      return scope.Promise.reject(e);
-    }
+    });
   }
 
   // Synchronous bytecode verifier: uses the synchronous SHA256(buffer).
@@ -78,18 +95,11 @@ export function wasmHook(
   }
 
   // Helper: Extract an ArrayBuffer from a bufferSource.
-  function extractBuffer(
-    bufferSource: BufferSource | WebAssembly.Module,
-  ): ArrayBuffer {
-    if (bufferSource instanceof scope.ArrayBuffer) {
-      return bufferSource;
-    }
+  function extractBuffer(bufferSource: BufferSource): ArrayBuffer {
     if (scope.ArrayBuffer.isView(bufferSource)) {
       return bufferSource.buffer as ArrayBuffer;
     }
-    throw new scope.TypeError(
-      "[WEBCAT] WebAssembly bytecode must be provided as an ArrayBuffer or typed array",
-    );
+    return bufferSource as ArrayBuffer;
   }
 
   // ============================

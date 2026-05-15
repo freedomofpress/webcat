@@ -25,6 +25,7 @@
     "storage",
     "unlimitedStorage",
     "tabs",
+    "scripting",
     "<all_urls>"
   ],
   "icons": {

@@ -205,11 +205,12 @@ class TorBrowser(Browser):
             return Path.home() / "Library" / "Application Support" / "TorBrowser-Data" / "Browser"
         return Path(os.path.dirname(TorBrowser.get_binary_path())).joinpath("TorBrowser/Data/Browser/")
 
-    def __init__(self, override_tbb_path="", override_profiles_path="", additional_configs={}, allowed_addons=[], security_level=4):
+    def __init__(self, override_tbb_path="", override_profiles_path="", additional_configs:dict={}, allowed_addons=[], security_level=4):
         if override_tbb_path == "":
             override_tbb_path = TorBrowser.get_binary_path()
         if override_profiles_path == "":
             override_profiles_path = TorBrowser.get_profiles_path()
+        additional_configs = additional_configs.copy()
         additional_configs["network.proxy.allow_hijacking_localhost"] = False
         if security_level != TorBrowser.SecurityLevel.Standard:
             additional_configs.update(TorBrowser.SecurityLevel._get_config(security_level))
@@ -255,9 +256,10 @@ class Server:
                 return os.path.join(root, path.lstrip("/").split("?", 1)[0])
 
             def do_GET(self):
-                if self.path in hooks:
+                path = self.path.split("?", 1)[0]
+                if path in hooks:
                     self.send_response(200)
-                    hook = hooks[self.path]
+                    hook = hooks[path]
                     if type(hook) is bytes:
                         self.send_header("Content-Type", "text/plain")
                         self.end_headers()
@@ -292,9 +294,9 @@ class Server:
         self.httpd.shutdown()
         self.thread.join()
 
-    def url(self):
+    def url(self, hostname="127.0.0.1"):
         scheme = "https" if self.ssl_cert else "http"
-        return f"{scheme}://127.0.0.1:{self.port}"
+        return f"{scheme}://{hostname}:{self.port}"
 
 def generate_ssl_cert(output_dir, dnsnames=[]):
     """Generate a self-signed certificate for 127.0.0.1."""

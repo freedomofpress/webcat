@@ -9,13 +9,25 @@ from helpers import Browser, DB, Server, TorBrowser, generate_ssl_cert
 from sigsum import generate_bundle
 from pytest_benchmark.fixture import BenchmarkFixture
 
-_tbb_skips = {"corrupted_serviceworker_test": "ServiceWorkers not supported in Tor Browser"}
+_tbb_skips = {
+    "corrupted_serviceworker_test": "ServiceWorkers not supported in Tor Browser",
+    "basic_test-in_frame": "SharedWorkers in frames not supported in Tor Browser",
+    "corrupted_wasm_test-in_frame": "SharedWorkers in frames not supported in Tor Browser",
+    "corrupted_wasm_fetch_test-in_frame": "SharedWorkers in frames not supported in Tor Browser",
+    "corrupted_wasm_worker_test-in_frame": "SharedWorkers in frames not supported in Tor Browser",
+    "corrupted_sharedworker_test-in_frame": "SharedWorkers in frames not supported in Tor Browser",
+    "corrupted_wasm_audioworklet_test-in_frame": "SharedWorkers in frames not supported in Tor Browser",
+    "corrupted_wasm_inline_test-in_frame": "SharedWorkers in frames not supported in Tor Browser",
+    "corrupted_wasm_frame_test-in_frame": "SharedWorkers in frames not supported in Tor Browser",
+}
 _tbb_safer_skips = {
     "basic_test": "WebAssembly not available at this security level",
     "corrupted_wasm_test": "WebAssembly not available at this security level",
     "corrupted_wasm_fetch_test": "WebAssembly not available at this security level",
     "corrupted_wasm_worker_test": "WebAssembly not available at this security level",
     "corrupted_wasm_audioworklet_test": "WebAssembly not available at this security level",
+    "corrupted_wasm_inline_test": "WebAssembly not available at this security level",
+    "corrupted_wasm_frame_test": "WebAssembly not available at this security level",
 }
 _tbb_safest_skips = {
     "no_wasm_test": "JavaScript fully disabled at this security level",
@@ -25,6 +37,7 @@ _tbb_safest_skips = {
     "corrupted_audioworklet_test": "JavaScript fully disabled at this security level",
     "corrupted_js_with_induced_error_test": "JavaScript fully disabled at this security level",
     "non_enrolled_loads_enrolled_subresource_test": "JavaScript fully disabled at this security level",
+    "corrupted_js_with_cache_eviction_test": "JavaScript fully disabled at this security level",
 }
 _browser_skips = {
     "tbb": _tbb_skips,
@@ -39,8 +52,9 @@ def pytest_collection_modifyitems(items):
         browser_id = item.callspec.params.get("browser")
         skips = _browser_skips.get(browser_id, {})
         test_case = item.callspec.id.removesuffix(f"-{browser_id}")
-        if test_case in skips:
-            item.add_marker(pytest.mark.skip(reason=skips[test_case]))
+        for pattern, reason in skips.items():
+            if pattern in test_case:
+                item.add_marker(pytest.mark.skip(reason=reason))
 
 def pytest_addoption(parser):
     parser.addoption(

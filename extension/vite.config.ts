@@ -8,6 +8,7 @@ export default defineConfig({
   build: {
     minify: !isTesting,
     outDir: "dist",
+    emptyOutDir: false,
     target: "esnext",
     rollupOptions: {
       input: {

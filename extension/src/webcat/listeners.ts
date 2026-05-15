@@ -177,12 +177,12 @@ export async function headersListener(
     const wasm = originStateHolder.current.manifest.wasm;
 
     const listener = async (
-      navDetails: browser.webNavigation._OnCommittedDetails,
+      navDetails: browser.webNavigation._OnDOMContentLoadedDetails,
     ) => {
       if (navDetails.tabId !== details.tabId) return;
       if (navDetails.frameId !== details.frameId) return;
 
-      browser.webNavigation.onCommitted.removeListener(listener);
+      browser.webNavigation.onDOMContentLoaded.removeListener(listener);
 
       await browser.tabs.executeScript(details.tabId, {
         code: getHooks(hooksType.content_script, wasm),
@@ -191,7 +191,7 @@ export async function headersListener(
       });
     };
 
-    browser.webNavigation.onCommitted.addListener(listener);
+    browser.webNavigation.onDOMContentLoaded.addListener(listener);
   }
 
   return {};
@@ -367,22 +367,6 @@ export async function installEnrolledListeners(
     return;
   }
 
-  if (fqdns.length === 0) {
-    if (
-      currentListeners.before ||
-      currentListeners.beforeHeaders ||
-      currentListeners.headers ||
-      currentListeners.errorOccurred ||
-      currentListeners.completed
-    ) {
-      removeListeners(currentListeners);
-      currentListeners = {};
-      browser.webRequest.handlerBehaviorChanged();
-    }
-    console.log("[webcat] installEnrolledListeners: 0 enrolled FQDNs");
-    return;
-  }
-
   const urls = buildUrlPatterns(fqdns);
 
   // The registration needs to be different from the existing one
@@ -426,6 +410,31 @@ export async function installEnrolledListeners(
 
   // See https://github.com/freedomofpress/webcat/issues/137
   browser.webRequest.handlerBehaviorChanged();
+
+  // Look up existing content scripts and add the ones that are missing
+  const scriptIds = (await browser.scripting.getRegisteredContentScripts()).map(
+    (script) => script.id,
+  );
+  await browser.scripting.registerContentScripts(
+    fqdns
+      .filter((fqdn) => {
+        return !scriptIds.includes(fqdn);
+      })
+      .map((fqdn) => {
+        return {
+          id: fqdn,
+          js: ["dist/hooks/content.js"],
+          matches: buildUrlPatterns([fqdn]),
+          matchOriginAsFallback: true,
+          allFrames: true,
+          runAt: "document_start",
+        };
+      }),
+  );
+  // Remove the content scripts whose fqdn is no longer enrolled
+  await browser.scripting.unregisterContentScripts({
+    ids: scriptIds.filter((id) => !fqdns.includes(id)),
+  });
 
   console.log(
     `[webcat] installEnrolledListeners: registered listeners for ${fqdns.length} FQDN(s)`,

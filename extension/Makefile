@@ -2,7 +2,7 @@ DIST := ../dist
 OUT  := $(DIST)/webcat-extension.zip
 OUT_TEST  := $(DIST)/webcat-extension-test.zip
 
-INPUTS := manifest.json dist icons pages data
+INPUTS := manifest.json dist/bundle.js dist/hooks/content.js icons pages data
 FIXED_MTIME := 198001010000
 
 all: package package-test
