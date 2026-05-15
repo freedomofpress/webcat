@@ -17,10 +17,12 @@ import {
 import {
   BundleFetcher,
   OriginStateFailed,
+  OriginStateHolder,
   OriginStateInitial,
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "../../src/webcat/interfaces/originstate";
+import { validateResponseContent } from "../../src/webcat/response";
 import { SHA256 } from "../../src/webcat/utils";
 
 function makeDummyFetcher(): BundleFetcher {
@@ -36,8 +38,16 @@ vi.stubGlobal("browser", {
   webRequest: {
     onBeforeRequest: { removeListener: vi.fn() },
     onHeadersReceived: { removeListener: vi.fn() },
+    filterResponseData: vi.fn(),
   },
 });
+
+// errorpage / setOKIcon touch many browser APIs we haven't stubbed; keep the
+// fail-closed path under test in isolation.
+vi.mock("../../src/webcat/ui", () => ({
+  errorpage: vi.fn(),
+  setOKIcon: vi.fn(),
+}));
 
 vi.mock("../../src/webcat/db", () => {
   return {
@@ -691,5 +701,127 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
   it("returns false for incorrect CSP", () => {
     const badCsp = "default-src 'self'; script-src 'self';";
     expect(verifiedManifestState.verifyCSP(badCsp, "/")).toBe(false);
+  });
+});
+
+//
+// ─────────────────────────────────────────────
+//   validateResponseContent fail-closed behavior
+// ─────────────────────────────────────────────
+//
+describe("validateResponseContent fail-closed", () => {
+  function makeFilter() {
+    const noop = () => {};
+    return {
+      // Pre-populate handlers with no-ops so the test types stay non-nullable;
+      // validateResponseContent overwrites these during setup.
+      onstart: noop as (event: Event) => void,
+      ondata: noop as (event: { data: ArrayBuffer }) => void,
+      onstop: noop as (event: Event) => void,
+      onerror: noop as (event: Event) => void,
+      status: "uninitialized",
+      error: "",
+      write: vi.fn(),
+      close: vi.fn(),
+      disconnect: vi.fn(),
+      suspend: vi.fn(),
+      resume: vi.fn(),
+    };
+  }
+
+  const DENIED = new Uint8Array([68, 69, 78, 73, 69, 68]);
+
+  it("blocks content when onstart throws (manifest not verified)", async () => {
+    const filter = makeFilter();
+    (
+      browser.webRequest.filterResponseData as unknown as vi.Mock
+    ).mockReturnValue(filter);
+
+    // Holder whose status is NOT "verified_manifest" → assertVerifiedManifest
+    // throws inside onstart, simulating a programmer error or bad state.
+    const holder = {
+      current: { status: "verified_enrollment", manifest: undefined },
+      stale: false,
+    } as unknown as OriginStateHolder;
+
+    const details = {
+      requestId: "req-1",
+      url: "https://example.com/index.html",
+      type: "main_frame",
+      tabId: 0,
+    } as unknown as browser.webRequest._OnBeforeRequestDetails;
+
+    await validateResponseContent(details, holder);
+
+    // The browser would invoke onstart once the response begins streaming.
+    await filter.onstart({} as Event);
+
+    expect(filter.write).toHaveBeenCalledTimes(1);
+    expect(new Uint8Array(filter.write.mock.calls[0][0])).toEqual(DENIED);
+    expect(filter.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks content when ondata throws (e.g. undefined manifest access)", async () => {
+    const filter = makeFilter();
+    (
+      browser.webRequest.filterResponseData as unknown as vi.Mock
+    ).mockReturnValue(filter);
+
+    // Pretend onstart succeeded but the manifest closure is still uninitialized
+    // (simulates any unexpected runtime error reaching into manifest fields).
+    const holder = {
+      current: { status: "verified_enrollment", manifest: undefined },
+      stale: false,
+    } as unknown as OriginStateHolder;
+
+    const details = {
+      requestId: "req-2",
+      url: "https://example.com/app.js",
+      type: "script",
+      tabId: 0,
+    } as unknown as browser.webRequest._OnBeforeRequestDetails;
+
+    await validateResponseContent(details, holder);
+
+    // Skip onstart and feed data directly — manifest is undefined inside the
+    // closure, so any access throws TypeError.
+    await filter.ondata({ data: new Uint8Array([1, 2, 3]).buffer });
+
+    // ondata's body only touches `manifest` on the hookMarker branch; non-marker
+    // bytes are just buffered. So force the throw path by sending the hook marker.
+    const { hookMarker } = await import("../../src/globals");
+    await filter.ondata({ data: hookMarker.buffer });
+
+    expect(filter.write).toHaveBeenCalledTimes(1);
+    expect(new Uint8Array(filter.write.mock.calls[0][0])).toEqual(DENIED);
+    expect(filter.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks content on filter.onerror", async () => {
+    const filter = makeFilter();
+    (
+      browser.webRequest.filterResponseData as unknown as vi.Mock
+    ).mockReturnValue(filter);
+
+    const holder = {
+      current: { status: "verified_enrollment", manifest: undefined },
+      stale: false,
+    } as unknown as OriginStateHolder;
+
+    const details = {
+      requestId: "req-3",
+      url: "https://example.com/style.css",
+      type: "stylesheet",
+      tabId: 0,
+    } as unknown as browser.webRequest._OnBeforeRequestDetails;
+
+    await validateResponseContent(details, holder);
+
+    filter.error = "underlying stream error";
+    filter.onerror({} as Event);
+
+    expect(filter.write).toHaveBeenCalledTimes(1);
+    expect(new Uint8Array(filter.write.mock.calls[0][0])).toEqual(DENIED);
+    expect(filter.close).toHaveBeenCalledTimes(1);
   });
 });
