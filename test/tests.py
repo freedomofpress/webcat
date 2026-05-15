@@ -271,6 +271,25 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, expected, ad
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
     ("cases/testapp", EXPECTED_CSP, {
+        "/": Hook(
+            b"<!--__WEBCAT_TEST_FAIL_CLOSED__-->",
+            type="text/html",
+        ),
+    }, "ERR_WEBCAT_FILE_MISMATCH"),
+], indirect=["root"], ids=[
+    "filter_failclosed_test",
+])
+def test_filter_failclosed(browser: Browser, server: Server, expected, addon_path):
+    browser.install_extension(addon_path)
+    sleep(7)
+    browser.navigate(server.url())
+    sleep(3)
+    res = browser.execute("document.body.innerText")
+    assert expected in res
+
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks, expected", [
+    ("cases/testapp", EXPECTED_CSP, {
         "/": Hook(open("cases/testapp/index.html", "rb").read(), type="text/html", delay=2),
         "/js/alert.js": Hook(b"alert('hacked');", type="text/javascript"),
     }, "ERR_WEBCAT_FILE_MISMATCH"),

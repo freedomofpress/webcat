@@ -231,90 +231,134 @@ export async function validateResponseContent(
 
   let manifest!: Manifest;
   const filter = browser.webRequest.filterResponseData(details.requestId);
+
+  // Fail-closed: any unexpected error in the stream filter pipeline must block
+  // the response
+  let blocked = false;
+  const failClosed = (where: string, err: unknown) => {
+    if (blocked) return;
+    blocked = true;
+    logger.addLog(
+      "error",
+      `Stream filter ${where} error, blocking: ${err instanceof Error ? err.message : String(err)}`,
+      details.tabId,
+      fqdn,
+    );
+    try {
+      deny(filter);
+    } catch {
+      /* filter may already be closed */
+    }
+    try {
+      filter.close();
+    } catch {
+      /* filter may already be closed */
+    }
+    errorpage(
+      details.tabId,
+      fqdn,
+      new WebcatError(WebcatErrorCode.File.MISMATCH),
+    );
+  };
+
+  filter.onerror = () => failClosed("onerror", filter.error);
+
   filter.onstart = () => {
-    assertVerifiedManifest(originStateHolder);
-    manifest = originStateHolder.current.manifest;
+    try {
+      assertVerifiedManifest(originStateHolder);
+      manifest = originStateHolder.current.manifest;
+    } catch (e) {
+      failClosed("onstart", e);
+    }
   };
 
   const source: ArrayBuffer[] = [];
   filter.ondata = (event: { data: ArrayBuffer }) => {
-    // The data here is usually chunked; normally it would be streamed down as we get it
-    // but since we can hash the content only at the end, we have to wait until we have everything
-    // before deciding if the response content matches the manifest or not. So we are saving it and we will
-    // build a blob later. If the data is the hook marker, replace it with the WASM hooks, and if it is the
-    // end marker, flush all buffered data
-    if (arraysEqual(hookMarker, new Uint8Array(event.data))) {
-      const hooks = getHooks(hooksType.page, manifest.wasm);
-      source.push(stringToUint8Array(hooks).buffer);
-    } else if (arraysEqual(endMarker, new Uint8Array(event.data))) {
-      source.forEach((hook) => filter.write(hook));
-      source.length = 0;
-    } else {
-      source.push(event.data);
+    try {
+      // The data here is usually chunked; normally it would be streamed down as we get it
+      // but since we can hash the content only at the end, we have to wait until we have everything
+      // before deciding if the response content matches the manifest or not. So we are saving it and we will
+      // build a blob later. If the data is the hook marker, replace it with the WASM hooks, and if it is the
+      // end marker, flush all buffered data
+      if (arraysEqual(hookMarker, new Uint8Array(event.data))) {
+        const hooks = getHooks(hooksType.page, manifest.wasm);
+        source.push(stringToUint8Array(hooks).buffer);
+      } else if (arraysEqual(endMarker, new Uint8Array(event.data))) {
+        source.forEach((hook) => filter.write(hook));
+        source.length = 0;
+      } else {
+        source.push(event.data);
+      }
+    } catch (e) {
+      failClosed("ondata", e);
     }
   };
 
   filter.onstop = async () => {
-    const blob = await new Blob(source).arrayBuffer();
+    try {
+      const blob = await new Blob(source).arrayBuffer();
 
-    // Following order of priority:
-    // - If there's an exact match, that should be the hash
-    // - If the paths ends in /, and there was no exact match, then use default_index
-    // - If everything else fails, it's an error or a catchall case, so attempt default_fallback
-    let manifest_hash: string;
+      // Following order of priority:
+      // - If there's an exact match, that should be the hash
+      // - If the paths ends in /, and there was no exact match, then use default_index
+      // - If everything else fails, it's an error or a catchall case, so attempt default_fallback
+      let manifest_hash: string;
 
-    if (manifest.files[pathname]) {
-      manifest_hash = manifest.files[pathname];
-    } else if (pathname.endsWith("/")) {
-      manifest_hash = manifest.files[pathname + manifest.default_index];
-    } else {
-      manifest_hash = manifest.files[manifest.default_fallback];
-    }
+      if (manifest.files[pathname]) {
+        manifest_hash = manifest.files[pathname];
+      } else if (pathname.endsWith("/")) {
+        manifest_hash = manifest.files[pathname + manifest.default_index];
+      } else {
+        manifest_hash = manifest.files[manifest.default_fallback];
+      }
 
-    if (!manifest_hash) {
-      deny(filter);
+      if (!manifest_hash) {
+        deny(filter);
+        filter.close();
+        errorpage(
+          details.tabId,
+          fqdn,
+          new WebcatError(WebcatErrorCode.File.MISSING),
+        );
+        return;
+      }
+
+      const content_hash = await SHA256(blob);
+      // Sometimes answers gets cached and we get an empty result, we shouldn't mark those as a hash mismatch
+      if (
+        !arraysEqual(
+          base64UrlToUint8Array(manifest_hash),
+          new Uint8Array(content_hash),
+        ) &&
+        blob.byteLength !== 0
+      ) {
+        deny(filter);
+        filter.close();
+        errorpage(
+          details.tabId,
+          fqdn,
+          new WebcatError(WebcatErrorCode.File.MISMATCH, [
+            String(manifest_hash),
+            String(Uint8ArrayToBase64Url(new Uint8Array(content_hash))),
+          ]),
+        );
+        return;
+      }
+
+      // If everything is OK then we can just write the raw blob back
+      logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
+
+      filter.write(blob);
+      // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
+      // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
       filter.close();
-      errorpage(
-        details.tabId,
-        fqdn,
-        new WebcatError(WebcatErrorCode.File.MISSING),
-      );
-      return;
+      if (details.type === "main_frame") {
+        setOKIcon(details.tabId, originStateHolder.current.delegation);
+      }
+      // Redirect the main frame to an error page
+    } catch (e) {
+      failClosed("onstop", e);
     }
-
-    const content_hash = await SHA256(blob);
-    // Sometimes answers gets cached and we get an empty result, we shouldn't mark those as a hash mismatch
-    if (
-      !arraysEqual(
-        base64UrlToUint8Array(manifest_hash),
-        new Uint8Array(content_hash),
-      ) &&
-      blob.byteLength !== 0
-    ) {
-      deny(filter);
-      filter.close();
-      errorpage(
-        details.tabId,
-        fqdn,
-        new WebcatError(WebcatErrorCode.File.MISMATCH, [
-          String(manifest_hash),
-          String(Uint8ArrayToBase64Url(new Uint8Array(content_hash))),
-        ]),
-      );
-      return;
-    }
-
-    // If everything is OK then we can just write the raw blob back
-    logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
-
-    filter.write(blob);
-    // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
-    // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
-    filter.close();
-    if (details.type === "main_frame") {
-      setOKIcon(details.tabId, originStateHolder.current.delegation);
-    }
-    // Redirect the main frame to an error page
   };
 }
 

@@ -29,6 +29,7 @@ export default defineConfig({
             "./src/mocks/validators.mock.ts",
           ),
           "./update": path.resolve(__dirname, "./src/mocks/update.mock.ts"),
+          "./utils": path.resolve(__dirname, "./src/mocks/utils.mock.ts"),
         },
       }
     : {},
