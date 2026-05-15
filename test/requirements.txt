@@ -3,3 +3,4 @@ cryptography
 geckordp
 pytest
 pytest-benchmark
+pytest-check
