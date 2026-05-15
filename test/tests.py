@@ -3,6 +3,7 @@ from time import sleep
 from helpers import Browser, Server, Hook
 import logging
 import json
+from pytest_check import check
 
 logging.getLogger("geckordp").setLevel(logging.CRITICAL)
 logging.getLogger("psutil").setLevel(logging.CRITICAL)
@@ -183,6 +184,7 @@ def setdiff(a: list, b: list):
     "corrupted_wasm_frame_test",
 ], indirect=["root"])
 def test_webcat(browser, in_frame, server, expected, logs, errors, rejections, addon_path, dnsnames, non_enrolled_dnsnames):
+    logs, errors, rejections = logs.copy(), errors.copy(), rejections.copy()
     browser.install_extension(addon_path)
     sleep(7)
     if in_frame:
@@ -194,14 +196,23 @@ def test_webcat(browser, in_frame, server, expected, logs, errors, rejections, a
         res = browser.execute("document.body.innerText")
         assert expected in res
     res = json.loads(browser.execute("JSON.stringify(window.capture?.logs || [])"))
-    for log in res: assert log in logs
-    for log in logs: assert log in res
+    for log in res:
+        if check.is_in(log, logs, "Actual log entry should be present in expected logs"):
+            logs.remove(log)
+    for log in logs:
+        check.is_none(log, "Expected log entry should be present in actual logs")
     res = json.loads(browser.execute("JSON.stringify(window.capture?.errors || [])"))
-    for err in res: assert err in errors
-    for err in errors: assert err in res
+    for err in res:
+        if check.is_in(err, errors, "Actual error should be present in expected errors"):
+            errors.remove(err)
+    for err in errors:
+        check.is_none(err, "Expected error should be present in actual errors")
     res = json.loads(browser.execute("JSON.stringify(window.capture?.rejections || [])"))
-    for err in res: assert err in rejections
-    for err in rejections: assert err in res
+    for err in res:
+        if check.is_in(err, rejections, "Actual rejection should be present in expected rejections"):
+            rejections.remove(err)
+    for err in rejections:
+        check.is_none(err, "Expected rejection should be present in actual rejections")
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
