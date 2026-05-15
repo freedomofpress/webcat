@@ -97,6 +97,13 @@ export enum WebcatErrorFile {
 }
 
 //
+// Internal errors — signal a WEBCAT bug. User should file an issue.
+//
+export enum WebcatErrorInternal {
+  UNEXPECTED = "ERR_WEBCAT_INTERNAL_UNEXPECTED",
+}
+
+//
 // Group wrapper (replacement for namespace WebcatErrorCode)
 //
 export const WebcatErrorCode = {
@@ -108,6 +115,7 @@ export const WebcatErrorCode = {
   Headers: WebcatErrorHeaders,
   URL: WebcatErrorURL,
   File: WebcatErrorFile,
+  Internal: WebcatErrorInternal,
 } as const;
 
 //
@@ -121,7 +129,8 @@ export type WebcatErrorCodeAny =
   | WebcatErrorCSP
   | WebcatErrorHeaders
   | WebcatErrorURL
-  | WebcatErrorFile;
+  | WebcatErrorFile
+  | WebcatErrorInternal;
 
 //
 // Error object

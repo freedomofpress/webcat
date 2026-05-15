@@ -254,11 +254,16 @@ export async function validateResponseContent(
     } catch {
       /* filter may already be closed */
     }
-    errorpage(
-      details.tabId,
-      fqdn,
-      new WebcatError(WebcatErrorCode.File.MISMATCH),
-    );
+    // onerror fires when the request is aborted from outside the filter (e.g.
+    // a header-validation listener already returned {cancel: true} and called
+    // errorpage with a specific code).
+    if (where !== "onerror") {
+      errorpage(
+        details.tabId,
+        fqdn,
+        new WebcatError(WebcatErrorCode.Internal.UNEXPECTED),
+      );
+    }
   };
 
   filter.onerror = () => failClosed("onerror", filter.error);

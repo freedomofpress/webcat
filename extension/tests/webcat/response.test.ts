@@ -797,7 +797,7 @@ describe("validateResponseContent fail-closed", () => {
     expect(filter.close).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks content on filter.onerror", async () => {
+  it("blocks content on filter.onerror without overwriting the error page", async () => {
     const filter = makeFilter();
     (
       browser.webRequest.filterResponseData as unknown as vi.Mock
@@ -817,11 +817,21 @@ describe("validateResponseContent fail-closed", () => {
 
     await validateResponseContent(details, holder);
 
+    // Reset the module-scoped errorpage mock so prior fail-closed tests in
+    // this suite don't leak call history into the assertion below.
+    const { errorpage } = await import("../../src/webcat/ui");
+    (errorpage as unknown as vi.Mock).mockClear();
+
     filter.error = "underlying stream error";
     filter.onerror({} as Event);
 
     expect(filter.write).toHaveBeenCalledTimes(1);
     expect(new Uint8Array(filter.write.mock.calls[0][0])).toEqual(DENIED);
     expect(filter.close).toHaveBeenCalledTimes(1);
+
+    // onerror means the request was aborted from outside the filter — typically
+    // by a header-validation listener that already set a specific error page.
+    // We must not overwrite it with a generic FILE_MISMATCH.
+    expect(errorpage).not.toHaveBeenCalled();
   });
 });
