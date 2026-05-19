@@ -1,3 +1,6 @@
+import os
+import shutil
+import tempfile
 import pytest
 from time import sleep
 from helpers import Browser, Server, Hook
@@ -298,3 +301,55 @@ def test_cache_eviction(browser: Browser, server: Server, expected, addon_path, 
     sleep(3)
     res = browser.execute("document.body.innerText")
     assert expected in res
+
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks, expected", [
+    pytest.param("cases/testapp", EXPECTED_CSP, {}, "Hello v2!",
+        id="version_refresh_test"),
+], indirect=["root"])
+def test_version_refresh(browser: Browser, server: Server, bundle_generator, expected, addon_path, root):
+    # Load v0.1: server serves the bundle that the `root` fixture signed.
+    browser.install_extension(addon_path)
+    sleep(7)
+    browser.navigate(server.url())
+    sleep(3)
+    assert "Hello!" in browser.execute("document.body.innerText")
+
+    # Build a v0.2 bundle signed with the same enrollment as v0.1, with a
+    # modified index.html. The inline <script> block is left untouched so its
+    # CSP sha256 hash stays valid.
+    with tempfile.TemporaryDirectory() as tmp:
+        v2_dir = os.path.join(tmp, "testapp_v2")
+        shutil.copytree(root, v2_dir)
+        index_path = os.path.join(v2_dir, "index.html")
+        with open(index_path, "r", encoding="utf-8") as f:
+            html = f.read()
+        new_html = html.replace("<p>Hello!</p>", "<p>Hello v2!</p>")
+        assert new_html != html, "index.html marker not found"
+        with open(index_path, "w", encoding="utf-8") as f:
+            f.write(new_html)
+        config_path = os.path.join(v2_dir, "webcat.config.json")
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        config["version"] = "0.2"
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f)
+        v2_bundle_path = os.path.join(tmp, "bundle_v2.json")
+        bundle_generator.sign(v2_dir, output_path=v2_bundle_path)
+        with open(v2_bundle_path, "rb") as f:
+            v2_bundle = f.read()
+        with open(index_path, "rb") as f:
+            v2_index = f.read()
+
+    # Server now signals a new version and serves the v0.2 bundle + content.
+    # The extension should detect x-webcat-version > cached manifest.version,
+    # purge the origin cache, and reload with bypassCache.
+    server.hooks["/"] = Hook(v2_index, type="text/html",
+                             headers={"x-webcat-version": "0.2"})
+    server.hooks["/.well-known/webcat/bundle.json"] = Hook(
+        v2_bundle, type="application/json",
+        headers={"cache-control": "no-store"})
+
+    browser.execute("location.reload()")
+    sleep(5)
+    assert expected in browser.execute("document.body.innerText")

@@ -6,7 +6,7 @@ import canonicaljson
 import hashlib
 
 from helpers import Browser, UpdateServer, Server, TorBrowser, generate_ssl_cert
-from sigsum import generate_bundle
+from sigsum import BundleGenerator
 from pytest_benchmark.fixture import BenchmarkFixture
 
 _tbb_skips = {
@@ -106,8 +106,14 @@ def update_server():
     return us
 
 @pytest.fixture(scope="session")
-def root(update_server, dnsnames, request):
-    generate_bundle(request.param)
+def bundle_generator():
+    g = BundleGenerator()
+    yield g
+    g.close()
+
+@pytest.fixture(scope="session")
+def root(update_server, dnsnames, request, bundle_generator):
+    bundle_generator.sign(request.param)
     with open(f'{request.param}/.well-known/webcat/bundle.json') as bundle:
         enrollment = json.load(bundle)["enrollment"]
         canonical_enrollment = canonicaljson.encode_canonical_json(enrollment)
