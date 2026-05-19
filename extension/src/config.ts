@@ -8,7 +8,9 @@ export const bundle_prev_name = "/.well-known/webcat/bundle-prev.json";
 export const lru_cache_size = __IS_TESTING__ ? 2 : 32;
 // Items here are just the size in bytes for a domain
 export const lru_set_size = 8192;
-export const endpoint = "https://webcat.freedom.press/";
+export const endpoint = __IS_TESTING__
+  ? "http://localhost:1234/"
+  : "https://webcat.freedom.press/";
 // During alpha, update every hour. Wall-clock based so that sleep/suspend
 // doesn't silently postpone updates.
 export const UPDATE_INTERVAL_MS = 60 * 60 * 1000; // 1 hour

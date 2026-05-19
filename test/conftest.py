@@ -5,7 +5,7 @@ import json
 import canonicaljson
 import hashlib
 
-from helpers import Browser, DB, Server, TorBrowser, generate_ssl_cert
+from helpers import Browser, UpdateServer, Server, TorBrowser, generate_ssl_cert
 from sigsum import generate_bundle
 from pytest_benchmark.fixture import BenchmarkFixture
 
@@ -100,21 +100,21 @@ def ssl_cert(dnsnames, non_enrolled_dnsnames):
     return cert_path, key_path
 
 @pytest.fixture(scope="session")
-def db():
-    db = DB()
-    db.start()
-    return db
+def update_server():
+    us = UpdateServer()
+    us.start()
+    return us
 
 @pytest.fixture(scope="session")
-def root(db, dnsnames, request):
+def root(update_server, dnsnames, request):
     generate_bundle(request.param)
     with open(f'{request.param}/.well-known/webcat/bundle.json') as bundle:
         enrollment = json.load(bundle)["enrollment"]
         canonical_enrollment = canonicaljson.encode_canonical_json(enrollment)
         enrollment_hash = hashlib.sha256(canonical_enrollment).hexdigest()
-        db.set("127.0.0.1", enrollment_hash)
+        update_server.set("127.0.0.1", enrollment_hash)
         for name in dnsnames:
-            db.set(name, enrollment_hash)
+            update_server.set(name, enrollment_hash)
     return request.param
 
 @pytest.fixture(scope="function")
