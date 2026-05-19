@@ -327,33 +327,96 @@ def generate_ssl_cert(output_dir, dnsnames=[]):
         ))
     return cert_path, key_path
 
-class DB:
+class UpdateServer:
     hosts = {}
 
-    def start(db):
+    @staticmethod
+    def canonicalize(host: str):
+        parts = host.split(".")
+        parts.reverse()
+        return f"canonical/.{".".join(parts)}"
+
+    def start(us):
         class Handler(http.server.SimpleHTTPRequestHandler):
             def do_GET(self):
-                if self.path == "/testing-list":
+                if self.path == "/list.json":
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
-                    self.wfile.write(json.dumps(db.hosts).encode())
+                    leaves = []
+                    for host, hash in us.hosts.items():
+                        leaves.append([UpdateServer.canonicalize(host), f"0A{len(hash):x}{hash}"])
+                    list = {
+                        "leaves": leaves,
+                        "proof": {
+                            "app_hash": "00"*32,
+                            "canonical_root_hash": "00"*32,
+                        }
+                    }
+                    self.wfile.write(json.dumps(list).encode())
+                elif self.path == "/block.json":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "signed_header": {
+                            "header": {
+                                "height": "0",
+                                "app_hash": "",
+                                "last_block_id": {
+                                    "hash": "00"*32,
+                                    "parts": {
+                                        "hash": "00"*32,
+                                        "total": 1,
+                                    },
+                                },
+                                "last_commit_hash": "00"*32,
+                                "data_hash": "00"*32,
+                                "validators_hash": "00"*32,
+                                "next_validators_hash": "00"*32,
+                                "consensus_hash": "00"*32,
+                                "app_hash": "00"*32,
+                                "last_results_hash": "00"*32,
+                                "evidence_hash": "00"*32,
+                                "proposer_address": "00"*20,
+                                "time": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+                            },
+                            "commit": {
+                                "height": "0",
+                                "round": 0,
+                                "block_id": {
+                                    "hash": "00"*32,
+                                    "parts": {
+                                        "hash": "00"*32,
+                                        "total": 1,
+                                    }
+                                },
+                                "signatures": [
+                                    {
+                                        "block_id_flag": 0,
+                                        "validator_address": "00"*20,
+                                        "signature": "AA"*43+"==",
+                                    },
+                                ],
+                            },
+                        },
+                    }).encode())
                 else:
                     self.send_response(404)
                     self.end_headers()
 
             def log_message(self, *a): pass  # suppress logs
 
-        db.httpd = socketserver.TCPServer(("127.0.0.1", 1234), Handler, False)
-        db.httpd.allow_reuse_address = True
-        db.httpd.server_bind()
-        db.httpd.server_activate()
-        db.thread = threading.Thread(target=db.httpd.serve_forever, daemon=True)
-        db.thread.start()
+        us.httpd = socketserver.TCPServer(("127.0.0.1", 1234), Handler, False)
+        us.httpd.allow_reuse_address = True
+        us.httpd.server_bind()
+        us.httpd.server_activate()
+        us.thread = threading.Thread(target=us.httpd.serve_forever, daemon=True)
+        us.thread.start()
 
-    def stop(db):
-        db.httpd.shutdown()
-        db.thread.join()
+    def stop(us):
+        us.httpd.shutdown()
+        us.thread.join()
 
-    def set(db, host, hash):
-        db.hosts[host] = hash
+    def set(us, host, hash):
+        us.hosts[host] = hash

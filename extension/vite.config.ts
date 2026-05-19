@@ -23,12 +23,18 @@ export default defineConfig({
   resolve: isTesting
     ? {
         alias: {
-          "./webcat/db": path.resolve(__dirname, "./src/mocks/db.mock.ts"),
+          "@freedomofpress/cometbft/dist/lightclient": path.resolve(
+            __dirname,
+            "./src/mocks/lightclient.mock.ts",
+          ),
+          "@freedomofpress/ics23/dist/webcat": path.resolve(
+            __dirname,
+            "./src/mocks/ics23.mock.ts",
+          ),
           "./validators": path.resolve(
             __dirname,
             "./src/mocks/validators.mock.ts",
           ),
-          "./update": path.resolve(__dirname, "./src/mocks/update.mock.ts"),
         },
       }
     : {},
