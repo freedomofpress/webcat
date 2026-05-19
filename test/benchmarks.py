@@ -3,6 +3,7 @@ import pytest
 
 from time import sleep
 from helpers import Browser, Server
+from tests import EXPECTED_CSP
 
 js_code = """
     (() => {
@@ -26,11 +27,7 @@ js_code = """
 @pytest.mark.parametrize("addon_installed, enrolled", [(True, True), (True, False), (False, True)], ids=["enrolled", "not_enrolled", "no_extension"])
 def test_benchmark(root, warm, addon_installed, enrolled, addon_path, request, benchmark):
     def setup():
-        headers = {
-            "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
-                                       "style-src 'self'; frame-src 'none'; worker-src 'self';"
-        }
-        server = Server(root=root, headers=headers)
+        server = Server(root=root, headers=EXPECTED_CSP)
         server.start()
         browser = Browser()
         browser.start(request.config.getoption("--headless"))
