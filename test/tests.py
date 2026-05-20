@@ -303,6 +303,47 @@ def test_cache_eviction(browser: Browser, server: Server, expected, addon_path, 
     assert expected in res
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks, delegated_fqdn, should_verify", [
+    # site2.localhost shares the same enrollment_hash as site1.localhost
+    pytest.param("cases/testapp",
+        EXPECTED_CSP | {"x-webcat-delegation": "site2.localhost"},
+        FRAMEHOST_HOOK,
+        "site2.localhost", True,
+        id="delegation_accepted_test"),
+
+    # nonenrolled.localhost is not in the enrollment DB, so verifyDelegation rejects.
+    # Page still loads, but no delegation appears in the log.
+    pytest.param("cases/testapp",
+        EXPECTED_CSP | {"x-webcat-delegation": "nonenrolled.localhost"},
+        FRAMEHOST_HOOK,
+        "nonenrolled.localhost", False,
+        id="delegation_rejected_test"),
+], indirect=["root"])
+def test_delegation(browser: Browser, server: Server, delegated_fqdn, should_verify, addon_path, dnsnames):
+    browser.install_extension(addon_path)
+    sleep(7)
+    # Subscribe before navigation so we don't miss the "Setting ok icon" line
+    browser.attach_extension_console()
+    browser.navigate(f"{server.url(dnsnames[0])}/")
+    sleep(3)
+
+    # Page loads successfully in both cases
+    assert "Hello!" in browser.execute("document.body.innerText")
+
+    logs_blob = json.dumps(browser.extension_logs())
+    accepted_marker = f"Setting ok icon (delegation: {delegated_fqdn})"
+    if should_verify:
+        assert accepted_marker in logs_blob, (
+            f"expected delegation marker {accepted_marker!r} in extension logs, got: {logs_blob}"
+        )
+    else:
+        assert accepted_marker not in logs_blob, (
+            f"delegation to non-enrolled {delegated_fqdn!r} should not have been accepted: {logs_blob}"
+        )
+        # And the unadorned ok-icon log should still be present.
+        assert "Setting ok icon" in logs_blob, logs_blob
+
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
     pytest.param("cases/testapp", EXPECTED_CSP, {}, "Hello v2!",
         id="version_refresh_test"),
