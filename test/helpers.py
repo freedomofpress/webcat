@@ -292,6 +292,7 @@ class Server:
 
     def stop(self):
         self.httpd.shutdown()
+        self.httpd.server_close()
         self.thread.join()
 
     def url(self, hostname="127.0.0.1"):
@@ -358,7 +359,7 @@ class UpdateServer:
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
-                    self.wfile.write(json.dumps({
+                    block = {
                         "signed_header": {
                             "header": {
                                 "height": "0",
@@ -400,7 +401,12 @@ class UpdateServer:
                                 ],
                             },
                         },
-                    }).encode())
+                    }
+                    if us.reschedule_in:
+                        block["__WEBCAT_TEST_SCHEDULE_UPDATE__"] = us.reschedule_in
+                        if us.reschedule_once:
+                            us.reschedule_in = None
+                    self.wfile.write(json.dumps(block).encode())
                 else:
                     self.send_response(404)
                     self.end_headers()
@@ -416,7 +422,12 @@ class UpdateServer:
 
     def stop(us):
         us.httpd.shutdown()
+        us.httpd.server_close()
         us.thread.join()
 
     def set(us, host, hash):
         us.hosts[host] = hash
+
+    def reschedule(us, time_in_seconds: float, once=False):
+        us.reschedule_in = time_in_seconds
+        us.reschedule_once = once
