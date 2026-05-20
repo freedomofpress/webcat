@@ -99,11 +99,12 @@ def ssl_cert(dnsnames, non_enrolled_dnsnames):
     cert_path, key_path = generate_ssl_cert(tmpdir, dnsnames + non_enrolled_dnsnames)
     return cert_path, key_path
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def update_server():
     us = UpdateServer()
     us.start()
-    return us
+    yield us
+    us.stop()
 
 @pytest.fixture(scope="session")
 def bundle_generator():

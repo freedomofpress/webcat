@@ -18,6 +18,8 @@ import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { installEnrolledListeners } from "./listeners";
 import { arraysEqual } from "./utils";
 
+declare const __IS_TESTING__: boolean;
+
 let lastUpdateFailed = false;
 
 const ALARM_NAME = "webcat-scheduled-update";
@@ -60,7 +62,8 @@ export async function handleUpdateAlarm(
     const lastUpdated = await db.getLastUpdated();
     if (
       lastUpdated === null ||
-      Date.now() - lastUpdated >= UPDATE_INTERVAL_MS
+      Date.now() - lastUpdated >= UPDATE_INTERVAL_MS ||
+      __IS_TESTING__
     ) {
       console.log("[webcat] Running scheduled update (alarm check)");
       try {
@@ -136,6 +139,20 @@ export async function update(
     // 2 Await latest block
     const block = await (await blockResponse).json();
     console.log("[webcat] Update block fetched");
+
+    if (__IS_TESTING__) {
+      const reschedule = block.__WEBCAT_TEST_SCHEDULE_UPDATE__;
+      if (reschedule) {
+        console.log(
+          "[webcat] Rescheduling update for test in",
+          reschedule,
+          "second(s)",
+        );
+        browser.alarms.create(ALARM_NAME, {
+          when: Date.now() + reschedule * 1000,
+        });
+      }
+    }
 
     // 3 Verify block against validatorSet
     const { proto: vset, cryptoIndex } = await importValidators(
