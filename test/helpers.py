@@ -34,6 +34,7 @@ subprocess.Popen = popen_no_output
 
 from geckordp.actors.addon.addons import AddonsActor
 from geckordp.actors.descriptors.tab import TabActor
+from geckordp.actors.descriptors.web_extension import WebExtensionActor
 from geckordp.actors.root import RootActor
 from geckordp.actors.web_console import WebConsoleActor
 from geckordp.actors.events import Events
@@ -115,6 +116,52 @@ class Browser:
         else:
             logging.info("Addon already installed")
             return addons[0].get("id")
+
+    def attach_extension_console(self, addon_match="webcat"):
+        # Subscribe to console-message resources from the extension's targets
+        addons = self.root.list_addons()
+        addon = next(
+            (a for a in addons
+             if addon_match in (a.get("id") or "")
+             or addon_match in (a.get("name") or "").lower()
+             or addon_match in (a.get("url") or "")),
+            None,
+        )
+        if addon is None:
+            raise RuntimeError(f"no addon matching {addon_match!r} in {addons!r}")
+        watcher_resp = self.client.send_receive({"to": addon["actor"], "type": "getWatcher"})
+        watcher_actor = watcher_resp.get("actor")
+        if not watcher_actor:
+            raise RuntimeError(f"no watcher actor in {watcher_resp!r}")
+
+        self._ext_logs = []
+        attached_targets = set()
+        def on_resources(data):
+            for entry in data.get("array", []):
+                if len(entry) >= 2 and entry[0] == "console-message":
+                    self._ext_logs.extend(entry[1])
+        def on_target(data):
+            tg = data.get("target", {})
+            actor = tg.get("actor")
+            if actor and actor not in attached_targets:
+                attached_targets.add(actor)
+                self.client.add_event_listener(
+                    actor, Events.Watcher.RESOURCES_AVAILABLE_ARRAY, on_resources
+                )
+        self.client.add_event_listener(
+            watcher_actor, Events.Watcher.TARGET_AVAILABLE_FORM, on_target
+        )
+        self.client.send_receive({
+            "to": watcher_actor, "type": "watchTargets", "targetType": "frame",
+        })
+        self.client.send_receive({
+            "to": watcher_actor, "type": "watchResources",
+            "resourceTypes": ["console-message", "error-message"],
+        })
+        self._ext_watcher_actor = watcher_actor
+
+    def extension_logs(self):
+        return list(getattr(self, "_ext_logs", []))
 
     def navigate(self, url):
         current_tab = self.root.current_tab()

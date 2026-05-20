@@ -139,12 +139,14 @@ export abstract class OriginStateBase {
     port: string,
     fqdn: string,
     enrollment_hash: Uint8Array,
+    delegation?: string,
   ) {
     this.fetcher = fetcher;
     this.scheme = scheme;
     this.port = port;
     this.fqdn = fqdn;
     this.enrollment_hash = enrollment_hash;
+    this.delegation = delegation;
     this.references = 1;
 
     // Cleanup service workers, see https://github.com/freedomofpress/webcat/issues/18
@@ -167,6 +169,7 @@ export class OriginStateFailed extends OriginStateBase {
       prev.port,
       prev.fqdn,
       prev.enrollment_hash,
+      prev.delegation,
     );
     Object.assign(this, prev);
     // We must set it again because we are copying
@@ -297,7 +300,6 @@ export class OriginStateInitial extends OriginStateBase {
 export class OriginStateVerifiedEnrollment extends OriginStateBase {
   public readonly status = "verified_enrollment" as const;
   public readonly enrollment: Enrollment;
-  public readonly delegation?: string | undefined;
   public bundle?: Bundle;
 
   constructor(
@@ -311,10 +313,10 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       prev.port,
       prev.fqdn,
       prev.enrollment_hash,
+      delegation,
     );
     this.references = prev.references;
     this.enrollment = enrollment;
-    this.delegation = delegation;
     this.bundle = prev.bundle;
   }
 
@@ -416,7 +418,6 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
 
 export class OriginStateVerifiedManifest extends OriginStateBase {
   public readonly status = "verified_manifest" as const;
-  public readonly delegation?: string | undefined;
   public readonly enrollment: Enrollment;
   public readonly manifest: Manifest;
   public readonly valid_sources: Set<string> = new Set();
@@ -432,12 +433,12 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
       prev.port,
       prev.fqdn,
       prev.enrollment_hash,
+      prev.delegation,
     );
     this.references = prev.references;
     this.enrollment = prev.enrollment;
     this.manifest = manifest;
     this.valid_sources = valid_sources;
-    this.delegation = prev.delegation;
     this.bundle = prev.bundle;
   }
 

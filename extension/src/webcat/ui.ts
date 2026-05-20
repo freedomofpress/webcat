@@ -29,7 +29,14 @@ export function setOKIcon(tabId: number, delegation?: string) {
 
   const theme = isDarkTheme() ? "dark" : "light";
 
-  logger.addLog("debug", "Setting ok icon", tabId, "");
+  logger.addLog(
+    "info",
+    delegation
+      ? `Setting ok icon (delegation: ${delegation})`
+      : "Setting ok icon",
+    tabId,
+    "",
+  );
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
