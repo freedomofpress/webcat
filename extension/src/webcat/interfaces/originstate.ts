@@ -21,6 +21,8 @@ import {
 } from "./bundle";
 import { WebcatError, WebcatErrorCode } from "./errors";
 
+declare const __IS_TESTING__: boolean;
+
 type BundleFetch = {
   promise: Promise<Response>;
   error?: WebcatError;
@@ -123,7 +125,7 @@ export abstract class OriginStateBase {
   public readonly enrollment_hash: Uint8Array;
   public fetcher: BundleFetcher;
   public bundle?: Bundle;
-  public sw_cleanup?: Promise<void>;
+  public sw_cleanup?: Promise<void[]>;
   public references: number;
   public readonly enrollment?: Enrollment;
   public readonly manifest?: Manifest;
@@ -151,10 +153,21 @@ export abstract class OriginStateBase {
 
     // Cleanup service workers, see https://github.com/freedomofpress/webcat/issues/18
     // and upcoming MPI/CISPA paper
-    this.sw_cleanup = browser.browsingData.remove(
-      { hostnames: [fqdn] },
-      { serviceWorkers: true, cache: true },
-    );
+    this.sw_cleanup = Promise.all([
+      // Service Workers and caches need to be cleared separately because the
+      // hostnames option is interpreted differently in the two cases. See
+      // https://bugzilla.mozilla.org/show_bug.cgi?id=1797376
+      browser.browsingData.remove(
+        { hostnames: [fqdn] },
+        { serviceWorkers: true },
+      ),
+      browser.browsingData.remove(
+        {
+          hostnames: __IS_TESTING__ ? [`${fqdn}:8080`, `${fqdn}:8443`] : [fqdn],
+        },
+        { cache: true },
+      ),
+    ]);
   }
 }
 
