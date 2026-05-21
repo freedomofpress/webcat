@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import pytest
 from time import sleep
-from helpers import Browser, Server, Hook
+from helpers import Browser, TorBrowser, Server, Hook, UpdateServer
 import logging
 import json
 from pytest_check import check
@@ -67,6 +67,14 @@ FRAMEHOST_HOOK = {
     }),
 }
 
+CSS_PATHS = set(map(lambda filename: f"/css/{filename}", os.listdir("./cases/testapp/css/")))
+JS_PATHS = set(map(lambda filename: f"/js/{filename}", os.listdir("./cases/testapp/js/")))
+WASM_PATHS = set(map(lambda filename: f"/wasm/{filename}", os.listdir("./cases/testapp/wasm/")))
+WORKER_PATHS = set(map(lambda filename: f"/workers/{filename}", os.listdir("./cases/testapp/workers/")))
+FRAME_PATHS = {"/js/framehost.js", "/wasm/frame_addThree.wasm"}
+ALL_PATHS = {"/"}.union(CSS_PATHS,JS_PATHS,WASM_PATHS,WORKER_PATHS)
+NON_FRAME_PATHS = ALL_PATHS-FRAME_PATHS
+
 def setdiff(a: list, b: list):
     a = a.copy()
     for el in b:
@@ -78,10 +86,10 @@ def setdiff(a: list, b: list):
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("in_frame", [False, True], ids=["plain","in_frame"])
-@pytest.mark.parametrize("root, headers, hooks, expected, logs, errors, rejections", [
+@pytest.mark.parametrize("root, headers, hooks, expected, logs, errors, rejections, paths_to_wait", [
 
     # Basic correct execution
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK, "Hello!", EXPECTED_LOGS, [], [],
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK, "Hello!", EXPECTED_LOGS, [], [], NON_FRAME_PATHS,
         id="basic_test"),
 
     # Correct execution without WebAssembly or Workers
@@ -105,95 +113,99 @@ def setdiff(a: list, b: list):
                 LOGENTRY_LOAD_AUDIOWORKLET,
                 LOGENTRY_INLINE,
             ]), [], [],
+        NON_FRAME_PATHS-WASM_PATHS-WORKER_PATHS-{"/js/wasm_frame.js"},
         id="no_wasm_test"),
 
     # Wrong CSP
     pytest.param("cases/testapp", {
             "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                     "style-src 'self'; frame-src 'none'; worker-src 'self';"
-        }, FRAMEHOST_HOOK, "ERR_WEBCAT_CSP_MISMATCH", [], [], [],
+        }, FRAMEHOST_HOOK, "ERR_WEBCAT_CSP_MISMATCH", [], [], [], {"/"},
         id="wrong_csp_test"),
 
     # Missing CSP
     pytest.param("cases/testapp", {
             # No CSP header
-        }, FRAMEHOST_HOOK, "ERR_WEBCAT_HEADERS_MISSING_CRITICAL", [], [], [],
+        }, FRAMEHOST_HOOK, "ERR_WEBCAT_HEADERS_MISSING_CRITICAL", [], [], [], {"/"},
         id="missing_csp_test"),
 
     # Hook / with static content
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [],
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/"},
         id="corrupted_index_test"),
 
     # Hook /.well-known/webcat/bundle.json
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/.well-known/webcat/bundle.json": b'{"a":"b"}'}, "ERR_WEBCAT_BUNDLE_MISSING_ENROLLMENT", [], [], [],
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/.well-known/webcat/bundle.json": b'{"a":"b"}'}, "ERR_WEBCAT_BUNDLE_MISSING_ENROLLMENT", [], [], [], {"/"},
         id="corrupted_manifest_test"),
 
     # Hook /js/alert.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [],
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/js/alert.js"},
         id="corrupted_js_test"),
 
     # Hook /wasm/addTwo.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM]), [], [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
-        ],
+        ], NON_FRAME_PATHS,
         id="corrupted_wasm_test"),
 
     # Hook /wasm/addThree.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FETCH]), [], [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
-        ],
+        ], NON_FRAME_PATHS,
         id="corrupted_wasm_fetch_test"),
 
     # Hook /wasm/reverseSub.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/reverseSub.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_WASMWORKER]), [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/wasm_worker.js']
-        ], [],
+        ], [], NON_FRAME_PATHS-{"/wasm/reverseSub.wasm"},
         id="corrupted_wasm_worker_test"),
 
     # Hook /workers/worker.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/worker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [],
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/worker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/worker.js"},
         id="corrupted_worker_test"),
 
     # Hook /workers/sharedworker.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/sharedworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [],
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/sharedworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/sharedworker.js"},
         id="corrupted_sharedworker_test"),
 
     # Hook /workers/serviceworker.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/serviceworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [],
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/serviceworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/serviceworker.js"},
         id="corrupted_serviceworker_test"),
 
     # Hook /workers/audioworklet.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/audioworklet.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [],
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/audioworklet.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/audioworklet.js"},
         id="corrupted_audioworklet_test"),
     
     # Hook /wasm/aw_addTwo.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/aw_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_AUDIOWORKLET]), [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/audioworklet.js']
-        ], [],
+        ], [], NON_FRAME_PATHS,
         id="corrupted_wasm_audioworklet_test"),
 
     # Hook /wasm/inline_addTwo.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/inline_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_INLINE]), [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
-        ], [],
+        ], [], NON_FRAME_PATHS,
         id="corrupted_wasm_inline_test"),
 
     # Hook /wasm/frame_addThree.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/frame_addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FRAME]), [], [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
-        ],
+        ], NON_FRAME_PATHS,
         id="corrupted_wasm_frame_test"),
 
 ], indirect=["root"])
-def test_webcat(browser, in_frame, server, expected, logs, errors, rejections, addon_path, dnsnames, non_enrolled_dnsnames):
+def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, expected, logs, errors, rejections, paths_to_wait, addon_path, dnsnames, non_enrolled_dnsnames):
     logs, errors, rejections = logs.copy(), errors.copy(), rejections.copy()
     browser.install_extension(addon_path)
-    sleep(7)
+    update_server.wait_for_update()
     if in_frame:
         browser.navigate(f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url(dnsnames[0])}")
     else:
         browser.navigate(server.url())
-    sleep(3)
+    if isinstance(browser, TorBrowser):
+        server.wait_for(paths_to_wait-{"/workers/serviceworker.js"})
+    else:      
+        server.wait_for(paths_to_wait)
     if not in_frame:
         res = browser.execute("document.body.innerText")
         assert expected in res
@@ -222,11 +234,11 @@ def test_webcat(browser, in_frame, server, expected, logs, errors, rejections, a
         "cache-control": "max-age=180"
     }, {"/console_log.png": WEBCAT_ICON}, "ERR_WEBCAT_FILE_MISMATCH"),
 ], indirect=["root"])
-def test_in_memory_cache(browser, server, expected, addon_path):
+def test_in_memory_cache(browser, server, update_server: UpdateServer, expected, addon_path):
     browser.navigate(f'{server.url()}/console_log.png')
     sleep(2)
     browser.install_extension(addon_path)
-    sleep(7)
+    update_server.wait_for_update()
     browser.navigate(f'{server.url()}/console_log.png')
     sleep(2)
     res = browser.execute("document.body.innerText")
@@ -241,9 +253,9 @@ def test_in_memory_cache(browser, server, expected, addon_path):
         }, "ERR_WEBCAT_FILE_MISMATCH",
         id="corrupted_js_with_induced_error_test"),
 ], indirect=["root"])
-def test_multiple_tabs(browser: Browser, server: Server, expected, addon_path):
+def test_multiple_tabs(browser: Browser, server: Server, update_server: UpdateServer, expected, addon_path):
     browser.install_extension(addon_path)
-    sleep(7)
+    update_server.wait_for_update()
     browser.execute(
         f"window.open('{server.url()}');"
         f"setTimeout(() => location.href = '{server.url()}/x', 1000)"
@@ -259,7 +271,7 @@ def test_multiple_tabs(browser: Browser, server: Server, expected, addon_path):
         }, "ERR_WEBCAT_FILE_MISMATCH",
         id="non_enrolled_loads_enrolled_subresource_test"),
 ], indirect=["root"])
-def test_non_enrolled_subresource(browser: Browser, server: Server, expected, addon_path, dnsnames, non_enrolled_dnsnames):
+def test_non_enrolled_subresource(browser: Browser, server: Server, update_server: UpdateServer, expected, addon_path, dnsnames, non_enrolled_dnsnames):
     enrolled_url = server.url(dnsnames[0])
     non_enrolled_url = server.url(non_enrolled_dnsnames[0])
     # Non-enrolled landing page that loads a single sub-resource cross-origin
@@ -273,7 +285,7 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, expected, ad
         headers={"content-security-policy": "script-src *"},
     )
     browser.install_extension(addon_path)
-    sleep(7)
+    update_server.wait_for_update()
     browser.navigate(non_enrolled_url)
     sleep(5)
     res = browser.execute("document.body.innerText")
@@ -287,9 +299,9 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, expected, ad
         }, "ERR_WEBCAT_FILE_MISMATCH",
         id="corrupted_js_with_cache_eviction_test"),
 ], indirect=["root"])
-def test_cache_eviction(browser: Browser, server: Server, expected, addon_path, dnsnames):
+def test_cache_eviction(browser: Browser, server: Server, update_server: UpdateServer, expected, addon_path, dnsnames):
     browser.install_extension(addon_path)
-    sleep(7)
+    update_server.wait_for_update()
     browser.execute(
          "const w = window.open();"
         f"window.open('{server.url()}');"
@@ -307,10 +319,10 @@ def test_cache_eviction(browser: Browser, server: Server, expected, addon_path, 
     pytest.param("cases/testapp", EXPECTED_CSP, {}, "Hello v2!",
         id="version_refresh_test"),
 ], indirect=["root"])
-def test_version_refresh(browser: Browser, server: Server, bundle_generator, expected, addon_path, root):
+def test_version_refresh(browser: Browser, server: Server, update_server: UpdateServer, bundle_generator, expected, addon_path, root):
     # Load v0.1: server serves the bundle that the `root` fixture signed.
     browser.install_extension(addon_path)
-    sleep(7)
+    update_server.wait_for_update()
     browser.navigate(server.url())
     sleep(3)
     assert "Hello!" in browser.execute("document.body.innerText")

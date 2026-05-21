@@ -240,6 +240,9 @@ class Server:
     class MultiThreadedServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         pass
 
+    _served = threading.Condition()
+    _counts: dict[str,int] = {}
+
     def __init__(self, root=".", headers=None, hooks=None, ssl_cert=None, ssl_key=None):
         self.root = os.path.abspath(root)
         self.headers = headers or {}
@@ -249,7 +252,7 @@ class Server:
         self.port = None
 
     def start(self):
-        root, headers, hooks = self.root, self.headers, self.hooks
+        root, headers, hooks, served, counts = self.root, self.headers, self.hooks, self._served, self._counts
 
         class Handler(http.server.SimpleHTTPRequestHandler):
             def translate_path(self, path):
@@ -272,6 +275,10 @@ class Server:
 
                 else:
                     super().do_GET()
+                
+                with served:
+                    counts[path] = counts.get(path, 0) + 1
+                    served.notify_all()
 
             def end_headers(self, override={}):
                 h = headers.copy()
@@ -298,6 +305,21 @@ class Server:
     def url(self, hostname="127.0.0.1"):
         scheme = "https" if self.ssl_cert else "http"
         return f"{scheme}://{hostname}:{self.port}"
+    
+    def wait_for(self, paths):
+        with self._served:
+            counts = {}
+            for path in paths:
+                counts[path] = self._counts.get(path, 0)
+            while True:
+                if not self._served.wait(15):
+                    raise RuntimeError(f"timeout waiting for '{"', '".join(counts.keys())}'")
+                for path, count in list(counts.items()):
+                    if self._counts.get(path, 0) > count:
+                        del counts[path]
+                if len(counts) == 0:
+                    break
+        sleep(0.2) # minimal sleep to allow the browser to process the last response
 
 def generate_ssl_cert(output_dir, dnsnames=[]):
     """Generate a self-signed certificate for 127.0.0.1."""
@@ -331,6 +353,10 @@ def generate_ssl_cert(output_dir, dnsnames=[]):
 class UpdateServer:
     hosts = {}
 
+    _reschedule_in = None
+    _reschedule_once = False
+    _update_served = threading.Condition()
+
     @staticmethod
     def canonicalize(host: str):
         parts = host.split(".")
@@ -355,6 +381,8 @@ class UpdateServer:
                         }
                     }
                     self.wfile.write(json.dumps(list).encode())
+                    with us._update_served:
+                        us._update_served.notify_all()
                 elif self.path == "/block.json":
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
@@ -402,10 +430,10 @@ class UpdateServer:
                             },
                         },
                     }
-                    if us.reschedule_in:
-                        block["__WEBCAT_TEST_SCHEDULE_UPDATE__"] = us.reschedule_in
-                        if us.reschedule_once:
-                            us.reschedule_in = None
+                    if us._reschedule_in:
+                        block["__WEBCAT_TEST_SCHEDULE_UPDATE__"] = us._reschedule_in
+                        if us._reschedule_once:
+                            us._reschedule_in = None
                     self.wfile.write(json.dumps(block).encode())
                 else:
                     self.send_response(404)
@@ -429,5 +457,9 @@ class UpdateServer:
         us.hosts[host] = hash
 
     def reschedule(us, time_in_seconds: float, once=False):
-        us.reschedule_in = time_in_seconds
-        us.reschedule_once = once
+        us._reschedule_in = time_in_seconds
+        us._reschedule_once = once
+
+    def wait_for_update(us):
+        with us._update_served:
+            us._update_served.wait()
