@@ -30,6 +30,7 @@ _tbb_safer_skips = {
     "corrupted_wasm_frame_test": "WebAssembly not available at this security level",
 }
 _tbb_safest_skips = {
+    "in_frame": "JavaScript fully disabled at this security level",
     "no_wasm_test": "JavaScript fully disabled at this security level",
     "corrupted_js_test": "JavaScript fully disabled at this security level",
     "corrupted_worker_test": "JavaScript fully disabled at this security level",
