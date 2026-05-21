@@ -238,7 +238,7 @@ class Hook:
 
 class Server:
     class MultiThreadedServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-        pass
+        allow_reuse_address = True
 
     _served = threading.Condition()
     _counts: dict[str,int] = {}
@@ -249,7 +249,10 @@ class Server:
         self.hooks = hooks or {}
         self.ssl_cert = ssl_cert
         self.ssl_key = ssl_key
-        self.port = None
+        if self.ssl_cert and self.ssl_key:
+            self.port = 8443
+        else:
+            self.port = 8080
 
     def start(self):
         root, headers, hooks, served, counts = self.root, self.headers, self.hooks, self._served, self._counts
@@ -288,12 +291,11 @@ class Server:
 
             def log_message(self, *a): pass  # suppress logs
 
-        self.httpd = Server.MultiThreadedServer(("127.0.0.1", 0), Handler)
+        self.httpd = Server.MultiThreadedServer(("127.0.0.1", self.port), Handler)
         if self.ssl_cert and self.ssl_key:
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.load_cert_chain(self.ssl_cert, self.ssl_key)
             self.httpd.socket = context.wrap_socket(self.httpd.socket, server_side=True)
-        self.port = self.httpd.server_address[1]
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
 

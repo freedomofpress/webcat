@@ -1,19 +1,33 @@
 export * from "../webcat/validators";
 
-export const validateProtocolAndPort = (_url: URL) => {
+export const validateProtocolAndPort = (urlobj: URL) => {
   console.log(
-    "[TESTING] validateProtocolAndPort hooked - always returning true for:",
-    _url.href,
+    "[TESTING] validateProtocolAndPort hooked - using ports 8080 and 8443 for:",
+    urlobj.href,
   );
-  return true;
+  if (
+    (urlobj.port === "8080" && urlobj.protocol === "http:") ||
+    (urlobj.port === "8443" && urlobj.protocol === "https:")
+  ) {
+    return true;
+  } else {
+    return false;
+  }
 };
 
-export const enforceHTTPS = (_url: URL) => {
+export function enforceHTTPS(urlobj: URL): string | undefined {
   console.log(
-    "[TESTING] enforceHTTPS hooked - skipping HTTPS enforcement for:",
-    _url.href,
+    "[TESTING] enforceHTTPS hooked - using port 8443 for:",
+    urlobj.href,
   );
-  return undefined;
-};
+  if (
+    urlobj.protocol !== "https:" &&
+    urlobj.hostname.substring(urlobj.hostname.lastIndexOf(".")) !== ".onion"
+  ) {
+    urlobj.protocol = "https:";
+    urlobj.port = "8443";
+    return urlobj.toString();
+  }
+}
 
 console.log("[TESTING] Mock validators module loaded");
