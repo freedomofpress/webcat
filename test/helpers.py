@@ -275,13 +275,24 @@ class TorBrowser(Browser):
                 json.dump(prefs, file)
 
 class Hook:
-    def __init__(self, data, type="text/plain", base64=False, delay=0, headers={}):
-        self.delay, self.headers = delay, headers
-        if base64:
+    type = "text/plain"
+    delay = 0
+    headers = {}
+    def __init__(self, data, type=None, base64=False, delay=None, headers={}):
+        if isinstance(data, Hook):
+            self.data = data.data
+            self.type = data.type
+            self.delay = data.delay
+            self.headers = data.headers
+        elif base64:
             self.data = b64decode(data)
         else:
             self.data = data
-        self.type = type
+        if type is not None:
+            self.type = type
+        if delay is not None:
+            self.delay = delay
+        self.headers = self.headers | headers
 
 class Server:
     class MultiThreadedServer(socketserver.ThreadingMixIn, socketserver.TCPServer):

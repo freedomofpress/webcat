@@ -234,13 +234,13 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
         "cache-control": "max-age=180"
     }, {"/console_log.png": WEBCAT_ICON}, "ERR_WEBCAT_FILE_MISMATCH"),
 ], indirect=["root"])
-def test_in_memory_cache(browser, server, update_server: UpdateServer, expected, addon_path):
+def test_in_memory_cache(browser, server: Server, update_server: UpdateServer, expected, addon_path):
     browser.navigate(f'{server.url()}/console_log.png')
-    sleep(2)
+    server.wait_for({"/favicon.ico"})
     browser.install_extension(addon_path)
     update_server.wait_for_update()
     browser.navigate(f'{server.url()}/console_log.png')
-    sleep(2)
+    sleep(2) # loading from cache, so can't use server.wait_for
     res = browser.execute("document.body.innerText")
     assert expected in res
 
@@ -260,7 +260,7 @@ def test_multiple_tabs(browser: Browser, server: Server, update_server: UpdateSe
         f"window.open('{server.url()}');"
         f"setTimeout(() => location.href = '{server.url()}/x', 1000)"
     )
-    sleep(3)
+    server.wait_for({"/js/alert.js"})
     res = browser.execute("document.body.innerText")
     assert expected in res
 
@@ -287,7 +287,7 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, update_serve
     browser.install_extension(addon_path)
     update_server.wait_for_update()
     browser.navigate(non_enrolled_url)
-    sleep(5)
+    server.wait_for({"/js/alert.js"})
     res = browser.execute("document.body.innerText")
     assert expected in res
 
@@ -310,11 +310,16 @@ def test_cache_eviction(browser: Browser, server: Server, update_server: UpdateS
         f"    location.href = '{server.url(dnsnames[1])}/console_log.png';"
          "}, 1000)"
     )
-    sleep(3)
+    server.wait_for({"/js/alert.js"})
     res = browser.execute("document.body.innerText")
     assert expected in res
 
-@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("browser, paths_to_wait", [
+    pytest.param("firefox", NON_FRAME_PATHS, id="firefox"),
+    pytest.param("tbb", NON_FRAME_PATHS-{"/workers/serviceworker.js"}, id="tbb"),
+    pytest.param("tbb_safer", NON_FRAME_PATHS-{"/workers/serviceworker.js"}-WASM_PATHS, id="tbb_safer"),
+    pytest.param("tbb_safest", NON_FRAME_PATHS-JS_PATHS-WORKER_PATHS-WASM_PATHS, id="tbb_safest")
+], indirect=["browser"])
 @pytest.mark.parametrize("root, headers, hooks, delegated_fqdn, should_verify", [
     # site2.localhost shares the same enrollment_hash as site1.localhost
     pytest.param("cases/testapp",
@@ -331,13 +336,13 @@ def test_cache_eviction(browser: Browser, server: Server, update_server: UpdateS
         "nonenrolled.localhost", False,
         id="delegation_rejected_test"),
 ], indirect=["root"])
-def test_delegation(browser: Browser, server: Server, delegated_fqdn, should_verify, addon_path, dnsnames):
+def test_delegation(browser: Browser, server: Server, update_server: UpdateServer, delegated_fqdn, should_verify, paths_to_wait, addon_path, dnsnames):
     browser.install_extension(addon_path)
-    sleep(7)
+    update_server.wait_for_update()
     # Subscribe before navigation so we don't miss the "Setting ok icon" line
     browser.attach_extension_console()
     browser.navigate(f"{server.url(dnsnames[0])}/")
-    sleep(3)
+    server.wait_for(paths_to_wait)
 
     # Page loads successfully in both cases
     assert "Hello!" in browser.execute("document.body.innerText")
@@ -355,17 +360,22 @@ def test_delegation(browser: Browser, server: Server, delegated_fqdn, should_ver
         # And the unadorned ok-icon log should still be present.
         assert "Setting ok icon" in logs_blob, logs_blob
 
-@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("browser, paths_to_wait", [
+    pytest.param("firefox", NON_FRAME_PATHS, id="firefox"),
+    pytest.param("tbb", NON_FRAME_PATHS-{"/workers/serviceworker.js"}, id="tbb"),
+    pytest.param("tbb_safer", NON_FRAME_PATHS-{"/workers/serviceworker.js"}-WASM_PATHS, id="tbb_safer"),
+    pytest.param("tbb_safest", NON_FRAME_PATHS-JS_PATHS-WORKER_PATHS-WASM_PATHS, id="tbb_safest")
+], indirect=["browser"])
 @pytest.mark.parametrize("root, headers, hooks, expected", [
     pytest.param("cases/testapp", EXPECTED_CSP, {}, "Hello v2!",
         id="version_refresh_test"),
 ], indirect=["root"])
-def test_version_refresh(browser: Browser, server: Server, update_server: UpdateServer, bundle_generator, expected, addon_path, root):
+def test_version_refresh(browser: Browser, server: Server, update_server: UpdateServer, bundle_generator, expected, paths_to_wait, addon_path, root):
     # Load v0.1: server serves the bundle that the `root` fixture signed.
     browser.install_extension(addon_path)
     update_server.wait_for_update()
     browser.navigate(server.url())
-    sleep(3)
+    server.wait_for(paths_to_wait)
     assert "Hello!" in browser.execute("document.body.innerText")
 
     # Build a v0.2 bundle signed with the same enrollment as v0.1, with a
@@ -404,5 +414,5 @@ def test_version_refresh(browser: Browser, server: Server, update_server: Update
         headers={"cache-control": "no-store"})
 
     browser.execute("location.reload()")
-    sleep(5)
+    server.wait_for(paths_to_wait)
     assert expected in browser.execute("document.body.innerText")
