@@ -416,3 +416,22 @@ def test_version_refresh(browser: Browser, server: Server, update_server: Update
     browser.execute("location.reload()")
     server.wait_for(paths_to_wait)
     assert expected in browser.execute("document.body.innerText")
+
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks, expected", [
+    ("cases/testapp", EXPECTED_CSP | {
+        "cache-control": "max-age=180"
+    }, {}, "ERR_WEBCAT_FILE_MISMATCH"),
+], indirect=["root"])
+def test_in_memory_cache_on_update(browser, server: Server, update_server: UpdateServer, expected, addon_path):
+    browser.install_extension(addon_path)
+    update_server.reschedule(2, once=True)
+    update_server.wait_for_update()
+    browser.navigate(f'{server.url()}/console_log.png')
+    server.wait_for({"/favicon.ico"})
+    sleep(2) # wait for the rescheduled update
+    server.hooks["/console_log.png"] = WEBCAT_ICON
+    browser.navigate(f'{server.url()}/console_log.png')
+    sleep(2)
+    res = browser.execute("document.body.innerText")
+    assert expected in res
