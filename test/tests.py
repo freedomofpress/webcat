@@ -406,7 +406,7 @@ def test_version_refresh(browser: Browser, server: Server, update_server: Update
 
     # Server now signals a new version and serves the v0.2 bundle + content.
     # The extension should detect x-webcat-version > cached manifest.version,
-    # purge the origin cache, and reload with bypassCache.
+    # purge the origin cache and browser caches, and reload.
     server.hooks["/"] = Hook(v2_index, type="text/html",
                              headers={"x-webcat-version": "0.2"})
     server.hooks["/.well-known/webcat/bundle.json"] = Hook(

@@ -1,3 +1,5 @@
+declare const __IS_TESTING__: boolean;
+
 export function getFQDN(url: string): string {
   const urlobj = new URL(url);
   return urlobj.hostname;
@@ -61,4 +63,21 @@ export function isNewerSemver(a: string, b: string): boolean {
   }
 
   return false;
+}
+
+export async function clearBrowserCaches(fqdns: string[]) {
+  // Caching is complicated. See:
+  //  - https://github.com/freedomofpress/webcat/issues/18
+  //  - https://dl.acm.org/doi/10.1145/3774904.3792624
+  //  - https://github.com/freedomofpress/webcat/issues/137
+  //  - https://bugzilla.mozilla.org/show_bug.cgi?id=1797376
+  await browser.browsingData.remove(
+    { hostnames: fqdns },
+    { serviceWorkers: true },
+  );
+  await browser.browsingData.remove({}, { cache: true });
+  // TODO: This call fails silently if invoked more than 20 times
+  // in 10 minutes. Figure out a way to deal with it safely. See
+  // https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/handlerBehaviorChanged
+  await browser.webRequest.handlerBehaviorChanged();
 }

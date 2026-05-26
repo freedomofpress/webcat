@@ -1,8 +1,6 @@
 import { WebcatError } from "./interfaces/errors";
 import { logger } from "./logger";
-import { getFQDN } from "./utils";
-
-declare const __IS_TESTING__: boolean;
+import { clearBrowserCaches, getFQDN } from "./utils";
 
 export function isDarkTheme(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -123,13 +121,5 @@ export async function errorpage(
   );
   await Promise.all(tabUpdates);
 
-  // See https://github.com/freedomofpress/webcat/issues/137
-  // and https://bugzilla.mozilla.org/show_bug.cgi?id=1797376
-  await browser.browsingData.remove(
-    {
-      hostnames: __IS_TESTING__ ? [`${fqdn}:8080`, `${fqdn}:8443`] : [fqdn],
-    },
-    { cache: true },
-  );
-  await browser.webRequest.handlerBehaviorChanged();
+  await clearBrowserCaches([fqdn]);
 }

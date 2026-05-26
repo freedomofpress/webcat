@@ -19,7 +19,13 @@ import {
 import { logger } from "./logger";
 import { NON_FRAME_TYPES, PASS_THROUGH_TYPES } from "./resources";
 import { errorpage, setOKIcon } from "./ui";
-import { arraysEqual, getFQDN, isNewerSemver, SHA256 } from "./utils";
+import {
+  arraysEqual,
+  clearBrowserCaches,
+  getFQDN,
+  isNewerSemver,
+  SHA256,
+} from "./utils";
 import { extractAndValidateHeaders } from "./validators";
 
 export async function validateResponseHeaders(
@@ -143,7 +149,8 @@ export async function validateResponseHeaders(
     // it via commitVerifiedOrigin later
     originStateHolder.stale = true;
     pendingOrigins.delete(details.requestId);
-    browser.tabs.reload(details.tabId, { bypassCache: true });
+    await clearBrowserCaches([fqdn]);
+    browser.tabs.reload(details.tabId);
   }
 
   const pathname = new URL(details.url).pathname;
