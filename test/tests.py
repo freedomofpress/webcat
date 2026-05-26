@@ -158,7 +158,7 @@ def setdiff(a: list, b: list):
     # Hook /wasm/reverseSub.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/reverseSub.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_WASMWORKER]), [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/wasm_worker.js']
-        ], [], NON_FRAME_PATHS-{"/wasm/reverseSub.wasm"},
+        ], [], NON_FRAME_PATHS,
         id="corrupted_wasm_worker_test"),
 
     # Hook /workers/worker.js
