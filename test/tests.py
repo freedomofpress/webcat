@@ -6,6 +6,8 @@ from time import sleep
 from helpers import Browser, TorBrowser, Server, Hook, UpdateServer
 import logging
 import json
+import canonicaljson
+import hashlib
 from pytest_check import check
 
 logging.getLogger("geckordp").setLevel(logging.CRITICAL)
@@ -423,15 +425,25 @@ def test_version_refresh(browser: Browser, server: Server, update_server: Update
         "cache-control": "max-age=180"
     }, {}, "ERR_WEBCAT_FILE_MISMATCH"),
 ], indirect=["root"])
-def test_in_memory_cache_on_update(browser, server: Server, update_server: UpdateServer, expected, addon_path):
+def test_in_memory_cache_on_update(browser, server: Server, update_server: UpdateServer, expected, addon_path, root, non_enrolled_dnsnames):
     browser.install_extension(addon_path)
     update_server.reschedule(2, once=True)
     update_server.wait_for_update()
-    browser.navigate(f'{server.url()}/console_log.png')
+
+    # load a non-enrolled site into browser cache
+    browser.navigate(f'{server.url(non_enrolled_dnsnames[0])}/console_log.png')
     server.wait_for({"/favicon.ico"})
+
+    # enroll the site
+    with open(f'{root}/.well-known/webcat/bundle.json') as bundle:
+        enrollment = json.load(bundle)["enrollment"]
+        canonical_enrollment = canonicaljson.encode_canonical_json(enrollment)
+        enrollment_hash = hashlib.sha256(canonical_enrollment).hexdigest()
+        update_server.set(non_enrolled_dnsnames[0], enrollment_hash)
+    
     sleep(2) # wait for the rescheduled update
     server.hooks["/console_log.png"] = WEBCAT_ICON
-    browser.navigate(f'{server.url()}/console_log.png')
+    browser.navigate(f'{server.url(non_enrolled_dnsnames[0])}/console_log.png')
     sleep(2)
     res = browser.execute("document.body.innerText")
     assert expected in res
