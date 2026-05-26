@@ -74,7 +74,7 @@ JS_PATHS = set(map(lambda filename: f"/js/{filename}", os.listdir("./cases/testa
 WASM_PATHS = set(map(lambda filename: f"/wasm/{filename}", os.listdir("./cases/testapp/wasm/")))
 WORKER_PATHS = set(map(lambda filename: f"/workers/{filename}", os.listdir("./cases/testapp/workers/")))
 FRAME_PATHS = {"/js/framehost.js", "/wasm/frame_addThree.wasm"}
-ALL_PATHS = {"/"}.union(CSS_PATHS,JS_PATHS,WASM_PATHS,WORKER_PATHS)
+ALL_PATHS = set().union(CSS_PATHS,JS_PATHS,WASM_PATHS,WORKER_PATHS)
 NON_FRAME_PATHS = ALL_PATHS-FRAME_PATHS
 
 def setdiff(a: list, b: list):
