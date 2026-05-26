@@ -411,17 +411,17 @@ def generate_ssl_cert(output_dir, dnsnames=[]):
     return cert_path, key_path
 
 class UpdateServer:
-    hosts = {}
-
-    _reschedule_in = None
-    _reschedule_once = False
-    _update_served = threading.Condition()
-
     @staticmethod
     def canonicalize(host: str):
         parts = host.split(".")
         parts.reverse()
         return f"canonical/.{".".join(parts)}"
+    
+    def __init__(us): 
+        us._reschedule_in = None
+        us._reschedule_once = False
+        us._update_served = threading.Condition()
+        us._hosts = {}
 
     def start(us):
         class Handler(http.server.SimpleHTTPRequestHandler):
@@ -431,7 +431,7 @@ class UpdateServer:
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
                     leaves = []
-                    for host, hash in us.hosts.items():
+                    for host, hash in us._hosts.items():
                         leaves.append([UpdateServer.canonicalize(host), f"0A{len(hash):x}{hash}"])
                     list = {
                         "leaves": leaves,
@@ -514,7 +514,7 @@ class UpdateServer:
         us.thread.join()
 
     def set(us, host, hash):
-        us.hosts[host] = hash
+        us._hosts[host] = hash
 
     def reschedule(us, time_in_seconds: float, once=False):
         us._reschedule_in = time_in_seconds
