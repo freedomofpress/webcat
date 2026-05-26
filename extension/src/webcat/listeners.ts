@@ -19,7 +19,12 @@ import {
 } from "./response";
 import { errorpage } from "./ui";
 import { retryUpdateIfFailed } from "./update";
-import { getFQDN, isExtensionRequest, isNewerSemver } from "./utils";
+import {
+  clearBrowserCaches,
+  getFQDN,
+  isExtensionRequest,
+  isNewerSemver,
+} from "./utils";
 
 function commitVerifiedOrigin(fqdn: string, holder: OriginStateHolder): void {
   if (holder.stale) {
@@ -214,7 +219,7 @@ export async function beforeHeadersListener(
         case "sharedworker":
         case "audioworklet":
         case "paintworklet":
-          await hookResponseContent(details);
+          hookResponseContent(details);
       }
       break;
     }
@@ -408,33 +413,31 @@ export async function installEnrolledListeners(
   };
   removeListeners(previous);
 
-  // See https://github.com/freedomofpress/webcat/issues/137
-  browser.webRequest.handlerBehaviorChanged();
-
   // Look up existing content scripts and add the ones that are missing
-  const scriptIds = (await browser.scripting.getRegisteredContentScripts()).map(
-    (script) => script.id,
-  );
+  const registeredFqdns = (
+    await browser.scripting.getRegisteredContentScripts()
+  ).map((script) => script.id);
+  const newFqdns = fqdns.filter((fqdn) => {
+    return !registeredFqdns.includes(fqdn);
+  });
   await browser.scripting.registerContentScripts(
-    fqdns
-      .filter((fqdn) => {
-        return !scriptIds.includes(fqdn);
-      })
-      .map((fqdn) => {
-        return {
-          id: fqdn,
-          js: ["dist/hooks/content.js"],
-          matches: buildUrlPatterns([fqdn]),
-          matchOriginAsFallback: true,
-          allFrames: true,
-          runAt: "document_start",
-        };
-      }),
+    newFqdns.map((fqdn) => {
+      return {
+        id: fqdn,
+        js: ["dist/hooks/content.js"],
+        matches: buildUrlPatterns([fqdn]),
+        matchOriginAsFallback: true,
+        allFrames: true,
+        runAt: "document_start",
+      };
+    }),
   );
   // Remove the content scripts whose fqdn is no longer enrolled
   await browser.scripting.unregisterContentScripts({
-    ids: scriptIds.filter((id) => !fqdns.includes(id)),
+    ids: registeredFqdns.filter((fqdn) => !fqdns.includes(fqdn)),
   });
+
+  clearBrowserCaches(newFqdns);
 
   console.log(
     `[webcat] installEnrolledListeners: registered listeners for ${fqdns.length} FQDN(s)`,

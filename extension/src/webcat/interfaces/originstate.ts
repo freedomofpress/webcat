@@ -125,7 +125,6 @@ export abstract class OriginStateBase {
   public readonly enrollment_hash: Uint8Array;
   public fetcher: BundleFetcher;
   public bundle?: Bundle;
-  public sw_cleanup?: Promise<void[]>;
   public references: number;
   public readonly enrollment?: Enrollment;
   public readonly manifest?: Manifest;
@@ -150,24 +149,6 @@ export abstract class OriginStateBase {
     this.enrollment_hash = enrollment_hash;
     this.delegation = delegation;
     this.references = 1;
-
-    // Cleanup service workers, see https://github.com/freedomofpress/webcat/issues/18
-    // and upcoming MPI/CISPA paper
-    this.sw_cleanup = Promise.all([
-      // Service Workers and caches need to be cleared separately because the
-      // hostnames option is interpreted differently in the two cases. See
-      // https://bugzilla.mozilla.org/show_bug.cgi?id=1797376
-      browser.browsingData.remove(
-        { hostnames: [fqdn] },
-        { serviceWorkers: true },
-      ),
-      browser.browsingData.remove(
-        {
-          hostnames: __IS_TESTING__ ? [`${fqdn}:8080`, `${fqdn}:8443`] : [fqdn],
-        },
-        { cache: true },
-      ),
-    ]);
   }
 }
 
@@ -422,8 +403,6 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
         );
       }
     }
-    // This is a good moment to enforce this: no response will be forwarded before
-    await this.sw_cleanup;
     const next = new OriginStateVerifiedManifest(this, manifest, valid_sources);
     return next;
   }
