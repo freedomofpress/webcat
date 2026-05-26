@@ -71,6 +71,9 @@ export async function clearBrowserCaches(fqdns: string[]) {
   //  - https://dl.acm.org/doi/10.1145/3774904.3792624
   //  - https://github.com/freedomofpress/webcat/issues/137
   //  - https://bugzilla.mozilla.org/show_bug.cgi?id=1797376
+  if (fqdns.length === 0) {
+    return;
+  }
   await browser.browsingData.remove(
     { hostnames: fqdns },
     { serviceWorkers: true },
