@@ -74,7 +74,7 @@ JS_PATHS = set(map(lambda filename: f"/js/{filename}", os.listdir("./cases/testa
 WASM_PATHS = set(map(lambda filename: f"/wasm/{filename}", os.listdir("./cases/testapp/wasm/")))
 WORKER_PATHS = set(map(lambda filename: f"/workers/{filename}", os.listdir("./cases/testapp/workers/")))
 FRAME_PATHS = {"/js/framehost.js", "/wasm/frame_addThree.wasm"}
-ALL_PATHS = set().union(CSS_PATHS,JS_PATHS,WASM_PATHS,WORKER_PATHS)
+ALL_PATHS = {"/"}.union(CSS_PATHS,JS_PATHS,WASM_PATHS,WORKER_PATHS)
 NON_FRAME_PATHS = ALL_PATHS-FRAME_PATHS
 
 def setdiff(a: list, b: list):
@@ -200,14 +200,14 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
     logs, errors, rejections = logs.copy(), errors.copy(), rejections.copy()
     browser.install_extension(addon_path)
     update_server.wait_for_update()
-    if in_frame:
-        browser.navigate(f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url(dnsnames[0])}")
-    else:
-        browser.navigate(server.url())
     if isinstance(browser, TorBrowser):
-        server.wait_for(paths_to_wait-{"/workers/serviceworker.js"})
-    else:      
-        server.wait_for(paths_to_wait)
+        paths_to_wait = paths_to_wait-{"/workers/serviceworker.js"}
+    if in_frame:
+        url = f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url(dnsnames[0])}"
+    else:
+        url = server.url()
+    with server.wait_for(paths_to_wait):
+        browser.navigate(url)
     if not in_frame:
         res = browser.execute("document.body.innerText")
         assert expected in res
@@ -237,8 +237,8 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
     }, {"/console_log.png": WEBCAT_ICON}, "ERR_WEBCAT_FILE_MISMATCH"),
 ], indirect=["root"])
 def test_in_memory_cache(browser, server: Server, update_server: UpdateServer, expected, addon_path):
-    browser.navigate(f'{server.url()}/console_log.png')
-    server.wait_for({"/favicon.ico"})
+    with server.wait_for({"/console_log.png"}):
+        browser.navigate(f'{server.url()}/console_log.png')
     browser.install_extension(addon_path)
     update_server.wait_for_update()
     browser.navigate(f'{server.url()}/console_log.png')
@@ -258,11 +258,11 @@ def test_in_memory_cache(browser, server: Server, update_server: UpdateServer, e
 def test_multiple_tabs(browser: Browser, server: Server, update_server: UpdateServer, expected, addon_path):
     browser.install_extension(addon_path)
     update_server.wait_for_update()
-    browser.execute(
-        f"window.open('{server.url()}');"
-        f"setTimeout(() => location.href = '{server.url()}/x', 1000)"
-    )
-    server.wait_for({"/js/alert.js"})
+    with server.wait_for({"/js/alert.js"}):
+        browser.execute(
+            f"window.open('{server.url()}');"
+            f"setTimeout(() => location.href = '{server.url()}/x', 1000)"
+        )
     res = browser.execute("document.body.innerText")
     assert expected in res
 
@@ -288,8 +288,8 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, update_serve
     )
     browser.install_extension(addon_path)
     update_server.wait_for_update()
-    browser.navigate(non_enrolled_url)
-    server.wait_for({"/js/alert.js"})
+    with server.wait_for({"/js/alert.js"}):
+        browser.navigate(non_enrolled_url)
     res = browser.execute("document.body.innerText")
     assert expected in res
 
@@ -304,15 +304,15 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, update_serve
 def test_cache_eviction(browser: Browser, server: Server, update_server: UpdateServer, expected, addon_path, dnsnames):
     browser.install_extension(addon_path)
     update_server.wait_for_update()
-    browser.execute(
-         "const w = window.open();"
-        f"window.open('{server.url()}');"
-         "setTimeout(() => {"
-        f"    w.location.href = '{server.url(dnsnames[0])}/console_log.png';"
-        f"    location.href = '{server.url(dnsnames[1])}/console_log.png';"
-         "}, 1000)"
-    )
-    server.wait_for({"/js/alert.js"})
+    with server.wait_for({"/js/alert.js"}):
+        browser.execute(
+            "const w = window.open();"
+            f"window.open('{server.url()}');"
+            "setTimeout(() => {"
+            f"    w.location.href = '{server.url(dnsnames[0])}/console_log.png';"
+            f"    location.href = '{server.url(dnsnames[1])}/console_log.png';"
+            "}, 1000)"
+        )
     res = browser.execute("document.body.innerText")
     assert expected in res
 
@@ -343,8 +343,8 @@ def test_delegation(browser: Browser, server: Server, update_server: UpdateServe
     update_server.wait_for_update()
     # Subscribe before navigation so we don't miss the "Setting ok icon" line
     browser.attach_extension_console()
-    browser.navigate(f"{server.url(dnsnames[0])}/")
-    server.wait_for(paths_to_wait)
+    with server.wait_for(paths_to_wait):
+        browser.navigate(f"{server.url(dnsnames[0])}/")
 
     # Page loads successfully in both cases
     assert "Hello!" in browser.execute("document.body.innerText")
@@ -376,8 +376,8 @@ def test_version_refresh(browser: Browser, server: Server, update_server: Update
     # Load v0.1: server serves the bundle that the `root` fixture signed.
     browser.install_extension(addon_path)
     update_server.wait_for_update()
-    browser.navigate(server.url())
-    server.wait_for(paths_to_wait)
+    with server.wait_for(paths_to_wait):
+        browser.navigate(server.url())
     assert "Hello!" in browser.execute("document.body.innerText")
 
     # Build a v0.2 bundle signed with the same enrollment as v0.1, with a
@@ -415,8 +415,8 @@ def test_version_refresh(browser: Browser, server: Server, update_server: Update
         v2_bundle, type="application/json",
         headers={"cache-control": "no-store"})
 
-    browser.execute("location.reload()")
-    server.wait_for(paths_to_wait)
+    with server.wait_for(paths_to_wait):
+        browser.execute("location.reload()")
     assert expected in browser.execute("document.body.innerText")
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
@@ -431,8 +431,8 @@ def test_in_memory_cache_on_update(browser, server: Server, update_server: Updat
     update_server.wait_for_update()
 
     # load a non-enrolled site into browser cache
-    browser.navigate(f'{server.url(non_enrolled_dnsnames[0])}/console_log.png')
-    server.wait_for({"/favicon.ico"})
+    with server.wait_for({"/console_log.png"}):
+        browser.navigate(f'{server.url(non_enrolled_dnsnames[0])}/console_log.png')
 
     # enroll the site
     with open(f'{root}/.well-known/webcat/bundle.json') as bundle:
@@ -443,7 +443,7 @@ def test_in_memory_cache_on_update(browser, server: Server, update_server: Updat
     
     sleep(2) # wait for the rescheduled update
     server.hooks["/console_log.png"] = WEBCAT_ICON
-    browser.navigate(f'{server.url(non_enrolled_dnsnames[0])}/console_log.png')
-    sleep(2)
+    with server.wait_for({"/console_log.png"}):
+        browser.navigate(f'{server.url(non_enrolled_dnsnames[0])}/console_log.png')
     res = browser.execute("document.body.innerText")
     assert expected in res

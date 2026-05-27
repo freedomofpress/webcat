@@ -278,12 +278,14 @@ class Hook:
     type = "text/plain"
     delay = 0
     headers = {}
-    def __init__(self, data, type=None, base64=False, delay=None, headers={}):
+    status = 200
+    def __init__(self, data, type=None, base64=False, delay=None, headers={}, status=None):
         if isinstance(data, Hook):
             self.data = data.data
             self.type = data.type
             self.delay = data.delay
             self.headers = data.headers
+            self.status = data.status
         elif base64:
             self.data = b64decode(data)
         else:
@@ -292,6 +294,8 @@ class Hook:
             self.type = type
         if delay is not None:
             self.delay = delay
+        if status is not None:
+            self.status = status
         self.headers = self.headers | headers
 
 class Server:
@@ -322,13 +326,14 @@ class Server:
             def do_GET(self):
                 path = self.path.split("?", 1)[0]
                 if path in hooks:
-                    self.send_response(200)
                     hook = hooks[path]
                     if type(hook) is bytes:
+                        self.send_response(200)
                         self.send_header("Content-Type", "text/plain")
                         self.end_headers()
                         self.wfile.write(hook)
                     else:
+                        self.send_response(hook.status)
                         self.send_header("Content-Type", hook.type)
                         self.end_headers(hook.headers)
                         self.wfile.write(hook.data)
@@ -366,20 +371,43 @@ class Server:
         scheme = "https" if self.ssl_cert else "http"
         return f"{scheme}://{hostname}:{self.port}"
     
+    class _Wait:
+        def __init__(self, server, paths):
+            self.server = server
+            self.paths = paths
+            self.timeout = False
+
+        def __enter__(self):
+            lock = threading.Lock()
+            lock.acquire()
+            self.thread = threading.Thread(target=self._wait, args=(lock,))
+            self.thread.start()
+            lock.acquire()
+
+        def __exit__(self, exc_type, exc, tb):
+            self.thread.join()
+            if self.timeout:
+                raise RuntimeError(f"timeout waiting for '{"', '".join(self.counts.keys())}'")
+            sleep(0.2) # minimal sleep to allow the browser to process the last response
+
+        def _wait(self, lock):
+            with self.server._served:
+                lock.release()
+                self.counts = {}
+                for path in self.paths:
+                    self.counts[path] = self.server._counts.get(path, 0)
+                while True:
+                    if not self.server._served.wait(15):
+                        self.timeout = True
+                        break
+                    for path, count in list(self.counts.items()):
+                        if self.server._counts.get(path, 0) > count:
+                            del self.counts[path]
+                    if len(self.counts) == 0:
+                        break
+    
     def wait_for(self, paths):
-        with self._served:
-            counts = {}
-            for path in paths:
-                counts[path] = self._counts.get(path, 0)
-            while True:
-                if not self._served.wait(15):
-                    raise RuntimeError(f"timeout waiting for '{"', '".join(counts.keys())}'")
-                for path, count in list(counts.items()):
-                    if self._counts.get(path, 0) > count:
-                        del counts[path]
-                if len(counts) == 0:
-                    break
-        sleep(0.2) # minimal sleep to allow the browser to process the last response
+        return Server._Wait(self, paths)
 
 def generate_ssl_cert(output_dir, dnsnames=[]):
     """Generate a self-signed certificate for 127.0.0.1."""
