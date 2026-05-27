@@ -330,12 +330,12 @@ class Server:
                     if type(hook) is bytes:
                         self.send_response(200)
                         self.send_header("Content-Type", "text/plain")
-                        self.end_headers()
+                        self.end_headers(hook)
                         self.wfile.write(hook)
                     else:
                         self.send_response(hook.status)
                         self.send_header("Content-Type", hook.type)
-                        self.end_headers(hook.headers)
+                        self.end_headers(hook.data, hook.headers)
                         self.wfile.write(hook.data)
                         sleep(hook.delay)
 
@@ -346,8 +346,9 @@ class Server:
                     counts[path] = counts.get(path, 0) + 1
                     served.notify_all()
 
-            def end_headers(self, override={}):
-                h = headers.copy()
+            def end_headers(self, data=None, override={}):
+                h = {} if data is None else {"Content-Length": f"{len(data)}"}
+                h.update(headers)
                 h.update(override)
                 for k, v in h.items(): self.send_header(k, v)
                 super().end_headers()
