@@ -276,7 +276,7 @@ class TorBrowser(Browser):
 
 class Hook:
     type = "text/plain"
-    delay = 0
+    delay = None
     headers = {}
     status = 200
     def __init__(self, data, type=None, base64=False, delay=None, headers={}, status=None):
@@ -335,9 +335,8 @@ class Server:
                     else:
                         self.send_response(hook.status)
                         self.send_header("Content-Type", hook.type)
-                        self.end_headers(hook.data, hook.headers)
+                        self.end_headers(hook.data, hook.headers, hook.delay)
                         self.wfile.write(hook.data)
-                        sleep(hook.delay)
 
                 else:
                     super().do_GET()
@@ -346,11 +345,13 @@ class Server:
                     counts[path] = counts.get(path, 0) + 1
                     served.notify_all()
 
-            def end_headers(self, data=None, override={}):
+            def end_headers(self, data=None, override={}, delay=None):
                 h = {} if data is None else {"Content-Length": f"{len(data)}"}
                 h.update(headers)
                 h.update(override)
                 for k, v in h.items(): self.send_header(k, v)
+                if delay is not None:
+                    sleep(delay)
                 super().end_headers()
 
             def log_message(self, *a): pass  # suppress logs
