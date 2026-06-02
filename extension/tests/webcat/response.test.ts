@@ -41,24 +41,25 @@ vi.stubGlobal("browser", {
 
 vi.mock("../../src/webcat/db", () => {
   return {
-    WebcatDatabase: vi.fn().mockImplementation(() => ({
-      getFQDNEnrollment: vi.fn(async (fqdn: string) => {
-        if (fqdn === "trusted.com") {
-          return new Uint8Array([0, 1, 2, 3]);
-        }
-        return new Uint8Array();
-      }),
+    WebcatDatabase: vi.fn().mockImplementation(function () {
+      return {
+        getFQDNEnrollment: vi.fn(async (fqdn: string) => {
+          if (fqdn === "trusted.com") {
+            return new Uint8Array([0, 1, 2, 3]);
+          }
+          return new Uint8Array();
+        }),
 
-      // Include other methods your test may call
-      setLastChecked: vi.fn(),
-      getLastChecked: vi.fn(async () => Date.now()),
+        setLastChecked: vi.fn(),
+        getLastChecked: vi.fn(async () => Date.now()),
 
-      updateList: vi.fn(),
-      getBlockMeta: vi.fn(async () => ({
-        blockTime: 1337,
-        rootHash: "deadbeef",
-      })),
-    })),
+        updateList: vi.fn(),
+        getBlockMeta: vi.fn(async () => ({
+          blockTime: 1337,
+          rootHash: "deadbeef",
+        })),
+      };
+    }),
   };
 });
 

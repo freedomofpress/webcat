@@ -160,7 +160,7 @@ describe("update", () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("fetches from the network endpoint when bundled is false", async () => {
@@ -269,7 +269,7 @@ describe("handleUpdateAlarm", () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("runs update when lastUpdated is null", async () => {
@@ -324,7 +324,7 @@ describe("retryUpdateIfFailed", () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("does not run update when no prior failure", async () => {
@@ -377,7 +377,7 @@ describe("initializeScheduledUpdates", () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.clearAllMocks();
   });
 
   it("creates the alarm", async () => {
