@@ -1,3 +1,21 @@
+declare const CacheKeySymbol: unique symbol;
+export type CacheKey<T> = string & { [CacheKeySymbol]: T | undefined };
+export function CacheKey<T extends { [index: string]: { toString(): string } }>(
+  key: string,
+  attrs: T,
+): CacheKey<T> {
+  return (encodeURIComponent(key) +
+    (attrs
+      ? "?" +
+        Object.keys(attrs)
+          .sort()
+          .map(
+            (name) =>
+              `${encodeURIComponent(name)}=${encodeURIComponent(attrs[name].toString())}`,
+          )
+      : "")) as CacheKey<T>;
+}
+
 export class LRUCache<K, V> {
   private cache: Map<K, V>;
   private limit: number;

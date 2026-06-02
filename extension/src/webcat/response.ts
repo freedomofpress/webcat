@@ -1,4 +1,5 @@
 import { endMarker, hookMarker, origins, pendingOrigins } from "./../globals";
+import { CacheKey } from "./cache";
 import {
   base64UrlToUint8Array,
   stringToUint8Array,
@@ -17,11 +18,12 @@ import {
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
 import { logger } from "./logger";
-import { NON_FRAME_TYPES, PASS_THROUGH_TYPES } from "./resources";
+import { PASS_THROUGH_TYPES } from "./resources";
 import { errorpage, setOKIcon } from "./ui";
 import {
   arraysEqual,
   clearBrowserCaches,
+  getFirstParty,
   getFQDN,
   isNewerSemver,
   SHA256,
@@ -144,7 +146,11 @@ export async function validateResponseHeaders(
       details.tabId,
       fqdn,
     );
-    origins.delete(fqdn);
+    const cachePartition = {
+      firstParty: getFirstParty(details.url, details.frameAncestors || []),
+      incognito: !!details.incognito,
+    };
+    origins.delete(CacheKey(fqdn, cachePartition));
     // Mark the holder so any sibling request that shares it won't re-insert
     // it via commitVerifiedOrigin later
     originStateHolder.stale = true;
@@ -216,14 +222,13 @@ export async function validateResponseContent(
   const pathname = new URL(details.url).pathname;
   const fqdn = getFQDN(details.url);
 
-  if (
-    NON_FRAME_TYPES.includes(details.type) &&
-    originStateHolder.current.status === "verified_manifest"
-  ) {
-    const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
-      .manifest;
-    // If a pass-through media type isn't in the manifest, bail before installing
-    // a filter so large files don't get buffered into the extension for nothing.
+  let manifest!: Manifest;
+  const filter = browser.webRequest.filterResponseData(details.requestId);
+  filter.onstart = () => {
+    assertVerifiedManifest(originStateHolder);
+    manifest = originStateHolder.current.manifest;
+    // If a pass-through media type isn't in the manifest, bail before receiving
+    // any data so large files don't get buffered into the extension for nothing.
     if (
       !manifest.files[pathname] &&
       !(
@@ -232,15 +237,8 @@ export async function validateResponseContent(
       ) &&
       PASS_THROUGH_TYPES.has(details.type)
     ) {
-      return {};
+      filter.disconnect();
     }
-  }
-
-  let manifest!: Manifest;
-  const filter = browser.webRequest.filterResponseData(details.requestId);
-  filter.onstart = () => {
-    assertVerifiedManifest(originStateHolder);
-    manifest = originStateHolder.current.manifest;
   };
 
   const source: ArrayBuffer[] = [];

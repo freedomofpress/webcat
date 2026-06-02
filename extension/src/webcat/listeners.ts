@@ -1,5 +1,6 @@
 import { endpoint } from "../config";
-import { db, origins, pendingOrigins, tabs } from "../globals";
+import { CachePartition, db, origins, pendingOrigins, tabs } from "../globals";
+import { CacheKey } from "./cache";
 import type { WebcatDatabase } from "./db";
 import { getHooks } from "./genhooks";
 import { hooksType, metadataRequestSource } from "./interfaces/base";
@@ -21,12 +22,17 @@ import { errorpage } from "./ui";
 import { retryUpdateIfFailed } from "./update";
 import {
   clearBrowserCaches,
+  getFirstParty,
   getFQDN,
   isExtensionRequest,
   isNewerSemver,
 } from "./utils";
 
-function commitVerifiedOrigin(fqdn: string, holder: OriginStateHolder): void {
+function commitVerifiedOrigin(
+  fqdn: string,
+  holder: OriginStateHolder,
+  cachePartition: CachePartition,
+): void {
   if (holder.stale) {
     return;
   }
@@ -35,7 +41,7 @@ function commitVerifiedOrigin(fqdn: string, holder: OriginStateHolder): void {
   }
   const incoming = (holder.current as OriginStateVerifiedManifest).manifest
     .version;
-  const existing = origins.get(fqdn);
+  const existing = origins.get(CacheKey(fqdn, cachePartition));
   if (existing && existing.current.status === "verified_manifest") {
     const current = (existing.current as OriginStateVerifiedManifest).manifest
       .version;
@@ -43,21 +49,22 @@ function commitVerifiedOrigin(fqdn: string, holder: OriginStateHolder): void {
       return;
     }
   }
-  origins.set(fqdn, holder);
+  origins.set(CacheKey(fqdn, cachePartition), holder);
 }
 
 function cleanup(tabId: number) {
   if (tabs.has(tabId)) {
-    const fqdn = tabs.get(tabId);
+    const cachePartition = tabs.get(tabId);
     /* DEVELOPMENT GUARDS */
     /* It's not possible that we have reference for a object that does not exists */
-    if (!fqdn) {
+    if (!cachePartition) {
       throw new Error(
         "When deleting a tab, we found an enrolled tab with fqdn",
       );
     }
     /* END */
-    const originState = origins.get(fqdn);
+    const fqdn = getFQDN(cachePartition.firstParty);
+    const originState = origins.get(CacheKey(fqdn, cachePartition));
     if (originState) {
       originState.current.references--;
     }
@@ -89,14 +96,18 @@ export async function headersListener(
 ): Promise<browser.webRequest.BlockingResponse> {
   // Skip allowed types, etensions request, and not enrolled tabs
   const fqdn = getFQDN(details.url);
+  const cachePartition = {
+    firstParty: getFirstParty(details.url, details.frameAncestors || []),
+    incognito: !!details.incognito,
+  };
 
+  const enrolled =
+    (await db.getFQDNEnrollment(fqdn, cachePartition)).length > 0;
   if (
     // Skip non-enrolled tabs
-    (!tabs.has(details.tabId) &&
-      details.tabId > 0 &&
-      (await db.getFQDNEnrollment(fqdn)).length === 0) ||
+    (!tabs.has(details.tabId) && details.tabId > 0 && !enrolled) ||
     // Skip non-enrolled workers
-    (details.tabId < 0 && (await db.getFQDNEnrollment(fqdn)).length === 0) ||
+    (details.tabId < 0 && !enrolled) ||
     isExtensionRequest(details)
   ) {
     // This is too much noise to really log
@@ -121,6 +132,7 @@ export async function headersListener(
       details.tabId,
       metadataRequestSource.worker,
       details.requestId,
+      cachePartition,
     );
     if (result instanceof WebcatError) {
       pendingOrigins.delete(details.requestId);
@@ -150,7 +162,7 @@ export async function headersListener(
   }
 
   if (pendingOrigins.has(details.requestId)) {
-    commitVerifiedOrigin(fqdn, originStateHolder);
+    commitVerifiedOrigin(fqdn, originStateHolder, cachePartition);
     pendingOrigins.delete(details.requestId);
   }
 
@@ -235,6 +247,10 @@ export async function requestListener(
   }
 
   const fqdn = getFQDN(details.url);
+  const cachePartition = {
+    firstParty: getFirstParty(details.url, details.frameAncestors || []),
+    incognito: !!details.incognito,
+  };
 
   const isFrame = FRAME_TYPES.includes(details.type);
 
@@ -256,7 +272,7 @@ export async function requestListener(
 
   let originStateHolder: OriginStateHolder | undefined;
   if (!isFrame) {
-    originStateHolder = origins.get(fqdn);
+    originStateHolder = origins.get(CacheKey(fqdn, cachePartition));
     if (originStateHolder) {
       pendingOrigins.set(details.requestId, originStateHolder);
     }
@@ -271,6 +287,7 @@ export async function requestListener(
         ? metadataRequestSource.main_frame
         : metadataRequestSource.sub_resource,
       details.requestId,
+      cachePartition,
     );
     if (result instanceof WebcatError) {
       pendingOrigins.delete(details.requestId);

@@ -24,7 +24,7 @@ import {
   RawPublicKey,
 } from "@freedomofpress/sigsum/dist/types";
 
-import { db } from "./../globals";
+import { CachePartition, db } from "./../globals";
 import { canonicalize } from "./canonicalize";
 import { base64UrlToUint8Array, stringToUint8Array } from "./encoding";
 import {
@@ -128,8 +128,8 @@ export function extractAndValidateHeaders(
 
 export async function validateCSP(
   csp: string,
-  fqdn: string,
   valid_sources: Set<string>,
+  cachePartition: CachePartition,
 ) {
   // See https://github.com/freedomofpress/webcat/issues/9
   // https://github.com/freedomofpress/webcat/issues/3
@@ -255,7 +255,7 @@ export async function validateCSP(
         );
       }
 
-      if ((await db.getFQDNEnrollment(fqdn)).length !== 0) {
+      if ((await db.getFQDNEnrollment(fqdn, cachePartition)).length !== 0) {
         valid_sources.add(fqdn);
         return true;
       } else {
