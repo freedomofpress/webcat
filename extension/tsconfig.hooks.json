@@ -3,12 +3,13 @@
     "target": "ES2024",
     "lib": ["DOM", "ES2024"],
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "types": ["firefox-webext-browser"],
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "noEmit": true
   },
   "include": [
     "./src/webcat/hooks/core.ts",
