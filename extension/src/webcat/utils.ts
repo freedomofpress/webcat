@@ -84,3 +84,13 @@ export async function clearBrowserCaches(fqdns: string[]) {
   // https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/handlerBehaviorChanged
   await browser.webRequest.handlerBehaviorChanged();
 }
+
+export function getFirstParty(
+  url: string,
+  frameAncestors: { url: string; frameId: number }[],
+): string {
+  if (frameAncestors.length === 0) {
+    return new URL(url).origin;
+  }
+  return new URL(frameAncestors[frameAncestors.length - 1].url).origin;
+}

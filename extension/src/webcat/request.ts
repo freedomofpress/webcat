@@ -1,5 +1,11 @@
-import { origins, pendingOrigins, tabs } from "./../globals";
-import { db } from "./../globals";
+import {
+  CachePartition,
+  db,
+  origins,
+  pendingOrigins,
+  tabs,
+} from "./../globals";
+import { CacheKey } from "./cache";
 import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
@@ -17,8 +23,9 @@ export async function validateOrigin(
   tabId: number,
   type: metadataRequestSource,
   requestId: string,
+  cachePartition: CachePartition,
 ) {
-  const enrollment_hash = await db.getFQDNEnrollment(fqdn);
+  const enrollment_hash = await db.getFQDNEnrollment(fqdn, cachePartition);
   if (enrollment_hash.length === 0) {
     //console.debug(`${url} is not enrolled, skipping...`);
     return;
@@ -45,10 +52,10 @@ export async function validateOrigin(
 
   // Nothing can go wrong in this func anymore hopefully, let's add the reference
   if (type === metadataRequestSource.main_frame) {
-    tabs.set(tabId, fqdn);
+    tabs.set(tabId, cachePartition);
   }
 
-  const cached = origins.get(fqdn);
+  const cached = origins.get(CacheKey(fqdn, cachePartition));
   if (cached) {
     // Pin the holder to this request so later stages cannot race against LRU eviction
     pendingOrigins.set(requestId, cached);
@@ -73,6 +80,7 @@ export async function validateOrigin(
     urlobj.port,
     fqdn,
     enrollment_hash,
+    cachePartition,
   );
   const origin = new OriginStateHolder(newOriginState);
   pendingOrigins.set(requestId, origin);

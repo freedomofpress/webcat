@@ -1,4 +1,5 @@
-import { nonOrigins, origins } from "../globals"; // caching maps
+import { CachePartition, nonOrigins, origins } from "../globals"; // caching maps
+import { CacheKey } from "./cache";
 import { extractHostname, extractRawHash } from "./parsers";
 
 const META_KEY = "block_meta";
@@ -41,9 +42,12 @@ export class WebcatDatabase {
     return Object.keys(all).filter((k) => k !== META_KEY);
   }
 
-  async getFQDNEnrollment(fqdn: string): Promise<Uint8Array> {
+  async getFQDNEnrollment(
+    fqdn: string,
+    cachePartition: CachePartition,
+  ): Promise<Uint8Array> {
     // 1. Positive-cache hit
-    const originState = origins.get(fqdn);
+    const originState = origins.get(CacheKey(fqdn, cachePartition));
     if (originState) {
       const cached = originState.current.enrollment_hash;
       if (!cached) {
@@ -55,7 +59,7 @@ export class WebcatDatabase {
     }
 
     // 2. Negative-cache hit
-    if (nonOrigins.has(fqdn)) {
+    if (nonOrigins.has(CacheKey(fqdn, cachePartition))) {
       return new Uint8Array();
     }
 
@@ -65,7 +69,7 @@ export class WebcatDatabase {
     if (stored) {
       return new Uint8Array(stored);
     } else {
-      nonOrigins.add(fqdn);
+      nonOrigins.add(CacheKey(fqdn, cachePartition));
       return new Uint8Array();
     }
   }
