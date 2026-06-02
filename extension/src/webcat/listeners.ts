@@ -437,7 +437,7 @@ export async function installEnrolledListeners(
     ids: registeredFqdns.filter((fqdn) => !fqdns.includes(fqdn)),
   });
 
-  clearBrowserCaches(newFqdns);
+  await clearBrowserCaches(newFqdns);
 
   console.log(
     `[webcat] installEnrolledListeners: registered listeners for ${fqdns.length} FQDN(s)`,
