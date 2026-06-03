@@ -1,4 +1,4 @@
-import { WebcatError } from "./interfaces/errors";
+import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { logger } from "./logger";
 import { clearBrowserCaches, getFQDN } from "./utils";
 
@@ -112,12 +112,24 @@ export async function errorpage(
 
   const code = error?.code ?? "WEBCAT_ERROR_UNDEFINED";
 
+  const params = new URLSearchParams({ code, host: fqdn });
+
+  if (
+    (code === WebcatErrorCode.File.MISMATCH ||
+      code === WebcatErrorCode.File.MISSING) &&
+    error?.details?.[0]
+  ) {
+    params.set("file", error.details[0]);
+  }
+
   const errorPageUrl =
-    browser.runtime.getURL("pages/error.html") + `#${encodeURIComponent(code)}`;
+    browser.runtime.getURL("pages/error.html") + `#${params.toString()}`;
 
   const tabUpdates: Promise<browser.tabs.Tab>[] = [];
   tabIds.forEach((tabId) =>
-    tabUpdates.push(browser.tabs.update(tabId, { url: errorPageUrl })),
+    tabUpdates.push(
+      browser.tabs.update(tabId, { url: errorPageUrl, loadReplace: true }),
+    ),
   );
   await Promise.all(tabUpdates);
 

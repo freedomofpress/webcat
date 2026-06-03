@@ -284,7 +284,7 @@ export async function validateResponseContent(
       errorpage(
         details.tabId,
         fqdn,
-        new WebcatError(WebcatErrorCode.File.MISSING),
+        new WebcatError(WebcatErrorCode.File.MISSING, [pathname]),
       );
       return;
     }
@@ -304,6 +304,7 @@ export async function validateResponseContent(
         details.tabId,
         fqdn,
         new WebcatError(WebcatErrorCode.File.MISMATCH, [
+          pathname,
           String(manifest_hash),
           String(Uint8ArrayToBase64Url(new Uint8Array(content_hash))),
         ]),
