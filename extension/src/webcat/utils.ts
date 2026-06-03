@@ -86,11 +86,12 @@ export async function clearBrowserCaches(fqdns: string[]) {
 }
 
 export function getFirstParty(
-  url: string,
-  frameAncestors: { url: string; frameId: number }[],
+  details: browser.webRequest._OnBeforeRequestDetails,
 ): string {
-  if (frameAncestors.length === 0) {
-    return new URL(url).origin;
+  // TODO: if details.tabId === -1 parse worker first party origin from the URL
+  if (!details.frameAncestors?.length) {
+    return new URL(details.url).origin;
   }
-  return new URL(frameAncestors[frameAncestors.length - 1].url).origin;
+  return new URL(details.frameAncestors[details.frameAncestors.length - 1].url)
+    .origin;
 }

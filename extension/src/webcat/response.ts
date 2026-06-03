@@ -147,7 +147,7 @@ export async function validateResponseHeaders(
       fqdn,
     );
     const cachePartition = {
-      firstParty: getFirstParty(details.url, details.frameAncestors || []),
+      firstParty: getFirstParty(details),
       incognito: !!details.incognito,
     };
     origins.delete(CacheKey(fqdn, cachePartition));
@@ -249,7 +249,11 @@ export async function validateResponseContent(
     // build a blob later. If the data is the hook marker, replace it with the WASM hooks, and if it is the
     // end marker, flush all buffered data
     if (arraysEqual(hookMarker, new Uint8Array(event.data))) {
-      const hooks = getHooks(hooksType.page, manifest.wasm);
+      const hooks = getHooks(
+        hooksType.page,
+        manifest.wasm,
+        getFirstParty(details),
+      );
       source.push(stringToUint8Array(hooks).buffer);
     } else if (arraysEqual(endMarker, new Uint8Array(event.data))) {
       source.forEach((hook) => filter.write(hook));
