@@ -15,7 +15,6 @@ const ALL_TYPES = [
   "xslt",
   "beacon",
   "imageset",
-  "object_subrequest",
   "speculative",
   "web_manifest",
 ] satisfies browser.webRequest.ResourceType[];

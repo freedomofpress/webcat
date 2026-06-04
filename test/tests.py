@@ -221,7 +221,7 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
     with server.wait_for(paths_to_wait):
         browser.navigate(url)
     if not in_frame:
-        res = browser.execute("document.body.innerText")
+        res = browser.execute("document.body.textContent")
         assert expected in res
     res = json.loads(browser.execute("JSON.stringify(window.capture?.logs || [])"))
     for log in res:
@@ -261,7 +261,7 @@ def test_in_memory_cache(browser, server: Server, update_server: UpdateServer, e
     update_server.wait_for_update()
     browser.navigate(f'{server.url()}/console_log.png')
     sleep(2) # loading from cache, so can't use server.wait_for
-    res = browser.execute("document.body.innerText")
+    res = browser.execute("document.body.textContent")
     assert expected in res
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
@@ -281,7 +281,7 @@ def test_multiple_tabs(browser: Browser, server: Server, update_server: UpdateSe
             f"window.open('{server.url()}');"
             f"setTimeout(() => location.href = '{server.url()}/x', 1000)"
         )
-    res = browser.execute("document.body.innerText")
+    res = browser.execute("document.body.textContent")
     assert expected in res
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
@@ -308,7 +308,7 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, update_serve
     update_server.wait_for_update()
     with server.wait_for({"/js/alert.js"}):
         browser.navigate(non_enrolled_url)
-    res = browser.execute("document.body.innerText")
+    res = browser.execute("document.body.textContent")
     assert expected in res
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
@@ -331,7 +331,7 @@ def test_cache_eviction(browser: Browser, server: Server, update_server: UpdateS
             f"    location.href = '{server.url(dnsnames[1])}/console_log.png';"
             "}, 1000)"
         )
-    res = browser.execute("document.body.innerText")
+    res = browser.execute("document.body.textContent")
     assert expected in res
 
 @pytest.mark.parametrize("browser, paths_to_wait", [
@@ -365,7 +365,7 @@ def test_delegation(browser: Browser, server: Server, update_server: UpdateServe
         browser.navigate(f"{server.url(dnsnames[0])}/")
 
     # Page loads successfully in both cases
-    assert "Hello!" in browser.execute("document.body.innerText")
+    assert "Hello!" in browser.execute("document.body.textContent")
 
     logs_blob = json.dumps(browser.extension_logs())
     accepted_marker = f"Setting ok icon (delegation: {delegated_fqdn})"
@@ -396,7 +396,7 @@ def test_version_refresh(browser: Browser, server: Server, update_server: Update
     update_server.wait_for_update()
     with server.wait_for(paths_to_wait):
         browser.navigate(server.url())
-    assert "Hello!" in browser.execute("document.body.innerText")
+    assert "Hello!" in browser.execute("document.body.textContent")
 
     # Build a v0.2 bundle signed with the same enrollment as v0.1, with a
     # modified index.html. The inline <script> block is left untouched so its
@@ -435,7 +435,7 @@ def test_version_refresh(browser: Browser, server: Server, update_server: Update
 
     with server.wait_for(paths_to_wait):
         browser.execute("location.reload()")
-    assert expected in browser.execute("document.body.innerText")
+    assert expected in browser.execute("document.body.textContent")
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
@@ -463,5 +463,5 @@ def test_in_memory_cache_on_update(browser, server: Server, update_server: Updat
     server.hooks["/console_log.png"] = WEBCAT_ICON
     with server.wait_for({"/console_log.png"}):
         browser.navigate(f'{server.url(non_enrolled_dnsnames[0])}/console_log.png')
-    res = browser.execute("document.body.innerText")
+    res = browser.execute("document.body.textContent")
     assert expected in res

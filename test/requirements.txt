@@ -4,3 +4,4 @@ geckordp
 pytest
 pytest-benchmark
 pytest-check
+pytest-rerunfailures

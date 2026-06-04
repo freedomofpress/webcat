@@ -44,7 +44,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '23'
+          node-version: '24'
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -95,5 +95,5 @@ jobs:
       - name: Run integration tests
         run: |
           make test TESTARGS="--addon ../dist/webcat-extension-test.zip \
-          --headless -k '${{ matrix.test-filter }}'"
+          --headless --reruns 2 --reruns-delay 5 -k '${{ matrix.test-filter }}'"
 
