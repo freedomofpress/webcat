@@ -1,5 +1,3 @@
-declare const __IS_TESTING__: boolean;
-
 export function getFQDN(url: string): string {
   const urlobj = new URL(url);
   return urlobj.hostname;

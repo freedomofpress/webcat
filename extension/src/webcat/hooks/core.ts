@@ -36,7 +36,7 @@ type HookInputs<T> = {
   exportFunction: (
     func: Function, // eslint-disable-line @typescript-eslint/no-unsafe-function-type
     targetScope: object,
-    options: { defineAs: string },
+    options?: { defineAs?: string },
   ) => Function; // eslint-disable-line @typescript-eslint/no-unsafe-function-type
 };
 
@@ -54,7 +54,6 @@ function updatableHook<T>(
     // Check if the hook has already been injected.
     if (key in localScope) {
       console.log(`[WEBCAT] Hook already injected: ${key}`);
-      console.log(data);
       localScope[key].data = data as T; // update data
       return;
     }
@@ -272,15 +271,8 @@ export const wasmHook = updatableHook<string[]>(
     hookedModule.exports = OriginalModule.exports.bind(OriginalModule);
     hookedModule.imports = OriginalModule.imports.bind(OriginalModule);
     exportFunction(hookedModule, wasm, { defineAs: "Module" });
+    OriginalModule.prototype.constructor = wasm.Module;
     wasm.Module.prototype = OriginalModule.prototype;
-
-    // Mark WebAssembly as hooked.
-    Object.defineProperty(wasm, "__hooked__", {
-      value: true,
-      writable: false,
-      configurable: false,
-      enumerable: false,
-    });
 
     console.log(
       "[WEBCAT] WebAssembly successfully hooked: all bytecode entry points now require authorization.",
@@ -295,12 +287,84 @@ export const wasmHook = updatableHook<string[]>(
  */
 export const sharedWorkerHook = updatableHook<string>(
   function (config, data) {
-    // TODO
-    data.then((data) => {
-      console.log(
-        `[WEBCAT] SharedWorker successfully hooked: first-party origin '${data}'.`,
-      );
+    const { unwrappedScope, exportFunction } = config;
+    if (!unwrappedScope.SharedWorker) {
+      return;
+    }
+
+    type SharedWorkerInternal = {
+      instance: SharedWorker;
+      port: MessagePort;
+      relay: MessagePort;
+      onerror: ((e: Event) => void) | null;
+    };
+    const internal = Symbol("WEBCAT");
+    type HookedSharedWorker = SharedWorker & {
+      [internal]: SharedWorkerInternal;
+    };
+
+    // Hook the SharedWorker constructor
+    const OriginalSharedWorker = unwrappedScope.SharedWorker;
+    function HookedSharedWorker(
+      ...args: [url: string | URL, options?: string | WorkerOptions]
+    ) {
+      if ((args.length as number) === 0) {
+        throw new unwrappedScope.TypeError(
+          "SharedWorker constructor: At least 1 argument required, but only 0 passed",
+        );
+      }
+      const self = unwrappedScope.Object.create(
+        OriginalSharedWorker.prototype,
+      ) as HookedSharedWorker;
+      const channel = new unwrappedScope.MessageChannel();
+      self[internal] = new unwrappedScope.Object() as SharedWorkerInternal;
+      self[internal].port = channel.port1;
+      self[internal].relay = channel.port2;
+      self[internal].onerror = null;
+      data.then((firstParty) => {
+        // Initialize the actual SharedWorker instance and relay messages
+        // TODO: relay messageerror events
+        self[internal].instance = new OriginalSharedWorker(
+          `${args[0]}#${firstParty}`,
+          ...(args.slice(1) as [options?: string | WorkerOptions]),
+        );
+        self[internal].instance.port.onmessage = exportFunction(
+          (e: MessageEvent<unknown>) => {
+            self[internal].relay.postMessage(e.data);
+          },
+          unwrappedScope,
+        ) as typeof MessagePort.prototype.onmessage;
+        self[internal].relay.onmessage = exportFunction(
+          (e: MessageEvent<unknown>) => {
+            self[internal].instance.port.postMessage(e.data);
+          },
+          unwrappedScope,
+        ) as typeof MessagePort.prototype.onmessage;
+      });
+      return self;
+    }
+    exportFunction(HookedSharedWorker, unwrappedScope, {
+      defineAs: "SharedWorker",
     });
+    OriginalSharedWorker.prototype.constructor = unwrappedScope.SharedWorker;
+    unwrappedScope.SharedWorker.prototype = OriginalSharedWorker.prototype;
+
+    // Hook SharedWorker.port
+    const { get: originalPort } = Object.getOwnPropertyDescriptor(
+      OriginalSharedWorker.prototype,
+      "port",
+    )!;
+    function hookedPort(this: HookedSharedWorker) {
+      if (internal in this) {
+        return this[internal].port;
+      }
+      return originalPort?.apply(this);
+    }
+    Object.defineProperty(OriginalSharedWorker.prototype, "port", {
+      get: exportFunction(hookedPort, unwrappedScope) as () => unknown,
+    });
+
+    // TODO: Hook SharedWorker.onerror
   },
   {
     key: "SHARED_WORKER_FIRST_PARTY",
