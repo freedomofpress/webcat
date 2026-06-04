@@ -20,3 +20,18 @@ export const hookMarker = stringToUint8Array(
 export const endMarker = stringToUint8Array(
   `__WEBCAT_END__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
 );
+
+declare const __IS_TESTING__: boolean;
+if (__IS_TESTING__) {
+  Object.defineProperty(globalThis, "state", {
+    value: {
+      origins,
+      pendingOrigins,
+      nonOrigins,
+      tabs,
+      db,
+      hookMarker,
+      endMarker,
+    },
+  });
+}
