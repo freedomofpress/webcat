@@ -77,6 +77,7 @@ export async function errorpage(
   tabId: number,
   fqdn: string,
   error?: WebcatError,
+  replace = true,
 ) {
   const tabIds = new Set<number>();
   const frameLookups = [];
@@ -128,7 +129,7 @@ export async function errorpage(
   const tabUpdates: Promise<browser.tabs.Tab>[] = [];
   tabIds.forEach((tabId) =>
     tabUpdates.push(
-      browser.tabs.update(tabId, { url: errorPageUrl, loadReplace: true }),
+      browser.tabs.update(tabId, { url: errorPageUrl, loadReplace: replace }),
     ),
   );
   await Promise.all(tabUpdates);
