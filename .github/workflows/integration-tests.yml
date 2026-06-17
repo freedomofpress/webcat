@@ -78,6 +78,13 @@ jobs:
           curl -fsSL "${TBB_URL}" -o tbb.tar.xz
           tar -xf tbb.tar.xz
           echo "$PWD/tor-browser/Browser" >> "$GITHUB_PATH"
+      
+      - name: Update NoScript
+        if: matrix.tor
+        run: |
+          NOSCRIPT_URL=$(curl -s https://dist.torproject.org/torbrowser/noscript/update-stable.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['addons']['{73a6fe31-595d-460b-a920-fcc0f8843232}']['updates'][0]['update_link'])")
+          echo "Updating NoScript from ${NOSCRIPT_URL}"
+          curl -fsSL "${NOSCRIPT_URL}" -o "$PWD/tor-browser/Browser/distribution/extensions/{73a6fe31-595d-460b-a920-fcc0f8843232}.xpi"
 
       - name: Set up virtual display and dependencies
         run: |
