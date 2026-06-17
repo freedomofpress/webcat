@@ -395,7 +395,7 @@ class Server:
             self.thread.join()
             if self.timeout:
                 raise RuntimeError(f"timeout waiting for '{"', '".join(self.counts.keys())}'")
-            sleep(0.2) # minimal sleep to allow the browser to process the last response
+            sleep(0.5) # minimal sleep to allow the browser to process the last response
 
         def _wait(self, lock):
             with self.server._served:

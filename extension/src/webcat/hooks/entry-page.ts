@@ -22,10 +22,4 @@ const hookInputs = {
 wasmHook(hookInputs);
 sharedWorkerHook(hookInputs);
 serviceWorkerHook(hookInputs);
-
-if (
-  "SharedWorkerGlobalScope" in globalThis ||
-  "ServiceWorkerGlobalScope" in globalThis
-) {
-  workerLocationHook();
-}
+workerLocationHook(hookInputs);

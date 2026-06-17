@@ -142,7 +142,7 @@ def setdiff(a: list, b: list):
         id="missing_csp_test"),
 
     # Hook / with static content
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/"}, False,
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/"}, True,
         id="corrupted_index_test"),
 
     # Hook /.well-known/webcat/bundle.json
@@ -150,7 +150,7 @@ def setdiff(a: list, b: list):
         id="corrupted_manifest_test"),
 
     # Hook /js/alert.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/js/alert.js"}, False,
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/js/alert.js"}, True,
         id="corrupted_js_test"),
 
     # Hook /wasm/addTwo.wasm
@@ -172,19 +172,19 @@ def setdiff(a: list, b: list):
         id="corrupted_wasm_worker_test"),
 
     # Hook /workers/worker.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/worker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/worker.js"}, False,
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/worker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/worker.js"}, True,
         id="corrupted_worker_test"),
 
     # Hook /workers/sharedworker.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/sharedworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/sharedworker.js"}, False,
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/sharedworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/sharedworker.js"}, True,
         id="corrupted_sharedworker_test"),
 
     # Hook /workers/serviceworker.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/serviceworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/serviceworker.js"}, False,
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/serviceworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/serviceworker.js"}, True,
         id="corrupted_serviceworker_test"),
 
     # Hook /workers/audioworklet.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/audioworklet.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/audioworklet.js"}, False,
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/audioworklet.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/audioworklet.js"}, True,
         id="corrupted_audioworklet_test"),
     
     # Hook /wasm/aw_addTwo.wasm
@@ -212,7 +212,8 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
     browser.install_extension(addon_path)
     update_server.wait_for_update()
     browser.attach_extension_console()
-    if isinstance(browser, TorBrowser):
+    if isinstance(browser, TorBrowser) or in_frame:
+        # ServiceWorkers are disabled in TBB by NoScript and in frames by WEBCAT
         paths_to_wait = paths_to_wait-{"/workers/serviceworker.js"}
     if in_frame:
         url = f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url(dnsnames[0])}"
