@@ -87,6 +87,9 @@ export const wasmHook = updatableHook<string[]>(
   function (config, data) {
     const { unwrappedScope, scope, key, exportFunction } = config;
     const wasm = unwrappedScope.WebAssembly;
+    if (!wasm) {
+      return;
+    }
 
     // Helper: Convert ArrayBuffer digest to a hex string.
     function arrayBuffertoBase64Url(bytes: ArrayBuffer | Uint8Array): string {
@@ -282,7 +285,7 @@ export const wasmHook = updatableHook<string[]>(
 );
 
 /**
- * Hooks the ServiceWorker API to expose information about the first-party
+ * Hooks the SharedWorker API to expose information about the first-party
  * origin to the webRequest API.
  */
 export const sharedWorkerHook = updatableHook<string>(
@@ -324,10 +327,8 @@ export const sharedWorkerHook = updatableHook<string>(
       data.then((firstParty) => {
         // Initialize the actual SharedWorker instance and relay messages
         // TODO: relay messageerror events
-        self[internal].instance = new OriginalSharedWorker(
-          `${args[0]}#${firstParty}`,
-          ...(args.slice(1) as [options?: string | WorkerOptions]),
-        );
+        args[0] = `${args[0]}#${firstParty}`;
+        self[internal].instance = new OriginalSharedWorker(...args);
         self[internal].instance.port.onmessage = exportFunction(
           (e: MessageEvent<unknown>) => {
             self[internal].relay.postMessage(e.data);
@@ -353,7 +354,7 @@ export const sharedWorkerHook = updatableHook<string>(
     const { get: originalPort } = Object.getOwnPropertyDescriptor(
       OriginalSharedWorker.prototype,
       "port",
-    )!;
+    ) as PropertyDescriptor;
     function hookedPort(this: HookedSharedWorker) {
       if (internal in this) {
         return this[internal].port;
@@ -372,18 +373,38 @@ export const sharedWorkerHook = updatableHook<string>(
   },
 );
 
+declare global {
+  var WorkerNavigator: typeof Navigator;
+}
+
 /**
- * Hooks the ServiceWorker API to expose information about the first-party
- * origin to the webRequest API.
+ * Disables the ServiceWorker API when not in a first-party origin.
  */
-export const serviceWorkerHook = updatableHook<string>(
-  function (config, data) {
-    // TODO
-    data.then((data) => {
-      console.log(
-        `[WEBCAT] ServiceWorker successfully hooked: first-party origin '${data}'.`,
-      );
-    });
+export const serviceWorkerHook = updatableHook<boolean>(
+  function ({ unwrappedScope, data }) {
+    if (typeof data === "string") {
+      // data is the placeholder, so we're in a frame
+      try {
+        Object.hasOwn(window.top || {}, "name");
+        // top is same-origin, so there's nothing to do
+        return;
+      } catch {
+        // top is cross-origin, continue
+      }
+    } else if ((data as unknown as boolean) === true) {
+      // we're in a worker that's same-origin with
+      // the first party; nothing to do
+      return;
+    }
+    delete (
+      (unwrappedScope.Navigator || unwrappedScope.WorkerNavigator || Object)
+        .prototype as unknown as Record<string, unknown>
+    ).serviceWorker;
+    delete (unwrappedScope as unknown as Record<string, unknown>).ServiceWorker;
+    delete (unwrappedScope as unknown as Record<string, unknown>)
+      .ServiceWorkerContainer;
+    delete (unwrappedScope as unknown as Record<string, unknown>)
+      .ServiceWorkerRegistration;
   },
   {
     key: "SERVICE_WORKER_FIRST_PARTY",
@@ -402,10 +423,15 @@ declare const WorkerLocation: {
 };
 
 /**
- * Hooks WorkerGlobalScope.location to hide parts of the URL hash injected by
- * sharedWorkerHook or serviceWorkerHook.
+ * Hooks WorkerGlobalScope.location to hide parts of
+ * the URL hash injected by sharedWorkerHook.
  */
-export function workerLocationHook() {
+export function workerLocationHook({ unwrappedScope }: HookInputs<void>) {
+  if (!("SharedWorkerGlobalScope" in unwrappedScope)) {
+    // Not in a SharedWorker; nothing to do
+    return;
+  }
+
   const {
     hash: { get: hash },
     href: { get: href },

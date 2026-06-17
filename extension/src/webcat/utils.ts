@@ -1,3 +1,6 @@
+import { firstPartyMarker } from "../globals";
+import { logger } from "./logger";
+
 export function getFQDN(url: string): string {
   const urlobj = new URL(url);
   return urlobj.hostname;
@@ -83,13 +86,64 @@ export async function clearBrowserCaches(fqdns: string[]) {
   await browser.webRequest.handlerBehaviorChanged();
 }
 
-export function getFirstParty(
+/**
+ * Determines the first-party origin (FPO) for a given request
+ */
+export async function getFirstParty(
   details: browser.webRequest._OnBeforeRequestDetails,
-): string {
-  // TODO: if details.tabId === -1 parse worker first party origin from the URL
-  if (!details.frameAncestors?.length) {
+): Promise<string> {
+  if (details.tabId === -1) {
+    // This is a SharedWorker or a ServiceWorker
+    for (const url of [details.url, details.documentUrl, details.originUrl]) {
+      if (url === undefined) continue;
+      const markerIndex = url?.indexOf(firstPartyMarker);
+      if (markerIndex !== -1) {
+        // FPO found in the SharedWorker URL hash, added there via hooked API
+        return url.substring(
+          markerIndex + firstPartyMarker.length + ":".length,
+        );
+      }
+    }
+    // No FPO found in URL hash; this must be a ServiceWorker
+    // Fall through and use the documentUrl
+  }
+  if (details.frameAncestors?.length) {
+    // This is a request with frameAncestors; FPO is the origin of the topmost (last) ancestor
+    return new URL(
+      details.frameAncestors[details.frameAncestors.length - 1].url,
+    ).origin;
+  }
+  if (details.frameId !== 0) {
+    // Subresource of a Worker in a frame; no frameAncestors available; check the tab
+    const frames = await browser.webNavigation.getAllFrames({
+      tabId: details.tabId,
+    });
+    if (frames.find((frame) => frame.frameId === details.frameId)) {
+      // Frame still exists; FPO is the origin of the frame with frameId === 0
+      return new URL(frames.find((frame) => frame.frameId === 0)?.url || "")
+        .origin;
+    }
+    logger.addLog(
+      "warn",
+      `Cannot determine first-party origin for '${details.url}'; using unique cache partition`,
+      details.tabId,
+      getFQDN(details.url),
+    );
+    return details.requestId;
+  }
+  if (details.documentUrl) {
+    // Loading into the top-level document; FPO is the origin of documentUrl
+    return new URL(details.documentUrl).origin;
+  }
+  if (details.type === "main_frame") {
+    // Top-level navigation; FPO is the origin of the request URL
     return new URL(details.url).origin;
   }
-  return new URL(details.frameAncestors[details.frameAncestors.length - 1].url)
-    .origin;
+  logger.addLog(
+    "error",
+    `No first-party origin found for '${details.url}'`,
+    details.tabId,
+    getFQDN(details.url),
+  );
+  return details.requestId;
 }

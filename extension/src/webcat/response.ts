@@ -147,7 +147,7 @@ export async function validateResponseHeaders(
       fqdn,
     );
     const cachePartition = {
-      firstParty: getFirstParty(details),
+      firstParty: await getFirstParty(details),
       incognito: !!details.incognito,
     };
     origins.delete(CacheKey(fqdn, cachePartition));
@@ -242,6 +242,7 @@ export async function validateResponseContent(
   };
 
   const source: ArrayBuffer[] = [];
+  const firstParty = await getFirstParty(details);
   filter.ondata = (event: { data: ArrayBuffer }) => {
     // The data here is usually chunked; normally it would be streamed down as we get it
     // but since we can hash the content only at the end, we have to wait until we have everything
@@ -252,7 +253,8 @@ export async function validateResponseContent(
       const hooks = getHooks(
         hooksType.page,
         manifest.wasm,
-        getFirstParty(details),
+        firstParty,
+        firstParty === details.originUrl,
       );
       source.push(stringToUint8Array(hooks).buffer);
     } else if (arraysEqual(endMarker, new Uint8Array(event.data))) {

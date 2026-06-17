@@ -97,7 +97,7 @@ export async function headersListener(
   // Skip allowed types, etensions request, and not enrolled tabs
   const fqdn = getFQDN(details.url);
   const cachePartition = {
-    firstParty: getFirstParty(details),
+    firstParty: await getFirstParty(details),
     incognito: !!details.incognito,
   };
 
@@ -208,6 +208,7 @@ export async function headersListener(
           hooksType.content_script,
           wasm,
           cachePartition.firstParty,
+          cachePartition.firstParty === new URL(details.url).origin,
         ),
         runAt: "document_start",
         frameId: details.frameId,
@@ -254,7 +255,7 @@ export async function requestListener(
 
   const fqdn = getFQDN(details.url);
   const cachePartition = {
-    firstParty: getFirstParty(details),
+    firstParty: await getFirstParty(details),
     incognito: !!details.incognito,
   };
 

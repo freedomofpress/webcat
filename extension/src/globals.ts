@@ -20,6 +20,7 @@ export const hookMarker = stringToUint8Array(
 export const endMarker = stringToUint8Array(
   `__WEBCAT_END__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
 );
+export const firstPartyMarker = `__WEBCAT_FIRST_PARTY__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}`;
 
 declare const __IS_TESTING__: boolean;
 if (__IS_TESTING__) {
