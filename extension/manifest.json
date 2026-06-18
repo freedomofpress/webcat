@@ -47,6 +47,7 @@
       "48": "icons/light/webcat.SVG",
       "128": "icons/light/webcat.SVG"
     },
-    "default_title": "WEBCAT unavailable on this site."
-  }
+    "default_title": "__MSG_webcatIsUnavailable__"
+  },
+  "default_locale": "en"
 }

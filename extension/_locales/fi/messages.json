@@ -1,0 +1,47 @@
+{
+    "warningSecurityRisk": {
+        "message": "Varoitus: Tietoturvariski"
+    },
+    "didNotVerify": {
+        "message": "Ei varmennettu"
+    },
+    "errorShortDesc": {
+        "message": "WEBCAT ei voinut varmentaa, että koodi, jonka $1 tarjoili, vastaa allekirjoitettua manifestia, joten sivu estettiin."
+    },
+    "thisSite": {
+        "message": "tämä sivusto"
+    },
+    "advanced": {
+        "message": "Lisätietoja"
+    },
+    "hideAdvanced": {
+        "message": "Piilota lisätiedot"
+    },
+    "goBack": {
+        "message": "Palaa takaisin"
+    },
+    "whatYouCanDo": {
+        "message": "Ongelma johtuu sivustosta, ei verkkoyhteydestäsi. Koodi tai ympäristö, jonka sivusto tarjoili, ei vastaa sen kehittäjien kryptografista allekirjoitusta, joten WEBCAT esti sivun pitääkseen sinut turvassa. Voit ilmoittaa ongelmasta sivuston omistajalle, tai jos luulet tämän olevan bugi, raportoida sen $1."
+    },
+    "webcatRepository": {
+        "message": "WEBCATin tietovarastoon"
+    },
+    "file": {
+        "message": "Tiedosto: $1"
+    },
+    "errorCode": {
+        "message": "Virhekoodi: $1"
+    },
+    "webcatVerificationSuccessful": {
+        "message": "WEBCAT-varmennus onnistui"
+    },
+    "webcatVerificationFailed": {
+        "message": "WEBCAT-varmennus epäonnistui"
+    },
+    "webcatIsRunning": {
+        "message": "WEBCAT on käynnissä"
+    },
+    "webcatIsUnavailable": {
+        "message": "WEBCAT ei käytettävissä tällä sivustolla."
+    }
+}
