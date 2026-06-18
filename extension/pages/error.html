@@ -11,41 +11,41 @@
     <link rel="stylesheet" href="chrome://global/skin/aboutNetError.css" />
     <link rel="stylesheet" href="error.css" />
     <script src="error.js"></script>
-    <title>Warning: Security Risk</title>
+    <title data-i18n="warningSecurityRisk">Warning: Security Risk</title>
   </head>
   <body class="certerror webcaterror">
     <div class="container">
       <div id="text-container">
         <div class="title">
-          <h1 class="title-text">Did not verify</h1>
+          <h1 class="title-text" data-i18n="didNotVerify">Did not verify</h1>
         </div>
 
-        <p id="errorShortDesc">
+        <p id="errorShortDesc" data-i18n="errorShortDesc">
           WEBCAT could not verify that the code served by
-          <span id="error-host">this site</span> matches its signed manifest, so
+          <span id="error-host" data-i18n="thisSite">this site</span> matches its signed manifest, so
           the page was blocked.
         </p>
 
         <div class="button-container">
-          <button id="advancedButton" aria-expanded="false">Advanced</button>
-          <button id="returnButton" class="primary">Go back</button>
+          <button id="advancedButton" aria-expanded="false" data-i18n="advanced">Advanced</button>
+          <button id="returnButton" class="primary" data-i18n="goBack">Go back</button>
         </div>
 
         <div id="errorDebugInformation" hidden="">
-          <p id="whatCanYouDo">
+          <p id="whatCanYouDo" data-i18n="whatYouCanDo">
             The problem is with the site, not your connection. The code or the
             environment it served do not match what its developers
             cryptographically signed, so WEBCAT blocked the page to keep you
             safe. You can let the site owner know, or if you believe this is a
             bug open an issue in the
-            <a href="https://github.com/freedomofpress/webcat"
+            <a href="https://github.com/freedomofpress/webcat"  data-i18n="webcatRepository"
               >WEBCAT repository</a
             >.
           </p>
-          <p class="error-detail" id="debug-file-line" hidden="">
+          <p class="error-detail" id="debug-file-line" hidden="" data-i18n="file">
             File: <span id="debug-file"></span>
           </p>
-          <p id="errorCode">Error code: <span id="debug-code"></span></p>
+          <p id="errorCode" data-i18n="errorCode">Error code: <span id="debug-code"></span></p>
         </div>
       </div>
     </div>

@@ -1,10 +1,23 @@
 document.addEventListener("DOMContentLoaded", () => {
+  function localize(container) {
+    container.querySelectorAll("[data-i18n]").forEach((el) => {
+      const substitutions = Array.from(el.children).map((child) => child.outerHTML);
+      const msg = browser.i18n.getMessage(el.getAttribute("data-i18n"), substitutions);
+      if (msg === "") {
+        return;
+      }
+      el.innerHTML = msg;
+      localize(el);
+    });
+  }
+  localize(document);
+
   const params = new URLSearchParams(location.hash.slice(1));
   const code = params.get("code") || "UNKNOWN";
   const host = params.get("host") || "";
   const file = params.get("file") || "";
 
-  setText("error-host", host || "this site");
+  setText("error-host", host || browser.i18n.getMessage("thisSite"));
   setText("debug-code", code);
 
   if (file) {
@@ -18,8 +31,8 @@ document.addEventListener("DOMContentLoaded", () => {
     advancedPanel.hidden = !advancedPanel.hidden;
     advancedButton.setAttribute("aria-expanded", String(!advancedPanel.hidden));
     advancedButton.textContent = advancedPanel.hidden
-      ? "Advanced"
-      : "Hide advanced";
+      ? browser.i18n.getMessage("advanced")
+      : browser.i18n.getMessage("hideAdvanced");
   });
 
   // The error page took a history slot
