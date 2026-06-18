@@ -1,8 +1,13 @@
 document.addEventListener("DOMContentLoaded", () => {
   function localize(container) {
     container.querySelectorAll("[data-i18n]").forEach((el) => {
-      const substitutions = Array.from(el.children).map((child) => child.outerHTML);
-      const msg = browser.i18n.getMessage(el.getAttribute("data-i18n"), substitutions);
+      const substitutions = Array.from(el.children).map(
+        (child) => child.outerHTML,
+      );
+      const msg = browser.i18n.getMessage(
+        el.getAttribute("data-i18n"),
+        substitutions,
+      );
       if (msg === "") {
         return;
       }

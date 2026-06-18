@@ -22,13 +22,21 @@
 
         <p id="errorShortDesc" data-i18n="errorShortDesc">
           WEBCAT could not verify that the code served by
-          <span id="error-host" data-i18n="thisSite">this site</span> matches its signed manifest, so
-          the page was blocked.
+          <span id="error-host" data-i18n="thisSite">this site</span> matches
+          its signed manifest, so the page was blocked.
         </p>
 
         <div class="button-container">
-          <button id="advancedButton" aria-expanded="false" data-i18n="advanced">Advanced</button>
-          <button id="returnButton" class="primary" data-i18n="goBack">Go back</button>
+          <button
+            id="advancedButton"
+            aria-expanded="false"
+            data-i18n="advanced"
+          >
+            Advanced
+          </button>
+          <button id="returnButton" class="primary" data-i18n="goBack">
+            Go back
+          </button>
         </div>
 
         <div id="errorDebugInformation" hidden="">
@@ -38,14 +46,23 @@
             cryptographically signed, so WEBCAT blocked the page to keep you
             safe. You can let the site owner know, or if you believe this is a
             bug open an issue in the
-            <a href="https://github.com/freedomofpress/webcat"  data-i18n="webcatRepository"
+            <a
+              href="https://github.com/freedomofpress/webcat"
+              data-i18n="webcatRepository"
               >WEBCAT repository</a
             >.
           </p>
-          <p class="error-detail" id="debug-file-line" hidden="" data-i18n="file">
+          <p
+            class="error-detail"
+            id="debug-file-line"
+            hidden=""
+            data-i18n="file"
+          >
             File: <span id="debug-file"></span>
           </p>
-          <p id="errorCode" data-i18n="errorCode">Error code: <span id="debug-code"></span></p>
+          <p id="errorCode" data-i18n="errorCode">
+            Error code: <span id="debug-code"></span>
+          </p>
         </div>
       </div>
     </div>
