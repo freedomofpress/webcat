@@ -1,23 +1,23 @@
 {
-    "advanced": {
-        "message": "Advanced"
-    },
-    "hideAdvanced": {
-        "message": "Hide advanced"
-    },
-    "thisSite": {
-        "message": "this site"
-    },
-    "webcatVerificationSuccessful": {
-        "message": "WEBCAT verification successful"
-    },
-    "webcatVerificationFailed": {
-        "message": "WEBCAT verification failed"
-    },
-    "webcatIsRunning": {
-        "message": "WEBCAT is running"
-    },
-    "webcatIsUnavailable": {
-        "message": "WEBCAT unavailable on this site."
-    }
+  "advanced": {
+    "message": "Advanced"
+  },
+  "hideAdvanced": {
+    "message": "Hide advanced"
+  },
+  "thisSite": {
+    "message": "this site"
+  },
+  "webcatVerificationSuccessful": {
+    "message": "WEBCAT verification successful"
+  },
+  "webcatVerificationFailed": {
+    "message": "WEBCAT verification failed"
+  },
+  "webcatIsRunning": {
+    "message": "WEBCAT is running"
+  },
+  "webcatIsUnavailable": {
+    "message": "WEBCAT unavailable on this site."
+  }
 }

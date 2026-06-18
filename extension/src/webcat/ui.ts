@@ -19,7 +19,10 @@ export function setIcon(tabId: number) {
     tabId: tabId,
     path: `icons/${theme}/webcat.SVG`,
   });
-  browser.pageAction.setTitle({ tabId, title: browser.i18n.getMessage("webcatIsRunning") });
+  browser.pageAction.setTitle({
+    tabId,
+    title: browser.i18n.getMessage("webcatIsRunning"),
+  });
 }
 
 export function setOKIcon(tabId: number, delegation?: string) {
