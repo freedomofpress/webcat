@@ -56,6 +56,7 @@ class Browser:
         profile.set_config("browser.shell.checkDefaultBrowser", False)
         profile.set_config("browser.startup.couldRestoreSession.count", -1)
         profile.set_config("dom.disable_open_during_load", False)
+        profile.set_config("termsofuse.bypassNotification", True)
         for key, value in additional_configs.items():
             profile.set_config(key, value)
         logging.info(f"Profile {self.profile_name} created.")
