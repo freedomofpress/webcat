@@ -115,6 +115,8 @@ export async function headersListener(
     return {};
   }
 
+  const isFrame = FRAME_TYPES.includes(details.type);
+
   // pendingOrigins is populated by requestListener
   let originStateHolder = pendingOrigins.get(details.requestId);
 
@@ -137,7 +139,7 @@ export async function headersListener(
     if (result instanceof WebcatError) {
       pendingOrigins.delete(details.requestId);
       tabs.delete(details.tabId);
-      errorpage(details.tabId, fqdn, result);
+      errorpage(details.tabId, fqdn, result, !isFrame);
       return { cancel: true };
     }
     originStateHolder = pendingOrigins.get(details.requestId);
@@ -157,7 +159,7 @@ export async function headersListener(
     );
     pendingOrigins.delete(details.requestId);
     tabs.delete(details.tabId);
-    errorpage(details.tabId, fqdn, result);
+    errorpage(details.tabId, fqdn, result, !isFrame);
     return { cancel: true };
   }
 
@@ -298,7 +300,7 @@ export async function requestListener(
       pendingOrigins.delete(details.requestId);
       if (isFrame) {
         tabs.delete(details.tabId);
-        errorpage(details.tabId, fqdn, result);
+        errorpage(details.tabId, fqdn, result, !isFrame);
       }
       return { cancel: true };
     }
