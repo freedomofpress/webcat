@@ -24,5 +24,9 @@ export function getHooks(
     .replace(
       '"__SERVICE_WORKER_FIRST_PARTY_PLACEHOLDER__"',
       JSON.stringify(sameOrigin),
+    )
+    .replace(
+      '"__WORKER_FIRST_PARTY_PLACEHOLDER__"',
+      JSON.stringify(`${firstPartyMarker}:${firstParty}`),
     );
 }

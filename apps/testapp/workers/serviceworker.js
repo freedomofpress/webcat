@@ -1,10 +1,12 @@
+importScripts("/workers/serviceworker_import.js");
 self.addEventListener('install', (event) => {
   console.log('Service Worker installed');
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', async (event) => {
   console.log('Service Worker activated');
+  await fetch("/Readme.md");
   clients.claim().then(() => {
     self.clients.matchAll().then(clients => {
       console.log(`Found ${clients.length} client(s)`); // Log the number of clients matched

@@ -74,6 +74,7 @@ CSS_PATHS = set(map(lambda filename: f"/css/{filename}", os.listdir("./cases/tes
 JS_PATHS = set(map(lambda filename: f"/js/{filename}", os.listdir("./cases/testapp/js/")))
 WASM_PATHS = set(map(lambda filename: f"/wasm/{filename}", os.listdir("./cases/testapp/wasm/")))
 WORKER_PATHS = set(map(lambda filename: f"/workers/{filename}", os.listdir("./cases/testapp/workers/")))
+SERVICEWORKER_PATHS = set(filter(lambda path: "serviceworker" in path, WORKER_PATHS))
 FRAME_PATHS = {"/js/framehost.js", "/wasm/frame_addThree.wasm"}
 ALL_PATHS = {"/"}.union(CSS_PATHS,JS_PATHS,WASM_PATHS,WORKER_PATHS)
 NON_FRAME_PATHS = ALL_PATHS-FRAME_PATHS
@@ -214,7 +215,7 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
     browser.attach_extension_console()
     if isinstance(browser, TorBrowser) or in_frame:
         # ServiceWorkers are disabled in TBB by NoScript and in frames by WEBCAT
-        paths_to_wait = paths_to_wait-{"/workers/serviceworker.js"}
+        paths_to_wait = paths_to_wait-SERVICEWORKER_PATHS
     if in_frame:
         url = f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url(dnsnames[0])}"
     else:
@@ -337,8 +338,8 @@ def test_cache_eviction(browser: Browser, server: Server, update_server: UpdateS
 
 @pytest.mark.parametrize("browser, paths_to_wait", [
     pytest.param("firefox", NON_FRAME_PATHS, id="firefox"),
-    pytest.param("tbb", NON_FRAME_PATHS-{"/workers/serviceworker.js"}, id="tbb"),
-    pytest.param("tbb_safer", NON_FRAME_PATHS-{"/workers/serviceworker.js"}-WASM_PATHS, id="tbb_safer"),
+    pytest.param("tbb", NON_FRAME_PATHS-SERVICEWORKER_PATHS, id="tbb"),
+    pytest.param("tbb_safer", NON_FRAME_PATHS-SERVICEWORKER_PATHS-WASM_PATHS, id="tbb_safer"),
     pytest.param("tbb_safest", NON_FRAME_PATHS-JS_PATHS-WORKER_PATHS-WASM_PATHS, id="tbb_safest")
 ], indirect=["browser"])
 @pytest.mark.parametrize("root, headers, hooks, delegated_fqdn, should_verify", [
@@ -383,8 +384,8 @@ def test_delegation(browser: Browser, server: Server, update_server: UpdateServe
 
 @pytest.mark.parametrize("browser, paths_to_wait", [
     pytest.param("firefox", NON_FRAME_PATHS, id="firefox"),
-    pytest.param("tbb", NON_FRAME_PATHS-{"/workers/serviceworker.js"}, id="tbb"),
-    pytest.param("tbb_safer", NON_FRAME_PATHS-{"/workers/serviceworker.js"}-WASM_PATHS, id="tbb_safer"),
+    pytest.param("tbb", NON_FRAME_PATHS-SERVICEWORKER_PATHS, id="tbb"),
+    pytest.param("tbb_safer", NON_FRAME_PATHS-SERVICEWORKER_PATHS-WASM_PATHS, id="tbb_safer"),
     pytest.param("tbb_safest", NON_FRAME_PATHS-JS_PATHS-WORKER_PATHS-WASM_PATHS, id="tbb_safest")
 ], indirect=["browser"])
 @pytest.mark.parametrize("root, headers, hooks, expected", [
