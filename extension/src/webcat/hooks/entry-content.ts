@@ -1,4 +1,9 @@
-import { serviceWorkerHook, sharedWorkerHook, wasmHook } from "./core";
+import {
+  serviceWorkerHook,
+  sharedWorkerHook,
+  wasmHook,
+  workerHook,
+} from "./core";
 
 console.log("[WEBCAT] Installing content script hook");
 
@@ -36,3 +41,4 @@ if (ancestor !== window) {
 
 sharedWorkerHook(hookInputs);
 serviceWorkerHook(hookInputs);
+workerHook(hookInputs);

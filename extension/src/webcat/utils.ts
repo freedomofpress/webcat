@@ -92,20 +92,20 @@ export async function clearBrowserCaches(fqdns: string[]) {
 export async function getFirstParty(
   details: browser.webRequest._OnBeforeRequestDetails,
 ): Promise<string> {
-  if (details.tabId === -1) {
-    // This is a SharedWorker or a ServiceWorker
+  if (details.tabId === -1 || details.frameId === 0) {
+    // This might be a SharedWorker or a ServiceWorker,
+    // or a Worker request affected by https://bugzilla.mozilla.org/show_bug.cgi?id=2048884
     for (const url of [details.url, details.documentUrl, details.originUrl]) {
       if (url === undefined) continue;
       const markerIndex = url?.indexOf(firstPartyMarker);
       if (markerIndex !== -1) {
-        // FPO found in the SharedWorker URL hash, added there via hooked API
+        // FPO found in a SharedWorker or Worker URL hash, added there via hooked API
         return url.substring(
           markerIndex + firstPartyMarker.length + ":".length,
         );
       }
     }
-    // No FPO found in URL hash; this must be a ServiceWorker
-    // Fall through and use the documentUrl
+    // No FPO found in URL hash; fall through
   }
   if (details.frameAncestors?.length) {
     // This is a request with frameAncestors; FPO is the origin of the topmost (last) ancestor

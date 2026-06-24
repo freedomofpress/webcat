@@ -95,7 +95,7 @@ export const wasmHook = updatableHook<string[]>(
     function arrayBuffertoBase64Url(bytes: ArrayBuffer | Uint8Array): string {
       const byteArray =
         bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-      const options = new unwrappedScope.Object() as {
+      const options = new scope.Object() as {
         alphabet?: "base64" | "base64url";
         omitPadding?: boolean;
       };
@@ -260,7 +260,7 @@ export const wasmHook = updatableHook<string[]>(
       bufferSource: BufferSource,
     ): WebAssembly.Module {
       if (!(this instanceof HookedModule)) {
-        throw new TypeError(
+        throw new scope.TypeError(
           "[WEBCAT] Constructor WebAssembly.Module requires 'new'",
         );
       }
@@ -290,7 +290,7 @@ export const wasmHook = updatableHook<string[]>(
  */
 export const sharedWorkerHook = updatableHook<string>(
   function (config, data) {
-    const { unwrappedScope, exportFunction } = config;
+    const { scope, unwrappedScope, exportFunction } = config;
     if (!unwrappedScope.SharedWorker) {
       return;
     }
@@ -309,18 +309,24 @@ export const sharedWorkerHook = updatableHook<string>(
     // Hook the SharedWorker constructor
     const OriginalSharedWorker = unwrappedScope.SharedWorker;
     function HookedSharedWorker(
+      this: object,
       ...args: [url: string | URL, options?: string | WorkerOptions]
     ) {
+      if (!(this instanceof HookedSharedWorker)) {
+        throw new scope.TypeError(
+          "SharedWorker constructor: 'new' is required",
+        );
+      }
       if ((args.length as number) === 0) {
-        throw new unwrappedScope.TypeError(
+        throw new scope.TypeError(
           "SharedWorker constructor: At least 1 argument required, but only 0 passed",
         );
       }
       const self = unwrappedScope.Object.create(
         OriginalSharedWorker.prototype,
       ) as HookedSharedWorker;
-      const channel = new unwrappedScope.MessageChannel();
-      self[internal] = new unwrappedScope.Object() as SharedWorkerInternal;
+      const channel = new scope.MessageChannel();
+      self[internal] = new scope.Object() as SharedWorkerInternal;
       self[internal].port = channel.port1;
       self[internal].relay = channel.port2;
       self[internal].onerror = null;
@@ -409,6 +415,141 @@ export const serviceWorkerHook = updatableHook<boolean>(
   {
     key: "SERVICE_WORKER_FIRST_PARTY",
     data: "__SERVICE_WORKER_FIRST_PARTY_PLACEHOLDER__",
+  },
+);
+
+/**
+ * Hooks the Worker API as a workaround to
+ * https://bugzilla.mozilla.org/show_bug.cgi?id=2048884
+ */
+export const workerHook = updatableHook<string>(
+  function (config, data) {
+    const { scope, unwrappedScope, exportFunction } = config;
+    if (!unwrappedScope.SharedWorker) {
+      return;
+    }
+
+    type MessageListener = (this: Worker, ev: MessageEvent<unknown>) => unknown;
+    type WorkerInternal = {
+      instance?: Worker;
+      onmessage: MessageListener | null;
+      messages: [message: unknown, options?: StructuredSerializeOptions][];
+    };
+    const internal = Symbol("WEBCAT");
+    type HookedWorker = Worker & {
+      [internal]: WorkerInternal;
+      wrappedJSObject?: HookedWorker;
+    };
+
+    // Hook the Worker constructor
+    const OriginalWorker = unwrappedScope.Worker;
+    const EventTarget = unwrappedScope.EventTarget;
+    const construct = unwrappedScope.Reflect.construct.bind(
+      unwrappedScope.Reflect,
+    );
+    function HookedWorker(
+      this: object,
+      ...args: [scriptUrl: string | URL, options?: WorkerOptions]
+    ) {
+      if (!(this instanceof HookedWorker)) {
+        throw new TypeError("Worker constructor: 'new' is required");
+      }
+      if ((args.length as number) === 0) {
+        throw new scope.TypeError(
+          "Worker constructor: At least 1 argument required, but only 0 passed",
+        );
+      }
+      const self = construct(
+        EventTarget,
+        new scope.Array(),
+        OriginalWorker,
+      ) as HookedWorker;
+      self[internal] = new scope.Object() as WorkerInternal;
+      self[internal].onmessage = null;
+      self[internal].messages = [];
+      data.then((firstParty) => {
+        // Initialize the actual Worker instance and relay messages
+        args[0] = `${args[0]}#${firstParty}`;
+        self[internal].instance = new OriginalWorker(...args);
+        self[internal].instance.onmessage = self[internal].onmessage;
+        self[internal].messages.forEach((args) => {
+          self[internal].instance?.postMessage(...args);
+        });
+      });
+      return self;
+    }
+    exportFunction(HookedWorker, unwrappedScope, { defineAs: "Worker" });
+    OriginalWorker.prototype.constructor = unwrappedScope.Worker;
+    unwrappedScope.Worker.prototype = OriginalWorker.prototype;
+
+    // Hook Worker.onmessage
+    const { get: originalGetOnmessage, set: originalSetOnmessage } =
+      Object.getOwnPropertyDescriptor(
+        OriginalWorker.prototype,
+        "onmessage",
+      ) as PropertyDescriptor;
+    function hookedGetOnmessage(this: HookedWorker) {
+      const unwrappedThis = this.wrappedJSObject || this;
+      if (internal in unwrappedThis) {
+        if (unwrappedThis[internal].instance) {
+          return originalGetOnmessage?.call(unwrappedThis[internal].instance);
+        }
+        return unwrappedThis[internal].onmessage;
+      }
+      return originalGetOnmessage?.call(this);
+    }
+    function hookedSetOnmessage(this: HookedWorker, v: MessageListener | null) {
+      const unwrappedThis = this.wrappedJSObject || this;
+      if (internal in unwrappedThis) {
+        if (unwrappedThis[internal].instance) {
+          originalSetOnmessage?.call(unwrappedThis[internal].instance, v);
+        } else {
+          unwrappedThis[internal].onmessage = v;
+        }
+      } else {
+        originalSetOnmessage?.call(this, v);
+      }
+    }
+    Object.defineProperty(OriginalWorker.prototype, "onmessage", {
+      get: exportFunction(hookedGetOnmessage, unwrappedScope) as () => unknown,
+      set: exportFunction(hookedSetOnmessage, unwrappedScope) as (
+        v: unknown,
+      ) => void,
+    });
+
+    // Hook Worker.postMessage
+    const originalPostMessage = OriginalWorker.prototype.postMessage;
+    function hookedPostMessage(
+      this: HookedWorker,
+      ...args: [message: unknown, options?: StructuredSerializeOptions]
+    ) {
+      const unwrappedThis = this.wrappedJSObject || this;
+      if (internal in unwrappedThis) {
+        if (unwrappedThis[internal].instance) {
+          originalPostMessage.call(unwrappedThis[internal].instance, ...args);
+        } else {
+          let options = args[1];
+          if (options && scope.Symbol.iterator in options) {
+            const transfer = options as Transferable[];
+            options = new scope.Object();
+            options.transfer = transfer;
+          }
+          args[0] = scope.structuredClone(args[0], options);
+          unwrappedThis[internal].messages.push(args);
+        }
+      } else {
+        originalPostMessage.call(this, ...args);
+      }
+    }
+    exportFunction(hookedPostMessage, OriginalWorker.prototype, {
+      defineAs: "postMessage",
+    });
+
+    // TODO: hook onerror, onmessageerror, addEventListener, removeEventListener, dispatchEvent, and terminate
+  },
+  {
+    key: "WORKER_FIRST_PARTY",
+    data: "__WORKER_FIRST_PARTY_PLACEHOLDER__",
   },
 );
 

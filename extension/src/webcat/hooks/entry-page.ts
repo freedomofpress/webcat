@@ -2,6 +2,7 @@ import {
   serviceWorkerHook,
   sharedWorkerHook,
   wasmHook,
+  workerHook,
   workerLocationHook,
 } from "./core";
 
@@ -22,4 +23,5 @@ const hookInputs = {
 wasmHook(hookInputs);
 sharedWorkerHook(hookInputs);
 serviceWorkerHook(hookInputs);
+workerHook(hookInputs);
 workerLocationHook(hookInputs);

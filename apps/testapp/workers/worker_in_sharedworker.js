@@ -1,0 +1,1 @@
+console.log("worker in sharedworker");
