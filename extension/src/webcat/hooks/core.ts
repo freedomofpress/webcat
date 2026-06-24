@@ -568,8 +568,11 @@ declare const WorkerLocation: {
  * the URL hash injected by sharedWorkerHook.
  */
 export function workerLocationHook({ unwrappedScope }: HookInputs<void>) {
-  if (!("SharedWorkerGlobalScope" in unwrappedScope)) {
-    // Not in a SharedWorker; nothing to do
+  if (
+    !("SharedWorkerGlobalScope" in unwrappedScope) &&
+    !("DedicatedWorkerGlobalScope" in unwrappedScope)
+  ) {
+    // Not in a SharedWorker or a Worker; nothing to do
     return;
   }
 
