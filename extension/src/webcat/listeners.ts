@@ -204,7 +204,7 @@ export async function headersListener(
       browser.webNavigation.onDOMContentLoaded.removeListener(listener);
 
       await browser.tabs.executeScript(details.tabId, {
-        code: getHooks(
+        code: await getHooks(
           hooksType.content_script,
           wasm,
           cachePartition.firstParty,
