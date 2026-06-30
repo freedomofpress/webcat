@@ -241,8 +241,9 @@ export async function validateResponseContent(
     }
   };
 
-  const source: ArrayBuffer[] = [];
+  const source: Promise<ArrayBuffer>[] = [];
   const firstParty = await getFirstParty(details);
+  let writeQueue: Promise<void> = Promise.resolve();
   filter.ondata = (event: { data: ArrayBuffer }) => {
     // The data here is usually chunked; normally it would be streamed down as we get it
     // but since we can hash the content only at the end, we have to wait until we have everything
@@ -256,17 +257,19 @@ export async function validateResponseContent(
         firstParty,
         firstParty === details.originUrl,
       );
-      source.push(stringToUint8Array(hooks).buffer);
+      source.push(hooks.then((h) => stringToUint8Array(h).buffer));
     } else if (arraysEqual(endMarker, new Uint8Array(event.data))) {
-      source.forEach((hook) => filter.write(hook));
+      source.forEach((hook) => {
+        writeQueue = writeQueue.then(async () => filter.write(await hook));
+      });
       source.length = 0;
     } else {
-      source.push(event.data);
+      source.push(Promise.resolve(event.data));
     }
   };
 
   filter.onstop = async () => {
-    const blob = await new Blob(source).arrayBuffer();
+    const blob = await new Blob(await Promise.all(source)).arrayBuffer();
 
     // Following order of priority:
     // - If there's an exact match, that should be the hash
@@ -319,6 +322,7 @@ export async function validateResponseContent(
     // If everything is OK then we can just write the raw blob back
     logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
 
+    await writeQueue;
     filter.write(blob);
     // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
     // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter

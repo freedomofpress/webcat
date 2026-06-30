@@ -1,4 +1,4 @@
-import { firstPartyMarker } from "../globals";
+import { firstPartyKey } from "../globals";
 import { logger } from "./logger";
 
 export function getFQDN(url: string): string {
@@ -97,12 +97,23 @@ export async function getFirstParty(
     // or a Worker request affected by https://bugzilla.mozilla.org/show_bug.cgi?id=2048884
     for (const url of [details.url, details.documentUrl, details.originUrl]) {
       if (url === undefined) continue;
-      const markerIndex = url?.indexOf(firstPartyMarker);
+      const markerIndex = url.lastIndexOf("#");
       if (markerIndex !== -1) {
-        // FPO found in a SharedWorker or Worker URL hash, added there via hooked API
-        return url.substring(
-          markerIndex + firstPartyMarker.length + ":".length,
-        );
+        try {
+          const efpo = Uint8Array.fromBase64(url.substring(markerIndex + 1));
+          const fpo = await crypto.subtle.decrypt(
+            {
+              name: "AES-GCM",
+              iv: efpo.slice(0, 96),
+            },
+            await firstPartyKey,
+            efpo.slice(96),
+          );
+          // Encrypted FPO found in a SharedWorker or Worker URL hash, added there via hooked API
+          return new TextDecoder().decode(fpo);
+        } catch {
+          // The fragment was not a valid encrypted FPO; ignore
+        }
       }
     }
     // No FPO found in URL hash; fall through
