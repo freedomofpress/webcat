@@ -299,12 +299,28 @@ export const sharedWorkerHook = updatableHook<string>(
       instance: SharedWorker;
       port: MessagePort;
       relay: MessagePort;
-      onerror: ((e: Event) => void) | null;
+      onerror: ((e: Event) => unknown) | null;
     };
     const internal = Symbol("WEBCAT");
     type HookedSharedWorker = SharedWorker & {
       [internal]: SharedWorkerInternal;
+      wrappedJSObject?: HookedSharedWorker;
     };
+    type EventHandler = ((e: Event) => unknown) & {
+      wrappedJSObject?: EventHandler;
+    };
+
+    function makeHookedHandler(v: EventHandler | null) {
+      v = v?.wrappedJSObject || v;
+      if (typeof v === "function") {
+        return exportFunction(function (...args: [e: Event]) {
+          // TODO: wrap the event
+          return v(...args);
+        }, unwrappedScope) as (e: Event) => unknown;
+      } else {
+        return null;
+      }
+    }
 
     // Hook the SharedWorker constructor
     const OriginalSharedWorker = unwrappedScope.SharedWorker;
@@ -347,6 +363,9 @@ export const sharedWorkerHook = updatableHook<string>(
           },
           unwrappedScope,
         ) as typeof MessagePort.prototype.onmessage;
+        self[internal].instance.onerror = makeHookedHandler(
+          self[internal].onerror,
+        );
       });
       return self;
     }
@@ -371,7 +390,40 @@ export const sharedWorkerHook = updatableHook<string>(
       get: exportFunction(hookedPort, unwrappedScope) as () => unknown,
     });
 
-    // TODO: Hook SharedWorker.onerror
+    const { get: originalGetOnerror, set: originalSetOnerror } =
+      Object.getOwnPropertyDescriptor(
+        OriginalSharedWorker.prototype,
+        "onerror",
+      ) as PropertyDescriptor;
+    function hookedGetOnerror(this: HookedSharedWorker) {
+      const unwrappedThis = this.wrappedJSObject || this;
+      if (internal in unwrappedThis) {
+        return unwrappedThis[internal].onerror;
+      }
+      return originalGetOnerror?.call(this);
+    }
+    function hookedSetOnerror(
+      this: HookedSharedWorker,
+      v: OnErrorEventHandler,
+    ) {
+      const unwrappedThis = this.wrappedJSObject || this;
+      if (internal in unwrappedThis) {
+        unwrappedThis[internal].onerror = v;
+        if (unwrappedThis[internal].instance) {
+          unwrappedThis[internal].instance.onerror = makeHookedHandler(v);
+        }
+      } else {
+        originalSetOnerror?.call(this, v);
+      }
+    }
+    Object.defineProperty(OriginalSharedWorker.prototype, "onerror", {
+      get: exportFunction(hookedGetOnerror, unwrappedScope) as () => unknown,
+      set: exportFunction(hookedSetOnerror, unwrappedScope) as (
+        v: unknown,
+      ) => void,
+    });
+
+    // TODO: Hook addEventListener, removeEventListener, and dispatchEvent
   },
   {
     key: "SHARED_WORKER_FIRST_PARTY",
