@@ -27,7 +27,7 @@ export async function getHooks(
   const efpo = new Uint8Array(iv.length + ct.byteLength);
   efpo.set(iv);
   efpo.set(ct, iv.length);
-  const efpoBase64 = efpo.toBase64();
+  const efpoBase64 = efpo.toBase64({ alphabet: "base64url" });
   return hooks[type]
     .replace('"__ALLOWED_HASHES_PLACEHOLDER__"', JSON.stringify(wasm))
     .replace(
