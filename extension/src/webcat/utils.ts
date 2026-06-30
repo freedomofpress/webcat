@@ -100,7 +100,9 @@ export async function getFirstParty(
       const markerIndex = url.lastIndexOf("#");
       if (markerIndex !== -1) {
         try {
-          const efpo = Uint8Array.fromBase64(url.substring(markerIndex + 1));
+          const efpo = Uint8Array.fromBase64(url.substring(markerIndex + 1), {
+            alphabet: "base64url",
+          });
           const fpo = await crypto.subtle.decrypt(
             {
               name: "AES-GCM",
