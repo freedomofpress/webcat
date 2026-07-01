@@ -297,17 +297,46 @@ export const sharedWorkerHook = updatableHook<string>(
       return;
     }
 
+    type EventListenerArgs = [
+      type: string,
+      callback: EventListenerOrEventListenerObject & {
+        wrappedJSObject?: EventListenerOrEventListenerObject;
+      },
+      options: AddEventListenerOptions | boolean,
+    ];
     type SharedWorkerInternal = {
       instance: SharedWorker & { [hooked]?: HookedSharedWorker };
       port: MessagePort;
       relay: MessagePort;
       onerror: ((e: Event) => unknown) | null;
+      listeners: Map<
+        string,
+        Map<EventListenerOrEventListenerObject, EventListenerArgs>
+      >;
     };
     const internal = Symbol("WEBCAT");
     type HookedSharedWorker = SharedWorker & {
       [internal]: SharedWorkerInternal;
       wrappedJSObject?: HookedSharedWorker;
     };
+
+    function bindEventListenerArgs(
+      thisArg: HookedSharedWorker,
+      args: EventListenerArgs,
+    ) {
+      const callback = args[1]?.wrappedJSObject || args[1];
+      args = Array.from(args) as EventListenerArgs;
+      if (typeof callback === "function") {
+        args[1] = callback.bind(thisArg);
+      } else {
+        args[1] = exportFunction(
+          (...args: [event: Event]) =>
+            callback.handleEvent?.call(thisArg, ...args),
+          unwrappedScope,
+        ) as EventListener;
+      }
+      return args;
+    }
 
     // Hook the SharedWorker constructor
     const OriginalSharedWorker = unwrappedScope.SharedWorker;
@@ -333,6 +362,7 @@ export const sharedWorkerHook = updatableHook<string>(
       self[internal].port = channel.port1;
       self[internal].relay = channel.port2;
       self[internal].onerror = null;
+      self[internal].listeners = new Map();
       data.then((firstParty) => {
         // Initialize the actual SharedWorker instance and relay messages
         // TODO: relay messageerror events
@@ -353,6 +383,13 @@ export const sharedWorkerHook = updatableHook<string>(
         ) as typeof MessagePort.prototype.onmessage;
         self[internal].instance.onerror =
           self[internal].onerror?.bind(self) || null;
+        for (const listeners of self[internal].listeners.values()) {
+          for (const args of listeners.values()) {
+            self[internal].instance.addEventListener(
+              ...bindEventListenerArgs(self, args),
+            );
+          }
+        }
       });
       return self;
     }
@@ -377,6 +414,7 @@ export const sharedWorkerHook = updatableHook<string>(
       get: exportFunction(hookedPort, unwrappedScope) as () => unknown,
     });
 
+    // Hook SharedWorker.onerror
     const { get: originalGetOnerror, set: originalSetOnerror } =
       Object.getOwnPropertyDescriptor(
         OriginalSharedWorker.prototype,
@@ -410,6 +448,42 @@ export const sharedWorkerHook = updatableHook<string>(
         v: unknown,
       ) => void,
     });
+
+    // Hook SharedWorker.addEventListener
+    const { value: originalAddEventListener } = Object.getOwnPropertyDescriptor(
+      unwrappedScope.EventTarget.prototype,
+      "addEventListener",
+    ) as PropertyDescriptor;
+    function hookedAddEventListener(
+      this: HookedSharedWorker,
+      ...args: EventListenerArgs
+    ) {
+      const unwrappedThis = this.wrappedJSObject || this;
+      const [type, callback] = args;
+      if (internal in unwrappedThis) {
+        const listeners =
+          unwrappedThis[internal].listeners.get(type) ||
+          new Map<EventListenerOrEventListenerObject, EventListenerArgs>();
+        if (!listeners.get(callback)) {
+          listeners.set(callback, args);
+        }
+        unwrappedThis[internal].listeners.set(type, listeners);
+        if (unwrappedThis[internal].instance) {
+          unwrappedThis[internal].instance.addEventListener(
+            ...bindEventListenerArgs(unwrappedThis, args),
+          );
+        }
+        return;
+      }
+      originalAddEventListener.call(this, ...args);
+    }
+    Object.defineProperty(
+      unwrappedScope.EventTarget.prototype,
+      "addEventListener",
+      {
+        value: exportFunction(hookedAddEventListener, unwrappedScope),
+      },
+    );
 
     // TODO: Hook addEventListener, removeEventListener, and dispatchEvent
   },

@@ -10,7 +10,15 @@ if (window.SharedWorker) {
     sharedWorker.port.postMessage('Check connection');
 
     sharedWorker.onerror = function (event) {
-      console.log(event.message, event.target === this);
+      console.log(event.message, event.target === this, "onerror");
+    };
+    sharedWorker.addEventListener("error", function (event) {
+      console.log(event.message, event.target === this, "callback");
+    });
+    const handler = {};
+    sharedWorker.addEventListener("error", handler);
+    handler.handleEvent = function (event) {
+      console.log(event.message, event.target === this, "handler");
     };
   }
   
