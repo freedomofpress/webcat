@@ -4,7 +4,6 @@ import {
   sharedWorkerHook,
   wasmHook,
   workerHook,
-  workerLocationHook,
 } from "./core";
 
 console.log("[WEBCAT] Installing page hook");
@@ -25,5 +24,4 @@ wasmHook(hookInputs);
 sharedWorkerHook(hookInputs);
 serviceWorkerHook(hookInputs);
 workerHook(hookInputs);
-workerLocationHook(hookInputs);
 eventHook(hookInputs);
