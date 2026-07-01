@@ -8,5 +8,9 @@ if (window.SharedWorker) {
     };
   
     sharedWorker.port.postMessage('Check connection');
+
+    sharedWorker.onerror = function (event) {
+      console.log(event.message, event.target === this);
+    };
   }
   

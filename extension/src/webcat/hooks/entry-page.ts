@@ -1,4 +1,5 @@
 import {
+  eventHook,
   serviceWorkerHook,
   sharedWorkerHook,
   wasmHook,
@@ -25,3 +26,4 @@ sharedWorkerHook(hookInputs);
 serviceWorkerHook(hookInputs);
 workerHook(hookInputs);
 workerLocationHook(hookInputs);
+eventHook(hookInputs);

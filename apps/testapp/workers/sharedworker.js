@@ -6,4 +6,5 @@ self.addEventListener('connect', async (event) => {
     port.postMessage('sharedworker: active');
     port.start();
 });
-  
+
+throw new Error("error in sharedworker");
