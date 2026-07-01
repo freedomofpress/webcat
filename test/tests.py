@@ -44,7 +44,9 @@ BAD_WASM = Hook(
     LOGENTRY_LOAD_WASMWORKER,
     LOGENTRY_LOAD_AUDIOWORKLET,
     LOGENTRY_WASM_FRAME,
-    LOGENTRY_ERROR_SHAREDWORKER,
+    LOGENTRY_ERROR_SHAREDWORKER_ONERROR,
+    LOGENTRY_ERROR_SHAREDWORKER_CALLBACK,
+    LOGENTRY_ERROR_SHAREDWORKER_HANDLER,
 ] = EXPECTED_LOGS = [
     ["inline:",True],
     ["alert.js:",True],
@@ -57,7 +59,9 @@ BAD_WASM = Hook(
     ["load_wasmworker.js:",True],
     ["load_audioworklet.js:",True],
     ["wasm_frame.js:",True],
-    ["Error: error in sharedworker", True],
+    ["Error: error in sharedworker", True, "onerror"],
+    ["Error: error in sharedworker", True, "callback"],
+    ["Error: error in sharedworker", True, "handler"],
 ]
 
 EXPECTED_CSP = {
@@ -126,7 +130,9 @@ def setdiff(a: list, b: list):
                 LOGENTRY_LOAD_WASMWORKER,
                 LOGENTRY_LOAD_AUDIOWORKLET,
                 LOGENTRY_INLINE,
-                LOGENTRY_ERROR_SHAREDWORKER,
+                LOGENTRY_ERROR_SHAREDWORKER_ONERROR,
+                LOGENTRY_ERROR_SHAREDWORKER_CALLBACK,
+                LOGENTRY_ERROR_SHAREDWORKER_HANDLER,
             ]), [], [],
         NON_FRAME_PATHS-WASM_PATHS-WORKER_PATHS-{"/js/wasm_frame.js"},
         True,
