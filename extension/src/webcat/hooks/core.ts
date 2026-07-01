@@ -40,6 +40,8 @@ type HookInputs<T> = {
   ) => Function; // eslint-disable-line @typescript-eslint/no-unsafe-function-type
 };
 
+const hooked = Symbol("WEBCAT");
+
 function updatableHook<T>(
   hook: (config: HookConfig<T> & HookInputs<T>, data: Promise<T>) => void,
   config: HookConfig<T>,
@@ -296,7 +298,7 @@ export const sharedWorkerHook = updatableHook<string>(
     }
 
     type SharedWorkerInternal = {
-      instance: SharedWorker;
+      instance: SharedWorker & { [hooked]?: HookedSharedWorker };
       port: MessagePort;
       relay: MessagePort;
       onerror: ((e: Event) => unknown) | null;
@@ -306,21 +308,6 @@ export const sharedWorkerHook = updatableHook<string>(
       [internal]: SharedWorkerInternal;
       wrappedJSObject?: HookedSharedWorker;
     };
-    type EventHandler = ((e: Event) => unknown) & {
-      wrappedJSObject?: EventHandler;
-    };
-
-    function makeHookedHandler(v: EventHandler | null) {
-      v = v?.wrappedJSObject || v;
-      if (typeof v === "function") {
-        return exportFunction(function (...args: [e: Event]) {
-          // TODO: wrap the event
-          return v(...args);
-        }, unwrappedScope) as (e: Event) => unknown;
-      } else {
-        return null;
-      }
-    }
 
     // Hook the SharedWorker constructor
     const OriginalSharedWorker = unwrappedScope.SharedWorker;
@@ -351,6 +338,7 @@ export const sharedWorkerHook = updatableHook<string>(
         // TODO: relay messageerror events
         args[0] = `${args[0]}#${firstParty}`;
         self[internal].instance = new OriginalSharedWorker(...args);
+        self[internal].instance[hooked] = self;
         self[internal].instance.port.onmessage = exportFunction(
           (e: MessageEvent<unknown>) => {
             self[internal].relay.postMessage(e.data);
@@ -363,9 +351,8 @@ export const sharedWorkerHook = updatableHook<string>(
           },
           unwrappedScope,
         ) as typeof MessagePort.prototype.onmessage;
-        self[internal].instance.onerror = makeHookedHandler(
-          self[internal].onerror,
-        );
+        self[internal].instance.onerror =
+          self[internal].onerror?.bind(self) || null;
       });
       return self;
     }
@@ -410,7 +397,8 @@ export const sharedWorkerHook = updatableHook<string>(
       if (internal in unwrappedThis) {
         unwrappedThis[internal].onerror = v;
         if (unwrappedThis[internal].instance) {
-          unwrappedThis[internal].instance.onerror = makeHookedHandler(v);
+          unwrappedThis[internal].instance.onerror =
+            v?.bind(unwrappedThis) || null;
         }
       } else {
         originalSetOnerror?.call(this, v);
@@ -614,6 +602,39 @@ declare const WorkerLocation: {
   new (): WorkerLocation;
   prototype: WorkerLocation;
 };
+
+/**
+ * Hooks the Event prototype to return hooked targets
+ */
+export const eventHook = updatableHook<void>(
+  function (config) {
+    const { unwrappedScope, exportFunction } = config;
+    for (const prop of [
+      "target",
+      "currentTarget",
+      "originalTarget",
+      "explicitOriginalTarget",
+      "srcElement",
+    ]) {
+      const { get: originalGet } = Object.getOwnPropertyDescriptor(
+        unwrappedScope.Event.prototype,
+        prop,
+      ) as PropertyDescriptor;
+      function hookedGet(this: Event & { wrappedJSObject?: Event }) {
+        const val = originalGet?.call(this);
+        const unwrappedVal = val?.wrappedJSObject || val;
+        return unwrappedVal?.[hooked] || val;
+      }
+      Object.defineProperty(unwrappedScope.Event.prototype, prop, {
+        get: exportFunction(hookedGet, unwrappedScope) as () => unknown,
+      });
+    }
+  },
+  {
+    key: "EVENT",
+    data: undefined,
+  },
+);
 
 /**
  * Hooks WorkerGlobalScope.location to hide parts of

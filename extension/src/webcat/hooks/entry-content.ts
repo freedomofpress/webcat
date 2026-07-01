@@ -1,4 +1,5 @@
 import {
+  eventHook,
   serviceWorkerHook,
   sharedWorkerHook,
   wasmHook,
@@ -42,3 +43,4 @@ if (ancestor !== window) {
 sharedWorkerHook(hookInputs);
 serviceWorkerHook(hookInputs);
 workerHook(hookInputs);
+eventHook(hookInputs);
