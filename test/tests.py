@@ -9,6 +9,7 @@ import json
 import canonicaljson
 import hashlib
 from pytest_check import check
+import urllib.parse
 
 logging.getLogger("geckordp").setLevel(logging.CRITICAL)
 logging.getLogger("psutil").setLevel(logging.CRITICAL)
@@ -43,6 +44,9 @@ BAD_WASM = Hook(
     LOGENTRY_LOAD_WASMWORKER,
     LOGENTRY_LOAD_AUDIOWORKLET,
     LOGENTRY_WASM_FRAME,
+    LOGENTRY_ERROR_SHAREDWORKER_ONERROR,
+    LOGENTRY_ERROR_SHAREDWORKER_CALLBACK,
+    LOGENTRY_ERROR_SHAREDWORKER_HANDLER,
 ] = EXPECTED_LOGS = [
     ["inline:",True],
     ["alert.js:",True],
@@ -55,6 +59,9 @@ BAD_WASM = Hook(
     ["load_wasmworker.js:",True],
     ["load_audioworklet.js:",True],
     ["wasm_frame.js:",True],
+    ["Error: error in sharedworker", True, "onerror"],
+    ["Error: error in sharedworker", True, "callback"],
+    ["Error: error in sharedworker", True, "handler"],
 ]
 
 EXPECTED_CSP = {
@@ -73,6 +80,7 @@ CSS_PATHS = set(map(lambda filename: f"/css/{filename}", os.listdir("./cases/tes
 JS_PATHS = set(map(lambda filename: f"/js/{filename}", os.listdir("./cases/testapp/js/")))
 WASM_PATHS = set(map(lambda filename: f"/wasm/{filename}", os.listdir("./cases/testapp/wasm/")))
 WORKER_PATHS = set(map(lambda filename: f"/workers/{filename}", os.listdir("./cases/testapp/workers/")))
+SERVICEWORKER_PATHS = set(filter(lambda path: "serviceworker" in path, WORKER_PATHS))
 FRAME_PATHS = {"/js/framehost.js", "/wasm/frame_addThree.wasm"}
 ALL_PATHS = {"/"}.union(CSS_PATHS,JS_PATHS,WASM_PATHS,WORKER_PATHS)
 NON_FRAME_PATHS = ALL_PATHS-FRAME_PATHS
@@ -86,12 +94,20 @@ def setdiff(a: list, b: list):
             pass
     return a
 
-@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
-@pytest.mark.parametrize("in_frame", [False, True], ids=["plain","in_frame"])
-@pytest.mark.parametrize("root, headers, hooks, expected, logs, errors, rejections, paths_to_wait", [
+@pytest.mark.parametrize("browser, incognito", [
+    pytest.param("firefox", False, id="firefox"),
+    pytest.param("tbb", True, id="tbb"),
+    pytest.param("tbb_safer", True, id="tbb_safer"),
+    pytest.param("tbb_safest", True, id="tbb_safest"),
+], indirect=["browser"])
+@pytest.mark.parametrize("in_frame, first_party", [
+    pytest.param(False, "https://site1.localhost:8443", id="plain"),
+    pytest.param(True, "https://nonenrolled.localhost:8443", id="in_frame"),
+])
+@pytest.mark.parametrize("root, headers, hooks, expected, logs, errors, rejections, paths_to_wait, origin_cached", [
 
     # Basic correct execution
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK, "Hello!", EXPECTED_LOGS, [], [], NON_FRAME_PATHS,
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK, "Hello!", EXPECTED_LOGS, [], [], NON_FRAME_PATHS, True,
         id="basic_test"),
 
     # Correct execution without WebAssembly or Workers
@@ -114,98 +130,105 @@ def setdiff(a: list, b: list):
                 LOGENTRY_LOAD_WASMWORKER,
                 LOGENTRY_LOAD_AUDIOWORKLET,
                 LOGENTRY_INLINE,
+                LOGENTRY_ERROR_SHAREDWORKER_ONERROR,
+                LOGENTRY_ERROR_SHAREDWORKER_CALLBACK,
+                LOGENTRY_ERROR_SHAREDWORKER_HANDLER,
             ]), [], [],
         NON_FRAME_PATHS-WASM_PATHS-WORKER_PATHS-{"/js/wasm_frame.js"},
+        True,
         id="no_wasm_test"),
 
     # Wrong CSP
     pytest.param("cases/testapp", {
             "content-security-policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
                                     "style-src 'self'; frame-src 'none'; worker-src 'self';"
-        }, FRAMEHOST_HOOK, "ERR_WEBCAT_CSP_MISMATCH", [], [], [], {"/"},
+        }, FRAMEHOST_HOOK, "ERR_WEBCAT_CSP_MISMATCH", [], [], [], {"/"}, False,
         id="wrong_csp_test"),
 
     # Missing CSP
     pytest.param("cases/testapp", {
             # No CSP header
-        }, FRAMEHOST_HOOK, "ERR_WEBCAT_HEADERS_MISSING_CRITICAL", [], [], [], {"/"},
+        }, FRAMEHOST_HOOK, "ERR_WEBCAT_HEADERS_MISSING_CRITICAL", [], [], [], {"/"}, False,
         id="missing_csp_test"),
 
     # Hook / with static content
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/"},
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/": b"<html><body>replaced index</body></html>"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/"}, True,
         id="corrupted_index_test"),
 
     # Hook /.well-known/webcat/bundle.json
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/.well-known/webcat/bundle.json": b'{"a":"b"}'}, "ERR_WEBCAT_BUNDLE_MISSING_ENROLLMENT", [], [], [], {"/"},
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/.well-known/webcat/bundle.json": b'{"a":"b"}'}, "ERR_WEBCAT_BUNDLE_MISSING_ENROLLMENT", [], [], [], {"/"}, False,
         id="corrupted_manifest_test"),
 
     # Hook /js/alert.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/js/alert.js"},
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/js/alert.js": b"alert('hacked');"}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/js/alert.js"}, True,
         id="corrupted_js_test"),
 
     # Hook /wasm/addTwo.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM]), [], [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
-        ], NON_FRAME_PATHS,
+        ], NON_FRAME_PATHS, True,
         id="corrupted_wasm_test"),
 
     # Hook /wasm/addThree.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FETCH]), [], [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
-        ], NON_FRAME_PATHS,
+        ], NON_FRAME_PATHS, True,
         id="corrupted_wasm_fetch_test"),
 
     # Hook /wasm/reverseSub.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/reverseSub.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_WASMWORKER]), [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/wasm_worker.js']
-        ], [], NON_FRAME_PATHS,
+        ], [], NON_FRAME_PATHS, True,
         id="corrupted_wasm_worker_test"),
 
     # Hook /workers/worker.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/worker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/worker.js"},
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/worker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/worker.js"}, True,
         id="corrupted_worker_test"),
 
     # Hook /workers/sharedworker.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/sharedworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/sharedworker.js"},
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/sharedworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/sharedworker.js"}, True,
         id="corrupted_sharedworker_test"),
 
     # Hook /workers/serviceworker.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/serviceworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/serviceworker.js"},
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/serviceworker.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/serviceworker.js"}, True,
         id="corrupted_serviceworker_test"),
 
     # Hook /workers/audioworklet.js
-    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/audioworklet.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/audioworklet.js"},
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/workers/audioworklet.js": Hook(b"console.log('hacked');", "text/javascript")}, "ERR_WEBCAT_FILE_MISMATCH", [], [], [], {"/workers/audioworklet.js"}, True,
         id="corrupted_audioworklet_test"),
     
     # Hook /wasm/aw_addTwo.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/aw_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_LOAD_AUDIOWORKLET]), [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '/workers/audioworklet.js']
-        ], [], NON_FRAME_PATHS,
+        ], [], NON_FRAME_PATHS, True,
         id="corrupted_wasm_audioworklet_test"),
 
     # Hook /wasm/inline_addTwo.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/inline_addTwo.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_INLINE]), [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
-        ], [], NON_FRAME_PATHS,
+        ], [], NON_FRAME_PATHS, True,
         id="corrupted_wasm_inline_test"),
 
     # Hook /wasm/frame_addThree.wasm
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {"/wasm/frame_addThree.wasm": BAD_WASM}, "Hello!", setdiff(EXPECTED_LOGS, [LOGENTRY_WASM_FRAME]), [], [
             ['Error: [WEBCAT] Unauthorized WebAssembly bytecode: HBppdg6328KAR4wUuqq0tuD4b7l5Wrl9ne6AfB4C0G4', '']
-        ], NON_FRAME_PATHS,
+        ], NON_FRAME_PATHS, True,
         id="corrupted_wasm_frame_test"),
 
 ], indirect=["root"])
-def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, expected, logs, errors, rejections, paths_to_wait, addon_path, dnsnames, non_enrolled_dnsnames):
+def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, expected, logs, errors, rejections,
+                paths_to_wait, origin_cached, first_party, incognito, addon_path, dnsnames, non_enrolled_dnsnames):
     logs, errors, rejections = logs.copy(), errors.copy(), rejections.copy()
     browser.install_extension(addon_path)
     update_server.wait_for_update()
-    if isinstance(browser, TorBrowser):
-        paths_to_wait = paths_to_wait-{"/workers/serviceworker.js"}
+    browser.attach_extension_console()
+    if isinstance(browser, TorBrowser) or in_frame:
+        # ServiceWorkers are disabled in TBB by NoScript and in frames by WEBCAT
+        paths_to_wait = paths_to_wait-SERVICEWORKER_PATHS
     if in_frame:
         url = f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url(dnsnames[0])}"
     else:
-        url = server.url()
+        url = server.url(dnsnames[0])
     with server.wait_for(paths_to_wait):
         browser.navigate(url)
     if not in_frame:
@@ -229,6 +252,12 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
             rejections.remove(err)
     for err in rejections:
         check.is_none(err, "Expected rejection should be present in actual rejections")
+
+    cache_keys = json.loads(browser.execute("JSON.stringify(state.origins.keys())", in_extension=True))
+    if origin_cached:
+        assert [f"{dnsnames[0]}?firstParty={urllib.parse.quote(first_party, safe="")},incognito={"true" if incognito else "false"}"] == cache_keys
+    else:
+        assert [] == cache_keys
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
@@ -318,8 +347,8 @@ def test_cache_eviction(browser: Browser, server: Server, update_server: UpdateS
 
 @pytest.mark.parametrize("browser, paths_to_wait", [
     pytest.param("firefox", NON_FRAME_PATHS, id="firefox"),
-    pytest.param("tbb", NON_FRAME_PATHS-{"/workers/serviceworker.js"}, id="tbb"),
-    pytest.param("tbb_safer", NON_FRAME_PATHS-{"/workers/serviceworker.js"}-WASM_PATHS, id="tbb_safer"),
+    pytest.param("tbb", NON_FRAME_PATHS-SERVICEWORKER_PATHS, id="tbb"),
+    pytest.param("tbb_safer", NON_FRAME_PATHS-SERVICEWORKER_PATHS-WASM_PATHS, id="tbb_safer"),
     pytest.param("tbb_safest", NON_FRAME_PATHS-JS_PATHS-WORKER_PATHS-WASM_PATHS, id="tbb_safest")
 ], indirect=["browser"])
 @pytest.mark.parametrize("root, headers, hooks, delegated_fqdn, should_verify", [
@@ -364,8 +393,8 @@ def test_delegation(browser: Browser, server: Server, update_server: UpdateServe
 
 @pytest.mark.parametrize("browser, paths_to_wait", [
     pytest.param("firefox", NON_FRAME_PATHS, id="firefox"),
-    pytest.param("tbb", NON_FRAME_PATHS-{"/workers/serviceworker.js"}, id="tbb"),
-    pytest.param("tbb_safer", NON_FRAME_PATHS-{"/workers/serviceworker.js"}-WASM_PATHS, id="tbb_safer"),
+    pytest.param("tbb", NON_FRAME_PATHS-SERVICEWORKER_PATHS, id="tbb"),
+    pytest.param("tbb_safer", NON_FRAME_PATHS-SERVICEWORKER_PATHS-WASM_PATHS, id="tbb_safer"),
     pytest.param("tbb_safest", NON_FRAME_PATHS-JS_PATHS-WORKER_PATHS-WASM_PATHS, id="tbb_safest")
 ], indirect=["browser"])
 @pytest.mark.parametrize("root, headers, hooks, expected", [

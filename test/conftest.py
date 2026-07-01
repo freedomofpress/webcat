@@ -9,6 +9,10 @@ from helpers import Browser, UpdateServer, Server, TorBrowser, generate_ssl_cert
 from sigsum import BundleGenerator
 from pytest_benchmark.fixture import BenchmarkFixture
 
+_firefox_skips = {
+    "corrupted_serviceworker_test-in_frame": "ServiceWorkers disabled in frames",
+}
+
 _tbb_skips = {
     "corrupted_serviceworker_test": "ServiceWorkers not supported in Tor Browser",
     "basic_test-in_frame": "SharedWorkers in frames not supported in Tor Browser",
@@ -41,7 +45,8 @@ _tbb_safest_skips = {
     "corrupted_js_with_cache_eviction_test": "JavaScript fully disabled at this security level",
 }
 _browser_skips = {
-    "tbb": _tbb_skips,
+    "firefox": _firefox_skips,
+    "tbb": {**_firefox_skips, **_tbb_skips},
     "tbb_safer": {**_tbb_skips, **_tbb_safer_skips},
     "tbb_safest": {**_tbb_skips, **_tbb_safer_skips, **_tbb_safest_skips},
 }

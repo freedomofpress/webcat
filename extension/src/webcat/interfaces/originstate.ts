@@ -1,5 +1,5 @@
 import { bundle_name, bundle_prev_name } from "../../config";
-import { db } from "../../globals";
+import { CachePartition, db } from "../../globals";
 import { canonicalize } from "../canonicalize";
 import { stringToUint8Array } from "../encoding";
 import { arraysEqual } from "../utils";
@@ -20,8 +20,6 @@ import {
   SigsumSignatures,
 } from "./bundle";
 import { WebcatError, WebcatErrorCode } from "./errors";
-
-declare const __IS_TESTING__: boolean;
 
 type BundleFetch = {
   promise: Promise<Response>;
@@ -131,6 +129,7 @@ export abstract class OriginStateBase {
   public readonly valid_signers?: Set<string>;
   public readonly valid_sources?: Set<string>;
   public readonly delegation?: string;
+  public readonly cachePartition: CachePartition;
 
   // Due to list logic, we support only one app per domain, and that should be a privileged one
   // But that is enforced in request.ts
@@ -140,6 +139,7 @@ export abstract class OriginStateBase {
     port: string,
     fqdn: string,
     enrollment_hash: Uint8Array,
+    cachePartition: CachePartition,
     delegation?: string,
   ) {
     this.fetcher = fetcher;
@@ -147,6 +147,7 @@ export abstract class OriginStateBase {
     this.port = port;
     this.fqdn = fqdn;
     this.enrollment_hash = enrollment_hash;
+    this.cachePartition = cachePartition;
     this.delegation = delegation;
     this.references = 1;
   }
@@ -163,6 +164,7 @@ export class OriginStateFailed extends OriginStateBase {
       prev.port,
       prev.fqdn,
       prev.enrollment_hash,
+      prev.cachePartition,
       prev.delegation,
     );
     Object.assign(this, prev);
@@ -182,12 +184,16 @@ export class OriginStateInitial extends OriginStateBase {
     port: string,
     fqdn: string,
     enrollment_hash: Uint8Array,
+    cachePartition: CachePartition,
   ) {
-    super(fetcher, scheme, port, fqdn, enrollment_hash);
+    super(fetcher, scheme, port, fqdn, enrollment_hash, cachePartition);
   }
 
   public async verifyDelegation(delegation: string): Promise<boolean> {
-    const delegation_hash = await db.getFQDNEnrollment(delegation);
+    const delegation_hash = await db.getFQDNEnrollment(
+      delegation,
+      this.cachePartition,
+    );
     return (
       delegation_hash && arraysEqual(delegation_hash, this.enrollment_hash)
     );
@@ -307,6 +313,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       prev.port,
       prev.fqdn,
       prev.enrollment_hash,
+      prev.cachePartition,
       delegation,
     );
     this.references = prev.references;
@@ -369,7 +376,11 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
 
     // Validate the default CSP
     try {
-      await validateCSP(manifest.default_csp, this.fqdn, valid_sources);
+      await validateCSP(
+        manifest.default_csp,
+        valid_sources,
+        this.cachePartition,
+      );
     } catch (e) {
       //return new OriginStateFailed(this, `failed parsing default_csp: ${e}`);
       return new OriginStateFailed(
@@ -385,7 +396,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       if (manifest.extra_csp.hasOwnProperty(path)) {
         const csp = manifest.extra_csp[path];
         try {
-          await validateCSP(csp, this.fqdn, valid_sources);
+          await validateCSP(csp, valid_sources, this.cachePartition);
         } catch (e) {
           return new OriginStateFailed(
             this,
@@ -425,6 +436,7 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
       prev.port,
       prev.fqdn,
       prev.enrollment_hash,
+      prev.cachePartition,
       prev.delegation,
     );
     this.references = prev.references;

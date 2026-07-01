@@ -1,4 +1,5 @@
 import { endMarker, hookMarker, origins, pendingOrigins } from "./../globals";
+import { CacheKey } from "./cache";
 import {
   base64UrlToUint8Array,
   stringToUint8Array,
@@ -17,11 +18,12 @@ import {
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
 import { logger } from "./logger";
-import { NON_FRAME_TYPES, PASS_THROUGH_TYPES } from "./resources";
+import { PASS_THROUGH_TYPES } from "./resources";
 import { errorpage, setOKIcon } from "./ui";
 import {
   arraysEqual,
   clearBrowserCaches,
+  getFirstParty,
   getFQDN,
   isNewerSemver,
   SHA256,
@@ -144,7 +146,11 @@ export async function validateResponseHeaders(
       details.tabId,
       fqdn,
     );
-    origins.delete(fqdn);
+    const cachePartition = {
+      firstParty: await getFirstParty(details),
+      incognito: !!details.incognito,
+    };
+    origins.delete(CacheKey(fqdn, cachePartition));
     // Mark the holder so any sibling request that shares it won't re-insert
     // it via commitVerifiedOrigin later
     originStateHolder.stale = true;
@@ -216,14 +222,13 @@ export async function validateResponseContent(
   const pathname = new URL(details.url).pathname;
   const fqdn = getFQDN(details.url);
 
-  if (
-    NON_FRAME_TYPES.includes(details.type) &&
-    originStateHolder.current.status === "verified_manifest"
-  ) {
-    const manifest = (originStateHolder.current as OriginStateVerifiedManifest)
-      .manifest;
-    // If a pass-through media type isn't in the manifest, bail before installing
-    // a filter so large files don't get buffered into the extension for nothing.
+  let manifest!: Manifest;
+  const filter = browser.webRequest.filterResponseData(details.requestId);
+  filter.onstart = () => {
+    assertVerifiedManifest(originStateHolder);
+    manifest = originStateHolder.current.manifest;
+    // If a pass-through media type isn't in the manifest, bail before receiving
+    // any data so large files don't get buffered into the extension for nothing.
     if (
       !manifest.files[pathname] &&
       !(
@@ -232,18 +237,13 @@ export async function validateResponseContent(
       ) &&
       PASS_THROUGH_TYPES.has(details.type)
     ) {
-      return {};
+      filter.disconnect();
     }
-  }
-
-  let manifest!: Manifest;
-  const filter = browser.webRequest.filterResponseData(details.requestId);
-  filter.onstart = () => {
-    assertVerifiedManifest(originStateHolder);
-    manifest = originStateHolder.current.manifest;
   };
 
-  const source: ArrayBuffer[] = [];
+  const source: Promise<ArrayBuffer>[] = [];
+  const firstParty = await getFirstParty(details);
+  let writeQueue: Promise<void> = Promise.resolve();
   filter.ondata = (event: { data: ArrayBuffer }) => {
     // The data here is usually chunked; normally it would be streamed down as we get it
     // but since we can hash the content only at the end, we have to wait until we have everything
@@ -251,18 +251,25 @@ export async function validateResponseContent(
     // build a blob later. If the data is the hook marker, replace it with the WASM hooks, and if it is the
     // end marker, flush all buffered data
     if (arraysEqual(hookMarker, new Uint8Array(event.data))) {
-      const hooks = getHooks(hooksType.page, manifest.wasm);
-      source.push(stringToUint8Array(hooks).buffer);
+      const hooks = getHooks(
+        hooksType.page,
+        manifest.wasm,
+        firstParty,
+        firstParty === details.originUrl,
+      );
+      source.push(hooks.then((h) => stringToUint8Array(h).buffer));
     } else if (arraysEqual(endMarker, new Uint8Array(event.data))) {
-      source.forEach((hook) => filter.write(hook));
+      source.forEach((hook) => {
+        writeQueue = writeQueue.then(async () => filter.write(await hook));
+      });
       source.length = 0;
     } else {
-      source.push(event.data);
+      source.push(Promise.resolve(event.data));
     }
   };
 
   filter.onstop = async () => {
-    const blob = await new Blob(source).arrayBuffer();
+    const blob = await new Blob(await Promise.all(source)).arrayBuffer();
 
     // Following order of priority:
     // - If there's an exact match, that should be the hash
@@ -315,6 +322,7 @@ export async function validateResponseContent(
     // If everything is OK then we can just write the raw blob back
     logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
 
+    await writeQueue;
     filter.write(blob);
     // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
     // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter

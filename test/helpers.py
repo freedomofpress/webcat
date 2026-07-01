@@ -146,6 +146,8 @@ class Browser:
             actor = tg.get("actor")
             if actor and actor not in attached_targets:
                 attached_targets.add(actor)
+                if tg.get("url", "").endswith("/_generated_background_page.html"):
+                    self._ext_console_id = tg.get("consoleActor")
                 self.client.add_event_listener(
                     actor, Events.Watcher.RESOURCES_AVAILABLE_ARRAY, on_resources
                 )
@@ -172,11 +174,14 @@ class Browser:
         logging.info(f"Navigating to {url}")
         return web.navigate_to(url)
     
-    def execute(self, javascript):
-        current_tab = self.root.current_tab()
-        tab = TabActor(self.client, current_tab["actor"])
-        actor_ids = tab.get_target()
-        console_actor_id = actor_ids["consoleActor"]
+    def execute(self, javascript, in_extension=False):
+        if in_extension:
+            console_actor_id = self._ext_console_id
+        else:
+            current_tab = self.root.current_tab()
+            tab = TabActor(self.client, current_tab["actor"])
+            actor_ids = tab.get_target()
+            console_actor_id = actor_ids["consoleActor"]
 
         logging.info(f"Executing js...")
         return self.evaluate_js_sync(console_actor_id, javascript)
@@ -391,7 +396,7 @@ class Server:
             self.thread.join()
             if self.timeout:
                 raise RuntimeError(f"timeout waiting for '{"', '".join(self.counts.keys())}'")
-            sleep(0.2) # minimal sleep to allow the browser to process the last response
+            sleep(0.5) # minimal sleep to allow the browser to process the last response
 
         def _wait(self, lock):
             with self.server._served:
