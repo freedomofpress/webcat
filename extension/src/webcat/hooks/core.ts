@@ -635,38 +635,3 @@ export const eventHook = updatableHook<void>(
     data: undefined,
   },
 );
-
-/**
- * Hooks WorkerGlobalScope.location to hide parts of
- * the URL hash injected by sharedWorkerHook.
- */
-export function workerLocationHook({ unwrappedScope }: HookInputs<void>) {
-  if (
-    !("SharedWorkerGlobalScope" in unwrappedScope) &&
-    !("DedicatedWorkerGlobalScope" in unwrappedScope)
-  ) {
-    // Not in a SharedWorker or a Worker; nothing to do
-    return;
-  }
-
-  const {
-    hash: { get: hash },
-    href: { get: href },
-    toString: { value: toString },
-  }: {
-    [K in keyof WorkerLocation]: TypedPropertyDescriptor<WorkerLocation[K]>;
-  } = Object.getOwnPropertyDescriptors(WorkerLocation.prototype);
-
-  function hook(f: (() => string) | undefined) {
-    return function (this: WorkerLocation) {
-      const v = f?.apply(this);
-      return v?.substring(0, v?.lastIndexOf("#"));
-    };
-  }
-
-  Object.defineProperties(WorkerLocation.prototype, {
-    hash: { get: hook(hash) },
-    href: { get: hook(href) },
-    toString: { value: hook(toString) },
-  });
-}
