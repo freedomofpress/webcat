@@ -8,13 +8,6 @@ import {
 
 console.log("[WEBCAT] Installing content script hook");
 
-const hookInputs = {
-  scope: window,
-  unwrappedScope: window.wrappedJSObject,
-  exportFunction: exportFunction,
-  localScope: window,
-};
-
 // Find the first ancestor that is same-origin with the current window
 // and is navigated to an HTTP(S) URL. That is, the first ancestor that
 // receives hash updates from the network layer.
@@ -37,10 +30,10 @@ if (ancestor !== window) {
   // hooked; use it instead of attempting to re-hook here
   window.wrappedJSObject.WebAssembly = ancestor.wrappedJSObject.WebAssembly;
 } else {
-  wasmHook(hookInputs);
+  wasmHook(window);
 }
 
-sharedWorkerHook(hookInputs);
-serviceWorkerHook(hookInputs);
-workerHook(hookInputs);
-eventHook(hookInputs);
+sharedWorkerHook(window);
+serviceWorkerHook(window);
+workerHook(window);
+eventHook(window);

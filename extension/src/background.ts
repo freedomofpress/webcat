@@ -4,7 +4,6 @@ import {
   installEnrolledListeners,
   installListener,
   startupListener,
-  tabCloseListener,
 } from "./webcat/listeners";
 import { setErrorIcon } from "./webcat/ui";
 import {
@@ -39,9 +38,6 @@ browser.alarms.onAlarm.addListener((alarm) => {
     handleUpdateAlarm(db, endpoint);
   }
 });
-
-// Let's count references to origin in case we ever need pruning policies
-browser.tabs.onRemoved.addListener(tabCloseListener);
 
 // Edit: moved the update logic directly in this file to ensure
 // it always runs

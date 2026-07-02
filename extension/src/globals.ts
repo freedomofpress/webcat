@@ -5,12 +5,16 @@ import { stringToUint8Array, Uint8ArrayToBase64Url } from "./webcat/encoding";
 import { OriginStateHolder } from "./webcat/interfaces/originstate";
 
 export type CachePartition = { firstParty: string; incognito: boolean };
+export type RequestInfo = {
+  pendingOrigin: OriginStateHolder;
+  cachePartition: CachePartition;
+};
 
+export const requestInfo = new Map<string, RequestInfo>();
 export const origins = new LRUCache<
   CacheKey<CachePartition>,
   OriginStateHolder
 >(lru_cache_size);
-export const pendingOrigins: Map<string, OriginStateHolder> = new Map();
 export const nonOrigins = new LRUSet<CacheKey<CachePartition>>(lru_set_size);
 export const tabs: Map<number, CachePartition> = new Map();
 export const db = new WebcatDatabase();
@@ -31,7 +35,7 @@ if (__IS_TESTING__) {
   Object.defineProperty(globalThis, "state", {
     value: {
       origins,
-      pendingOrigins,
+      requestInfo,
       nonOrigins,
       tabs,
       db,

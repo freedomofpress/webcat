@@ -1,4 +1,4 @@
-import { endMarker, hookMarker, origins, pendingOrigins } from "./../globals";
+import { endMarker, hookMarker, origins } from "./../globals";
 import { CacheKey } from "./cache";
 import {
   base64UrlToUint8Array,
@@ -154,7 +154,6 @@ export async function validateResponseHeaders(
     // Mark the holder so any sibling request that shares it won't re-insert
     // it via commitVerifiedOrigin later
     originStateHolder.stale = true;
-    pendingOrigins.delete(details.requestId);
     await clearBrowserCaches([fqdn]);
     browser.tabs.reload(details.tabId);
   }

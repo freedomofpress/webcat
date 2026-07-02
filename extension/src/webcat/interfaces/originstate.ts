@@ -123,7 +123,6 @@ export abstract class OriginStateBase {
   public readonly enrollment_hash: Uint8Array;
   public fetcher: BundleFetcher;
   public bundle?: Bundle;
-  public references: number;
   public readonly enrollment?: Enrollment;
   public readonly manifest?: Manifest;
   public readonly valid_signers?: Set<string>;
@@ -149,7 +148,6 @@ export abstract class OriginStateBase {
     this.enrollment_hash = enrollment_hash;
     this.cachePartition = cachePartition;
     this.delegation = delegation;
-    this.references = 1;
   }
 }
 
@@ -316,7 +314,6 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       prev.cachePartition,
       delegation,
     );
-    this.references = prev.references;
     this.enrollment = enrollment;
     this.bundle = prev.bundle;
   }
@@ -439,7 +436,6 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
       prev.cachePartition,
       prev.delegation,
     );
-    this.references = prev.references;
     this.enrollment = prev.enrollment;
     this.manifest = manifest;
     this.valid_sources = valid_sources;
