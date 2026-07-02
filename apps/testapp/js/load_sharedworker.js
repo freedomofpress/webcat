@@ -20,5 +20,11 @@ if (window.SharedWorker) {
     handler.handleEvent = function (event) {
       console.log(event.message, event.target === this, "handler");
     };
+
+    const removedCallback = function (event) {
+      console.log(event.message, event.target === this, "removed callback");
+    };
+    sharedWorker.addEventListener("error", removedCallback);
+    sharedWorker.removeEventListener("error", removedCallback);
   }
   
