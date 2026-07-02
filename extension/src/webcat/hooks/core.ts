@@ -301,9 +301,7 @@ export const sharedWorkerHook = updatableHook<string>(
 
     type EventListenerArgs = [
       type: string,
-      callback: EventListenerOrEventListenerObject & {
-        wrappedJSObject?: EventListenerOrEventListenerObject;
-      },
+      callback: EventListenerOrEventListenerObject,
       options: AddEventListenerOptions | boolean,
     ];
     type SharedWorkerInternal = {
@@ -319,14 +317,13 @@ export const sharedWorkerHook = updatableHook<string>(
     const internal = Symbol("WEBCAT");
     type HookedSharedWorker = SharedWorker & {
       [internal]: SharedWorkerInternal;
-      wrappedJSObject?: HookedSharedWorker;
     };
 
     function bindEventListenerArgs(
       thisArg: HookedSharedWorker,
       args: EventListenerArgs,
     ) {
-      const callback = args[1]?.wrappedJSObject || args[1];
+      const callback = unwrap(args[1]);
       args = Array.from(args) as EventListenerArgs;
       if (typeof callback === "function") {
         args[1] = callback.bind(thisArg);
@@ -421,9 +418,8 @@ export const sharedWorkerHook = updatableHook<string>(
         "onerror",
       ) as PropertyDescriptor;
     function hookedGetOnerror(this: HookedSharedWorker) {
-      const unwrappedThis = this.wrappedJSObject || this;
-      if (internal in unwrappedThis) {
-        return unwrappedThis[internal].onerror;
+      if (internal in unwrap(this)) {
+        return unwrap(this)[internal].onerror;
       }
       return originalGetOnerror?.call(this);
     }
@@ -431,12 +427,11 @@ export const sharedWorkerHook = updatableHook<string>(
       this: HookedSharedWorker,
       v: OnErrorEventHandler,
     ) {
-      const unwrappedThis = this.wrappedJSObject || this;
-      if (internal in unwrappedThis) {
-        unwrappedThis[internal].onerror = v;
-        if (unwrappedThis[internal].instance) {
-          unwrappedThis[internal].instance.onerror =
-            v?.bind(unwrappedThis) || null;
+      if (internal in unwrap(this)) {
+        unwrap(this)[internal].onerror = v;
+        if (unwrap(this)[internal].instance) {
+          unwrap(this)[internal].instance.onerror =
+            v?.bind(unwrap(this)) || null;
         }
       } else {
         originalSetOnerror?.call(this, v);
@@ -456,19 +451,18 @@ export const sharedWorkerHook = updatableHook<string>(
       this: HookedSharedWorker,
       ...args: EventListenerArgs
     ) {
-      const unwrappedThis = this.wrappedJSObject || this;
       const [type, callback] = args;
-      if (internal in unwrappedThis) {
+      if (internal in unwrap(this)) {
         const listeners =
-          unwrappedThis[internal].listeners.get(type) ||
+          unwrap(this)[internal].listeners.get(type) ||
           new Map<EventListenerOrEventListenerObject, EventListenerArgs>();
         if (!listeners.get(callback)) {
           listeners.set(callback, args);
         }
-        unwrappedThis[internal].listeners.set(type, listeners);
-        if (unwrappedThis[internal].instance) {
-          unwrappedThis[internal].instance.addEventListener(
-            ...bindEventListenerArgs(unwrappedThis, args),
+        unwrap(this)[internal].listeners.set(type, listeners);
+        if (unwrap(this)[internal].instance) {
+          unwrap(this)[internal].instance.addEventListener(
+            ...bindEventListenerArgs(unwrap(this), args),
           );
         }
         return;
@@ -483,7 +477,7 @@ export const sharedWorkerHook = updatableHook<string>(
       },
     );
 
-    // TODO: Hook addEventListener, removeEventListener, and dispatchEvent
+    // TODO: Hook removeEventListener, and dispatchEvent
   },
   {
     key: "SHARED_WORKER_FIRST_PARTY",
@@ -549,7 +543,6 @@ export const workerHook = updatableHook<string>(
     const internal = Symbol("WEBCAT");
     type HookedWorker = Worker & {
       [internal]: WorkerInternal;
-      wrappedJSObject?: HookedWorker;
     };
 
     // Hook the Worker constructor
@@ -600,22 +593,20 @@ export const workerHook = updatableHook<string>(
         "onmessage",
       ) as PropertyDescriptor;
     function hookedGetOnmessage(this: HookedWorker) {
-      const unwrappedThis = this.wrappedJSObject || this;
-      if (internal in unwrappedThis) {
-        if (unwrappedThis[internal].instance) {
-          return originalGetOnmessage?.call(unwrappedThis[internal].instance);
+      if (internal in unwrap(this)) {
+        if (unwrap(this)[internal].instance) {
+          return originalGetOnmessage?.call(unwrap(this)[internal].instance);
         }
-        return unwrappedThis[internal].onmessage;
+        return unwrap(this)[internal].onmessage;
       }
       return originalGetOnmessage?.call(this);
     }
     function hookedSetOnmessage(this: HookedWorker, v: MessageListener | null) {
-      const unwrappedThis = this.wrappedJSObject || this;
-      if (internal in unwrappedThis) {
-        if (unwrappedThis[internal].instance) {
-          originalSetOnmessage?.call(unwrappedThis[internal].instance, v);
+      if (internal in unwrap(this)) {
+        if (unwrap(this)[internal].instance) {
+          originalSetOnmessage?.call(unwrap(this)[internal].instance, v);
         } else {
-          unwrappedThis[internal].onmessage = v;
+          unwrap(this)[internal].onmessage = v;
         }
       } else {
         originalSetOnmessage?.call(this, v);
@@ -632,10 +623,9 @@ export const workerHook = updatableHook<string>(
       this: HookedWorker,
       ...args: [message: unknown, options?: StructuredSerializeOptions]
     ) {
-      const unwrappedThis = this.wrappedJSObject || this;
-      if (internal in unwrappedThis) {
-        if (unwrappedThis[internal].instance) {
-          originalPostMessage.call(unwrappedThis[internal].instance, ...args);
+      if (internal in unwrap(this)) {
+        if (unwrap(this)[internal].instance) {
+          originalPostMessage.call(unwrap(this)[internal].instance, ...args);
         } else {
           let options = args[1];
           if (options && global.Symbol.iterator in options) {
@@ -644,7 +634,7 @@ export const workerHook = updatableHook<string>(
             options.transfer = transfer;
           }
           args[0] = global.structuredClone(args[0], options);
-          unwrappedThis[internal].messages.push(args);
+          unwrap(this)[internal].messages.push(args);
         }
       } else {
         originalPostMessage.call(this, ...args);
@@ -686,10 +676,9 @@ export const eventHook = updatableHook<void>(
         unwrap(global.Event.prototype),
         prop,
       ) as PropertyDescriptor;
-      function hookedGet(this: Event & { wrappedJSObject?: Event }) {
-        const val = originalGet?.call(this);
-        const unwrappedVal = val?.wrappedJSObject || val;
-        return unwrappedVal?.[hooked] || val;
+      function hookedGet(this: Event) {
+        const val = unwrap(originalGet?.call(this));
+        return val?.[hooked] || val;
       }
       Object.defineProperty(unwrap(global.Event.prototype), prop, {
         get: exportFunc(hookedGet, global) as () => unknown,
