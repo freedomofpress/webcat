@@ -8,20 +8,10 @@ import {
 
 console.log("[WEBCAT] Installing page hook");
 
-const hookInputs = {
-  scope: globalThis,
-  unwrappedScope: globalThis,
-  exportFunction: (func, targetScope, options) => {
-    if (options?.defineAs) {
-      Object.defineProperty(targetScope, options.defineAs, { value: func });
-    }
-    return func;
-  },
-  localScope: {},
-};
+const scope = {};
 
-wasmHook(hookInputs);
-sharedWorkerHook(hookInputs);
-serviceWorkerHook(hookInputs);
-workerHook(hookInputs);
-eventHook(hookInputs);
+wasmHook(scope);
+sharedWorkerHook(scope);
+serviceWorkerHook(scope);
+workerHook(scope);
+eventHook(scope);

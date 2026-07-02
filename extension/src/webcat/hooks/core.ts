@@ -4,6 +4,19 @@
 
 import { SHA256 } from "./sha256";
 
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  function exportFunction<T extends Function>(
+    func: T,
+    targetScope: object,
+    options?: { defineAs?: string },
+  ): T;
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace XPCNativeWrapper {
+    function unwrap<T extends object>(obj: T): T;
+  }
+}
+
 type HookConfig<T> = {
   key: string;
   data: T | string;
@@ -11,72 +24,68 @@ type HookConfig<T> = {
 
 type LocalScope<T> = Record<string, { data: T; ready: Promise<void> }>;
 
-type HookInputs<T> = {
-  /**
-   * A private object that persists across multiple calls to the hook.
-   */
-  localScope: LocalScope<T> | unknown;
-
-  /**
-   * An object exposing properties that the hook refers to. In a content
-   * script, it is a wrapped object accessed via Xray vision.
-   */
-  scope: typeof globalThis;
-
-  /**
-   * The unwrapped (no Xray vision) equivalent of scope. Outside content
-   * scripts, scope and unwrappedScope are the same object.
-   */
-  unwrappedScope: typeof globalThis;
-
-  /**
-   * A function that exports func to targetScope with the name specified in
-   * options.defineAs.
-   */
-  exportFunction: (
-    func: Function, // eslint-disable-line @typescript-eslint/no-unsafe-function-type
-    targetScope: object,
-    options?: { defineAs?: string },
-  ) => Function; // eslint-disable-line @typescript-eslint/no-unsafe-function-type
-};
-
 const hooked = Symbol("WEBCAT");
+const global = globalThis.self || globalThis;
+const isolated = typeof globalThis.exportFunction === "function";
+
+function unwrap<T extends object>(object: T) {
+  if (isolated) {
+    return XPCNativeWrapper.unwrap(object);
+  }
+  return object;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+function exportFunc<T extends Function>(
+  func: T,
+  object: object = global,
+  prop: string | undefined = undefined,
+) {
+  if (isolated) {
+    const options = {} as { defineAs?: string };
+    if (prop !== undefined) {
+      options.defineAs = prop;
+    }
+    return exportFunction(func, XPCNativeWrapper.unwrap(object), options);
+  } else if (prop !== undefined) {
+    (object as { [prop]: T })[prop] = func;
+  }
+  return func;
+}
 
 function updatableHook<T>(
-  hook: (config: HookConfig<T> & HookInputs<T>, data: Promise<T>) => void,
+  hook: (data: Promise<T>, config: HookConfig<T>, scope: LocalScope<T>) => void,
   config: HookConfig<T>,
 ) {
-  return function (inputs: HookInputs<T>) {
-    const args = Object.assign({}, config, inputs);
-    const key = args.key;
-    const scope = args.scope;
-    const localScope = args.localScope as LocalScope<T>;
-    let data = args.data;
+  return function (scopeObject: object) {
+    const scope = scopeObject as LocalScope<T>;
+    let data = config.data;
 
     // Check if the hook has already been injected.
-    if (key in localScope) {
-      console.log(`[WEBCAT] Hook already injected: ${key}`);
-      localScope[key].data = data as T; // update data
+    if (config.key in scope) {
+      console.log(`[WEBCAT] Hook already injected: ${config.key}`);
+      scope[config.key].data = data as T; // update data
       return;
     }
 
     // Allow updating data through localScope
-    const { promise: ready, resolve } = scope.Promise.withResolvers<void>();
-    localScope[key] = { ready, data: data as T };
-    Object.defineProperty(localScope[key], "data", {
+    const { promise: ready, resolve } = global.Promise.withResolvers<void>();
+    scope[config.key] = { ready, data: data as T };
+    Object.defineProperty(scope[config.key], "data", {
       set: (v) => {
         data = v;
         resolve();
       },
       get: () => data,
     });
-    if (data !== `__${key}_PLACEHOLDER__`) {
-      localScope[key].data = data as T;
+    if (data !== `__${config.key}_PLACEHOLDER__`) {
+      scope[config.key].data = data as T;
     }
 
     hook(
-      args,
       ready.then(() => data as T),
+      config,
+      scope,
     );
   };
 }
@@ -86,9 +95,8 @@ function updatableHook<T>(
  * and check the hash against a list of allowed hashes.
  */
 export const wasmHook = updatableHook<string[]>(
-  function (config, data) {
-    const { unwrappedScope, scope, key, exportFunction } = config;
-    const wasm = unwrappedScope.WebAssembly;
+  function (data, { key }, scope) {
+    const wasm = unwrap(global.WebAssembly);
     if (!wasm) {
       return;
     }
@@ -97,7 +105,7 @@ export const wasmHook = updatableHook<string[]>(
     function arrayBuffertoBase64Url(bytes: ArrayBuffer | Uint8Array): string {
       const byteArray =
         bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-      const options = new scope.Object() as {
+      const options = new global.Object() as {
         alphabet?: "base64" | "base64url";
         omitPadding?: boolean;
       };
@@ -117,7 +125,7 @@ export const wasmHook = updatableHook<string[]>(
         return crypto.subtle.digest("SHA-256", buffer).then((digestBuffer) => {
           const hashHex: string = arrayBuffertoBase64Url(digestBuffer);
           if (!hashes.includes(hashHex)) {
-            throw new scope.Error(
+            throw new global.Error(
               `[WEBCAT] Unauthorized WebAssembly bytecode: ${hashHex}`,
             );
           }
@@ -130,9 +138,8 @@ export const wasmHook = updatableHook<string[]>(
     function verifyBytecodeSync(bufferSource: BufferSource): void {
       const buffer = extractBuffer(bufferSource);
       const hashHex: string = arrayBuffertoBase64Url(SHA256(buffer));
-      const localScope = config.localScope as LocalScope<string[]>;
-      if (!localScope[key].data.includes(hashHex)) {
-        throw new scope.Error(
+      if (!scope[key].data.includes(hashHex)) {
+        throw new global.Error(
           `[WEBCAT] Unauthorized WebAssembly bytecode: ${hashHex}`,
         );
       }
@@ -141,7 +148,7 @@ export const wasmHook = updatableHook<string[]>(
 
     // Helper: Extract an ArrayBuffer from a bufferSource.
     function extractBuffer(bufferSource: BufferSource): ArrayBuffer {
-      if (scope.ArrayBuffer.isView(bufferSource)) {
+      if (global.ArrayBuffer.isView(bufferSource)) {
         return bufferSource.buffer as ArrayBuffer;
       }
       return bufferSource as ArrayBuffer;
@@ -173,7 +180,7 @@ export const wasmHook = updatableHook<string[]>(
         );
       }
     }
-    exportFunction(hookedInstantiate, wasm, { defineAs: "instantiate" });
+    exportFunc(hookedInstantiate, wasm, "instantiate");
 
     // Hook WebAssembly.compile (async)
     const originalCompile = wasm.compile;
@@ -186,7 +193,7 @@ export const wasmHook = updatableHook<string[]>(
         originalCompile.bind(this, bufferSource, compileOptions),
       );
     }
-    exportFunction(hookedCompile, wasm, { defineAs: "compile" });
+    exportFunc(hookedCompile, wasm, "compile");
 
     // Hook WebAssembly.validate (synchronous)
     const originalValidate = wasm.validate;
@@ -197,7 +204,7 @@ export const wasmHook = updatableHook<string[]>(
       verifyBytecodeSync(bufferSource);
       return originalValidate.call(this, bufferSource);
     }
-    exportFunction(hookedValidate, wasm, { defineAs: "validate" });
+    exportFunc(hookedValidate, wasm, "validate");
 
     // Hook WebAssembly.instantiateStreaming (async)
     const originalInstantiateStreaming = wasm.instantiateStreaming;
@@ -207,7 +214,7 @@ export const wasmHook = updatableHook<string[]>(
       importObject?: WebAssembly.Imports,
       compileOptions?: object,
     ): Promise<WebAssembly.WebAssemblyInstantiatedSource> {
-      return scope.Promise.resolve(source)
+      return global.Promise.resolve(source)
         .then((response) => response.clone().arrayBuffer())
         .then(verifyBytecodeAsync)
         .then(
@@ -219,9 +226,7 @@ export const wasmHook = updatableHook<string[]>(
           ),
         );
     }
-    exportFunction(hookedInstantiateStreaming, wasm, {
-      defineAs: "instantiateStreaming",
-    });
+    exportFunc(hookedInstantiateStreaming, wasm, "instantiateStreaming");
 
     // Hook WebAssembly.compileStreaming (async)
     const originalCompileStreaming = wasm.compileStreaming;
@@ -230,14 +235,12 @@ export const wasmHook = updatableHook<string[]>(
       source: Response | PromiseLike<Response>,
       compileOptions?: object,
     ): Promise<WebAssembly.Module> {
-      return scope.Promise.resolve(source)
+      return global.Promise.resolve(source)
         .then((response) => response.clone().arrayBuffer())
         .then(verifyBytecodeAsync)
         .then(originalCompileStreaming.bind(this, source, compileOptions));
     }
-    exportFunction(hookedCompileStreaming, wasm, {
-      defineAs: "compileStreaming",
-    });
+    exportFunc(hookedCompileStreaming, wasm, "compileStreaming");
 
     // Hook the WebAssembly.Module constructor (synchronous)
     type WebAssemblyModuleConstructor = {
@@ -262,7 +265,7 @@ export const wasmHook = updatableHook<string[]>(
       bufferSource: BufferSource,
     ): WebAssembly.Module {
       if (!(this instanceof HookedModule)) {
-        throw new scope.TypeError(
+        throw new global.TypeError(
           "[WEBCAT] Constructor WebAssembly.Module requires 'new'",
         );
       }
@@ -275,7 +278,7 @@ export const wasmHook = updatableHook<string[]>(
       OriginalModule.customSections.bind(OriginalModule);
     hookedModule.exports = OriginalModule.exports.bind(OriginalModule);
     hookedModule.imports = OriginalModule.imports.bind(OriginalModule);
-    exportFunction(hookedModule, wasm, { defineAs: "Module" });
+    exportFunc(hookedModule, wasm, "Module");
     OriginalModule.prototype.constructor = wasm.Module;
     wasm.Module.prototype = OriginalModule.prototype;
 
@@ -291,9 +294,8 @@ export const wasmHook = updatableHook<string[]>(
  * origin to the webRequest API.
  */
 export const sharedWorkerHook = updatableHook<string>(
-  function (config, data) {
-    const { scope, unwrappedScope, exportFunction } = config;
-    if (!unwrappedScope.SharedWorker) {
+  function (data) {
+    if (!global.SharedWorker) {
       return;
     }
 
@@ -329,36 +331,36 @@ export const sharedWorkerHook = updatableHook<string>(
       if (typeof callback === "function") {
         args[1] = callback.bind(thisArg);
       } else {
-        args[1] = exportFunction(
+        args[1] = exportFunc(
           (...args: [event: Event]) =>
             callback.handleEvent?.call(thisArg, ...args),
-          unwrappedScope,
+          global,
         ) as EventListener;
       }
       return args;
     }
 
     // Hook the SharedWorker constructor
-    const OriginalSharedWorker = unwrappedScope.SharedWorker;
+    const OriginalSharedWorker = unwrap(global.SharedWorker);
     function HookedSharedWorker(
       this: object,
       ...args: [url: string | URL, options?: string | WorkerOptions]
     ) {
       if (!(this instanceof HookedSharedWorker)) {
-        throw new scope.TypeError(
+        throw new global.TypeError(
           "SharedWorker constructor: 'new' is required",
         );
       }
       if ((args.length as number) === 0) {
-        throw new scope.TypeError(
+        throw new global.TypeError(
           "SharedWorker constructor: At least 1 argument required, but only 0 passed",
         );
       }
-      const self = unwrappedScope.Object.create(
+      const self = unwrap(global.Object).create(
         OriginalSharedWorker.prototype,
       ) as HookedSharedWorker;
-      const channel = new scope.MessageChannel();
-      self[internal] = new scope.Object() as SharedWorkerInternal;
+      const channel = new global.MessageChannel();
+      self[internal] = new global.Object() as SharedWorkerInternal;
       self[internal].port = channel.port1;
       self[internal].relay = channel.port2;
       self[internal].onerror = null;
@@ -369,17 +371,17 @@ export const sharedWorkerHook = updatableHook<string>(
         args[0] = `${args[0]}#${firstParty}`;
         self[internal].instance = new OriginalSharedWorker(...args);
         self[internal].instance[hooked] = self;
-        self[internal].instance.port.onmessage = exportFunction(
+        self[internal].instance.port.onmessage = exportFunc(
           (e: MessageEvent<unknown>) => {
             self[internal].relay.postMessage(e.data);
           },
-          unwrappedScope,
+          global,
         ) as typeof MessagePort.prototype.onmessage;
-        self[internal].relay.onmessage = exportFunction(
+        self[internal].relay.onmessage = exportFunc(
           (e: MessageEvent<unknown>) => {
             self[internal].instance.port.postMessage(e.data);
           },
-          unwrappedScope,
+          global,
         ) as typeof MessagePort.prototype.onmessage;
         self[internal].instance.onerror =
           self[internal].onerror?.bind(self) || null;
@@ -393,11 +395,9 @@ export const sharedWorkerHook = updatableHook<string>(
       });
       return self;
     }
-    exportFunction(HookedSharedWorker, unwrappedScope, {
-      defineAs: "SharedWorker",
-    });
-    OriginalSharedWorker.prototype.constructor = unwrappedScope.SharedWorker;
-    unwrappedScope.SharedWorker.prototype = OriginalSharedWorker.prototype;
+    exportFunc(HookedSharedWorker, global, "SharedWorker");
+    OriginalSharedWorker.prototype.constructor = unwrap(global.SharedWorker);
+    unwrap(global).SharedWorker.prototype = OriginalSharedWorker.prototype;
 
     // Hook SharedWorker.port
     const { get: originalPort } = Object.getOwnPropertyDescriptor(
@@ -411,7 +411,7 @@ export const sharedWorkerHook = updatableHook<string>(
       return originalPort?.apply(this);
     }
     Object.defineProperty(OriginalSharedWorker.prototype, "port", {
-      get: exportFunction(hookedPort, unwrappedScope) as () => unknown,
+      get: exportFunc(hookedPort, global) as () => unknown,
     });
 
     // Hook SharedWorker.onerror
@@ -443,15 +443,13 @@ export const sharedWorkerHook = updatableHook<string>(
       }
     }
     Object.defineProperty(OriginalSharedWorker.prototype, "onerror", {
-      get: exportFunction(hookedGetOnerror, unwrappedScope) as () => unknown,
-      set: exportFunction(hookedSetOnerror, unwrappedScope) as (
-        v: unknown,
-      ) => void,
+      get: exportFunc(hookedGetOnerror, global) as () => unknown,
+      set: exportFunc(hookedSetOnerror, global) as (v: unknown) => void,
     });
 
     // Hook SharedWorker.addEventListener
     const { value: originalAddEventListener } = Object.getOwnPropertyDescriptor(
-      unwrappedScope.EventTarget.prototype,
+      unwrap(global.EventTarget.prototype),
       "addEventListener",
     ) as PropertyDescriptor;
     function hookedAddEventListener(
@@ -478,10 +476,10 @@ export const sharedWorkerHook = updatableHook<string>(
       originalAddEventListener.call(this, ...args);
     }
     Object.defineProperty(
-      unwrappedScope.EventTarget.prototype,
+      unwrap(global.EventTarget.prototype),
       "addEventListener",
       {
-        value: exportFunction(hookedAddEventListener, unwrappedScope),
+        value: exportFunc(hookedAddEventListener, global),
       },
     );
 
@@ -501,11 +499,11 @@ declare global {
  * Disables the ServiceWorker API when not in a first-party origin.
  */
 export const serviceWorkerHook = updatableHook<boolean>(
-  function ({ unwrappedScope, data }) {
+  function (_, { data }) {
     if (typeof data === "string") {
       // data is the placeholder, so we're in a frame
       try {
-        Object.hasOwn(window.top || {}, "name");
+        Object.hasOwn(global.top || {}, "name");
         // top is same-origin, so there's nothing to do
         return;
       } catch {
@@ -516,14 +514,14 @@ export const serviceWorkerHook = updatableHook<boolean>(
       // the first party; nothing to do
       return;
     }
-    delete (
-      (unwrappedScope.Navigator || unwrappedScope.WorkerNavigator || Object)
-        .prototype as unknown as Record<string, unknown>
+    delete unwrap(
+      (global.Navigator || global.WorkerNavigator || global.Object)
+        .prototype as unknown as Record<string, unknown>,
     ).serviceWorker;
-    delete (unwrappedScope as unknown as Record<string, unknown>).ServiceWorker;
-    delete (unwrappedScope as unknown as Record<string, unknown>)
+    delete unwrap(global as unknown as Record<string, unknown>).ServiceWorker;
+    delete unwrap(global as unknown as Record<string, unknown>)
       .ServiceWorkerContainer;
-    delete (unwrappedScope as unknown as Record<string, unknown>)
+    delete unwrap(global as unknown as Record<string, unknown>)
       .ServiceWorkerRegistration;
   },
   {
@@ -537,9 +535,8 @@ export const serviceWorkerHook = updatableHook<boolean>(
  * https://bugzilla.mozilla.org/show_bug.cgi?id=2048884
  */
 export const workerHook = updatableHook<string>(
-  function (config, data) {
-    const { scope, unwrappedScope, exportFunction } = config;
-    if (!unwrappedScope.SharedWorker) {
+  function (data) {
+    if (!global.SharedWorker) {
       return;
     }
 
@@ -556,10 +553,10 @@ export const workerHook = updatableHook<string>(
     };
 
     // Hook the Worker constructor
-    const OriginalWorker = unwrappedScope.Worker;
-    const EventTarget = unwrappedScope.EventTarget;
-    const construct = unwrappedScope.Reflect.construct.bind(
-      unwrappedScope.Reflect,
+    const OriginalWorker = unwrap(global.Worker);
+    const EventTarget = unwrap(global.EventTarget);
+    const construct = unwrap(global.Reflect).construct.bind(
+      unwrap(global.Reflect),
     );
     function HookedWorker(
       this: object,
@@ -569,16 +566,16 @@ export const workerHook = updatableHook<string>(
         throw new TypeError("Worker constructor: 'new' is required");
       }
       if ((args.length as number) === 0) {
-        throw new scope.TypeError(
+        throw new global.TypeError(
           "Worker constructor: At least 1 argument required, but only 0 passed",
         );
       }
       const self = construct(
         EventTarget,
-        new scope.Array(),
+        new global.Array(),
         OriginalWorker,
       ) as HookedWorker;
-      self[internal] = new scope.Object() as WorkerInternal;
+      self[internal] = new global.Object() as WorkerInternal;
       self[internal].onmessage = null;
       self[internal].messages = [];
       data.then((firstParty) => {
@@ -592,9 +589,9 @@ export const workerHook = updatableHook<string>(
       });
       return self;
     }
-    exportFunction(HookedWorker, unwrappedScope, { defineAs: "Worker" });
-    OriginalWorker.prototype.constructor = unwrappedScope.Worker;
-    unwrappedScope.Worker.prototype = OriginalWorker.prototype;
+    exportFunc(HookedWorker, global, "Worker");
+    OriginalWorker.prototype.constructor = unwrap(global.Worker);
+    unwrap(global).Worker.prototype = OriginalWorker.prototype;
 
     // Hook Worker.onmessage
     const { get: originalGetOnmessage, set: originalSetOnmessage } =
@@ -625,10 +622,8 @@ export const workerHook = updatableHook<string>(
       }
     }
     Object.defineProperty(OriginalWorker.prototype, "onmessage", {
-      get: exportFunction(hookedGetOnmessage, unwrappedScope) as () => unknown,
-      set: exportFunction(hookedSetOnmessage, unwrappedScope) as (
-        v: unknown,
-      ) => void,
+      get: exportFunc(hookedGetOnmessage, global) as () => unknown,
+      set: exportFunc(hookedSetOnmessage, global) as (v: unknown) => void,
     });
 
     // Hook Worker.postMessage
@@ -643,21 +638,19 @@ export const workerHook = updatableHook<string>(
           originalPostMessage.call(unwrappedThis[internal].instance, ...args);
         } else {
           let options = args[1];
-          if (options && scope.Symbol.iterator in options) {
+          if (options && global.Symbol.iterator in options) {
             const transfer = options as Transferable[];
-            options = new scope.Object();
+            options = new global.Object();
             options.transfer = transfer;
           }
-          args[0] = scope.structuredClone(args[0], options);
+          args[0] = global.structuredClone(args[0], options);
           unwrappedThis[internal].messages.push(args);
         }
       } else {
         originalPostMessage.call(this, ...args);
       }
     }
-    exportFunction(hookedPostMessage, OriginalWorker.prototype, {
-      defineAs: "postMessage",
-    });
+    exportFunc(hookedPostMessage, OriginalWorker.prototype, "postMessage");
 
     // TODO: hook onerror, onmessageerror, addEventListener, removeEventListener, dispatchEvent, and terminate
   },
@@ -681,8 +674,7 @@ declare const WorkerLocation: {
  * Hooks the Event prototype to return hooked targets
  */
 export const eventHook = updatableHook<void>(
-  function (config) {
-    const { unwrappedScope, exportFunction } = config;
+  function () {
     for (const prop of [
       "target",
       "currentTarget",
@@ -691,7 +683,7 @@ export const eventHook = updatableHook<void>(
       "srcElement",
     ]) {
       const { get: originalGet } = Object.getOwnPropertyDescriptor(
-        unwrappedScope.Event.prototype,
+        unwrap(global.Event.prototype),
         prop,
       ) as PropertyDescriptor;
       function hookedGet(this: Event & { wrappedJSObject?: Event }) {
@@ -699,8 +691,8 @@ export const eventHook = updatableHook<void>(
         const unwrappedVal = val?.wrappedJSObject || val;
         return unwrappedVal?.[hooked] || val;
       }
-      Object.defineProperty(unwrappedScope.Event.prototype, prop, {
-        get: exportFunction(hookedGet, unwrappedScope) as () => unknown,
+      Object.defineProperty(unwrap(global.Event.prototype), prop, {
+        get: exportFunc(hookedGet, global) as () => unknown,
       });
     }
   },
