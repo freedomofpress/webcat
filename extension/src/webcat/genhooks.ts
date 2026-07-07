@@ -28,18 +28,12 @@ export async function getHooks(
   efpo.set(iv);
   efpo.set(ct, iv.length);
   const efpoBase64 = efpo.toBase64({ alphabet: "base64url" });
-  return hooks[type]
-    .replace('"__ALLOWED_HASHES_PLACEHOLDER__"', JSON.stringify(wasm))
-    .replace(
-      '"__SHARED_WORKER_FIRST_PARTY_PLACEHOLDER__"',
-      JSON.stringify(efpoBase64),
-    )
-    .replace(
-      '"__SERVICE_WORKER_FIRST_PARTY_PLACEHOLDER__"',
-      JSON.stringify(sameOrigin),
-    )
-    .replace(
-      '"__WORKER_FIRST_PARTY_PLACEHOLDER__"',
-      JSON.stringify(efpoBase64),
-    );
+  return hooks[type].replace(
+    '"__DATA_PLACEHOLDER__"',
+    JSON.stringify({
+      hashes: wasm,
+      firstParty: efpoBase64,
+      sameOriginWithFirstParty: sameOrigin,
+    }),
+  );
 }

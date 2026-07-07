@@ -1,12 +1,13 @@
-import {
-  eventHook,
-  serviceWorkerHook,
-  sharedWorkerHook,
-  wasmHook,
-  workerHook,
-} from "./core";
+// This file is to be compiled, minified and embedded as a string to be
+// dynamically updated with data and injected into scripts
+// by response.ts
+
+import { eventHook } from "./events";
+import { wasmHook } from "./wasm";
+import { serviceWorkerHook, sharedWorkerHook, workerHook } from "./workers";
 
 console.log("[WEBCAT] Installing content script hook");
+const data = "__DATA_PLACEHOLDER__";
 
 // Find the first ancestor that is same-origin with the current window
 // and is navigated to an HTTP(S) URL. That is, the first ancestor that
@@ -30,10 +31,10 @@ if (ancestor !== window) {
   // hooked; use it instead of attempting to re-hook here
   window.wrappedJSObject.WebAssembly = ancestor.wrappedJSObject.WebAssembly;
 } else {
-  wasmHook(window);
+  wasmHook(window, data);
 }
 
-sharedWorkerHook(window);
-serviceWorkerHook(window);
-workerHook(window);
-eventHook(window);
+sharedWorkerHook(window, data);
+serviceWorkerHook(window, data);
+workerHook(window, data);
+eventHook(window, data);
