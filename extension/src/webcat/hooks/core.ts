@@ -638,6 +638,7 @@ export const workerHook = updatableHook<string>(
       instance?: Worker;
       onmessage: MessageListener | null;
       messages: [message: unknown, options?: StructuredSerializeOptions][];
+      terminated?: boolean;
     };
     const internal = Symbol("WEBCAT");
     type HookedWorker = Worker & {
@@ -674,6 +675,9 @@ export const workerHook = updatableHook<string>(
         // Initialize the actual Worker instance and relay messages
         args[0] = `${args[0]}#${firstParty}`;
         self[internal].instance = new OriginalWorker(...args);
+        if (self[internal].terminated) {
+          self[internal].instance.terminate();
+        }
         self[internal].instance.onmessage = self[internal].onmessage;
         self[internal].messages.forEach((args) => {
           self[internal].instance?.postMessage(...args);
@@ -741,7 +745,21 @@ export const workerHook = updatableHook<string>(
     }
     exportFunc(hookedPostMessage, OriginalWorker.prototype, "postMessage");
 
-    // TODO: hook onerror, onmessageerror, addEventListener, removeEventListener, dispatchEvent, and terminate
+    const originalTerminate = OriginalWorker.prototype.terminate;
+    function hookedTerminate(this: HookedWorker) {
+      if (internal in unwrap(this)) {
+        if (unwrap(this)[internal].instance) {
+          originalTerminate.call(unwrap(this)[internal].instance);
+        } else {
+          unwrap(this)[internal].terminated = true;
+        }
+      } else {
+        originalTerminate.call(this);
+      }
+    }
+    exportFunc(hookedTerminate, OriginalWorker.prototype, "terminate");
+
+    // TODO: hook onerror, onmessageerror, addEventListener, removeEventListener, dispatchEvent
   },
   {
     key: "WORKER_FIRST_PARTY",
