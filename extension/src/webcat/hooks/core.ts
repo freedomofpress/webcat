@@ -552,7 +552,31 @@ export const sharedWorkerHook = updatableHook<string>(
       },
     );
 
-    // TODO: Hook dispatchEvent
+    // Hook SharedWorker.dispatchEvent
+    const { value: originalDispatchEvent } = Object.getOwnPropertyDescriptor(
+      unwrap(global.EventTarget.prototype),
+      "dispatchEvent",
+    ) as PropertyDescriptor;
+    function hookedDispatchEvent(
+      this: HookedSharedWorker,
+      ...args: [event: Event]
+    ) {
+      if (internal in unwrap(this)) {
+        if (unwrap(this)[internal].instance) {
+          return unwrap(this)[internal].instance.dispatchEvent(...args);
+        }
+        // TODO: handle synchronous case
+        return true;
+      }
+      return originalDispatchEvent.call(this, ...args);
+    }
+    Object.defineProperty(
+      unwrap(global.EventTarget.prototype),
+      "dispatchEvent",
+      {
+        value: exportFunc(hookedDispatchEvent, global),
+      },
+    );
   },
   {
     key: "SHARED_WORKER_FIRST_PARTY",
