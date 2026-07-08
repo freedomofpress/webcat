@@ -11,7 +11,7 @@ window.capture = { logs: [], errors: [], rejections: [] };
     log.apply(console, arguments);
   }
   window.addEventListener('error',
-    ({ error }) => top.postMessage({ type: 'errors', value: [ error.toString(), relative(error.fileName) ] }, "*"));
+    (error) => top.postMessage({ type: 'errors', value: [ error.message, relative(error.filename) ] }, "*"));
   window.addEventListener('unhandledrejection',
     ({ reason }) => {
       if (reason instanceof Error) {

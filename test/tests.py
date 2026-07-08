@@ -47,6 +47,7 @@ BAD_WASM = Hook(
     LOGENTRY_ERROR_SHAREDWORKER_ONERROR,
     LOGENTRY_ERROR_SHAREDWORKER_CALLBACK,
     LOGENTRY_ERROR_SHAREDWORKER_HANDLER,
+    LOGENTRY_ERROR_WORKER_ONERROR,
 ] = EXPECTED_LOGS = [
     ["inline:",True],
     ["alert.js:",True],
@@ -62,6 +63,7 @@ BAD_WASM = Hook(
     ["Error: error in sharedworker", True, "onerror"],
     ["Error: error in sharedworker", True, "callback"],
     ["Error: error in sharedworker", True, "handler"],
+    ["Error: error in worker", True, "onerror"],
 ]
 
 EXPECTED_CSP = {
@@ -133,6 +135,7 @@ def setdiff(a: list, b: list):
                 LOGENTRY_ERROR_SHAREDWORKER_ONERROR,
                 LOGENTRY_ERROR_SHAREDWORKER_CALLBACK,
                 LOGENTRY_ERROR_SHAREDWORKER_HANDLER,
+                LOGENTRY_ERROR_WORKER_ONERROR,
             ]), [], [],
         NON_FRAME_PATHS-WASM_PATHS-WORKER_PATHS-{"/js/wasm_frame.js"},
         True,

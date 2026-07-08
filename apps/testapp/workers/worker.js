@@ -5,3 +5,5 @@ self.addEventListener('message', (event) => {
       postMessage('worker: active');
     }
 });
+
+throw new Error("error in worker");

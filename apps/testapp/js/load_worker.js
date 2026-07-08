@@ -8,4 +8,9 @@ if (window.Worker) {
     };
   
     worker.postMessage('Check connection');
+
+    worker.onerror = function (event) {
+      console.log(event.message, event.target === this, "onerror");
+      event.preventDefault();
+    };
   }

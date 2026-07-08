@@ -344,9 +344,10 @@ export const workerHook = updatableHook(
 
     type MessageListener = (this: Worker, ev: MessageEvent<unknown>) => unknown;
     type WorkerInternal = {
-      instance?: Worker;
+      instance: Worker & { [hooked]?: HookedWorker };
       onmessage: MessageListener | null;
       messages: [message: unknown, options?: StructuredSerializeOptions][];
+      onerror: ((e: Event) => unknown) | null;
       terminated?: boolean;
     };
     const internal = Symbol("WEBCAT");
@@ -380,10 +381,12 @@ export const workerHook = updatableHook(
       self[internal] = new global.Object() as WorkerInternal;
       self[internal].onmessage = null;
       self[internal].messages = [];
+      self[internal].onerror = null;
       data.then(({ firstParty }) => {
         // Initialize the actual Worker instance and relay messages
         args[0] = `${args[0]}#${firstParty}`;
         self[internal].instance = new OriginalWorker(...args);
+        self[internal].instance[hooked] = self;
         if (self[internal].terminated) {
           self[internal].instance.terminate();
         }
@@ -391,6 +394,8 @@ export const workerHook = updatableHook(
         self[internal].messages.forEach((args) => {
           self[internal].instance?.postMessage(...args);
         });
+        self[internal].instance.onerror =
+          self[internal].onerror?.bind(self) || null;
       });
       return self;
     }
@@ -454,6 +459,7 @@ export const workerHook = updatableHook(
     }
     exportFunc(hookedPostMessage, OriginalWorker.prototype, "postMessage");
 
+    // Hook Worker.terminate
     const originalTerminate = OriginalWorker.prototype.terminate;
     function hookedTerminate(this: HookedWorker) {
       if (internal in unwrap(this)) {
@@ -468,6 +474,34 @@ export const workerHook = updatableHook(
     }
     exportFunc(hookedTerminate, OriginalWorker.prototype, "terminate");
 
-    // TODO: hook onerror, onmessageerror, addEventListener, removeEventListener, dispatchEvent
+    // Hook Worker.onerror
+    const { get: originalGetOnerror, set: originalSetOnerror } =
+      Object.getOwnPropertyDescriptor(
+        OriginalWorker.prototype,
+        "onerror",
+      ) as PropertyDescriptor;
+    function hookedGetOnerror(this: HookedWorker) {
+      if (internal in unwrap(this)) {
+        return unwrap(this)[internal].onerror;
+      }
+      return originalGetOnerror?.call(this);
+    }
+    function hookedSetOnerror(this: HookedWorker, v: OnErrorEventHandler) {
+      if (internal in unwrap(this)) {
+        unwrap(this)[internal].onerror = v;
+        if (unwrap(this)[internal].instance) {
+          unwrap(this)[internal].instance.onerror =
+            v?.bind(unwrap(this)) || null;
+        }
+      } else {
+        originalSetOnerror?.call(this, v);
+      }
+    }
+    Object.defineProperty(OriginalWorker.prototype, "onerror", {
+      get: exportFunc(hookedGetOnerror, global) as () => unknown,
+      set: exportFunc(hookedSetOnerror, global) as (v: unknown) => void,
+    });
+
+    // TODO: hook onmessageerror, addEventListener, removeEventListener, dispatchEvent
   },
 );
