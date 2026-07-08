@@ -1,4 +1,14 @@
-import { exportFunc, global, hooked, unwrap, updatableHook } from "./core";
+import {
+  exportFunc,
+  global,
+  Hooked,
+  hooked,
+  Internal,
+  internal,
+  unwrap,
+  updatableHook,
+} from "./core";
+import { hookEventProperty } from "./events";
 
 // Map.prototype.getOrInsert is not yet available in Firefox ESR & TBB
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/getOrInsert
@@ -34,8 +44,7 @@ export const sharedWorkerHook = updatableHook(
       nonCapturingArgs?: EventListenerArgs;
       capturingArgs?: EventListenerArgs;
     };
-    type SharedWorkerInternal = {
-      instance: SharedWorker & { [hooked]?: HookedSharedWorker };
+    type SharedWorkerInternal = Internal<SharedWorker> & {
       port: MessagePort;
       relay: MessagePort;
       onerror: ((e: Event) => unknown) | null;
@@ -44,13 +53,9 @@ export const sharedWorkerHook = updatableHook(
         Map<EventListenerOrEventListenerObject, EventListenerArgsByKind>
       >;
     };
-    const internal = Symbol("WEBCAT");
-    type HookedSharedWorker = SharedWorker & {
-      [internal]: SharedWorkerInternal;
-    };
 
     function bindEventListenerArgs(
-      thisArg: HookedSharedWorker,
+      thisArg: Hooked<SharedWorker, SharedWorkerInternal>,
       args: EventListenerArgs,
     ) {
       const callback = unwrap(args[1]);
@@ -85,7 +90,7 @@ export const sharedWorkerHook = updatableHook(
       }
       const self = unwrap(global.Object).create(
         OriginalSharedWorker.prototype,
-      ) as HookedSharedWorker;
+      ) as Hooked<SharedWorker, SharedWorkerInternal>;
       const channel = new global.MessageChannel();
       self[internal] = new global.Object() as SharedWorkerInternal;
       self[internal].port = channel.port1;
@@ -137,7 +142,7 @@ export const sharedWorkerHook = updatableHook(
       OriginalSharedWorker.prototype,
       "port",
     ) as PropertyDescriptor;
-    function hookedPort(this: HookedSharedWorker) {
+    function hookedPort(this: Hooked<SharedWorker, SharedWorkerInternal>) {
       if (internal in this) {
         return this[internal].port;
       }
@@ -148,35 +153,7 @@ export const sharedWorkerHook = updatableHook(
     });
 
     // Hook SharedWorker.onerror
-    const { get: originalGetOnerror, set: originalSetOnerror } =
-      Object.getOwnPropertyDescriptor(
-        OriginalSharedWorker.prototype,
-        "onerror",
-      ) as PropertyDescriptor;
-    function hookedGetOnerror(this: HookedSharedWorker) {
-      if (internal in unwrap(this)) {
-        return unwrap(this)[internal].onerror;
-      }
-      return originalGetOnerror?.call(this);
-    }
-    function hookedSetOnerror(
-      this: HookedSharedWorker,
-      v: OnErrorEventHandler,
-    ) {
-      if (internal in unwrap(this)) {
-        unwrap(this)[internal].onerror = v;
-        if (unwrap(this)[internal].instance) {
-          unwrap(this)[internal].instance.onerror =
-            v?.bind(unwrap(this)) || null;
-        }
-      } else {
-        originalSetOnerror?.call(this, v);
-      }
-    }
-    Object.defineProperty(OriginalSharedWorker.prototype, "onerror", {
-      get: exportFunc(hookedGetOnerror, global) as () => unknown,
-      set: exportFunc(hookedSetOnerror, global) as (v: unknown) => void,
-    });
+    hookEventProperty(OriginalSharedWorker.prototype, "onerror");
 
     // Hook SharedWorker.addEventListener
     const { value: originalAddEventListener } = Object.getOwnPropertyDescriptor(
@@ -184,7 +161,7 @@ export const sharedWorkerHook = updatableHook(
       "addEventListener",
     ) as PropertyDescriptor;
     function hookedAddEventListener(
-      this: HookedSharedWorker,
+      this: Hooked<SharedWorker, SharedWorkerInternal>,
       ...args: EventListenerArgs
     ) {
       const [type, callback, options] = args;
@@ -227,7 +204,7 @@ export const sharedWorkerHook = updatableHook(
         "removeEventListener",
       ) as PropertyDescriptor;
     function hookedRemoveEventListener(
-      this: HookedSharedWorker,
+      this: Hooked<SharedWorker, SharedWorkerInternal>,
       ...args: EventListenerArgs
     ) {
       const [type, callback, options] = args;
@@ -270,7 +247,7 @@ export const sharedWorkerHook = updatableHook(
       "dispatchEvent",
     ) as PropertyDescriptor;
     function hookedDispatchEvent(
-      this: HookedSharedWorker,
+      this: Hooked<SharedWorker, SharedWorkerInternal>,
       ...args: [event: Event]
     ) {
       if (internal in unwrap(this)) {
@@ -343,16 +320,11 @@ export const workerHook = updatableHook(
     }
 
     type MessageListener = (this: Worker, ev: MessageEvent<unknown>) => unknown;
-    type WorkerInternal = {
-      instance: Worker & { [hooked]?: HookedWorker };
+    type WorkerInternal = Internal<Worker> & {
       onmessage: MessageListener | null;
       messages: [message: unknown, options?: StructuredSerializeOptions][];
       onerror: ((e: Event) => unknown) | null;
       terminated?: boolean;
-    };
-    const internal = Symbol("WEBCAT");
-    type HookedWorker = Worker & {
-      [internal]: WorkerInternal;
     };
 
     // Hook the Worker constructor
@@ -377,7 +349,7 @@ export const workerHook = updatableHook(
         EventTarget,
         new global.Array(),
         OriginalWorker,
-      ) as HookedWorker;
+      ) as Hooked<Worker, WorkerInternal>;
       self[internal] = new global.Object() as WorkerInternal;
       self[internal].onmessage = null;
       self[internal].messages = [];
@@ -403,41 +375,10 @@ export const workerHook = updatableHook(
     OriginalWorker.prototype.constructor = unwrap(global.Worker);
     unwrap(global).Worker.prototype = OriginalWorker.prototype;
 
-    // Hook Worker.onmessage
-    const { get: originalGetOnmessage, set: originalSetOnmessage } =
-      Object.getOwnPropertyDescriptor(
-        OriginalWorker.prototype,
-        "onmessage",
-      ) as PropertyDescriptor;
-    function hookedGetOnmessage(this: HookedWorker) {
-      if (internal in unwrap(this)) {
-        if (unwrap(this)[internal].instance) {
-          return originalGetOnmessage?.call(unwrap(this)[internal].instance);
-        }
-        return unwrap(this)[internal].onmessage;
-      }
-      return originalGetOnmessage?.call(this);
-    }
-    function hookedSetOnmessage(this: HookedWorker, v: MessageListener | null) {
-      if (internal in unwrap(this)) {
-        if (unwrap(this)[internal].instance) {
-          originalSetOnmessage?.call(unwrap(this)[internal].instance, v);
-        } else {
-          unwrap(this)[internal].onmessage = v;
-        }
-      } else {
-        originalSetOnmessage?.call(this, v);
-      }
-    }
-    Object.defineProperty(OriginalWorker.prototype, "onmessage", {
-      get: exportFunc(hookedGetOnmessage, global) as () => unknown,
-      set: exportFunc(hookedSetOnmessage, global) as (v: unknown) => void,
-    });
-
     // Hook Worker.postMessage
     const originalPostMessage = OriginalWorker.prototype.postMessage;
     function hookedPostMessage(
-      this: HookedWorker,
+      this: Hooked<Worker, WorkerInternal>,
       ...args: [message: unknown, options?: StructuredSerializeOptions]
     ) {
       if (internal in unwrap(this)) {
@@ -461,7 +402,7 @@ export const workerHook = updatableHook(
 
     // Hook Worker.terminate
     const originalTerminate = OriginalWorker.prototype.terminate;
-    function hookedTerminate(this: HookedWorker) {
+    function hookedTerminate(this: Hooked<Worker, WorkerInternal>) {
       if (internal in unwrap(this)) {
         if (unwrap(this)[internal].instance) {
           originalTerminate.call(unwrap(this)[internal].instance);
@@ -474,34 +415,11 @@ export const workerHook = updatableHook(
     }
     exportFunc(hookedTerminate, OriginalWorker.prototype, "terminate");
 
-    // Hook Worker.onerror
-    const { get: originalGetOnerror, set: originalSetOnerror } =
-      Object.getOwnPropertyDescriptor(
-        OriginalWorker.prototype,
-        "onerror",
-      ) as PropertyDescriptor;
-    function hookedGetOnerror(this: HookedWorker) {
-      if (internal in unwrap(this)) {
-        return unwrap(this)[internal].onerror;
-      }
-      return originalGetOnerror?.call(this);
-    }
-    function hookedSetOnerror(this: HookedWorker, v: OnErrorEventHandler) {
-      if (internal in unwrap(this)) {
-        unwrap(this)[internal].onerror = v;
-        if (unwrap(this)[internal].instance) {
-          unwrap(this)[internal].instance.onerror =
-            v?.bind(unwrap(this)) || null;
-        }
-      } else {
-        originalSetOnerror?.call(this, v);
-      }
-    }
-    Object.defineProperty(OriginalWorker.prototype, "onerror", {
-      get: exportFunc(hookedGetOnerror, global) as () => unknown,
-      set: exportFunc(hookedSetOnerror, global) as (v: unknown) => void,
-    });
+    // Hook Worker.onmessage, Worker.onerror, and Worker.onmessageerror
+    hookEventProperty(OriginalWorker.prototype, "onmessage");
+    hookEventProperty(OriginalWorker.prototype, "onerror");
+    hookEventProperty(OriginalWorker.prototype, "onmessageerror");
 
-    // TODO: hook onmessageerror, addEventListener, removeEventListener, dispatchEvent
+    // TODO: hook addEventListener, removeEventListener, dispatchEvent
   },
 );
