@@ -5,24 +5,11 @@ import {
   hooked,
   Internal,
   internal,
+  makeInternal,
   unwrap,
   updatableHook,
 } from "./core";
-import { hookEventProperty } from "./events";
-
-// Map.prototype.getOrInsert is not yet available in Firefox ESR & TBB
-// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/getOrInsert
-function getOrInsert<M extends Map<K, V>, K, V>(
-  map: M,
-  key: K,
-  defaultValue: V,
-) {
-  if (map.has(key)) {
-    return map.get(key) as V;
-  }
-  map.set(key, defaultValue);
-  return defaultValue;
-}
+import { connectEventListeners, hookEventProperty } from "./events";
 
 /**
  * Hooks the SharedWorker API to expose information about the first-party
@@ -35,42 +22,11 @@ export const sharedWorkerHook = updatableHook(
       return;
     }
 
-    type EventListenerArgs = [
-      type: string,
-      callback: EventListenerOrEventListenerObject,
-      options: AddEventListenerOptions | boolean,
-    ];
-    type EventListenerArgsByKind = {
-      nonCapturingArgs?: EventListenerArgs;
-      capturingArgs?: EventListenerArgs;
-    };
     type SharedWorkerInternal = Internal<SharedWorker> & {
       port: MessagePort;
       relay: MessagePort;
       onerror: ((e: Event) => unknown) | null;
-      listeners: Map<
-        string,
-        Map<EventListenerOrEventListenerObject, EventListenerArgsByKind>
-      >;
     };
-
-    function bindEventListenerArgs(
-      thisArg: Hooked<SharedWorker, SharedWorkerInternal>,
-      args: EventListenerArgs,
-    ) {
-      const callback = unwrap(args[1]);
-      args = Array.from(args) as EventListenerArgs;
-      if (typeof callback === "function") {
-        args[1] = callback.bind(thisArg);
-      } else {
-        args[1] = exportFunc(
-          (...args: [event: Event]) =>
-            callback.handleEvent?.call(thisArg, ...args),
-          global,
-        ) as EventListener;
-      }
-      return args;
-    }
 
     // Hook the SharedWorker constructor
     const OriginalSharedWorker = unwrap(global.SharedWorker);
@@ -92,11 +48,11 @@ export const sharedWorkerHook = updatableHook(
         OriginalSharedWorker.prototype,
       ) as Hooked<SharedWorker, SharedWorkerInternal>;
       const channel = new global.MessageChannel();
-      self[internal] = new global.Object() as SharedWorkerInternal;
-      self[internal].port = channel.port1;
-      self[internal].relay = channel.port2;
-      self[internal].onerror = null;
-      self[internal].listeners = new Map();
+      self[internal] = makeInternal({
+        port: channel.port1,
+        relay: channel.port2,
+        onerror: null,
+      });
       data.then(({ firstParty }) => {
         // Initialize the actual SharedWorker instance and relay messages
         // TODO: relay messageerror events
@@ -115,21 +71,7 @@ export const sharedWorkerHook = updatableHook(
           },
           global,
         ) as typeof MessagePort.prototype.onmessage;
-        self[internal].instance.onerror =
-          self[internal].onerror?.bind(self) || null;
-        for (const listeners of self[internal].listeners.values()) {
-          for (const {
-            nonCapturingArgs,
-            capturingArgs,
-          } of listeners.values()) {
-            if (nonCapturingArgs) {
-              self[internal].instance.addEventListener(...nonCapturingArgs);
-            }
-            if (capturingArgs) {
-              self[internal].instance.addEventListener(...capturingArgs);
-            }
-          }
-        }
+        connectEventListeners(self);
       });
       return self;
     }
@@ -154,118 +96,6 @@ export const sharedWorkerHook = updatableHook(
 
     // Hook SharedWorker.onerror
     hookEventProperty(OriginalSharedWorker.prototype, "onerror");
-
-    // Hook SharedWorker.addEventListener
-    const { value: originalAddEventListener } = Object.getOwnPropertyDescriptor(
-      unwrap(global.EventTarget.prototype),
-      "addEventListener",
-    ) as PropertyDescriptor;
-    function hookedAddEventListener(
-      this: Hooked<SharedWorker, SharedWorkerInternal>,
-      ...args: EventListenerArgs
-    ) {
-      const [type, callback, options] = args;
-      if (internal in unwrap(this)) {
-        const listeners = getOrInsert(
-          getOrInsert(unwrap(this)[internal].listeners, type, new Map()),
-          callback,
-          {} as EventListenerArgsByKind,
-        );
-        const useCapture =
-          options instanceof window.Object
-            ? !!unwrap(options).capture
-            : !!unwrap(options);
-        const kind = useCapture ? "capturingArgs" : "nonCapturingArgs";
-        if (!listeners[kind]) {
-          // Listener doesn't exist; bind args and memorize
-          const boundArgs = bindEventListenerArgs(unwrap(this), args);
-          listeners[kind] = boundArgs;
-          if (unwrap(this)[internal].instance) {
-            // Instance exists, add the listener for real
-            unwrap(this)[internal].instance.addEventListener(...boundArgs);
-          }
-        }
-      } else {
-        originalAddEventListener.call(this, ...args);
-      }
-    }
-    Object.defineProperty(
-      unwrap(global.EventTarget.prototype),
-      "addEventListener",
-      {
-        value: exportFunc(hookedAddEventListener, global),
-      },
-    );
-
-    // Hook SharedWorker.removeEventListener
-    const { value: originalRemoveEventListener } =
-      Object.getOwnPropertyDescriptor(
-        unwrap(global.EventTarget.prototype),
-        "removeEventListener",
-      ) as PropertyDescriptor;
-    function hookedRemoveEventListener(
-      this: Hooked<SharedWorker, SharedWorkerInternal>,
-      ...args: EventListenerArgs
-    ) {
-      const [type, callback, options] = args;
-      if (internal in unwrap(this)) {
-        const listeners = getOrInsert(
-          getOrInsert(unwrap(this)[internal].listeners, type, new Map()),
-          callback,
-          {} as EventListenerArgsByKind,
-        );
-        const useCapture =
-          options instanceof window.Object
-            ? !!unwrap(options).capture
-            : !!unwrap(options);
-        const kind = useCapture ? "capturingArgs" : "nonCapturingArgs";
-        if (listeners[kind]) {
-          // Listener exists; remove
-          if (unwrap(this)[internal].instance) {
-            // Instance exists, remove for real
-            unwrap(this)[internal].instance.removeEventListener(
-              ...listeners[kind],
-            );
-          }
-          delete listeners[kind];
-        }
-      } else {
-        originalRemoveEventListener.call(this, ...args);
-      }
-    }
-    Object.defineProperty(
-      unwrap(global.EventTarget.prototype),
-      "removeEventListener",
-      {
-        value: exportFunc(hookedRemoveEventListener, global),
-      },
-    );
-
-    // Hook SharedWorker.dispatchEvent
-    const { value: originalDispatchEvent } = Object.getOwnPropertyDescriptor(
-      unwrap(global.EventTarget.prototype),
-      "dispatchEvent",
-    ) as PropertyDescriptor;
-    function hookedDispatchEvent(
-      this: Hooked<SharedWorker, SharedWorkerInternal>,
-      ...args: [event: Event]
-    ) {
-      if (internal in unwrap(this)) {
-        if (unwrap(this)[internal].instance) {
-          return unwrap(this)[internal].instance.dispatchEvent(...args);
-        }
-        // TODO: handle synchronous case
-        return true;
-      }
-      return originalDispatchEvent.call(this, ...args);
-    }
-    Object.defineProperty(
-      unwrap(global.EventTarget.prototype),
-      "dispatchEvent",
-      {
-        value: exportFunc(hookedDispatchEvent, global),
-      },
-    );
   },
 );
 
@@ -350,10 +180,11 @@ export const workerHook = updatableHook(
         new global.Array(),
         OriginalWorker,
       ) as Hooked<Worker, WorkerInternal>;
-      self[internal] = new global.Object() as WorkerInternal;
-      self[internal].onmessage = null;
-      self[internal].messages = [];
-      self[internal].onerror = null;
+      self[internal] = makeInternal({
+        onmessage: null,
+        messages: [],
+        onerror: null,
+      });
       data.then(({ firstParty }) => {
         // Initialize the actual Worker instance and relay messages
         args[0] = `${args[0]}#${firstParty}`;
@@ -362,12 +193,10 @@ export const workerHook = updatableHook(
         if (self[internal].terminated) {
           self[internal].instance.terminate();
         }
-        self[internal].instance.onmessage = self[internal].onmessage;
+        connectEventListeners(self);
         self[internal].messages.forEach((args) => {
           self[internal].instance?.postMessage(...args);
         });
-        self[internal].instance.onerror =
-          self[internal].onerror?.bind(self) || null;
       });
       return self;
     }
@@ -419,7 +248,5 @@ export const workerHook = updatableHook(
     hookEventProperty(OriginalWorker.prototype, "onmessage");
     hookEventProperty(OriginalWorker.prototype, "onerror");
     hookEventProperty(OriginalWorker.prototype, "onmessageerror");
-
-    // TODO: hook addEventListener, removeEventListener, dispatchEvent
   },
 );

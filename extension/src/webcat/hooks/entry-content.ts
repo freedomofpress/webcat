@@ -2,7 +2,7 @@
 // dynamically updated with data and injected into scripts
 // by response.ts
 
-import { eventHook } from "./events";
+import { eventHook, eventTargetHook } from "./events";
 import { wasmHook } from "./wasm";
 import { serviceWorkerHook, sharedWorkerHook, workerHook } from "./workers";
 
@@ -37,4 +37,5 @@ if (ancestor !== window) {
 sharedWorkerHook(window, data);
 serviceWorkerHook(window, data);
 workerHook(window, data);
+eventTargetHook(window, data);
 eventHook(window, data);
