@@ -12,8 +12,13 @@ declare global {
 }
 
 export type LocalScope<T> = Record<string, { data: T; ready: Promise<void> }>;
+export type Hooked<T, I extends Internal<T>> = T & { [internal]: I };
+export type Internal<T> = {
+  instance: T & { [hooked]?: T };
+};
 
-export const hooked = Symbol("WEBCAT");
+export const internal = Symbol("WEBCAT internal");
+export const hooked = Symbol("WEBCAT hooked");
 export const global = globalThis.self || globalThis;
 const isolated = typeof globalThis.exportFunction === "function";
 
