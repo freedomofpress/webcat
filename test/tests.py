@@ -11,6 +11,9 @@ import hashlib
 from pytest_check import check
 import urllib.parse
 
+class Fatal(Exception):
+    pass
+
 logging.getLogger("geckordp").setLevel(logging.CRITICAL)
 logging.getLogger("psutil").setLevel(logging.CRITICAL)
 logging.getLogger().setLevel(logging.WARNING)
@@ -242,6 +245,8 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
         browser.navigate(url)
     if not in_frame:
         res = browser.execute("document.body.textContent")
+        if "__WEBCAT_" in res:
+            raise Fatal(f"Marker leaked to response content: {res}")
         assert expected in res
     res = json.loads(browser.execute("JSON.stringify(window.capture?.logs || [])"))
     for log in res:

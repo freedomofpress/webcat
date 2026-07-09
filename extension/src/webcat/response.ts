@@ -239,6 +239,7 @@ export async function validateResponseContent(
 
   const source: Promise<ArrayBuffer>[] = [];
   let writeQueue: Promise<void> = Promise.resolve();
+  let endMarkerSeen = false;
   filter.ondata = (event: { data: ArrayBuffer }) => {
     // The data here is usually chunked; normally it would be streamed down as we get it
     // but since we can hash the content only at the end, we have to wait until we have everything
@@ -261,12 +262,20 @@ export async function validateResponseContent(
         writeQueue = writeQueue.then(async () => filter.write(await hook));
       });
       source.length = 0;
+      endMarkerSeen = true;
     } else {
       source.push(Promise.resolve(event.data));
     }
   };
 
   filter.onstop = async () => {
+    if (!endMarkerSeen && !PASS_THROUGH_TYPES.has(details.type)) {
+      // The request terminated early, before headers were received,
+      // possibly because the user navigated away. Close without
+      // writing anything; don't display an error.
+      filter.close();
+      return;
+    }
     const blob = await new Blob(await Promise.all(source)).arrayBuffer();
 
     // Following order of priority:
