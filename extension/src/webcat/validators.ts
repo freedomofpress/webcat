@@ -24,7 +24,7 @@ import {
   RawPublicKey,
 } from "@freedomofpress/sigsum/dist/types";
 
-import { CachePartition, db } from "./../globals";
+import { db } from "./../globals";
 import { canonicalize } from "./canonicalize";
 import { base64UrlToUint8Array, stringToUint8Array } from "./encoding";
 import {
@@ -35,6 +35,7 @@ import {
   SigsumSignatures,
 } from "./interfaces/bundle";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
+import { CachePartition } from "./interfaces/requestinfo";
 import { parseContentSecurityPolicy } from "./parsers";
 import { FRAME_TYPES } from "./resources";
 import { getFQDNSafe } from "./utils";

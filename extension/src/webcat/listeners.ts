@@ -1,5 +1,5 @@
 import { endpoint } from "../config";
-import { CachePartition, db, origins, requestInfo, tabs } from "../globals";
+import { db, origins, requestInfo, tabs } from "../globals";
 import { CacheKey } from "./cache";
 import type { WebcatDatabase } from "./db";
 import { getHooks } from "./genhooks";
@@ -9,6 +9,7 @@ import {
   OriginStateHolder,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
+import { CachePartition, RequestInfo } from "./interfaces/requestinfo";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
@@ -100,7 +101,6 @@ export async function headersListener(
   }
 
   commitVerifiedOrigin(fqdn, originStateHolder, cachePartition);
-  requestInfo.delete(details.requestId);
 
   markResponseContent(details);
 
@@ -210,10 +210,13 @@ export async function requestListener(
   if (!isFrame) {
     originStateHolder = origins.get(CacheKey(fqdn, cachePartition));
     if (originStateHolder) {
-      requestInfo.set(details.requestId, {
-        pendingOrigin: originStateHolder,
-        cachePartition,
-      });
+      requestInfo.set(
+        details.requestId,
+        new RequestInfo({
+          pendingOrigin: originStateHolder,
+          cachePartition,
+        }),
+      );
     }
   }
 
@@ -259,13 +262,21 @@ export async function requestListener(
 function errorOccurredListener(
   details: browser.webRequest._OnErrorOccurredDetails,
 ): void {
-  requestInfo.delete(details.requestId);
+  const info = requestInfo.get(details.requestId);
+  if (info) {
+    info.fail();
+    requestInfo.delete(details.requestId);
+  }
 }
 
 function completedListener(
   details: browser.webRequest._OnCompletedDetails,
 ): void {
-  requestInfo.delete(details.requestId);
+  const info = requestInfo.get(details.requestId);
+  if (info) {
+    info.complete();
+    requestInfo.delete(details.requestId);
+  }
 }
 
 // Single global webRequest listener registration that scopes to the union
