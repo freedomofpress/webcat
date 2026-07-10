@@ -1,4 +1,4 @@
-import { CachePartition, db, origins, requestInfo, tabs } from "./../globals";
+import { db, origins, requestInfo, tabs } from "./../globals";
 import { CacheKey } from "./cache";
 import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
@@ -7,6 +7,7 @@ import {
   OriginStateHolder,
   OriginStateInitial,
 } from "./interfaces/originstate";
+import { CachePartition, RequestInfo } from "./interfaces/requestinfo";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
 import { enforceHTTPS, validateProtocolAndPort } from "./validators";
@@ -52,7 +53,10 @@ export async function validateOrigin(
   const cached = origins.get(CacheKey(fqdn, cachePartition));
   if (cached) {
     // Pin the holder to this request so later stages cannot race against LRU eviction
-    requestInfo.set(requestId, { pendingOrigin: cached, cachePartition });
+    requestInfo.set(
+      requestId,
+      new RequestInfo({ pendingOrigin: cached, cachePartition }),
+    );
     return;
   }
 
@@ -77,7 +81,10 @@ export async function validateOrigin(
     cachePartition,
   );
   const origin = new OriginStateHolder(newOriginState);
-  requestInfo.set(requestId, { pendingOrigin: origin, cachePartition });
+  requestInfo.set(
+    requestId,
+    new RequestInfo({ pendingOrigin: origin, cachePartition }),
+  );
 
   // See https://github.com/freedomofpress/webcat/issues/95
   await origin.current.fetcher.awaitAll();

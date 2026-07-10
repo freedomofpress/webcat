@@ -3,12 +3,7 @@ import { CacheKey, LRUCache, LRUSet } from "./webcat/cache";
 import { WebcatDatabase } from "./webcat/db";
 import { stringToUint8Array, Uint8ArrayToBase64Url } from "./webcat/encoding";
 import { OriginStateHolder } from "./webcat/interfaces/originstate";
-
-export type CachePartition = { firstParty: string; incognito: boolean };
-export type RequestInfo = {
-  pendingOrigin: OriginStateHolder;
-  cachePartition: CachePartition;
-};
+import { CachePartition, RequestInfo } from "./webcat/interfaces/requestinfo";
 
 export const requestInfo = new Map<string, RequestInfo>();
 export const origins = new LRUCache<

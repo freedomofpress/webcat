@@ -1,4 +1,4 @@
-import { CachePartition, endMarker, hookMarker, origins } from "./../globals";
+import { endMarker, hookMarker, origins, requestInfo } from "./../globals";
 import { CacheKey } from "./cache";
 import {
   base64UrlToUint8Array,
@@ -17,6 +17,7 @@ import {
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
+import { CachePartition } from "./interfaces/requestinfo";
 import { logger } from "./logger";
 import { PASS_THROUGH_TYPES } from "./resources";
 import { errorpage, setOKIcon } from "./ui";
@@ -268,11 +269,31 @@ export async function validateResponseContent(
     }
   };
 
+  const info = requestInfo.get(details.requestId);
   filter.onstop = async () => {
     if (!endMarkerSeen && !PASS_THROUGH_TYPES.has(details.type)) {
       // The request terminated early, before headers were received,
       // possibly because the user navigated away. Close without
       // writing anything; don't display an error.
+      filter.close();
+      return;
+    }
+    try {
+      // Make sure the response is complete and was not interrupted by a
+      // network error; ignore incomplete responses without displaying an
+      // error. When the request is not associated with a tab, skip the
+      // check as a workaround to a bug in ServiceWorkers:
+      // https://bugzilla.mozilla.org/show_bug.cgi?id=2054048
+      if (details.tabId !== -1) {
+        await info?.completed;
+      }
+    } catch {
+      logger.addLog(
+        "warn",
+        `Request canceled, url: ${details.url}`,
+        details.tabId,
+        fqdn,
+      );
       filter.close();
       return;
     }

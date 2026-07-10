@@ -1,5 +1,5 @@
 import { bundle_name, bundle_prev_name } from "../../config";
-import { CachePartition, db } from "../../globals";
+import { db } from "../../globals";
 import { canonicalize } from "../canonicalize";
 import { stringToUint8Array } from "../encoding";
 import { arraysEqual } from "../utils";
@@ -20,6 +20,7 @@ import {
   SigsumSignatures,
 } from "./bundle";
 import { WebcatError, WebcatErrorCode } from "./errors";
+import { CachePartition } from "./requestinfo";
 
 type BundleFetch = {
   promise: Promise<Response>;
