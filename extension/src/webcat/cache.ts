@@ -15,6 +15,23 @@ export function CacheKey<T extends { [index: string]: { toString(): string } }>(
           )
       : "")) as CacheKey<T>;
 }
+export function isInPartition<
+  P extends { [index: string]: { toString(): string } },
+  T extends P,
+>(key: CacheKey<T>, partition: P) {
+  const [_, q] = key.split("?");
+  if (q) {
+    const attrs = {} as Record<string, string>;
+    q.split(",").forEach((attr) => {
+      const [name, value] = attr.split("=");
+      attrs[name] = value;
+    });
+    return Object.keys(partition).every(
+      (name) => partition[name].toString() === attrs[name],
+    );
+  }
+  return Object.keys(partition).length === 0;
+}
 
 export class LRUCache<K, V> {
   private cache: Map<K, V>;
@@ -98,6 +115,10 @@ export class LRUSet<T> {
 
   values(): T[] {
     return Array.from(this.cache.values());
+  }
+
+  delete(value: T): void {
+    this.cache.delete(value);
   }
 
   clear(): void {
