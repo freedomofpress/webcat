@@ -81,7 +81,11 @@ export async function headersListener(
     throw new Error("No originState while starting to parse response.");
   }
 
-  const result = await validateResponseHeaders(originStateHolder, details);
+  const result = await validateResponseHeaders(
+    originStateHolder,
+    details,
+    cachePartition,
+  );
   if (result instanceof WebcatError) {
     logger.addLog(
       "error",
@@ -247,7 +251,7 @@ export async function requestListener(
     return {};
   }
 
-  await validateResponseContent(details, originStateHolder);
+  await validateResponseContent(details, originStateHolder, cachePartition);
   return {};
 }
 

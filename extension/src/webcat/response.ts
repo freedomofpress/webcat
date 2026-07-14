@@ -1,4 +1,4 @@
-import { endMarker, hookMarker, origins } from "./../globals";
+import { CachePartition, endMarker, hookMarker, origins } from "./../globals";
 import { CacheKey } from "./cache";
 import {
   base64UrlToUint8Array,
@@ -23,7 +23,6 @@ import { errorpage, setOKIcon } from "./ui";
 import {
   arraysEqual,
   clearBrowserCaches,
-  getFirstParty,
   getFQDN,
   isNewerSemver,
   SHA256,
@@ -33,6 +32,7 @@ import { extractAndValidateHeaders } from "./validators";
 export async function validateResponseHeaders(
   originStateHolder: OriginStateHolder,
   details: browser.webRequest._OnHeadersReceivedDetails,
+  cachePartition: CachePartition,
 ) {
   const fqdn = originStateHolder.current.fqdn;
   // Some headers, such as CSP, needs to always be validated
@@ -146,10 +146,6 @@ export async function validateResponseHeaders(
       details.tabId,
       fqdn,
     );
-    const cachePartition = {
-      firstParty: await getFirstParty(details),
-      incognito: !!details.incognito,
-    };
     origins.delete(CacheKey(fqdn, cachePartition));
     // Mark the holder so any sibling request that shares it won't re-insert
     // it via commitVerifiedOrigin later
@@ -212,6 +208,7 @@ function assertVerifiedManifest(
 export async function validateResponseContent(
   details: browser.webRequest._OnBeforeRequestDetails,
   originStateHolder: OriginStateHolder,
+  cachePartition: CachePartition,
 ) {
   function deny(filter: browser.webRequest.StreamFilter) {
     // DENIED
@@ -241,7 +238,6 @@ export async function validateResponseContent(
   };
 
   const source: Promise<ArrayBuffer>[] = [];
-  const firstParty = await getFirstParty(details);
   let writeQueue: Promise<void> = Promise.resolve();
   filter.ondata = (event: { data: ArrayBuffer }) => {
     // The data here is usually chunked; normally it would be streamed down as we get it
@@ -253,8 +249,8 @@ export async function validateResponseContent(
       const hooks = getHooks(
         hooksType.page,
         manifest.wasm,
-        firstParty,
-        firstParty === details.originUrl,
+        cachePartition.firstParty,
+        cachePartition.firstParty === details.originUrl,
       );
       source.push(hooks.then((h) => stringToUint8Array(h).buffer));
     } else if (arraysEqual(endMarker, new Uint8Array(event.data))) {
