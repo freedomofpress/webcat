@@ -29,6 +29,9 @@ export const firstPartyKey = crypto.subtle.generateKey(
   false,
   ["encrypt", "decrypt"],
 );
+export const firtsPartySalt = crypto.getRandomValues(
+  new Uint8Array(new ArrayBuffer(256 / 8)), // SHA-256 length
+);
 
 declare const __IS_TESTING__: boolean;
 if (__IS_TESTING__) {

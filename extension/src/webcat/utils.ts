@@ -106,10 +106,10 @@ export async function getFirstParty(
           const fpo = await crypto.subtle.decrypt(
             {
               name: "AES-GCM",
-              iv: efpo.slice(0, 96),
+              iv: efpo.slice(0, 12),
             },
             await firstPartyKey,
-            efpo.slice(96),
+            efpo.slice(12),
           );
           // Encrypted FPO found in a SharedWorker or Worker URL hash, added there via hooked API
           return new TextDecoder().decode(fpo);
