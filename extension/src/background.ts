@@ -1,5 +1,6 @@
 import { endpoint } from "./config";
-import { db } from "./globals";
+import { db, nonOrigins, origins } from "./globals";
+import { isInPartition } from "./webcat/cache";
 import {
   installEnrolledListeners,
   installListener,
@@ -59,5 +60,22 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 browser.tabs.onCreated.addListener((tab) => {
   if (tab.id !== undefined) {
     browser.pageAction.hide(tab.id);
+  }
+});
+
+// Handle incognito sessions ending
+browser.windows.onRemoved.addListener(async () => {
+  const windows = await browser.windows.getAll();
+  if (windows.filter((win) => win.incognito).length === 0) {
+    for (const key of origins.keys()) {
+      if (isInPartition(key, { incognito: true })) {
+        origins.delete(key);
+      }
+    }
+    for (const value of nonOrigins.values()) {
+      if (isInPartition(value, { incognito: true })) {
+        nonOrigins.delete(value);
+      }
+    }
   }
 });
