@@ -22,11 +22,81 @@ export const sharedWorkerHook = updatableHook(
       return;
     }
 
+    type MessageListener = (
+      this: MessagePort,
+      ev: MessageEvent<unknown>,
+    ) => unknown;
+    type MessagePortInternal = Internal<MessagePort> & {
+      onmessage: MessageListener | null;
+      messages: [message: unknown, options?: StructuredSerializeOptions][];
+      onmessageerror: MessageListener | null;
+      started: boolean;
+      closed: boolean;
+    };
     type SharedWorkerInternal = Internal<SharedWorker> & {
-      port: MessagePort;
-      relay: MessagePort;
+      port: Hooked<MessagePort, MessagePortInternal>;
       onerror: ((e: Event) => unknown) | null;
     };
+
+    // Hook MessagePort.postMessage
+    const OriginalMessagePort = unwrap(global.MessagePort);
+    const originalPostMessage = OriginalMessagePort.prototype.postMessage;
+    function hookedPostMessage(
+      this: Hooked<MessagePort, MessagePortInternal>,
+      ...args: [message: unknown, options?: StructuredSerializeOptions]
+    ) {
+      if (internal in unwrap(this)) {
+        if (unwrap(this)[internal].instance) {
+          originalPostMessage.call(unwrap(this)[internal].instance, ...args);
+        } else {
+          let options = args[1];
+          if (options && global.Symbol.iterator in options) {
+            const transfer = options as Transferable[];
+            options = new global.Object();
+            options.transfer = transfer;
+          }
+          args[0] = global.structuredClone(args[0], options);
+          unwrap(this)[internal].messages.push(args);
+        }
+      } else {
+        originalPostMessage.call(this, ...args);
+      }
+    }
+    exportFunc(hookedPostMessage, OriginalMessagePort.prototype, "postMessage");
+
+    // Hook MessagePort.start
+    const originalStart = OriginalMessagePort.prototype.start;
+    function hookedStart(this: Hooked<MessagePort, MessagePortInternal>) {
+      if (internal in unwrap(this)) {
+        if (unwrap(this)[internal].instance) {
+          originalStart.call(unwrap(this)[internal].instance);
+        } else {
+          unwrap(this)[internal].started = true;
+        }
+      } else {
+        originalStart.call(this);
+      }
+    }
+    exportFunc(hookedStart, OriginalMessagePort.prototype, "start");
+
+    // Hook MessagePort.close
+    const originalClose = OriginalMessagePort.prototype.close;
+    function hookedClose(this: Hooked<MessagePort, MessagePortInternal>) {
+      if (internal in unwrap(this)) {
+        if (unwrap(this)[internal].instance) {
+          originalClose.call(unwrap(this)[internal].instance);
+        } else {
+          unwrap(this)[internal].closed = true;
+        }
+      } else {
+        originalClose.call(this);
+      }
+    }
+    exportFunc(hookedClose, OriginalMessagePort.prototype, "close");
+
+    // Hook MessagePort.onmessage and MessagePort.onmessageerror
+    hookEventProperty(OriginalMessagePort.prototype, "onmessage");
+    hookEventProperty(OriginalMessagePort.prototype, "onmessageerror");
 
     // Hook the SharedWorker constructor
     const OriginalSharedWorker = unwrap(global.SharedWorker);
@@ -47,31 +117,35 @@ export const sharedWorkerHook = updatableHook(
       const self = unwrap(global.Object).create(
         OriginalSharedWorker.prototype,
       ) as Hooked<SharedWorker, SharedWorkerInternal>;
-      const channel = new global.MessageChannel();
+      const port = unwrap(global.Object).create(
+        OriginalMessagePort.prototype,
+      ) as Hooked<MessagePort, MessagePortInternal>;
+      port[internal] = makeInternal({
+        onmessage: null,
+        messages: [],
+        onmessageerror: null,
+        started: false,
+        closed: false,
+      });
       self[internal] = makeInternal({
-        port: channel.port1,
-        relay: channel.port2,
+        port: port,
         onerror: null,
       });
       data.then(({ firstParty }) => {
         // Initialize the actual SharedWorker instance and relay messages
-        // TODO: relay messageerror events
         args[0] = `${args[0]}#${firstParty}`;
         self[internal].instance = new OriginalSharedWorker(...args);
         self[internal].instance[hooked] = self;
-        self[internal].instance.port.onmessage = exportFunc(
-          (e: MessageEvent<unknown>) => {
-            self[internal].relay.postMessage(e.data);
-          },
-          global,
-        ) as typeof MessagePort.prototype.onmessage;
-        self[internal].relay.onmessage = exportFunc(
-          (e: MessageEvent<unknown>) => {
-            self[internal].instance.port.postMessage(e.data);
-          },
-          global,
-        ) as typeof MessagePort.prototype.onmessage;
         connectEventListeners(self);
+        port[internal].instance = self[internal].instance.port;
+        port[internal].instance[hooked] = port;
+        connectEventListeners(port);
+        if (port[internal].started) {
+          port[internal].instance.start();
+        }
+        if (port[internal].closed) {
+          port[internal].instance.close();
+        }
       });
       return self;
     }
