@@ -250,7 +250,10 @@ export async function validateResponseContent(
         hooksType.page,
         manifest.wasm,
         cachePartition.firstParty,
-        cachePartition.firstParty === details.originUrl,
+        // Hooks are only injected to workers, and CSP restrictions only allow
+        // same-origin workers, so the request's web origin is the URL's origin;
+        // determine whether the URL is same-origin with the first party
+        cachePartition.firstParty === new URL(details.url).origin,
       );
       source.push(hooks.then((h) => stringToUint8Array(h).buffer));
     } else if (arraysEqual(endMarker, new Uint8Array(event.data))) {
