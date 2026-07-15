@@ -1,5 +1,5 @@
-import { endpoint } from "../config";
-import { db, origins, requestInfo, tabs } from "../globals";
+import { updater } from "../background";
+import { origins, requestInfo, tabs } from "../globals";
 import { CacheKey } from "./cache";
 import type { WebcatDatabase } from "./db";
 import { getHooks } from "./genhooks";
@@ -20,7 +20,6 @@ import {
   validateResponseHeaders,
 } from "./response";
 import { errorpage } from "./ui";
-import { retryUpdateIfFailed } from "./update";
 import {
   clearBrowserCaches,
   getFirstParty,
@@ -203,7 +202,7 @@ export async function requestListener(
       details.tabId,
       fqdn,
     );
-    await retryUpdateIfFailed(db, endpoint);
+    await updater.retryIfFailed();
   }
 
   let originStateHolder: OriginStateHolder | undefined;
