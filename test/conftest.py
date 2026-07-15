@@ -125,10 +125,8 @@ def bundle_generator():
     yield g
     g.close()
 
-# Session-scoped so the bundle is signed (a network round-trip to the sigsum
-# log) once per session, not once per test. Keep function-scoped fixtures like
-# update_server out of the dependency list: they would tear this fixture down
-# after every test and re-trigger the signing.
+# Session-scoped so signing (a sigsum network round trip) happens once. A
+# function-scoped dependency here would tear this down after every test.
 @pytest.fixture(scope="session")
 def root(request, bundle_generator):
     bundle_generator.sign(request.param)

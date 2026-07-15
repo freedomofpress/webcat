@@ -46,9 +46,7 @@ from geckordp.profile import ProfileManager
 from geckordp.rdp_client import RDPClient
 
 class Browser:
-    # Profile initialization through geckordp launches Firefox twice and waits
-    # for the profile directory to settle (~15s). Do that once per (binary,
-    # profiles path) pair and clone the result for each Browser (~1s).
+    # geckordp profile creation takes ~15s; do it once and clone per browser
     _template_profiles: dict = {}
 
     def __init__(self, override_firefox_path="", override_profiles_path="", additional_configs={}):
@@ -81,9 +79,8 @@ class Browser:
         flags = list(flags or [])
         if headless:
             flags.append("-headless")
-        # wait=False skips geckordp's CPU-settle heuristic (up to 15s on a
-        # loaded machine); the debugger port only opens once the RDP server
-        # is ready, so poll that instead.
+        # wait=False skips geckordp's slow CPU-settle heuristic; we poll the
+        # debugger port and the console instead
         self.proc = Firefox.start(start, self.port, self.profile_name, flags, self.override_firefox_path, False, False)
         logging.info("Firefox started.")
         try:
@@ -103,10 +100,8 @@ class Browser:
             self.client.connect(self.host, self.port)
             logging.info("RDP connection established.")
             self.root = RootActor(self.client)
-            # The RDP port accepts connections slightly before the browser can
-            # service actor requests; a navigate() sent too early is silently
-            # dropped. A full console-evaluation round trip exercises the same
-            # tab-target path a navigation uses, so only return once that works.
+            # a navigate() sent before the tab can service actor requests is
+            # silently dropped, so wait until a console evaluation works
             while True:
                 try:
                     if self.execute("true") is True:
@@ -117,8 +112,7 @@ class Browser:
                     raise RuntimeError("browser tab not responsive within 30s")
                 sleep(0.1)
         except Exception:
-            # A failed start never reaches the fixture teardown; kill the
-            # half-started browser here or it poisons every following test.
+            # teardown never runs if start fails; don't leak the browser
             try:
                 self.proc.kill()
                 self.proc.wait(5)
@@ -135,9 +129,8 @@ class Browser:
             logging.info("Firefox process killed.")
         except:
             pass
-        # Wait for the browser to actually exit and release the debugger
-        # port: otherwise the next test can connect to this dying instance
-        # (and e.g. get responses from its cache instead of the server).
+        # Wait for exit and port release, or the next test's RDP client can
+        # connect to this dying instance.
         proc = getattr(self, "proc", None)
         if proc is not None:
             try:
@@ -157,9 +150,7 @@ class Browser:
                 except OSError:
                     break
                 if monotonic() > deadline:
-                    logging.warning(
-                        f"debugger port {self.port} still open 10s after killing "
-                        f"firefox; next browser start may fail to bind it")
+                    logging.warning(f"debugger port {self.port} still open after kill")
                     break
                 sleep(0.1)
         try:
@@ -183,8 +174,7 @@ class Browser:
                 f.write(f"{name}:{port}\tOID.2.16.840.1.101.3.4.2.1\t{fingerprint}\t{db_key}\n")
 
     def _list_addons(self, timeout=15):
-        # geckordp returns None when an RDP request times out; that happens
-        # transiently on a loaded machine, so retry instead of crashing.
+        # geckordp returns None on transient RDP timeouts; retry
         deadline = monotonic() + timeout
         while True:
             addons = self.root.list_addons()
@@ -260,12 +250,8 @@ class Browser:
         return list(getattr(self, "_ext_logs", []))
 
     def find_tab(self, needle, timeout=5):
-        """Return the first tab whose URL contains `needle`, or None.
-
-        Which tab ends up selected after window.open/error redirects differs
-        between Firefox and Tor Browser and shifts with timing, so tests that
-        expect an error page in *some* tab should use this instead of reading
-        the currently selected tab."""
+        """Return the first tab whose URL contains `needle`, or None. Use for
+        assertions that must not depend on which tab is currently selected."""
         deadline = monotonic() + timeout
         while True:
             for tab in self.root.list_tabs() or []:
@@ -667,24 +653,17 @@ class UpdateServer:
         us._reschedule_in = time_in_seconds
         us._reschedule_once = once
 
-    def wait_for_update(us, count=1, timeout=60, settle=1.0):
-        """Block until list.json has been served at least `count` times in
-        total. Returns immediately if that already happened, so a fetch
-        completing before this call cannot cause a missed wakeup.
-
-        `settle` then leaves the extension time to finish the rest of the
-        update (verify, store, re-register listeners, clear caches): a page
-        load overlapping that tail can wedge response filtering entirely and
-        freeze the page mid-load, which manifests as wait_for() timeouts on
-        the later subresources. Remove once the extension serializes updates
-        against in-flight requests."""
+    def wait_for_update(us, timeout=60, settle=1.0):
+        """Block until list.json has been served at least once; returns
+        immediately if it already was, so an early fetch cannot cause a
+        missed wakeup. `settle` then gives the extension time to finish
+        applying the update: a page load overlapping that tail can wedge
+        response filtering and freeze the page mid-load."""
         deadline = monotonic() + timeout
         with us._update_served:
-            while us._update_count < count:
+            while us._update_count < 1:
                 remaining = deadline - monotonic()
                 if remaining <= 0:
-                    raise RuntimeError(
-                        f"timeout waiting for update fetch "
-                        f"({us._update_count}/{count} after {timeout}s)")
+                    raise RuntimeError(f"no update fetch within {timeout}s")
                 us._update_served.wait(remaining)
         sleep(settle)
