@@ -25,7 +25,7 @@ js_code = """
 @pytest.mark.parametrize("root", [("cases/testapp")], indirect=True)
 @pytest.mark.parametrize("warm", [(False), (True)], ids=["cold", "warm"])
 @pytest.mark.parametrize("addon_installed, enrolled", [(True, True), (True, False), (False, True)], ids=["enrolled", "not_enrolled", "no_extension"])
-def test_benchmark(root, warm, addon_installed, enrolled, addon_path, request, benchmark):
+def test_benchmark(root, update_server, warm, addon_installed, enrolled, addon_path, request, benchmark):
     def setup():
         server = Server(root=root, headers=EXPECTED_CSP)
         server.start()

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
+import atexit
 import json
 import uuid
 import queue
 import logging
 import subprocess
 import os
+import socket
 import ssl
 import sys
 import threading
@@ -15,7 +17,7 @@ import datetime
 import ipaddress
 from base64 import b64decode, b64encode
 from pathlib import Path
-from time import sleep
+from time import sleep, monotonic
 
 from cryptography import x509
 from cryptography.x509.oid import NameOID
@@ -44,12 +46,24 @@ from geckordp.profile import ProfileManager
 from geckordp.rdp_client import RDPClient
 
 class Browser:
+    # Profile initialization through geckordp launches Firefox twice and waits
+    # for the profile directory to settle (~15s). Do that once per (binary,
+    # profiles path) pair and clone the result for each Browser (~1s).
+    _template_profiles: dict = {}
+
     def __init__(self, override_firefox_path="", override_profiles_path="", additional_configs={}):
         self.host = "127.0.0.1"
         self.profile_name = f"geckordp-{uuid.uuid4()}"
         self.override_firefox_path = override_firefox_path
         self.pm = ProfileManager(override_firefox_path, override_profiles_path)
-        self.pm.create(self.profile_name)
+        template_key = (str(override_firefox_path), str(override_profiles_path))
+        template = Browser._template_profiles.get(template_key)
+        if template is None:
+            template = f"geckordp-template-{uuid.uuid4()}"
+            self.pm.create(template)
+            Browser._template_profiles[template_key] = template
+            atexit.register(self.pm.remove, template)
+        self.pm.clone(template, self.profile_name, ignore_invalid_files=True)
         profile = self.pm.get_profile_by_name(self.profile_name)
         self.profile_path = profile.path
         profile.set_required_configs()
@@ -62,16 +76,55 @@ class Browser:
         logging.info(f"Profile {self.profile_name} created.")
         subprocess.Popen(["pkill", "-f", f'\\-P {self.profile_name}']) # TBB hack
 
-    def start(self, headless=False, start="about:blank", flags=[], port=6000):
+    def start(self, headless=False, start="about:blank", flags=None, port=6000):
         self.port = port
+        flags = list(flags or [])
         if headless:
             flags.append("-headless")
-        Firefox.start(start, self.port, self.profile_name, flags, self.override_firefox_path, False)
+        # wait=False skips geckordp's CPU-settle heuristic (up to 15s on a
+        # loaded machine); the debugger port only opens once the RDP server
+        # is ready, so poll that instead.
+        self.proc = Firefox.start(start, self.port, self.profile_name, flags, self.override_firefox_path, False, False)
         logging.info("Firefox started.")
-        self.client = RDPClient()
-        self.client.connect(self.host, self.port)
-        logging.info("RDP connection established.")
-        self.root = RootActor(self.client)
+        try:
+            deadline = monotonic() + 30
+            while True:
+                if self.proc.poll() is not None:
+                    raise RuntimeError(
+                        f"firefox exited during startup (code {self.proc.returncode})")
+                try:
+                    socket.create_connection((self.host, self.port), timeout=1).close()
+                    break
+                except OSError:
+                    if monotonic() > deadline:
+                        raise RuntimeError(f"debugger port {self.port} did not open within 30s")
+                    sleep(0.1)
+            self.client = RDPClient()
+            self.client.connect(self.host, self.port)
+            logging.info("RDP connection established.")
+            self.root = RootActor(self.client)
+            # The RDP port accepts connections slightly before the browser can
+            # service actor requests; a navigate() sent too early is silently
+            # dropped. A full console-evaluation round trip exercises the same
+            # tab-target path a navigation uses, so only return once that works.
+            while True:
+                try:
+                    if self.execute("true") is True:
+                        break
+                except Exception:
+                    pass
+                if monotonic() > deadline:
+                    raise RuntimeError("browser tab not responsive within 30s")
+                sleep(0.1)
+        except Exception:
+            # A failed start never reaches the fixture teardown; kill the
+            # half-started browser here or it poisons every following test.
+            try:
+                self.proc.kill()
+                self.proc.wait(5)
+            except Exception:
+                pass
+            raise
     
     def destroy(self):
         self.client.disconnect()
@@ -82,6 +135,33 @@ class Browser:
             logging.info("Firefox process killed.")
         except:
             pass
+        # Wait for the browser to actually exit and release the debugger
+        # port: otherwise the next test can connect to this dying instance
+        # (and e.g. get responses from its cache instead of the server).
+        proc = getattr(self, "proc", None)
+        if proc is not None:
+            try:
+                proc.terminate()
+                proc.wait(10)
+            except Exception:
+                try:
+                    proc.kill()
+                    proc.wait(5)
+                except Exception:
+                    pass
+        if hasattr(self, "port"):
+            deadline = monotonic() + 10
+            while True:
+                try:
+                    socket.create_connection((self.host, self.port), timeout=0.2).close()
+                except OSError:
+                    break
+                if monotonic() > deadline:
+                    logging.warning(
+                        f"debugger port {self.port} still open 10s after killing "
+                        f"firefox; next browser start may fail to bind it")
+                    break
+                sleep(0.1)
         try:
             self.pm.remove(self.profile_name)
             logging.info(f"Profile {self.profile_name} removed.")
@@ -102,9 +182,22 @@ class Browser:
             for name in dnsnames:
                 f.write(f"{name}:{port}\tOID.2.16.840.1.101.3.4.2.1\t{fingerprint}\t{db_key}\n")
 
+    def _list_addons(self, timeout=15):
+        # geckordp returns None when an RDP request times out; that happens
+        # transiently on a loaded machine, so retry instead of crashing.
+        deadline = monotonic() + timeout
+        while True:
+            addons = self.root.list_addons()
+            if addons is not None:
+                return addons
+            if monotonic() > deadline:
+                raise RuntimeError(f"list_addons unresponsive for {timeout}s")
+            logging.warning("list_addons returned None, retrying")
+            sleep(0.5)
+
     def install_extension(self, path):
         root_actor_ids = self.root.get_root()
-        addons = [addon for addon in self.root.list_addons() if path in addon.get("url", "")]
+        addons = [addon for addon in self._list_addons() if path in addon.get("url", "")]
         if not addons:
             logging.info(f"Installing temporary addon from {path}")
             response = AddonsActor(self.client, root_actor_ids["addonsActor"]).install_temporary_addon(path)
@@ -120,7 +213,7 @@ class Browser:
 
     def attach_extension_console(self, addon_match="webcat"):
         # Subscribe to console-message resources from the extension's targets
-        addons = self.root.list_addons()
+        addons = self._list_addons()
         addon = next(
             (a for a in addons
              if addon_match in (a.get("id") or "")
@@ -453,10 +546,11 @@ class UpdateServer:
         parts.reverse()
         return f"canonical/.{".".join(parts)}"
     
-    def __init__(us): 
+    def __init__(us):
         us._reschedule_in = None
         us._reschedule_once = False
         us._update_served = threading.Condition()
+        us._update_count = 0
         us._hosts = {}
 
     def start(us):
@@ -478,6 +572,7 @@ class UpdateServer:
                     }
                     self.wfile.write(json.dumps(list).encode())
                     with us._update_served:
+                        us._update_count += 1
                         us._update_served.notify_all()
                 elif self.path == "/block.json":
                     self.send_response(200)
@@ -556,6 +651,16 @@ class UpdateServer:
         us._reschedule_in = time_in_seconds
         us._reschedule_once = once
 
-    def wait_for_update(us):
+    def wait_for_update(us, count=1, timeout=60):
+        """Block until list.json has been served at least `count` times in
+        total. Returns immediately if that already happened, so a fetch
+        completing before this call cannot cause a missed wakeup."""
+        deadline = monotonic() + timeout
         with us._update_served:
-            us._update_served.wait()
+            while us._update_count < count:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise RuntimeError(
+                        f"timeout waiting for update fetch "
+                        f"({us._update_count}/{count} after {timeout}s)")
+                us._update_served.wait(remaining)
