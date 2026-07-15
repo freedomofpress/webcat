@@ -651,10 +651,17 @@ class UpdateServer:
         us._reschedule_in = time_in_seconds
         us._reschedule_once = once
 
-    def wait_for_update(us, count=1, timeout=60):
+    def wait_for_update(us, count=1, timeout=60, settle=1.0):
         """Block until list.json has been served at least `count` times in
         total. Returns immediately if that already happened, so a fetch
-        completing before this call cannot cause a missed wakeup."""
+        completing before this call cannot cause a missed wakeup.
+
+        `settle` then leaves the extension time to finish the rest of the
+        update (verify, store, re-register listeners, clear caches): a page
+        load overlapping that tail can wedge response filtering entirely and
+        freeze the page mid-load, which manifests as wait_for() timeouts on
+        the later subresources. Remove once the extension serializes updates
+        against in-flight requests."""
         deadline = monotonic() + timeout
         with us._update_served:
             while us._update_count < count:
@@ -664,3 +671,4 @@ class UpdateServer:
                         f"timeout waiting for update fetch "
                         f"({us._update_count}/{count} after {timeout}s)")
                 us._update_served.wait(remaining)
+        sleep(settle)
