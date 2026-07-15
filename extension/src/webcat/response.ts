@@ -218,22 +218,56 @@ export async function validateResponseContent(
   const pathname = new URL(details.url).pathname;
   const fqdn = getFQDN(details.url);
 
+  // An exception escaping a StreamFilter callback leaves the filter open and
+  // the request hung forever, with nothing logged: the page just freezes.
+  // Fail closed and loud instead.
+  function abort(filter: browser.webRequest.StreamFilter, error: unknown) {
+    logger.addLog(
+      "error",
+      `Response validation failed for ${pathname}: ${error}`,
+      details.tabId,
+      fqdn,
+    );
+    try {
+      deny(filter);
+    } catch {
+      // filter may not be writable anymore
+    }
+    try {
+      filter.close();
+    } catch {
+      // filter may already be closed
+    }
+    errorpage(
+      details.tabId,
+      fqdn,
+      new WebcatError(WebcatErrorCode.File.VALIDATION_FAILED, [
+        pathname,
+        String(error),
+      ]),
+    );
+  }
+
   let manifest!: Manifest;
   const filter = browser.webRequest.filterResponseData(details.requestId);
   filter.onstart = () => {
-    assertVerifiedManifest(originStateHolder);
-    manifest = originStateHolder.current.manifest;
-    // If a pass-through media type isn't in the manifest, bail before receiving
-    // any data so large files don't get buffered into the extension for nothing.
-    if (
-      !manifest.files[pathname] &&
-      !(
-        pathname.endsWith("/") &&
-        manifest.files[pathname + manifest.default_index]
-      ) &&
-      PASS_THROUGH_TYPES.has(details.type)
-    ) {
-      filter.disconnect();
+    try {
+      assertVerifiedManifest(originStateHolder);
+      manifest = originStateHolder.current.manifest;
+      // If a pass-through media type isn't in the manifest, bail before receiving
+      // any data so large files don't get buffered into the extension for nothing.
+      if (
+        !manifest.files[pathname] &&
+        !(
+          pathname.endsWith("/") &&
+          manifest.files[pathname + manifest.default_index]
+        ) &&
+        PASS_THROUGH_TYPES.has(details.type)
+      ) {
+        filter.disconnect();
+      }
+    } catch (error) {
+      abort(filter, error);
     }
   };
 
@@ -267,6 +301,16 @@ export async function validateResponseContent(
   };
 
   filter.onstop = async () => {
+    try {
+      await onstop();
+    } catch (error) {
+      // A rejected hook generation (in `source` or `writeQueue`) or an
+      // unexpected state would otherwise hang this request forever.
+      abort(filter, error);
+    }
+  };
+
+  async function onstop() {
     const blob = await new Blob(await Promise.all(source)).arrayBuffer();
 
     // Following order of priority:
@@ -329,7 +373,7 @@ export async function validateResponseContent(
       setOKIcon(details.tabId, originStateHolder.current.delegation);
     }
     // Redirect the main frame to an error page
-  };
+  }
 }
 
 export function hookResponseContent(

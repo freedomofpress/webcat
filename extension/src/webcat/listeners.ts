@@ -137,16 +137,28 @@ export async function headersListener(
 
       browser.webNavigation.onDOMContentLoaded.removeListener(listener);
 
-      await browser.tabs.executeScript(details.tabId, {
-        code: await getHooks(
-          hooksType.content_script,
-          wasm,
-          cachePartition.firstParty,
-          cachePartition.firstParty === new URL(details.url).origin,
-        ),
-        runAt: "document_start",
-        frameId: details.frameId,
-      });
+      try {
+        await browser.tabs.executeScript(details.tabId, {
+          code: await getHooks(
+            hooksType.content_script,
+            wasm,
+            cachePartition.firstParty,
+            cachePartition.firstParty === new URL(details.url).origin,
+          ),
+          runAt: "document_start",
+          frameId: details.frameId,
+        });
+      } catch (error) {
+        // If this injection is lost, the page hooks never receive their
+        // data and everything queued on it (e.g. Worker construction)
+        // silently hangs forever. At minimum make the failure visible.
+        logger.addLog(
+          "error",
+          `Content hook injection failed for frame ${details.frameId}: ${error}`,
+          details.tabId,
+          getFQDN(details.url),
+        );
+      }
     };
 
     browser.webNavigation.onDOMContentLoaded.addListener(listener);
