@@ -7,12 +7,6 @@ import {
   WebcatLeavesFile,
 } from "@freedomofpress/ics23/dist/webcat";
 
-import {
-  CHECK_INTERVAL_MS,
-  FETCH_TIMEOUT_MS,
-  UPDATE_INTERVAL_MS,
-} from "../config";
-import validator_set from "../validator_set.json";
 import { WebcatDatabase } from "./db";
 import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { arraysEqual } from "./utils";
@@ -28,22 +22,46 @@ export class UpdateEvent extends Event {
   }
 }
 
+export type EnrollmentUpdaterOptions = {
+  endpoint: string;
+  database: WebcatDatabase;
+  validatorSet: ValidatorJson;
+  checkInterval?: number;
+  updateInterval?: number;
+  fetchTimeout?: number;
+};
+
 /**
  * Handles loading enrollment updates periodically from the endpoint,
  * storing them to the database, and notifying event consumers.
  */
 export class EnrollmentUpdater extends EventTarget {
+  static readonly DefaultCheckInterval = 5 * 60 * 1000; // 5 minutes
+  static readonly DefaultUpdateInterval = 60 * 60 * 1000; // 1 hour
+  static readonly DefaultFetchTimeout = 3000; // 3 seconds
+
   readonly #endpoint: string;
   readonly #db: WebcatDatabase;
+  readonly #validatorSet: ValidatorJson;
+  readonly #checkInterval: number;
+  readonly #updateInterval: number;
+  readonly #fetchTimeout: number;
   readonly #alarm: string;
 
   #lastUpdateFailed = false;
 
-  constructor(endpoint: string, db: WebcatDatabase) {
+  constructor(options: EnrollmentUpdaterOptions) {
     super();
-    this.#endpoint = endpoint;
-    this.#db = db;
-    this.#alarm = `webcat-scheduled-update:${endpoint}`;
+    this.#endpoint = options.endpoint;
+    this.#db = options.database;
+    this.#validatorSet = options.validatorSet;
+    this.#checkInterval =
+      options.checkInterval || EnrollmentUpdater.DefaultCheckInterval;
+    this.#updateInterval =
+      options.updateInterval || EnrollmentUpdater.DefaultUpdateInterval;
+    this.#fetchTimeout =
+      options.fetchTimeout || EnrollmentUpdater.DefaultFetchTimeout;
+    this.#alarm = `webcat-scheduled-update:${options.endpoint}`;
   }
 
   /**
@@ -54,7 +72,7 @@ export class EnrollmentUpdater extends EventTarget {
     browser.alarms.get(this.#alarm).then((alarm) => {
       if (!alarm) {
         browser.alarms.create(this.#alarm, {
-          periodInMinutes: CHECK_INTERVAL_MS / 60000,
+          periodInMinutes: this.#checkInterval / 60000,
         });
       }
       this.dispatchEvent(new Event("scheduled"));
@@ -121,7 +139,7 @@ export class EnrollmentUpdater extends EventTarget {
 
       // 3 Verify block against validatorSet
       const { proto: vset, cryptoIndex } = await importValidators(
-        validator_set as ValidatorJson,
+        this.#validatorSet,
       );
       const sh = importCommit(block as CommitJson);
       const out = await verifyCommit(sh, vset, cryptoIndex);
@@ -214,7 +232,7 @@ export class EnrollmentUpdater extends EventTarget {
   async isDue(): Promise<boolean> {
     const lastUpdated = await this.#db.getLastUpdated();
     return (
-      lastUpdated === null || Date.now() - lastUpdated >= UPDATE_INTERVAL_MS
+      lastUpdated === null || Date.now() - lastUpdated >= this.#updateInterval
     );
   }
 
@@ -226,7 +244,7 @@ export class EnrollmentUpdater extends EventTarget {
       const lastUpdated = await this.#db.getLastUpdated();
       if (
         lastUpdated === null ||
-        Date.now() - lastUpdated >= UPDATE_INTERVAL_MS ||
+        Date.now() - lastUpdated >= this.#updateInterval ||
         __IS_TESTING__
       ) {
         console.log("[webcat] Running scheduled update (alarm check)");
@@ -243,7 +261,7 @@ export class EnrollmentUpdater extends EventTarget {
 
   async #fetchWithTimeout(
     url: string,
-    timeoutMs: number = FETCH_TIMEOUT_MS,
+    timeoutMs: number = this.#fetchTimeout,
   ): Promise<Response> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
