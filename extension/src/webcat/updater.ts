@@ -15,9 +15,11 @@ declare const __IS_TESTING__: boolean;
 
 export class UpdateEvent extends Event {
   readonly local: boolean;
+  readonly success: boolean;
 
-  constructor(local = false) {
+  constructor(success: boolean, local = false) {
     super("updated");
+    this.success = success;
     this.local = local;
   }
 }
@@ -163,6 +165,7 @@ export class EnrollmentUpdater extends EventTarget {
       if (meta !== null && out.headerTime.seconds <= meta.blockTime) {
         console.log("[webcat] Block already applied, skipping");
         this.#lastUpdateFailed = false;
+        this.dispatchEvent(new UpdateEvent(false, local));
         return;
       }
 
@@ -188,13 +191,14 @@ export class EnrollmentUpdater extends EventTarget {
         await this.#db.setLastUpdated();
       }
       console.log(`[webcat] List updated successfully`);
-      this.dispatchEvent(new UpdateEvent(local));
+      this.dispatchEvent(new UpdateEvent(true, local));
 
       // Success - clear failure flag
       this.#lastUpdateFailed = false;
     } catch (error) {
       console.error("[webcat] Update failed:", error);
       this.#lastUpdateFailed = true;
+      this.dispatchEvent(new UpdateEvent(false, local));
       throw error;
     }
   }
