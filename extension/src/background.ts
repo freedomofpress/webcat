@@ -7,38 +7,9 @@ import {
   startupListener,
 } from "./webcat/listeners";
 import { setErrorIcon } from "./webcat/ui";
-import {
-  handleUpdateAlarm,
-  initializeScheduledUpdates,
-  update,
-} from "./webcat/update";
+import { EnrollmentUpdater } from "./webcat/updater";
 
 console.log("[webcat] Starting up background");
-
-(async () => {
-  try {
-    console.log("[webcat] Importing bundled list");
-    await update(db, endpoint, true);
-  } catch (error) {
-    console.error("[webcat] Bundled list import failed:", error);
-  }
-
-  try {
-    await installEnrolledListeners(db);
-  } catch (error) {
-    console.error("[webcat] Initial listener install failed:", error);
-  }
-
-  console.log("[webcat] Attempting network update");
-  await initializeScheduledUpdates(db, endpoint);
-})();
-
-// Listen for the update alarm
-browser.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "webcat-scheduled-update") {
-    handleUpdateAlarm(db, endpoint);
-  }
-});
 
 // Edit: moved the update logic directly in this file to ensure
 // it always runs
@@ -79,3 +50,13 @@ browser.windows.onRemoved.addListener(async () => {
     }
   }
 });
+
+export const updater = new EnrollmentUpdater(endpoint, db);
+updater.addEventListener("updated", function () {
+  try {
+    installEnrolledListeners(db);
+  } catch (error) {
+    console.error("[webcat] Bundled list import failed:", error);
+  }
+});
+updater.start();

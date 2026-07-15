@@ -1,13 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CHECK_INTERVAL_MS, UPDATE_INTERVAL_MS } from "../../src/config";
-import {
-  handleUpdateAlarm,
-  initializeScheduledUpdates,
-  retryUpdateIfFailed,
-  shouldDoScheduledUpdate,
-  update,
-} from "../../src/webcat/update";
+import { EnrollmentUpdater } from "../../src/webcat/updater";
 
 // Mock the heavy crypto dependencies
 vi.mock("@freedomofpress/cometbft/dist/commit", () => ({
@@ -53,6 +47,9 @@ vi.mock("../../src/validator_set.json", () => ({
 const mockAlarms = {
   get: vi.fn(),
   create: vi.fn(),
+  onAlarm: {
+    addListener: vi.fn(),
+  },
 };
 (globalThis as Record<string, unknown>).browser = {
   alarms: mockAlarms,
@@ -95,8 +92,13 @@ function setupFetchMock() {
   return { blockJson, leavesJson };
 }
 
-describe("shouldDoScheduledUpdate", () => {
+describe("isDue", () => {
+  let db: ReturnType<typeof createMockDb>;
+  let updater: EnrollmentUpdater;
+
   beforeEach(() => {
+    db = createMockDb();
+    updater = new EnrollmentUpdater("https://example.com/", db as never);
     vi.useFakeTimers();
   });
 
@@ -105,56 +107,60 @@ describe("shouldDoScheduledUpdate", () => {
   });
 
   it("returns true when lastUpdated is null (never updated)", () => {
-    expect(shouldDoScheduledUpdate(null)).toBe(true);
+    db.getLastUpdated.mockResolvedValue(null);
+    expect(updater.isDue()).resolves.toBe(true);
   });
 
   it("returns true when lastUpdated is exactly UPDATE_INTERVAL_MS ago", () => {
-    const now = Date.now();
-    expect(shouldDoScheduledUpdate(now - UPDATE_INTERVAL_MS)).toBe(true);
+    db.getLastUpdated.mockResolvedValue(Date.now() - UPDATE_INTERVAL_MS);
+    expect(updater.isDue()).resolves.toBe(true);
   });
 
   it("returns true when lastUpdated is older than UPDATE_INTERVAL_MS", () => {
-    const now = Date.now();
-    expect(shouldDoScheduledUpdate(now - UPDATE_INTERVAL_MS - 1)).toBe(true);
+    db.getLastUpdated.mockResolvedValue(Date.now() - UPDATE_INTERVAL_MS - 1);
+    expect(updater.isDue()).resolves.toBe(true);
   });
 
   it("returns false when lastUpdated is less than UPDATE_INTERVAL_MS ago", () => {
-    const now = Date.now();
-    expect(shouldDoScheduledUpdate(now - UPDATE_INTERVAL_MS + 1)).toBe(false);
+    db.getLastUpdated.mockResolvedValue(Date.now() - UPDATE_INTERVAL_MS + 1);
+    expect(updater.isDue()).resolves.toBe(false);
   });
 
   it("returns false when lastUpdated is very recent", () => {
-    const now = Date.now();
-    expect(shouldDoScheduledUpdate(now - 1000)).toBe(false);
+    db.getLastUpdated.mockResolvedValue(Date.now() - 1000);
+    expect(updater.isDue()).resolves.toBe(false);
   });
 
   it("returns false when lastUpdated is now", () => {
-    const now = Date.now();
-    expect(shouldDoScheduledUpdate(now)).toBe(false);
+    db.getLastUpdated.mockResolvedValue(Date.now());
+    expect(updater.isDue()).resolves.toBe(false);
   });
 
-  it("returns true after time advances past the interval", () => {
+  it("returns true after time advances past the interval", async () => {
     const baseTime = Date.now();
     const lastUpdated = baseTime;
 
     // Just updated, should not need update
-    expect(shouldDoScheduledUpdate(lastUpdated)).toBe(false);
+    db.getLastUpdated.mockResolvedValue(lastUpdated);
+    expect(await updater.isDue()).toBe(false);
 
     // Advance time by 59 minutes, still should not need update
     vi.advanceTimersByTime(59 * 60 * 1000);
-    expect(shouldDoScheduledUpdate(lastUpdated)).toBe(false);
+    expect(await updater.isDue()).toBe(false);
 
     // Advance time by 1 more minute (total 60 min), now should need update
     vi.advanceTimersByTime(1 * 60 * 1000);
-    expect(shouldDoScheduledUpdate(lastUpdated)).toBe(true);
+    expect(await updater.isDue()).toBe(true);
   });
 });
 
 describe("update", () => {
   let db: ReturnType<typeof createMockDb>;
+  let updater: EnrollmentUpdater;
 
   beforeEach(() => {
     db = createMockDb();
+    updater = new EnrollmentUpdater("https://example.com/", db as never);
     db.getBlockMeta.mockResolvedValue(null);
     setupFetchMock();
   });
@@ -164,7 +170,7 @@ describe("update", () => {
   });
 
   it("fetches from the network endpoint when bundled is false", async () => {
-    await update(db as never, "https://example.com/");
+    await updater.update();
 
     expect(fetch).toHaveBeenCalledWith(
       "https://example.com/list.json",
@@ -177,7 +183,7 @@ describe("update", () => {
   });
 
   it("fetches from bundled URLs when bundled is true", async () => {
-    await update(db as never, "https://example.com/", true);
+    await updater.update(true);
 
     expect(fetch).toHaveBeenCalledWith(
       "moz-extension://test-id/data/list.json",
@@ -190,25 +196,25 @@ describe("update", () => {
   });
 
   it("calls setLastUpdated only for non-bundled updates", async () => {
-    await update(db as never, "https://example.com/", false);
+    await updater.update(false);
     expect(db.setLastUpdated).toHaveBeenCalled();
 
     db.setLastUpdated.mockClear();
-    await update(db as never, "https://example.com/", true);
+    await updater.update(true);
     expect(db.setLastUpdated).not.toHaveBeenCalled();
   });
 
   it("always calls setLastChecked", async () => {
-    await update(db as never, "https://example.com/", true);
+    await updater.update(true);
     expect(db.setLastChecked).toHaveBeenCalled();
 
     db.setLastChecked.mockClear();
-    await update(db as never, "https://example.com/", false);
+    await updater.update(false);
     expect(db.setLastChecked).toHaveBeenCalled();
   });
 
   it("updates the list and block time on success", async () => {
-    await update(db as never, "https://example.com/");
+    await updater.update();
 
     expect(db.updateList).toHaveBeenCalledWith([["example.com", "abc123"]], {
       blockTime: 1000,
@@ -220,7 +226,7 @@ describe("update", () => {
     // Block time from verifyCommit mock returns 1000n
     db.getBlockMeta.mockResolvedValue({ blockTime: 1000 });
 
-    await update(db as never, "https://example.com/");
+    await updater.update();
 
     expect(db.updateList).not.toHaveBeenCalled();
   });
@@ -232,18 +238,14 @@ describe("update", () => {
       ok: false,
     });
 
-    await expect(update(db as never, "https://example.com/")).rejects.toThrow(
-      "Block verification failed",
-    );
+    await expect(updater.update()).rejects.toThrow("Block verification failed");
   });
 
   it("throws when app_hash mismatches", async () => {
     const { arraysEqual } = await import("../../src/webcat/utils");
     (arraysEqual as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
 
-    await expect(update(db as never, "https://example.com/")).rejects.toThrow(
-      "app hash mismatch",
-    );
+    await expect(updater.update()).rejects.toThrow("app hash mismatch");
   });
 
   it("throws when proof verification fails", async () => {
@@ -253,19 +255,32 @@ describe("update", () => {
       false,
     );
 
-    await expect(update(db as never, "https://example.com/")).rejects.toThrow(
-      "proof did not verify",
-    );
+    await expect(updater.update()).rejects.toThrow("proof did not verify");
   });
 });
 
 describe("handleUpdateAlarm", () => {
   let db: ReturnType<typeof createMockDb>;
+  let updater: EnrollmentUpdater;
+  let updated: Promise<void>;
+  let handle: (alarm: { name: string }) => Promise<void>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     db = createMockDb();
+    updater = new EnrollmentUpdater("https://example.com/", db as never);
+    let resolveUpdated: () => void;
+    updated = new Promise<void>((r) => (resolveUpdated = r));
+    updater.addEventListener("updated", resolveUpdated!);
     setupFetchMock();
     db.getBlockMeta.mockResolvedValue(null);
+    mockAlarms.onAlarm.addListener.mockImplementation(function (callback) {
+      handle = callback;
+    });
+    mockAlarms.get.mockResolvedValue(undefined);
+    db.getLastUpdated.mockResolvedValue(null);
+    updater.start();
+    await updated;
+    db.updateList.mockClear();
   });
 
   afterEach(() => {
@@ -275,7 +290,7 @@ describe("handleUpdateAlarm", () => {
   it("runs update when lastUpdated is null", async () => {
     db.getLastUpdated.mockResolvedValue(null);
 
-    await handleUpdateAlarm(db as never, "https://example.com/");
+    await handle({ name: "webcat-scheduled-update:https://example.com/" });
 
     expect(db.updateList).toHaveBeenCalled();
   });
@@ -283,7 +298,7 @@ describe("handleUpdateAlarm", () => {
   it("runs update when update interval has elapsed", async () => {
     db.getLastUpdated.mockResolvedValue(Date.now() - UPDATE_INTERVAL_MS - 1000);
 
-    await handleUpdateAlarm(db as never, "https://example.com/");
+    await handle({ name: "webcat-scheduled-update:https://example.com/" });
 
     expect(db.updateList).toHaveBeenCalled();
   });
@@ -291,7 +306,7 @@ describe("handleUpdateAlarm", () => {
   it("skips update when interval has not elapsed", async () => {
     db.getLastUpdated.mockResolvedValue(Date.now() - 1000);
 
-    await handleUpdateAlarm(db as never, "https://example.com/");
+    await handle({ name: "webcat-scheduled-update:https://example.com/" });
 
     expect(db.updateList).not.toHaveBeenCalled();
   });
@@ -301,7 +316,7 @@ describe("handleUpdateAlarm", () => {
     globalThis.fetch = vi.fn(() => Promise.reject(new Error("network error")));
 
     await expect(
-      handleUpdateAlarm(db as never, "https://example.com/"),
+      handle({ name: "webcat-scheduled-update:https://example.com/" }),
     ).resolves.toBeUndefined();
   });
 
@@ -309,16 +324,18 @@ describe("handleUpdateAlarm", () => {
     db.getLastUpdated.mockRejectedValue(new Error("db error"));
 
     await expect(
-      handleUpdateAlarm(db as never, "https://example.com/"),
+      handle({ name: "webcat-scheduled-update:https://example.com/" }),
     ).resolves.toBeUndefined();
   });
 });
 
-describe("retryUpdateIfFailed", () => {
+describe("retryIfFailed", () => {
   let db: ReturnType<typeof createMockDb>;
+  let updater: EnrollmentUpdater;
 
   beforeEach(() => {
     db = createMockDb();
+    updater = new EnrollmentUpdater("https://example.com/", db as never);
     setupFetchMock();
     db.getBlockMeta.mockResolvedValue(null);
   });
@@ -330,10 +347,10 @@ describe("retryUpdateIfFailed", () => {
   it("does not run update when no prior failure", async () => {
     // Ensure a successful update first to clear the failure flag
     db.getLastUpdated.mockResolvedValue(null);
-    await handleUpdateAlarm(db as never, "https://example.com/");
+    await updater.update();
 
     db.updateList.mockClear();
-    await retryUpdateIfFailed(db as never, "https://example.com/");
+    await updater.retryIfFailed();
 
     expect(db.updateList).not.toHaveBeenCalled();
   });
@@ -342,12 +359,14 @@ describe("retryUpdateIfFailed", () => {
     // Trigger a failure to set lastUpdateFailed = true
     db.getLastUpdated.mockResolvedValue(null);
     globalThis.fetch = vi.fn(() => Promise.reject(new Error("network error")));
-    await handleUpdateAlarm(db as never, "https://example.com/");
+    try {
+      await updater.update();
+    } catch {}
 
     // Now restore fetch and retry
     setupFetchMock();
     db.updateList.mockClear();
-    await retryUpdateIfFailed(db as never, "https://example.com/");
+    await updater.retryIfFailed();
 
     expect(db.updateList).toHaveBeenCalled();
   });
@@ -356,20 +375,30 @@ describe("retryUpdateIfFailed", () => {
     // Trigger initial failure
     db.getLastUpdated.mockResolvedValue(null);
     globalThis.fetch = vi.fn(() => Promise.reject(new Error("network error")));
-    await handleUpdateAlarm(db as never, "https://example.com/");
+    try {
+      await updater.update();
+    } catch {}
 
     // Retry also fails — should not throw
-    await expect(
-      retryUpdateIfFailed(db as never, "https://example.com/"),
-    ).resolves.toBeUndefined();
+    await expect(updater.retryIfFailed()).resolves.toBeUndefined();
   });
 });
 
-describe("initializeScheduledUpdates", () => {
+describe("start", () => {
   let db: ReturnType<typeof createMockDb>;
+  let updater: EnrollmentUpdater;
+  let scheduled: Promise<void>;
+  let updated: Promise<void>;
 
   beforeEach(() => {
     db = createMockDb();
+    updater = new EnrollmentUpdater("https://example.com/", db as never);
+    let resolveScheduled: () => void;
+    scheduled = new Promise<void>((r) => (resolveScheduled = r));
+    updater.addEventListener("scheduled", resolveScheduled!);
+    let resolveUpdated: () => void;
+    updated = new Promise<void>((r) => (resolveUpdated = r));
+    updater.addEventListener("updated", resolveUpdated!);
     setupFetchMock();
     db.getBlockMeta.mockResolvedValue(null);
     mockAlarms.get.mockResolvedValue(undefined);
@@ -383,18 +412,25 @@ describe("initializeScheduledUpdates", () => {
   it("creates the alarm", async () => {
     db.getLastUpdated.mockResolvedValue(Date.now());
 
-    await initializeScheduledUpdates(db as never, "https://example.com/");
+    updater.start();
+    await scheduled;
 
-    expect(mockAlarms.create).toHaveBeenCalledWith("webcat-scheduled-update", {
-      periodInMinutes: CHECK_INTERVAL_MS / 60000,
-    });
+    expect(mockAlarms.create).toHaveBeenCalledWith(
+      "webcat-scheduled-update:https://example.com/",
+      {
+        periodInMinutes: CHECK_INTERVAL_MS / 60000,
+      },
+    );
   });
 
   it("does not create a duplicate alarm", async () => {
     db.getLastUpdated.mockResolvedValue(Date.now());
-    mockAlarms.get.mockResolvedValue({ name: "webcat-scheduled-update" });
+    mockAlarms.get.mockResolvedValue({
+      name: "webcat-scheduled-update:https://example.com/",
+    });
 
-    await initializeScheduledUpdates(db as never, "https://example.com/");
+    updater.start();
+    await scheduled;
 
     expect(mockAlarms.create).not.toHaveBeenCalled();
   });
@@ -402,7 +438,8 @@ describe("initializeScheduledUpdates", () => {
   it("runs an overdue update and creates the alarm", async () => {
     db.getLastUpdated.mockResolvedValue(null);
 
-    await initializeScheduledUpdates(db as never, "https://example.com/");
+    updater.start();
+    await updated;
 
     expect(db.updateList).toHaveBeenCalled();
     expect(mockAlarms.create).toHaveBeenCalled();
@@ -411,7 +448,8 @@ describe("initializeScheduledUpdates", () => {
   it("still creates alarm when checkAndUpdate throws", async () => {
     db.getLastUpdated.mockRejectedValue(new Error("db error"));
 
-    await initializeScheduledUpdates(db as never, "https://example.com/");
+    updater.start();
+    await scheduled;
 
     expect(mockAlarms.create).toHaveBeenCalled();
   });

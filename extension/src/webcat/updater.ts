@@ -1,0 +1,266 @@
+import { importCommit } from "@freedomofpress/cometbft/dist/commit";
+import { verifyCommit } from "@freedomofpress/cometbft/dist/lightclient";
+import { CommitJson, ValidatorJson } from "@freedomofpress/cometbft/dist/types";
+import { importValidators } from "@freedomofpress/cometbft/dist/validators";
+import {
+  verifyWebcatProof,
+  WebcatLeavesFile,
+} from "@freedomofpress/ics23/dist/webcat";
+
+import {
+  CHECK_INTERVAL_MS,
+  FETCH_TIMEOUT_MS,
+  UPDATE_INTERVAL_MS,
+} from "../config";
+import validator_set from "../validator_set.json";
+import { WebcatDatabase } from "./db";
+import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
+import { arraysEqual } from "./utils";
+
+declare const __IS_TESTING__: boolean;
+
+export class UpdateEvent extends Event {
+  readonly local: boolean;
+
+  constructor(local = false) {
+    super("updated");
+    this.local = local;
+  }
+}
+
+/**
+ * Handles loading enrollment updates periodically from the endpoint,
+ * storing them to the database, and notifying event consumers.
+ */
+export class EnrollmentUpdater extends EventTarget {
+  readonly #endpoint: string;
+  readonly #db: WebcatDatabase;
+  readonly #alarm: string;
+
+  #lastUpdateFailed = false;
+
+  constructor(endpoint: string, db: WebcatDatabase) {
+    super();
+    this.#endpoint = endpoint;
+    this.#db = db;
+    this.#alarm = `webcat-scheduled-update:${endpoint}`;
+  }
+
+  /**
+   * Loads bundled enrollments and initiates periodic updates.
+   */
+  start() {
+    browser.alarms.onAlarm.addListener(this.#handleUpdateAlarm.bind(this));
+    browser.alarms.get(this.#alarm).then((alarm) => {
+      if (!alarm) {
+        browser.alarms.create(this.#alarm, {
+          periodInMinutes: CHECK_INTERVAL_MS / 60000,
+        });
+      }
+      this.dispatchEvent(new Event("scheduled"));
+    });
+
+    console.log("[webcat] Importing bundled list");
+    this.update(true)
+      .then(async () => {
+        console.log("[webcat] Attempting network update");
+        await this.#checkAndUpdate();
+      })
+      .catch((error) => {
+        console.error("[webcat] Bundled list import failed:", error);
+      });
+  }
+
+  /**
+   * Immediately does a single update. If local is true, only the enrollment
+   * files bundled with the extension are consulted without accessing the network.
+   */
+  async update(local = false) {
+    try {
+      console.log("[webcat] Running production list updater");
+      await this.#db.setLastChecked();
+
+      let leavesUrl: string;
+      let blocksUrl: string;
+
+      if (local) {
+        // Use bundled files at install or update time
+        console.log("[webcat] Loading bundled update files");
+        leavesUrl = browser.runtime.getURL("data/list.json");
+        blocksUrl = browser.runtime.getURL("data/block.json");
+      } else {
+        // Use network endpoints for production
+        console.log("[webcat] Fetching update files");
+        leavesUrl = `${this.#endpoint}list.json`;
+        blocksUrl = `${this.#endpoint}block.json`;
+      }
+
+      const leavesResponse = this.#fetchWithTimeout(leavesUrl);
+      const blockResponse = this.#fetchWithTimeout(blocksUrl);
+
+      // Prevent unhandled rejection if block fetch fails before leaves is awaited
+      leavesResponse.catch(() => {});
+
+      // 2 Await latest block
+      const block = await (await blockResponse).json();
+      console.log("[webcat] Update block fetched");
+
+      if (__IS_TESTING__) {
+        const reschedule = block.__WEBCAT_TEST_SCHEDULE_UPDATE__;
+        if (reschedule) {
+          console.log(
+            "[webcat] Rescheduling update for test in",
+            reschedule,
+            "second(s)",
+          );
+          browser.alarms.create(this.#alarm, {
+            when: Date.now() + reschedule * 1000,
+          });
+        }
+      }
+
+      // 3 Verify block against validatorSet
+      const { proto: vset, cryptoIndex } = await importValidators(
+        validator_set as ValidatorJson,
+      );
+      const sh = importCommit(block as CommitJson);
+      const out = await verifyCommit(sh, vset, cryptoIndex);
+
+      if (out.ok) {
+        console.log(
+          "[webcat] Block verified, app_hash: ",
+          Uint8ArrayToBase64(out.appHash),
+          "time: ",
+          out.headerTime,
+        );
+      } else {
+        throw new Error(`Block verification failed: ${out}`);
+      }
+
+      if (!out.headerTime) {
+        throw new Error("Block verification did not return a time");
+      }
+
+      const meta = await this.#db.getBlockMeta();
+      if (meta !== null && out.headerTime.seconds <= meta.blockTime) {
+        console.log("[webcat] Block already applied, skipping");
+        this.#lastUpdateFailed = false;
+        return;
+      }
+
+      // 5 Fetch leaves file (with timeout)
+      const leaves = (await (await leavesResponse).json()) as WebcatLeavesFile;
+
+      // 6 Verify leaves file app_hash matches the block one
+      if (!arraysEqual(hexToUint8Array(leaves.proof.app_hash), out.appHash)) {
+        throw new Error("app hash mismatch");
+      }
+
+      // 7 Verify leaves against the canonical_root_hash and app_hash
+      const verifiedLeaves = await verifyWebcatProof(leaves);
+      if (verifiedLeaves === false) {
+        throw new Error("proof did not verify against app hash");
+      }
+
+      await this.#db.updateList(verifiedLeaves, {
+        blockTime: Number(out.headerTime.seconds),
+        rootHash: leaves.proof.canonical_root_hash,
+      });
+      if (!local) {
+        await this.#db.setLastUpdated();
+      }
+      console.log(`[webcat] List updated successfully`);
+      this.dispatchEvent(new UpdateEvent(local));
+
+      // Success - clear failure flag
+      this.#lastUpdateFailed = false;
+    } catch (error) {
+      console.error("[webcat] Update failed:", error);
+      this.#lastUpdateFailed = true;
+      throw error;
+    }
+  }
+
+  /**
+   * Retries an update if the previous attempt failed.
+   * Unlike update, retryIfFailed never throws.
+   */
+  async retryIfFailed(): Promise<void> {
+    if (this.#lastUpdateFailed) {
+      console.log("[webcat] Retrying failed update on main_frame navigation");
+      try {
+        await this.update();
+      } catch (error) {
+        console.error("[webcat] Retry update failed:", error);
+        // Don't re-throw, don't block navigation
+      }
+    }
+  }
+
+  async #checkAndUpdate(): Promise<void> {
+    if (await this.isDue()) {
+      console.log("[webcat] Running overdue scheduled update");
+      try {
+        await this.update();
+      } catch (error) {
+        console.error("[webcat] Scheduled update failed:", error);
+      }
+    }
+  }
+
+  /**
+   * Returns a Promise that resolves to true if an update is overdue.
+   */
+  async isDue(): Promise<boolean> {
+    const lastUpdated = await this.#db.getLastUpdated();
+    return (
+      lastUpdated === null || Date.now() - lastUpdated >= UPDATE_INTERVAL_MS
+    );
+  }
+
+  async #handleUpdateAlarm(alarm: browser.alarms.Alarm): Promise<void> {
+    if (alarm.name !== this.#alarm) {
+      return;
+    }
+    try {
+      const lastUpdated = await this.#db.getLastUpdated();
+      if (
+        lastUpdated === null ||
+        Date.now() - lastUpdated >= UPDATE_INTERVAL_MS ||
+        __IS_TESTING__
+      ) {
+        console.log("[webcat] Running scheduled update (alarm check)");
+        try {
+          await this.update();
+        } catch (error) {
+          console.error("[webcat] Scheduled update failed:", error);
+        }
+      }
+    } catch (error) {
+      console.error("[webcat] Error in update alarm handler:", error);
+    }
+  }
+
+  async #fetchWithTimeout(
+    url: string,
+    timeoutMs: number = FETCH_TIMEOUT_MS,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`Fetch timeout after ${timeoutMs}ms: ${url}`);
+      }
+      throw error;
+    }
+  }
+}
