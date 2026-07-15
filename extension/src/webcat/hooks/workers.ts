@@ -146,6 +146,9 @@ export const sharedWorkerHook = updatableHook(
         if (port[internal].closed) {
           port[internal].instance.close();
         }
+        port[internal].messages.forEach((args) => {
+          port[internal].instance?.postMessage(...args);
+        });
       });
       return self;
     }
