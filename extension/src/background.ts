@@ -1,5 +1,11 @@
-import { endpoint } from "./config";
+import {
+  CHECK_INTERVAL_MS,
+  endpoint,
+  FETCH_TIMEOUT_MS,
+  UPDATE_INTERVAL_MS,
+} from "./config";
 import { db, nonOrigins, origins } from "./globals";
+import validator_set from "./validator_set.json";
 import { isInPartition } from "./webcat/cache";
 import {
   installEnrolledListeners,
@@ -51,7 +57,14 @@ browser.windows.onRemoved.addListener(async () => {
   }
 });
 
-export const updater = new EnrollmentUpdater(endpoint, db);
+export const updater = new EnrollmentUpdater({
+  endpoint: endpoint,
+  database: db,
+  validatorSet: validator_set,
+  checkInterval: CHECK_INTERVAL_MS,
+  updateInterval: UPDATE_INTERVAL_MS,
+  fetchTimeout: FETCH_TIMEOUT_MS,
+});
 updater.addEventListener("updated", function () {
   try {
     installEnrolledListeners(db);

@@ -1,6 +1,6 @@
+import { ValidatorJson } from "@freedomofpress/cometbft/dist/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CHECK_INTERVAL_MS, UPDATE_INTERVAL_MS } from "../../src/config";
 import { EnrollmentUpdater } from "../../src/webcat/updater";
 
 // Mock the heavy crypto dependencies
@@ -36,11 +36,6 @@ vi.mock("../../src/webcat/encoding", () => ({
 
 vi.mock("../../src/webcat/utils", () => ({
   arraysEqual: vi.fn(() => true),
-}));
-
-// Mock the validator set import
-vi.mock("../../src/validator_set.json", () => ({
-  default: {},
 }));
 
 // Mock browser.alarms API
@@ -98,7 +93,11 @@ describe("isDue", () => {
 
   beforeEach(() => {
     db = createMockDb();
-    updater = new EnrollmentUpdater("https://example.com/", db as never);
+    updater = new EnrollmentUpdater({
+      endpoint: "https://example.com/",
+      database: db as never,
+      validatorSet: {} as ValidatorJson,
+    });
     vi.useFakeTimers();
   });
 
@@ -112,17 +111,23 @@ describe("isDue", () => {
   });
 
   it("returns true when lastUpdated is exactly UPDATE_INTERVAL_MS ago", () => {
-    db.getLastUpdated.mockResolvedValue(Date.now() - UPDATE_INTERVAL_MS);
+    db.getLastUpdated.mockResolvedValue(
+      Date.now() - EnrollmentUpdater.DefaultUpdateInterval,
+    );
     expect(updater.isDue()).resolves.toBe(true);
   });
 
   it("returns true when lastUpdated is older than UPDATE_INTERVAL_MS", () => {
-    db.getLastUpdated.mockResolvedValue(Date.now() - UPDATE_INTERVAL_MS - 1);
+    db.getLastUpdated.mockResolvedValue(
+      Date.now() - EnrollmentUpdater.DefaultUpdateInterval - 1,
+    );
     expect(updater.isDue()).resolves.toBe(true);
   });
 
   it("returns false when lastUpdated is less than UPDATE_INTERVAL_MS ago", () => {
-    db.getLastUpdated.mockResolvedValue(Date.now() - UPDATE_INTERVAL_MS + 1);
+    db.getLastUpdated.mockResolvedValue(
+      Date.now() - EnrollmentUpdater.DefaultUpdateInterval + 1,
+    );
     expect(updater.isDue()).resolves.toBe(false);
   });
 
@@ -160,7 +165,11 @@ describe("update", () => {
 
   beforeEach(() => {
     db = createMockDb();
-    updater = new EnrollmentUpdater("https://example.com/", db as never);
+    updater = new EnrollmentUpdater({
+      endpoint: "https://example.com/",
+      database: db as never,
+      validatorSet: {} as ValidatorJson,
+    });
     db.getBlockMeta.mockResolvedValue(null);
     setupFetchMock();
   });
@@ -267,10 +276,14 @@ describe("handleUpdateAlarm", () => {
 
   beforeEach(async () => {
     db = createMockDb();
-    updater = new EnrollmentUpdater("https://example.com/", db as never);
-    let resolveUpdated: () => void;
+    updater = new EnrollmentUpdater({
+      endpoint: "https://example.com/",
+      database: db as never,
+      validatorSet: {} as ValidatorJson,
+    });
+    let resolveUpdated: (() => void) | null = null;
     updated = new Promise<void>((r) => (resolveUpdated = r));
-    updater.addEventListener("updated", resolveUpdated!);
+    updater.addEventListener("updated", resolveUpdated);
     setupFetchMock();
     db.getBlockMeta.mockResolvedValue(null);
     mockAlarms.onAlarm.addListener.mockImplementation(function (callback) {
@@ -296,7 +309,9 @@ describe("handleUpdateAlarm", () => {
   });
 
   it("runs update when update interval has elapsed", async () => {
-    db.getLastUpdated.mockResolvedValue(Date.now() - UPDATE_INTERVAL_MS - 1000);
+    db.getLastUpdated.mockResolvedValue(
+      Date.now() - EnrollmentUpdater.DefaultUpdateInterval - 1000,
+    );
 
     await handle({ name: "webcat-scheduled-update:https://example.com/" });
 
@@ -335,7 +350,11 @@ describe("retryIfFailed", () => {
 
   beforeEach(() => {
     db = createMockDb();
-    updater = new EnrollmentUpdater("https://example.com/", db as never);
+    updater = new EnrollmentUpdater({
+      endpoint: "https://example.com/",
+      database: db as never,
+      validatorSet: {} as ValidatorJson,
+    });
     setupFetchMock();
     db.getBlockMeta.mockResolvedValue(null);
   });
@@ -392,13 +411,17 @@ describe("start", () => {
 
   beforeEach(() => {
     db = createMockDb();
-    updater = new EnrollmentUpdater("https://example.com/", db as never);
-    let resolveScheduled: () => void;
+    updater = new EnrollmentUpdater({
+      endpoint: "https://example.com/",
+      database: db as never,
+      validatorSet: {} as ValidatorJson,
+    });
+    let resolveScheduled: (() => void) | null = null;
     scheduled = new Promise<void>((r) => (resolveScheduled = r));
-    updater.addEventListener("scheduled", resolveScheduled!);
-    let resolveUpdated: () => void;
+    updater.addEventListener("scheduled", resolveScheduled);
+    let resolveUpdated: (() => void) | null = null;
     updated = new Promise<void>((r) => (resolveUpdated = r));
-    updater.addEventListener("updated", resolveUpdated!);
+    updater.addEventListener("updated", resolveUpdated);
     setupFetchMock();
     db.getBlockMeta.mockResolvedValue(null);
     mockAlarms.get.mockResolvedValue(undefined);
@@ -418,7 +441,7 @@ describe("start", () => {
     expect(mockAlarms.create).toHaveBeenCalledWith(
       "webcat-scheduled-update:https://example.com/",
       {
-        periodInMinutes: CHECK_INTERVAL_MS / 60000,
+        periodInMinutes: EnrollmentUpdater.DefaultCheckInterval / 60000,
       },
     );
   });
