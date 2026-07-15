@@ -301,8 +301,10 @@ def test_multiple_tabs(browser: Browser, server: Server, update_server: UpdateSe
             f"window.open('{server.url()}');"
             f"setTimeout(() => location.href = '{server.url()}/x', 1000)"
         )
-    res = browser.execute("document.body.textContent")
-    assert expected in res
+    # Which tab ends up selected differs between Firefox and Tor Browser;
+    # the corrupted script must be blocked in whichever tab loaded it.
+    assert browser.find_tab(expected), \
+        f"no tab showing {expected}: {[t.get('url') for t in browser.root.list_tabs()]}"
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
@@ -351,8 +353,10 @@ def test_cache_eviction(browser: Browser, server: Server, update_server: UpdateS
             f"    location.href = '{server.url(dnsnames[1])}/console_log.png';"
             "}, 1000)"
         )
-    res = browser.execute("document.body.textContent")
-    assert expected in res
+    # Which tab ends up selected differs between Firefox and Tor Browser;
+    # the evicted-and-corrupted file must be blocked in whichever tab loaded it.
+    assert browser.find_tab(expected), \
+        f"no tab showing {expected}: {[t.get('url') for t in browser.root.list_tabs()]}"
 
 @pytest.mark.parametrize("browser, paths_to_wait", [
     pytest.param("firefox", NON_FRAME_PATHS, id="firefox"),

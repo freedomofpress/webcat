@@ -259,6 +259,22 @@ class Browser:
     def extension_logs(self):
         return list(getattr(self, "_ext_logs", []))
 
+    def find_tab(self, needle, timeout=5):
+        """Return the first tab whose URL contains `needle`, or None.
+
+        Which tab ends up selected after window.open/error redirects differs
+        between Firefox and Tor Browser and shifts with timing, so tests that
+        expect an error page in *some* tab should use this instead of reading
+        the currently selected tab."""
+        deadline = monotonic() + timeout
+        while True:
+            for tab in self.root.list_tabs() or []:
+                if needle in (tab.get("url") or ""):
+                    return tab
+            if monotonic() > deadline:
+                return None
+            sleep(0.2)
+
     def navigate(self, url):
         current_tab = self.root.current_tab()
         tab = TabActor(self.client, current_tab["actor"])
