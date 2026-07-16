@@ -4,7 +4,7 @@ import { buildUrlPatterns } from "./utils";
  * Represents a single content script in a static file.
  */
 export class ContentScript {
-  readonly #idPrefix = "webcat-script:";
+  readonly #idPrefix;
   readonly #path: string;
 
   /**
@@ -12,6 +12,7 @@ export class ContentScript {
    */
   constructor(path: string) {
     this.#path = path;
+    this.#idPrefix = `webcat-script:${path}:`;
   }
 
   /**
@@ -35,7 +36,7 @@ export class ContentScript {
     await browser.scripting.registerContentScripts(
       newFqdns.map((fqdn) => {
         return {
-          id: fqdn,
+          id: this.#idPrefix + fqdn,
           js: [this.#path],
           matches: buildUrlPatterns([fqdn]),
           matchOriginAsFallback: true,
@@ -46,7 +47,9 @@ export class ContentScript {
     );
     // Remove the content scripts whose fqdn is no longer enrolled
     await browser.scripting.unregisterContentScripts({
-      ids: registeredFqdns.filter((fqdn) => !fqdns.includes(fqdn)),
+      ids: registeredFqdns
+        .filter((fqdn) => !fqdns.includes(fqdn))
+        .map((fqdn) => this.#idPrefix + fqdn),
     });
 
     return newFqdns;
