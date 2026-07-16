@@ -1,4 +1,3 @@
-import { RequestHandler } from "./browser/requests";
 import { ContentScript } from "./browser/scripting";
 import {
   CHECK_INTERVAL_MS,
@@ -9,15 +8,8 @@ import {
 import { db, nonOrigins, origins } from "./globals";
 import validator_set from "./validator_set.json";
 import { isInPartition } from "./webcat/cache";
-import {
-  beforeHeadersListener,
-  completedListener,
-  errorOccurredListener,
-  headersListener,
-  installListener,
-  requestListener,
-  startupListener,
-} from "./webcat/listeners";
+import { WebcatRequestHandler } from "./webcat/handler";
+import { installListener, startupListener } from "./webcat/listeners";
 import { setErrorIcon } from "./webcat/ui";
 import { EnrollmentUpdater } from "./webcat/updater";
 import { clearBrowserCaches } from "./webcat/utils";
@@ -64,13 +56,8 @@ browser.windows.onRemoved.addListener(async () => {
   }
 });
 
-const requestHandler = new RequestHandler();
-requestHandler.addEventListener("beforerequest", requestListener);
-requestHandler.addEventListener("beforeheaders", beforeHeadersListener);
-requestHandler.addEventListener("headersreceived", headersListener);
-requestHandler.addEventListener("erroroccurred", errorOccurredListener);
-requestHandler.addEventListener("completed", completedListener);
-
+const requestHandler = new WebcatRequestHandler();
+const contentScript = new ContentScript("dist/hooks/content.js");
 export const updater = new EnrollmentUpdater({
   endpoint: endpoint,
   database: db,
@@ -79,7 +66,6 @@ export const updater = new EnrollmentUpdater({
   updateInterval: UPDATE_INTERVAL_MS,
   fetchTimeout: FETCH_TIMEOUT_MS,
 });
-const contentScript = new ContentScript("dist/hooks/content.js");
 
 updater.addEventListener("updated", async () => {
   try {
