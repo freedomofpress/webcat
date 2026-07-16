@@ -1,3 +1,4 @@
+import { BeforeRequestDetails, RequestEvent } from "./browser/requests";
 import { ContentScript } from "./browser/scripting";
 import {
   CHECK_INTERVAL_MS,
@@ -49,7 +50,7 @@ browser.windows.onRemoved.addListener(async () => {
 
 const requestHandler = new WebcatRequestHandler();
 const contentScript = new ContentScript("dist/hooks/content.js");
-export const updater = new EnrollmentUpdater({
+const updater = new EnrollmentUpdater({
   endpoint: endpoint,
   database: db,
   validatorSet: validator_set,
@@ -57,6 +58,14 @@ export const updater = new EnrollmentUpdater({
   updateInterval: UPDATE_INTERVAL_MS,
   fetchTimeout: FETCH_TIMEOUT_MS,
 });
+
+requestHandler.addEventListener(
+  "beforeframeload",
+  async (event: RequestEvent<BeforeRequestDetails>) => {
+    using _blockingResponse = event.blockingResponse;
+    await updater.retryIfFailed();
+  },
+);
 
 updater.addEventListener("updated", async () => {
   try {

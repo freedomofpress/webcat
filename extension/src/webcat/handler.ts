@@ -1,4 +1,3 @@
-import { updater } from "../background";
 import {
   BeforeHeadersDetails,
   BeforeRequestDetails,
@@ -35,6 +34,16 @@ import {
   isNewerSemver,
 } from "./utils";
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export interface WebcatRequestHandler extends RequestHandler {
+  addEventListener: RequestHandler["addEventListener"] &
+    ((
+      type: "beforeframeload",
+      callback: (event: RequestEvent<BeforeRequestDetails>) => void,
+    ) => void);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebcatRequestHandler extends RequestHandler {
   constructor() {
     super();
@@ -68,7 +77,13 @@ export class WebcatRequestHandler extends RequestHandler {
         details.tabId,
         fqdn,
       );
-      await updater.retryIfFailed();
+      const beforeframeload = new RequestEvent(
+        "beforeframeload",
+        event.details,
+      );
+      this.dispatchEvent(beforeframeload);
+      await beforeframeload.blockingResponse.ready();
+      blockingResponse.set(beforeframeload.blockingResponse);
     }
 
     let originStateHolder: OriginStateHolder | undefined;
