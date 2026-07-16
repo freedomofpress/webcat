@@ -13,9 +13,6 @@ export const origins = new LRUCache<
 export const nonOrigins = new LRUSet<CacheKey<CachePartition>>(lru_set_size);
 export const tabs: Map<number, CachePartition> = new Map();
 export const db = new WebcatDatabase();
-export const hookMarker = stringToUint8Array(
-  `__WEBCAT_HOOK__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
-);
 export const endMarker = stringToUint8Array(
   `__WEBCAT_END__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
 );
@@ -37,7 +34,6 @@ if (__IS_TESTING__) {
       nonOrigins,
       tabs,
       db,
-      hookMarker,
       endMarker,
     },
   });
