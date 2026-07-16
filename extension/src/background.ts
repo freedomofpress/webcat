@@ -1,3 +1,5 @@
+import { RequestHandler } from "./browser/requests";
+import { ContentScript } from "./browser/scripting";
 import {
   CHECK_INTERVAL_MS,
   endpoint,
@@ -7,7 +9,6 @@ import {
 import { db, nonOrigins, origins } from "./globals";
 import validator_set from "./validator_set.json";
 import { isInPartition } from "./webcat/cache";
-import { RequestHandler } from "./webcat/handler";
 import {
   beforeHeadersListener,
   completedListener,
@@ -17,7 +18,6 @@ import {
   requestListener,
   startupListener,
 } from "./webcat/listeners";
-import { ContentScript } from "./webcat/scripting";
 import { setErrorIcon } from "./webcat/ui";
 import { EnrollmentUpdater } from "./webcat/updater";
 import { clearBrowserCaches } from "./webcat/utils";

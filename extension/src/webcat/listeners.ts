@@ -1,7 +1,4 @@
 import { updater } from "../background";
-import { origins, requestInfo, tabs } from "../globals";
-import { CacheKey } from "./cache";
-import { getHooks } from "./genhooks";
 import {
   BeforeHeadersDetails,
   BeforeRequestDetails,
@@ -10,7 +7,10 @@ import {
   HeadersReceivedDetails,
   RequestDetails,
   RequestEvent,
-} from "./handler";
+} from "../browser/requests";
+import { origins, requestInfo, tabs } from "../globals";
+import { CacheKey } from "./cache";
+import { getHooks } from "./genhooks";
 import { hooksType, metadataRequestSource } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
 import {
