@@ -1,3 +1,5 @@
+import { buildUrlPatterns } from "./utils";
+
 type RegisteredListeners = {
   before?: (
     details: browser.webRequest._OnBeforeRequestDetails,
@@ -153,27 +155,20 @@ export interface RequestHandler extends EventTarget {
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class RequestHandler extends EventTarget {
-  static buildUrlPatterns(fqdns: string[]): string[] {
-    const urls: string[] = [];
-    for (const fqdn of fqdns) {
-      urls.push(`http://${fqdn}/*`);
-      urls.push(`https://${fqdn}/*`);
-    }
-    return urls;
-  }
-
   readonly #details = new Map<string, RequestDetails>();
 
   #currentListeners: RegisteredListeners = {};
 
   /**
    * Binds the handler to the given list of FQDNs. When called, the handler
-   * starts handling requests for the URLs in the list and stops handling
-   * requests for any previously bound URLs that are not in the new list.
+   * starts handling requests for the FQDNs in the list and stops handling
+   * requests for any previously bound FQDNs that are not in the new list.
    *
-   * @param urls A list of URL patterns to bind to.
+   * @param fqdns A list of fully-qualified domain names to bind to.
    */
-  bind(urls: string[]) {
+  bind(fqdns: string[]) {
+    const urls = buildUrlPatterns(fqdns);
+
     // The registration needs to be different from the existing one
     const before = (details: browser.webRequest._OnBeforeRequestDetails) =>
       this.#beforeRequest(details);
