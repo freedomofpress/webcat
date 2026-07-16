@@ -1,5 +1,4 @@
 import {
-  BeforeHeadersDetails,
   BeforeRequestDetails,
   CompletedDetails,
   ErrorOccurredDetails,
@@ -21,7 +20,6 @@ import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import {
-  hookResponseContent,
   markResponseContent,
   validateResponseContent,
   validateResponseHeaders,
@@ -48,7 +46,6 @@ export class WebcatRequestHandler extends RequestHandler {
   constructor() {
     super();
     this.addEventListener("beforerequest", this.#onRequest);
-    this.addEventListener("beforeheaders", this.#onBeforeHeaders);
     this.addEventListener("headersreceived", this.#onHeaders);
     this.addEventListener("erroroccurred", this.#onErrorOccurred);
     this.addEventListener("completed", this.#onCompleted);
@@ -134,33 +131,7 @@ export class WebcatRequestHandler extends RequestHandler {
       return;
     }
 
-    await validateResponseContent(details, originStateHolder, cachePartition);
-  }
-
-  #onBeforeHeaders(event: RequestEvent<BeforeHeadersDetails>) {
-    using blockingResponse = event.blockingResponse;
-    const details = event.details;
-    if (details.type !== "script") {
-      return;
-    }
-    if (!details.requestHeaders) {
-      console.error("FATAL: request headers not available");
-      return blockingResponse.set({ cancel: true });
-    }
-    for (const header of details.requestHeaders) {
-      if (header.name.toLowerCase() === "sec-fetch-dest") {
-        switch (header.value) {
-          case "worker":
-          case "serviceworker":
-          case "sharedworker":
-          case "audioworklet":
-          case "paintworklet":
-            hookResponseContent(details);
-        }
-        break;
-      }
-    }
-    return;
+    await validateResponseContent(event, originStateHolder, cachePartition);
   }
 
   async #onHeaders(event: RequestEvent<HeadersReceivedDetails>) {

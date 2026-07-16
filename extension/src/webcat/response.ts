@@ -1,4 +1,9 @@
-import { endMarker, hookMarker, origins, requestInfo } from "./../globals";
+import {
+  BeforeRequestDetails,
+  HeadersReceivedDetails,
+  RequestEvent,
+} from "../browser/requests";
+import { endMarker, origins, requestInfo } from "./../globals";
 import { CacheKey } from "./cache";
 import {
   base64UrlToUint8Array,
@@ -29,6 +34,14 @@ import {
   SHA256,
 } from "./utils";
 import { extractAndValidateHeaders } from "./validators";
+
+const WORKER_FETCH_DESTINATIONS = [
+  "worker",
+  "serviceworker",
+  "sharedworker",
+  "audioworklet",
+  "paintworklet",
+];
 
 export async function validateResponseHeaders(
   originStateHolder: OriginStateHolder,
@@ -207,7 +220,7 @@ function assertVerifiedManifest(
 }
 
 export async function validateResponseContent(
-  details: browser.webRequest._OnBeforeRequestDetails,
+  event: RequestEvent<BeforeRequestDetails>,
   originStateHolder: OriginStateHolder,
   cachePartition: CachePartition,
 ) {
@@ -216,12 +229,15 @@ export async function validateResponseContent(
     filter.write(new Uint8Array([68, 69, 78, 73, 69, 68]));
   }
 
+  const details = event.details;
   const pathname = new URL(details.url).pathname;
   const fqdn = getFQDN(details.url);
 
   let manifest!: Manifest;
   const filter = browser.webRequest.filterResponseData(details.requestId);
+  const source: Promise<ArrayBuffer>[] = [];
   filter.onstart = () => {
+    const details = event.details as HeadersReceivedDetails;
     assertVerifiedManifest(originStateHolder);
     manifest = originStateHolder.current.manifest;
     // If a pass-through media type isn't in the manifest, bail before receiving
@@ -236,29 +252,42 @@ export async function validateResponseContent(
     ) {
       filter.disconnect();
     }
+    // Inject hooks to worker scripts
+    if (details.type === "script" && details.requestHeaders) {
+      for (const header of details.requestHeaders) {
+        if (
+          header.name.toLowerCase() === "sec-fetch-dest" &&
+          header.value !== undefined
+        ) {
+          if (WORKER_FETCH_DESTINATIONS.includes(header.value)) {
+            const hooks = getHooks(
+              hooksType.page,
+              manifest.wasm,
+              cachePartition.firstParty,
+              // Hooks are only injected to workers, and CSP restrictions only allow
+              // same-origin workers, so the request's web origin is the URL's origin;
+              // determine whether the URL is same-origin with the first party
+              cachePartition.firstParty === new URL(details.url).origin,
+            );
+            source.push(hooks.then((h) => stringToUint8Array(h).buffer));
+          }
+          break;
+        }
+      }
+    }
   };
 
-  const source: Promise<ArrayBuffer>[] = [];
   let writeQueue: Promise<void> = Promise.resolve();
   let endMarkerSeen = false;
   filter.ondata = (event: { data: ArrayBuffer }) => {
-    // The data here is usually chunked; normally it would be streamed down as we get it
-    // but since we can hash the content only at the end, we have to wait until we have everything
-    // before deciding if the response content matches the manifest or not. So we are saving it and we will
-    // build a blob later. If the data is the hook marker, replace it with the WASM hooks, and if it is the
-    // end marker, flush all buffered data
-    if (arraysEqual(hookMarker, new Uint8Array(event.data))) {
-      const hooks = getHooks(
-        hooksType.page,
-        manifest.wasm,
-        cachePartition.firstParty,
-        // Hooks are only injected to workers, and CSP restrictions only allow
-        // same-origin workers, so the request's web origin is the URL's origin;
-        // determine whether the URL is same-origin with the first party
-        cachePartition.firstParty === new URL(details.url).origin,
-      );
-      source.push(hooks.then((h) => stringToUint8Array(h).buffer));
-    } else if (arraysEqual(endMarker, new Uint8Array(event.data))) {
+    // The data here is usually chunked; normally it would be streamed down as
+    // we get it but since we can hash the content only at the end, we have to
+    // wait until we have everything before deciding if the response content
+    // matches the manifest or not. So we are saving it and we will build a
+    // blob later. If the data is the end marker, flush all buffered data;
+    // anything received up to that point is from this or other extensions, not
+    // the network.
+    if (arraysEqual(endMarker, new Uint8Array(event.data))) {
       source.forEach((hook) => {
         writeQueue = writeQueue.then(async () => filter.write(await hook));
       });
@@ -359,20 +388,6 @@ export async function validateResponseContent(
       setOKIcon(details.tabId, originStateHolder.current.delegation);
     }
     // Redirect the main frame to an error page
-  };
-}
-
-export function hookResponseContent(
-  details: browser.webRequest._OnBeforeSendHeadersDetails,
-) {
-  const hookMarkerInjector = browser.webRequest.filterResponseData(
-    details.requestId,
-  );
-  hookMarkerInjector.onstart = () => {
-    // Inject hook marker, later replaced with
-    // the actual hook in the validation filter
-    hookMarkerInjector.write(hookMarker);
-    hookMarkerInjector.disconnect();
   };
 }
 

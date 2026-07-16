@@ -230,7 +230,7 @@ export class RequestHandler extends EventTarget {
     details: BeforeRequestDetails,
   ): Promise<browser.webRequest.BlockingResponse> {
     details = Object.assign({}, details);
-    this.#details.set(details.requestId, Object.assign({}, details));
+    this.#details.set(details.requestId, details);
     const event = new RequestEvent("beforerequest", details);
     this.dispatchEvent(event);
     return await event.blockingResponse.ready();
