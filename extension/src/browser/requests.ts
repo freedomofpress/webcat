@@ -121,31 +121,27 @@ export class RequestEvent<T extends RequestDetails> extends Event {
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export interface RequestHandler extends EventTarget {
-  addEventListener(
-    type: "beforerequest",
-    callback: (event: RequestEvent<BeforeRequestDetails>) => void,
-  ): void;
-  addEventListener(
-    type: "beforeheaders",
-    callback: (event: RequestEvent<BeforeHeadersDetails>) => void,
-  ): void;
-  addEventListener(
-    type: "headersreceived",
-    callback: (event: RequestEvent<HeadersReceivedDetails>) => void,
-  ): void;
-  addEventListener(
-    type: "erroroccurred",
-    callback: (event: RequestEvent<ErrorOccurredDetails>) => void,
-  ): void;
-  addEventListener(
-    type: "completed",
-    callback: (event: RequestEvent<CompletedDetails>) => void,
-  ): void;
-  addEventListener(
-    type: string,
-    callback: EventListenerOrEventListenerObject | null,
-    options?: AddEventListenerOptions | boolean,
-  ): void;
+  addEventListener: EventTarget["addEventListener"] &
+    ((
+      type: "beforerequest",
+      callback: (event: RequestEvent<BeforeRequestDetails>) => void,
+    ) => void) &
+    ((
+      type: "beforeheaders",
+      callback: (event: RequestEvent<BeforeHeadersDetails>) => void,
+    ) => void) &
+    ((
+      type: "headersreceived",
+      callback: (event: RequestEvent<HeadersReceivedDetails>) => void,
+    ) => void) &
+    ((
+      type: "erroroccurred",
+      callback: (event: RequestEvent<ErrorOccurredDetails>) => void,
+    ) => void) &
+    ((
+      type: "completed",
+      callback: (event: RequestEvent<CompletedDetails>) => void,
+    ) => void);
 }
 
 /**
