@@ -9,20 +9,11 @@ import { db, nonOrigins, origins } from "./globals";
 import validator_set from "./validator_set.json";
 import { isInPartition } from "./webcat/cache";
 import { WebcatRequestHandler } from "./webcat/handler";
-import { installListener, startupListener } from "./webcat/listeners";
 import { setErrorIcon } from "./webcat/ui";
 import { EnrollmentUpdater } from "./webcat/updater";
 import { clearBrowserCaches } from "./webcat/utils";
 
 console.log("[webcat] Starting up background");
-
-// Edit: moved the update logic directly in this file to ensure
-// it always runs
-// On first extension installation download and verify a full list
-browser.runtime.onInstalled.addListener(installListener);
-
-// On every startup download the diff(s)
-browser.runtime.onStartup.addListener(startupListener);
 
 // Not the best performance idea to act on all tab just for this
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
