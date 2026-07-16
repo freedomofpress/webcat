@@ -4,6 +4,7 @@ import json
 import uuid
 import queue
 import logging
+import psutil
 import subprocess
 import os
 import socket
@@ -45,6 +46,28 @@ from geckordp.firefox import Firefox, _kill_instances
 from geckordp.profile import ProfileManager
 from geckordp.rdp_client import RDPClient
 
+def kill_tree(proc, timeout=10):
+    """Terminate a process and all its children. Killing only the browser
+    leaves e.g. Tor Browser's tor daemon behind, which keeps holding the
+    shared Tor data directory and ports and makes every later Tor Browser
+    start fail with 'Tor exited during startup'."""
+    try:
+        procs = [psutil.Process(proc.pid)]
+        procs += procs[0].children(recursive=True)
+    except psutil.NoSuchProcess:
+        return
+    for p in procs:
+        try:
+            p.terminate()
+        except psutil.NoSuchProcess:
+            pass
+    _, alive = psutil.wait_procs(procs, timeout=timeout)
+    for p in alive:
+        try:
+            p.kill()
+        except psutil.NoSuchProcess:
+            pass
+
 class Browser:
     # geckordp profile creation takes ~15s; do it once and clone per browser
     _template_profiles: dict = {}
@@ -59,6 +82,12 @@ class Browser:
         if template is None:
             template = f"geckordp-template-{uuid.uuid4()}"
             self.pm.create(template)
+            # geckordp initializes the profile by launching the browser; kill
+            # any instance that survived it, or its leftovers (e.g. the tor
+            # daemon) block every later browser start
+            for p in psutil.process_iter(["cmdline"]):
+                if template in " ".join(p.info["cmdline"] or []):
+                    kill_tree(p)
             Browser._template_profiles[template_key] = template
             atexit.register(self.pm.remove, template)
         self.pm.clone(template, self.profile_name, ignore_invalid_files=True)
@@ -79,6 +108,15 @@ class Browser:
         flags = list(flags or [])
         if headless:
             flags.append("-headless")
+        # fail fast if a stale browser still holds the debugger port; the RDP
+        # client would otherwise silently connect to the wrong instance
+        try:
+            socket.create_connection((self.host, self.port), timeout=0.2).close()
+            stale = True
+        except OSError:
+            stale = False
+        if stale:
+            raise RuntimeError(f"debugger port {self.port} is already in use")
         # wait=False skips geckordp's slow CPU-settle heuristic; we poll the
         # debugger port and the console instead
         self.proc = Firefox.start(start, self.port, self.profile_name, flags, self.override_firefox_path, False, False)
@@ -113,11 +151,7 @@ class Browser:
                 sleep(0.1)
         except Exception:
             # teardown never runs if start fails; don't leak the browser
-            try:
-                self.proc.kill()
-                self.proc.wait(5)
-            except Exception:
-                pass
+            kill_tree(self.proc)
             raise
     
     def destroy(self):
@@ -133,15 +167,7 @@ class Browser:
         # connect to this dying instance.
         proc = getattr(self, "proc", None)
         if proc is not None:
-            try:
-                proc.terminate()
-                proc.wait(10)
-            except Exception:
-                try:
-                    proc.kill()
-                    proc.wait(5)
-                except Exception:
-                    pass
+            kill_tree(proc)
         if hasattr(self, "port"):
             deadline = monotonic() + 10
             while True:
@@ -248,18 +274,6 @@ class Browser:
 
     def extension_logs(self):
         return list(getattr(self, "_ext_logs", []))
-
-    def find_tab(self, needle, timeout=5):
-        """Return the first tab whose URL contains `needle`, or None. Use for
-        assertions that must not depend on which tab is currently selected."""
-        deadline = monotonic() + timeout
-        while True:
-            for tab in self.root.list_tabs() or []:
-                if needle in (tab.get("url") or ""):
-                    return tab
-            if monotonic() > deadline:
-                return None
-            sleep(0.2)
 
     def navigate(self, url):
         current_tab = self.root.current_tab()
