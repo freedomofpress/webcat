@@ -1,8 +1,16 @@
 import { updater } from "../background";
 import { origins, requestInfo, tabs } from "../globals";
 import { CacheKey } from "./cache";
-import type { WebcatDatabase } from "./db";
 import { getHooks } from "./genhooks";
+import {
+  BeforeHeadersDetails,
+  BeforeRequestDetails,
+  CompletedDetails,
+  ErrorOccurredDetails,
+  HeadersReceivedDetails,
+  RequestDetails,
+  RequestEvent,
+} from "./handler";
 import { hooksType, metadataRequestSource } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
 import {
@@ -21,7 +29,6 @@ import {
 } from "./response";
 import { errorpage } from "./ui";
 import {
-  clearBrowserCaches,
   getFirstParty,
   getFQDN,
   isExtensionRequest,
@@ -65,14 +72,16 @@ export async function startupListener() {
 }
 
 export async function headersListener(
-  details: browser.webRequest._OnHeadersReceivedDetails,
-): Promise<browser.webRequest.BlockingResponse> {
+  event: RequestEvent<HeadersReceivedDetails>,
+): Promise<void> {
+  using blockingResponse = event.blockingResponse;
+  const details = event.details;
   const fqdn = getFQDN(details.url);
   const info = requestInfo.get(details.requestId);
 
   // Skip non-enrolled and extension requests
   if (!info || isExtensionRequest(details)) {
-    return {};
+    return;
   }
 
   const { pendingOrigin: originStateHolder, cachePartition } = info;
@@ -96,7 +105,7 @@ export async function headersListener(
     requestInfo.delete(details.requestId);
     tabs.delete(details.tabId);
     errorpage(details.tabId, fqdn, result, !FRAME_TYPES.includes(details.type));
-    return { cancel: true };
+    return blockingResponse.set({ cancel: true });
   }
 
   commitVerifiedOrigin(fqdn, originStateHolder, cachePartition);
@@ -151,17 +160,20 @@ export async function headersListener(
     browser.webNavigation.onDOMContentLoaded.addListener(listener);
   }
 
-  return {};
+  return;
 }
 
 export async function beforeHeadersListener(
-  details: browser.webRequest._OnBeforeSendHeadersDetails,
-): Promise<browser.webRequest.BlockingResponse> {
-  // this listener is only added for script requests, i.e.
-  // here we already know details.type === "script"
+  event: RequestEvent<BeforeHeadersDetails>,
+): Promise<void> {
+  using blockingResponse = event.blockingResponse;
+  const details = event.details;
+  if (details.type !== "script") {
+    return;
+  }
   if (!details.requestHeaders) {
     console.error("FATAL: request headers not available");
-    return { cancel: true };
+    return blockingResponse.set({ cancel: true });
   }
   for (const header of details.requestHeaders) {
     if (header.name.toLowerCase() === "sec-fetch-dest") {
@@ -176,14 +188,16 @@ export async function beforeHeadersListener(
       break;
     }
   }
-  return {};
+  return;
 }
 
 export async function requestListener(
-  details: browser.webRequest._OnBeforeRequestDetails,
-): Promise<browser.webRequest.BlockingResponse> {
+  event: RequestEvent<BeforeRequestDetails>,
+): Promise<void> {
+  using blockingResponse = event.blockingResponse;
+  const details = event.details as RequestDetails;
   if (isExtensionRequest(details)) {
-    return {};
+    return;
   }
 
   const fqdn = getFQDN(details.url);
@@ -236,31 +250,31 @@ export async function requestListener(
         tabs.delete(details.tabId);
         errorpage(details.tabId, fqdn, result, !isFrame);
       }
-      return { cancel: true };
+      return blockingResponse.set({ cancel: true });
     }
     if (result) {
       // HTTPS redirect; browser reissues under a fresh requestId.
       if (isFrame) {
         logger.addLog("info", `Redirecting to https`, details.tabId, fqdn);
       }
-      return result;
+      return blockingResponse.set(result);
     }
     originStateHolder = requestInfo.get(details.requestId)?.pendingOrigin;
   }
 
   // No holder means the fqdn isn't enrolled
   if (!originStateHolder) {
-    return {};
+    return;
   }
 
   await validateResponseContent(details, originStateHolder, cachePartition);
-  return {};
 }
 
 // Ensure pending objects do not leak
-function errorOccurredListener(
-  details: browser.webRequest._OnErrorOccurredDetails,
+export function errorOccurredListener(
+  event: RequestEvent<ErrorOccurredDetails>,
 ): void {
+  const details = event.details as ErrorOccurredDetails;
   const info = requestInfo.get(details.requestId);
   if (info) {
     info.fail();
@@ -268,144 +282,11 @@ function errorOccurredListener(
   }
 }
 
-function completedListener(
-  details: browser.webRequest._OnCompletedDetails,
-): void {
+export function completedListener(event: RequestEvent<CompletedDetails>): void {
+  const details = event.details;
   const info = requestInfo.get(details.requestId);
   if (info) {
     info.complete();
     requestInfo.delete(details.requestId);
   }
-}
-
-// Single global webRequest listener registration that scopes to the union
-// of currently enrolled FQDNs. We re-register the listeners on every list
-// update; we always add the new listener before removing the old one, so
-// there is no window with no listener.
-type RegisteredListeners = {
-  before?: (
-    details: browser.webRequest._OnBeforeRequestDetails,
-  ) => Promise<browser.webRequest.BlockingResponse>;
-  beforeHeaders?: (
-    details: browser.webRequest._OnBeforeSendHeadersDetails,
-  ) => Promise<browser.webRequest.BlockingResponse>;
-  headers?: (
-    details: browser.webRequest._OnHeadersReceivedDetails,
-  ) => Promise<browser.webRequest.BlockingResponse>;
-  errorOccurred?: (details: browser.webRequest._OnErrorOccurredDetails) => void;
-  completed?: (details: browser.webRequest._OnCompletedDetails) => void;
-};
-
-let currentListeners: RegisteredListeners = {};
-
-function buildUrlPatterns(fqdns: string[]): string[] {
-  const urls: string[] = [];
-  for (const fqdn of fqdns) {
-    urls.push(`http://${fqdn}/*`);
-    urls.push(`https://${fqdn}/*`);
-  }
-  return urls;
-}
-
-function removeListeners(listeners: RegisteredListeners): void {
-  if (listeners.before) {
-    browser.webRequest.onBeforeRequest.removeListener(listeners.before);
-  }
-  if (listeners.beforeHeaders) {
-    browser.webRequest.onBeforeSendHeaders.removeListener(
-      listeners.beforeHeaders,
-    );
-  }
-  if (listeners.headers) {
-    browser.webRequest.onHeadersReceived.removeListener(listeners.headers);
-  }
-  if (listeners.errorOccurred) {
-    browser.webRequest.onErrorOccurred.removeListener(listeners.errorOccurred);
-  }
-  if (listeners.completed) {
-    browser.webRequest.onCompleted.removeListener(listeners.completed);
-  }
-}
-
-export async function installEnrolledListeners(
-  database: WebcatDatabase,
-): Promise<void> {
-  let fqdns: string[];
-  try {
-    fqdns = await database.listAllFQDNs();
-  } catch (error) {
-    console.error("[webcat] listAllFQDNs failed:", error);
-    return;
-  }
-
-  const urls = buildUrlPatterns(fqdns);
-
-  // The registration needs to be different from the existing one
-  const before = (details: browser.webRequest._OnBeforeRequestDetails) =>
-    requestListener(details);
-  const beforeHeaders = (
-    details: browser.webRequest._OnBeforeSendHeadersDetails,
-  ) => beforeHeadersListener(details);
-  const headers = (details: browser.webRequest._OnHeadersReceivedDetails) =>
-    headersListener(details);
-  const errorOccurred = (details: browser.webRequest._OnErrorOccurredDetails) =>
-    errorOccurredListener(details);
-  const completed = (details: browser.webRequest._OnCompletedDetails) =>
-    completedListener(details);
-
-  // Add new listeners first, then remove the old ones
-  browser.webRequest.onBeforeRequest.addListener(before, { urls }, [
-    "blocking",
-  ]);
-  browser.webRequest.onBeforeSendHeaders.addListener(
-    beforeHeaders,
-    { urls, types: ["script"] },
-    ["blocking", "requestHeaders"],
-  );
-  browser.webRequest.onHeadersReceived.addListener(headers, { urls }, [
-    "blocking",
-    "responseHeaders",
-  ]);
-  browser.webRequest.onErrorOccurred.addListener(errorOccurred, { urls });
-  browser.webRequest.onCompleted.addListener(completed, { urls });
-
-  const previous = currentListeners;
-  currentListeners = {
-    before,
-    beforeHeaders,
-    headers,
-    errorOccurred,
-    completed,
-  };
-  removeListeners(previous);
-
-  // Look up existing content scripts and add the ones that are missing
-  const registeredFqdns = (
-    await browser.scripting.getRegisteredContentScripts()
-  ).map((script) => script.id);
-  const newFqdns = fqdns.filter((fqdn) => {
-    return !registeredFqdns.includes(fqdn);
-  });
-  await browser.scripting.registerContentScripts(
-    newFqdns.map((fqdn) => {
-      return {
-        id: fqdn,
-        js: ["dist/hooks/content.js"],
-        matches: buildUrlPatterns([fqdn]),
-        matchOriginAsFallback: true,
-        allFrames: true,
-        runAt: "document_start",
-      };
-    }),
-  );
-  // Remove the content scripts whose fqdn is no longer enrolled
-  await browser.scripting.unregisterContentScripts({
-    ids: registeredFqdns.filter((fqdn) => !fqdns.includes(fqdn)),
-  });
-
-  await clearBrowserCaches(newFqdns);
-
-  console.log(
-    `[webcat] installEnrolledListeners: registered listeners for ${fqdns.length} FQDN(s)`,
-  );
 }
