@@ -17,6 +17,7 @@ import {
   requestListener,
   startupListener,
 } from "./webcat/listeners";
+import { ContentScript } from "./webcat/scripting";
 import { setErrorIcon } from "./webcat/ui";
 import { EnrollmentUpdater } from "./webcat/updater";
 import { clearBrowserCaches } from "./webcat/utils";
@@ -78,36 +79,13 @@ export const updater = new EnrollmentUpdater({
   updateInterval: UPDATE_INTERVAL_MS,
   fetchTimeout: FETCH_TIMEOUT_MS,
 });
+const contentScript = new ContentScript("dist/hooks/content.js");
+
 updater.addEventListener("updated", async () => {
   try {
     const fqdns = await db.listAllFQDNs();
-    const urls = RequestHandler.buildUrlPatterns(fqdns);
-    requestHandler.bind(urls);
-
-    // Look up existing content scripts and add the ones that are missing
-    const registeredFqdns = (
-      await browser.scripting.getRegisteredContentScripts()
-    ).map((script) => script.id);
-    const newFqdns = fqdns.filter((fqdn) => {
-      return !registeredFqdns.includes(fqdn);
-    });
-    await browser.scripting.registerContentScripts(
-      newFqdns.map((fqdn) => {
-        return {
-          id: fqdn,
-          js: ["dist/hooks/content.js"],
-          matches: RequestHandler.buildUrlPatterns([fqdn]),
-          matchOriginAsFallback: true,
-          allFrames: true,
-          runAt: "document_start",
-        };
-      }),
-    );
-    // Remove the content scripts whose fqdn is no longer enrolled
-    await browser.scripting.unregisterContentScripts({
-      ids: registeredFqdns.filter((fqdn) => !fqdns.includes(fqdn)),
-    });
-
+    requestHandler.bind(fqdns);
+    const newFqdns = await contentScript.bind(fqdns);
     await clearBrowserCaches(newFqdns);
   } catch (error) {
     console.error("[webcat] Bundled list import failed:", error);
