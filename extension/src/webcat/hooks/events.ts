@@ -116,7 +116,7 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
     ...args: EventListenerArgs
   ) {
     const [type, callback, options] = args;
-    if (internal in unwrap(this)) {
+    if (this && internal in unwrap(this)) {
       const listeners = getOrInsert(
         getOrInsert(unwrap(this)[internal].listeners, type, new Map()),
         callback,
@@ -159,7 +159,7 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
     ...args: EventListenerArgs
   ) {
     const [type, callback, options] = args;
-    if (internal in unwrap(this)) {
+    if (this && internal in unwrap(this)) {
       const listeners = getOrInsert(
         getOrInsert(unwrap(this)[internal].listeners, type, new Map()),
         callback,
@@ -201,7 +201,7 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
     this: Hooked<EventTarget, Internal<EventTarget>>,
     ...args: [event: Event]
   ) {
-    if (internal in unwrap(this)) {
+    if (this && internal in unwrap(this)) {
       if (unwrap(this)[internal].instance) {
         return unwrap(this)[internal].instance.dispatchEvent(...args);
       }
