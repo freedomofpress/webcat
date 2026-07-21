@@ -1,4 +1,4 @@
-import { firstPartyKey, firtsPartySalt as firstPartySalt } from "../globals";
+import { firstPartyKey, firstPartySalt } from "../globals";
 import contentHooks from "./../../dist/hooks/content.js?raw";
 import pageHooks from "./../../dist/hooks/page.js?raw";
 import { hooksType } from "./interfaces/base";
