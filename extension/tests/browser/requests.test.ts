@@ -268,5 +268,56 @@ describe("RequestHandler", () => {
     });
     expect(Array.from(detailsById.keys())).toEqual(["123", "456"]);
     expect(detailsById.get("123")).not.toBe(detailsById.get("456"));
+    expect(detailsById.get("456")?.completed).rejects.toBeUndefined();
+  });
+
+  it("should mark RequestDetails as completed when the onCompleted event fires", async () => {
+    handler.bind(["example.com"]);
+    const promises: Promise<string>[] = [];
+    const listener = (type: string) => {
+      return (event: RequestEvent<RequestDetails>) => {
+        promises.push(event.details.completed.then(() => type));
+      };
+    };
+    handler.addEventListener("beforerequest", listener("beforerequest"));
+    handler.addEventListener("beforeheaders", listener("beforeheaders"));
+    handler.addEventListener("headersreceived", listener("headersreceived"));
+    handler.addEventListener("completed", listener("completed"));
+    beforeRequest.values().next().value?.({});
+    beforeSendHeaders.values().next().value?.({});
+    headersReceived.values().next().value?.({});
+    completed.values().next().value?.({});
+
+    await expect(Promise.all(promises)).resolves.toEqual([
+      "beforerequest",
+      "beforeheaders",
+      "headersreceived",
+      "completed",
+    ]);
+  });
+
+  it("should mark RequestDetails as failed when the onErrorOccurred event fires", async () => {
+    handler.bind(["example.com"]);
+    const promises: Promise<string>[] = [];
+    const listener = (type: string) => {
+      return (event: RequestEvent<RequestDetails>) => {
+        promises.push(event.details.completed.catch(() => type));
+      };
+    };
+    handler.addEventListener("beforerequest", listener("beforerequest"));
+    handler.addEventListener("beforeheaders", listener("beforeheaders"));
+    handler.addEventListener("headersreceived", listener("headersreceived"));
+    handler.addEventListener("erroroccurred", listener("erroroccurred"));
+    beforeRequest.values().next().value?.({});
+    beforeSendHeaders.values().next().value?.({});
+    headersReceived.values().next().value?.({});
+    errorOccurred.values().next().value?.({});
+
+    await expect(Promise.all(promises)).resolves.toEqual([
+      "beforerequest",
+      "beforeheaders",
+      "headersreceived",
+      "erroroccurred",
+    ]);
   });
 });
