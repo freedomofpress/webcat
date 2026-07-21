@@ -50,7 +50,9 @@ export type RequestDetails =
 export class BlockingResponse
   implements browser.webRequest.BlockingResponse, Disposable
 {
-  #promise: Promise<BlockingResponse> | BlockingResponse = this;
+  #promise: Promise<BlockingResponse>;
+  #resolve: (br: BlockingResponse) => void;
+  #pendingScopes: number;
 
   cancel?: boolean | undefined;
   redirectUrl?: string | undefined;
@@ -61,11 +63,24 @@ export class BlockingResponse
     | browser.webRequest._BlockingResponseAuthCredentials
     | undefined;
 
+  constructor() {
+    const { promise, resolve } = Promise.withResolvers<BlockingResponse>();
+    this.#promise = promise;
+    this.#resolve = resolve;
+    this.#pendingScopes = 0;
+  }
+
   get [Symbol.dispose]() {
-    const { promise, resolve } = Promise.withResolvers<void>();
-    this.#promise = Promise.all([this.#promise, promise]).then(() => this);
+    this.#pendingScopes++;
+    const disposed = false;
     return () => {
-      resolve();
+      if (disposed) {
+        return;
+      }
+      this.#pendingScopes--;
+      if (this.#pendingScopes === 0) {
+        this.#resolve(this);
+      }
     };
   }
 
@@ -73,6 +88,9 @@ export class BlockingResponse
    * @returns A Promise that resolves to this BlockingResponse after disposal.
    */
   async ready() {
+    if (this.#pendingScopes === 0) {
+      this.#resolve(this);
+    }
     return await this.#promise;
   }
 
