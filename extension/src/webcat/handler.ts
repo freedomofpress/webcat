@@ -234,7 +234,6 @@ export class WebcatRequestHandler extends RequestHandler {
     const details = event.details as ErrorOccurredDetails;
     const info = requestInfo.get(details.requestId);
     if (info) {
-      info.fail();
       requestInfo.delete(details.requestId);
     }
   }
@@ -243,7 +242,6 @@ export class WebcatRequestHandler extends RequestHandler {
     const details = event.details;
     const info = requestInfo.get(details.requestId);
     if (info) {
-      info.complete();
       requestInfo.delete(details.requestId);
     }
   }

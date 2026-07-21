@@ -14,12 +14,39 @@ type RegisteredListeners = {
   completed?: (details: browser.webRequest._OnCompletedDetails) => void;
 };
 
-export type BeforeRequestDetails = browser.webRequest._OnBeforeRequestDetails;
+class RequestDetailsBase {
+  /**
+   * Resolved when the request completes or rejected if a network error occurs.
+   */
+  readonly completed: Promise<void>;
+
+  #resolve: () => void;
+  #reject: () => void;
+
+  constructor() {
+    const { promise, resolve, reject } = Promise.withResolvers<void>();
+    this.completed = promise;
+    this.#resolve = resolve;
+    this.#reject = reject;
+  }
+
+  complete() {
+    this.#resolve();
+  }
+
+  fail() {
+    this.#reject();
+  }
+}
+
+export type BeforeRequestDetails = RequestDetailsBase &
+  browser.webRequest._OnBeforeRequestDetails;
 export type BeforeHeadersDetails = BeforeRequestDetails &
   browser.webRequest._OnBeforeSendHeadersDetails;
 export type HeadersReceivedDetails = BeforeHeadersDetails &
   browser.webRequest._OnHeadersReceivedDetails;
-export type ErrorOccurredDetails = browser.webRequest._OnErrorOccurredDetails;
+export type ErrorOccurredDetails = BeforeRequestDetails &
+  browser.webRequest._OnErrorOccurredDetails;
 export type CompletedDetails = HeadersReceivedDetails &
   browser.webRequest._OnCompletedDetails;
 export type RequestDetails =
@@ -245,9 +272,9 @@ export class RequestHandler extends EventTarget {
   }
 
   async #beforeRequest(
-    details: BeforeRequestDetails,
+    d: browser.webRequest._OnBeforeRequestDetails,
   ): Promise<browser.webRequest.BlockingResponse> {
-    details = Object.assign({}, details);
+    const details = Object.assign(new RequestDetailsBase(), d);
     this.#details.set(details.requestId, details);
     const event = new RequestEvent("beforerequest", details);
     this.dispatchEvent(event);
@@ -255,11 +282,11 @@ export class RequestHandler extends EventTarget {
   }
 
   async #beforeHeaders(
-    details: BeforeHeadersDetails,
+    d: browser.webRequest._OnBeforeSendHeadersDetails,
   ): Promise<browser.webRequest.BlockingResponse> {
-    details = Object.assign(
-      this.#details.get(details.requestId) as BeforeRequestDetails,
-      details,
+    const details = Object.assign(
+      this.#details.get(d.requestId) as BeforeRequestDetails,
+      d,
     );
     const event = new RequestEvent("beforeheaders", details);
     this.dispatchEvent(event);
@@ -267,32 +294,34 @@ export class RequestHandler extends EventTarget {
   }
 
   async #headersReceived(
-    details: HeadersReceivedDetails,
+    d: browser.webRequest._OnHeadersReceivedDetails,
   ): Promise<browser.webRequest.BlockingResponse> {
-    details = Object.assign(
-      this.#details.get(details.requestId) as BeforeRequestDetails,
-      details,
+    const details = Object.assign(
+      this.#details.get(d.requestId) as BeforeHeadersDetails,
+      d,
     );
     const event = new RequestEvent("headersreceived", details);
     this.dispatchEvent(event);
     return await event.blockingResponse.ready();
   }
 
-  #errorOccurred(details: ErrorOccurredDetails) {
-    details = Object.assign(
-      this.#details.get(details.requestId) as ErrorOccurredDetails,
-      details,
+  #errorOccurred(d: browser.webRequest._OnErrorOccurredDetails) {
+    const details = Object.assign(
+      this.#details.get(d.requestId) as BeforeRequestDetails,
+      d,
     );
+    details.fail();
     const event = new RequestEvent("erroroccurred", details);
     this.dispatchEvent(event);
     this.#details.delete(details.requestId);
   }
 
-  #completed(details: CompletedDetails) {
-    details = Object.assign(
-      this.#details.get(details.requestId) as HeadersReceivedDetails,
-      details,
+  #completed(d: browser.webRequest._OnCompletedDetails) {
+    const details = Object.assign(
+      this.#details.get(d.requestId) as HeadersReceivedDetails,
+      d,
     );
+    details.complete();
     const event = new RequestEvent("completed", details);
     this.dispatchEvent(event);
     this.#details.delete(details.requestId);

@@ -3,7 +3,7 @@ import {
   HeadersReceivedDetails,
   RequestEvent,
 } from "../browser/requests";
-import { endMarker, origins, requestInfo } from "./../globals";
+import { endMarker, origins } from "./../globals";
 import { CacheKey } from "./cache";
 import {
   base64UrlToUint8Array,
@@ -298,7 +298,6 @@ export async function validateResponseContent(
     }
   };
 
-  const info = requestInfo.get(details.requestId);
   filter.onstop = async () => {
     if (!endMarkerSeen && !PASS_THROUGH_TYPES.has(details.type)) {
       // The request terminated early, before headers were received,
@@ -314,7 +313,7 @@ export async function validateResponseContent(
       // check as a workaround to a bug in ServiceWorkers:
       // https://bugzilla.mozilla.org/show_bug.cgi?id=2054048
       if (details.tabId !== -1) {
-        await info?.completed;
+        await details.completed;
       }
     } catch {
       logger.addLog(
