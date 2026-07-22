@@ -5,7 +5,7 @@ import {
   RequestHandler,
 } from "../browser/requests";
 import { ContentScript } from "../browser/scripting";
-import { origins, tabs } from "../globals";
+import { origins } from "../globals";
 import { CacheKey } from "./cache";
 import { WebcatDatabase } from "./db";
 import { HookBuilder } from "./hookbuilder";
@@ -98,7 +98,6 @@ export class WebcatRequestHandler extends RequestHandler {
       const result = await validateOrigin(this.#db, details);
       if (result instanceof WebcatError) {
         if (details.state.isFrame) {
-          tabs.delete(details.tabId);
           errorpage(details, result);
         }
         return blockingResponse.set({ cancel: true });
@@ -139,7 +138,6 @@ export class WebcatRequestHandler extends RequestHandler {
         `Error when parsing response headers: ${result}: ${result.details?.join(", ")}`,
         details,
       );
-      tabs.delete(details.tabId);
       errorpage(details, result);
       return blockingResponse.set({ cancel: true });
     }

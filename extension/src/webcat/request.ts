@@ -1,5 +1,5 @@
 import { BeforeRequestDetails } from "../browser/requests";
-import { origins, tabs } from "./../globals";
+import { origins } from "./../globals";
 import { CacheKey } from "./cache";
 import { WebcatDatabase } from "./db";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
@@ -68,11 +68,6 @@ export async function validateOrigin(
   const redirect = enforceHTTPS(urlobj);
   if (redirect) {
     return { redirectUrl: redirect };
-  }
-
-  // Nothing can go wrong in this func anymore hopefully, let's add the reference
-  if (isFrame) {
-    tabs.set(details.tabId, cachePartition);
   }
 
   const cached = origins.get(CacheKey(fqdn, cachePartition));
