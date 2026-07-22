@@ -1,21 +1,19 @@
 import {
   BeforeRequestDetails,
-  CompletedDetails,
-  ErrorOccurredDetails,
   HeadersReceivedDetails,
   RequestEvent,
   RequestHandler,
 } from "../browser/requests";
-import { origins, requestInfo, tabs } from "../globals";
+import { origins, tabs } from "../globals";
 import { CacheKey } from "./cache";
 import { getHooks } from "./genhooks";
-import { hooksType, metadataRequestSource } from "./interfaces/base";
+import { hooksType } from "./interfaces/base";
 import { WebcatError } from "./interfaces/errors";
 import {
   OriginStateHolder,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
-import { CachePartition, RequestInfo } from "./interfaces/requestinfo";
+import { CachePartition, Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
@@ -47,32 +45,37 @@ export class WebcatRequestHandler extends RequestHandler {
     super();
     this.addEventListener("beforerequest", this.#onRequest);
     this.addEventListener("headersreceived", this.#onHeaders);
-    this.addEventListener("erroroccurred", this.#onErrorOccurred);
-    this.addEventListener("completed", this.#onCompleted);
+  }
+
+  async #initializeState(
+    details: BeforeRequestDetails,
+  ): Promise<Stateful<BeforeRequestDetails>> {
+    return Object.assign(details, {
+      state: {
+        fqdn: getFQDN(details.url),
+        cachePartition: {
+          firstParty: await getFirstParty(details),
+          incognito: !!details.incognito,
+        },
+        isFrame: FRAME_TYPES.includes(details.type),
+      },
+    });
   }
 
   async #onRequest(event: RequestEvent<BeforeRequestDetails>) {
     using blockingResponse = event.blockingResponse;
-    const details = event.details;
-    if (isExtensionRequest(details)) {
+    if (isExtensionRequest(event.details)) {
       return;
     }
-
-    const fqdn = getFQDN(details.url);
-    const cachePartition = {
-      firstParty: await getFirstParty(details),
-      incognito: !!details.incognito,
-    };
-
-    const isFrame = FRAME_TYPES.includes(details.type);
+    const details = await this.#initializeState(event.details);
 
     // Frame-only pre-setup: retry pending list updates
-    if (isFrame) {
+    if (details.state.isFrame) {
       logger.addLog(
         "info",
         `Loading ${details.type} ${details.url}`,
         details.tabId,
-        fqdn,
+        details.state.fqdn,
       );
       const beforeframeload = new RequestEvent(
         "beforeframeload",
@@ -83,100 +86,89 @@ export class WebcatRequestHandler extends RequestHandler {
       blockingResponse.set(beforeframeload.blockingResponse);
     }
 
-    let originStateHolder: OriginStateHolder | undefined;
-    if (!isFrame) {
-      originStateHolder = origins.get(CacheKey(fqdn, cachePartition));
-      if (originStateHolder) {
-        requestInfo.set(
-          details.requestId,
-          new RequestInfo({
-            pendingOrigin: originStateHolder,
-            cachePartition,
-          }),
-        );
-      }
+    // For non-frames, check for cached origin
+    if (!details.state.isFrame) {
+      details.state.pendingOrigin = origins.get(
+        CacheKey(details.state.fqdn, details.state.cachePartition),
+      );
     }
 
-    if (!originStateHolder) {
-      const result = await validateOrigin(
-        fqdn,
-        details.url,
-        details.tabId,
-        isFrame
-          ? metadataRequestSource.main_frame
-          : metadataRequestSource.sub_resource,
-        details.requestId,
-        cachePartition,
-      );
+    // If no origin was available in cache, perform full validation;
+    // for frames, this is done every time
+    if (!details.state.pendingOrigin) {
+      const result = await validateOrigin(details);
       if (result instanceof WebcatError) {
-        requestInfo.delete(details.requestId);
-        if (isFrame) {
+        if (details.state.isFrame) {
           tabs.delete(details.tabId);
-          errorpage(details.tabId, fqdn, result, !isFrame);
+          errorpage(
+            details.tabId,
+            details.state.fqdn,
+            result,
+            !details.state.isFrame,
+          );
         }
         return blockingResponse.set({ cancel: true });
       }
       if (result) {
         // HTTPS redirect; browser reissues under a fresh requestId.
-        if (isFrame) {
-          logger.addLog("info", `Redirecting to https`, details.tabId, fqdn);
+        if (details.state.isFrame) {
+          logger.addLog(
+            "info",
+            `Redirecting to https`,
+            details.tabId,
+            details.state.fqdn,
+          );
         }
         return blockingResponse.set(result);
       }
-      originStateHolder = requestInfo.get(details.requestId)?.pendingOrigin;
     }
 
     // No holder means the fqdn isn't enrolled
-    if (!originStateHolder) {
+    if (!details.state.pendingOrigin) {
       return;
     }
 
-    await validateResponseContent(event, originStateHolder, cachePartition);
+    await validateResponseContent(details);
   }
 
   async #onHeaders(event: RequestEvent<HeadersReceivedDetails>) {
     using blockingResponse = event.blockingResponse;
-    const details = event.details;
-    const fqdn = getFQDN(details.url);
-    const info = requestInfo.get(details.requestId);
+    const details = event.details as Stateful<HeadersReceivedDetails>;
 
     // Skip non-enrolled and extension requests
-    if (!info || isExtensionRequest(details)) {
+    if (!details.state || isExtensionRequest(details)) {
       return;
     }
 
-    const { pendingOrigin: originStateHolder, cachePartition } = info;
-
-    if (!originStateHolder) {
-      throw new Error("No originState while starting to parse response.");
+    if (!details.state.pendingOrigin) {
+      throw new Error("missing pendingOrigin in request state");
     }
 
-    const result = await validateResponseHeaders(
-      originStateHolder,
-      details,
-      cachePartition,
-    );
+    const result = await validateResponseHeaders(details);
     if (result instanceof WebcatError) {
       logger.addLog(
         "error",
         `Error when parsing response headers: ${result}: ${result.details?.join(", ")}`,
         details.tabId,
-        fqdn,
+        details.state.fqdn,
       );
-      requestInfo.delete(details.requestId);
       tabs.delete(details.tabId);
       errorpage(
         details.tabId,
-        fqdn,
+        details.state.fqdn,
         result,
         !FRAME_TYPES.includes(details.type),
       );
       return blockingResponse.set({ cancel: true });
     }
 
-    this.#commitVerifiedOrigin(fqdn, originStateHolder, cachePartition);
+    this.#commitVerifiedOrigin(
+      details.state.fqdn,
+      details.state.pendingOrigin,
+      details.state.cachePartition,
+    );
 
-    markResponseContent(details);
+    markResponseContent(event.details);
 
     // Here we must have already validated the enrollment and the manifest
     // and thus should have all the information, but we haven't started
@@ -199,9 +191,9 @@ export class WebcatRequestHandler extends RequestHandler {
 
     if (
       FRAME_TYPES.includes(details.type) &&
-      originStateHolder.current.manifest
+      details.state.pendingOrigin.current.manifest
     ) {
-      const wasm = originStateHolder.current.manifest.wasm;
+      const wasm = details.state.pendingOrigin.current.manifest.wasm;
 
       const listener = async (
         navDetails: browser.webNavigation._OnDOMContentLoadedDetails,
@@ -215,8 +207,9 @@ export class WebcatRequestHandler extends RequestHandler {
           code: await getHooks(
             hooksType.content_script,
             wasm,
-            cachePartition.firstParty,
-            cachePartition.firstParty === new URL(details.url).origin,
+            details.state.cachePartition.firstParty,
+            details.state.cachePartition.firstParty ===
+              new URL(details.url).origin,
           ),
           runAt: "document_start",
           frameId: details.frameId,
@@ -227,23 +220,6 @@ export class WebcatRequestHandler extends RequestHandler {
     }
 
     return;
-  }
-
-  #onErrorOccurred(event: RequestEvent<ErrorOccurredDetails>) {
-    // Ensure pending objects do not leak
-    const details = event.details as ErrorOccurredDetails;
-    const info = requestInfo.get(details.requestId);
-    if (info) {
-      requestInfo.delete(details.requestId);
-    }
-  }
-
-  #onCompleted(event: RequestEvent<CompletedDetails>) {
-    const details = event.details;
-    const info = requestInfo.get(details.requestId);
-    if (info) {
-      requestInfo.delete(details.requestId);
-    }
   }
 
   #commitVerifiedOrigin(

@@ -1,7 +1,6 @@
 import {
   BeforeRequestDetails,
   HeadersReceivedDetails,
-  RequestEvent,
 } from "../browser/requests";
 import { endMarker, origins } from "./../globals";
 import { CacheKey } from "./cache";
@@ -22,7 +21,7 @@ import {
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
-import { CachePartition } from "./interfaces/requestinfo";
+import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { PASS_THROUGH_TYPES } from "./resources";
 import { errorpage, setOKIcon } from "./ui";
@@ -44,18 +43,18 @@ const WORKER_FETCH_DESTINATIONS = [
 ];
 
 export async function validateResponseHeaders(
-  originStateHolder: OriginStateHolder,
-  details: browser.webRequest._OnHeadersReceivedDetails,
-  cachePartition: CachePartition,
+  details: Stateful<HeadersReceivedDetails>,
 ) {
-  const fqdn = originStateHolder.current.fqdn;
+  if (!details.state.pendingOrigin) {
+    throw new Error("missing pendingOrigin in request state");
+  }
   // Some headers, such as CSP, needs to always be validated
 
   logger.addLog(
     "info",
-    `Validating response headers, url: ${details.url} status: ${originStateHolder.current.status}`,
+    `Validating response headers, url: ${details.url} status: ${details.state.pendingOrigin.current.status}`,
     details.tabId,
-    originStateHolder.current.fqdn,
+    details.state.fqdn,
   );
 
   // Step 1: Extract headers, normalize, check for duplicates and mandatory ones
@@ -76,7 +75,7 @@ export async function validateResponseHeaders(
   const enrollment_header = normalizedHeaders.get("x-webcat-enrollment");
 
   // Step 2: Populate the required headers in the origin and check the policy
-  if (originStateHolder.current.status === "request_sent") {
+  if (details.state.pendingOrigin.current.status === "request_sent") {
     // let's check for delegation and add it only when populating the orgin the first time
 
     // enrollment info can be bundled with the manifest or passed in header
@@ -91,17 +90,17 @@ export async function validateResponseHeaders(
       } catch {
         return new WebcatError(WebcatErrorCode.Headers.ENROLLMENT_MALFORMED);
       }
-      originStateHolder.current = await (
-        originStateHolder.current as OriginStateInitial
+      details.state.pendingOrigin.current = await (
+        details.state.pendingOrigin.current as OriginStateInitial
       ).verifyEnrollment(enrollment, delegation);
     } else {
-      originStateHolder.current = await (
-        originStateHolder.current as OriginStateInitial
+      details.state.pendingOrigin.current = await (
+        details.state.pendingOrigin.current as OriginStateInitial
       ).verifyEnrollment(undefined, delegation);
     }
 
-    if (originStateHolder.current.status === "failed") {
-      return (originStateHolder.current as OriginStateFailed).error;
+    if (details.state.pendingOrigin.current.status === "failed") {
+      return (details.state.pendingOrigin.current as OriginStateFailed).error;
     }
 
     logger.addLog(
@@ -112,18 +111,18 @@ export async function validateResponseHeaders(
     );
 
     // Step 3: Populate and validate the manifest
-    originStateHolder.current = await (
-      originStateHolder.current as OriginStateVerifiedEnrollment
+    details.state.pendingOrigin.current = await (
+      details.state.pendingOrigin.current as OriginStateVerifiedEnrollment
     ).verifyManifest();
-    if (originStateHolder.current.status === "failed") {
-      return (originStateHolder.current as OriginStateFailed).error;
+    if (details.state.pendingOrigin.current.status === "failed") {
+      return (details.state.pendingOrigin.current as OriginStateFailed).error;
     }
 
     // Step 4: Ensure we are at the expected final state now
     // This should never happen
-    if (originStateHolder.current.status !== "verified_manifest") {
+    if (details.state.pendingOrigin.current.status !== "verified_manifest") {
       throw new Error(
-        `Error with the origin state: expected origin to be in state verified_manifest, got ${originStateHolder.current.status}`,
+        `Error with the origin state: expected origin to be in state verified_manifest, got ${details.state.pendingOrigin.current.status}`,
       );
     }
 
@@ -131,15 +130,15 @@ export async function validateResponseHeaders(
       "info",
       `Metadata for ${details.url} loaded`,
       details.tabId,
-      fqdn,
+      details.state.fqdn,
     );
   }
 
   // Now, we should have the manifest, and can validate the CSP based on path
   /* DEVELOPMENT GUARD */
   if (
-    !originStateHolder.current.manifest ||
-    originStateHolder.current.status !== "verified_manifest"
+    !details.state.pendingOrigin.current.manifest ||
+    details.state.pendingOrigin.current.status !== "verified_manifest"
   ) {
     // Though this should never happen?
     throw new Error(
@@ -152,29 +151,28 @@ export async function validateResponseHeaders(
   // has been updated and that users should update the manifest before loading
   if (
     version &&
-    isNewerSemver(version, originStateHolder.current.manifest.version)
+    isNewerSemver(version, details.state.pendingOrigin.current.manifest.version)
   ) {
     logger.addLog(
       "info",
-      `Detected new version ${version}, current_version ${originStateHolder.current.manifest.version}`,
+      `Detected new version ${version}, current_version ${details.state.pendingOrigin.current.manifest.version}`,
       details.tabId,
-      fqdn,
+      details.state.fqdn,
     );
-    origins.delete(CacheKey(fqdn, cachePartition));
+    origins.delete(CacheKey(details.state.fqdn, details.state.cachePartition));
     // Mark the holder so any sibling request that shares it won't re-insert
     // it via commitVerifiedOrigin later
-    originStateHolder.stale = true;
-    await clearBrowserCaches([fqdn]);
+    details.state.pendingOrigin.stale = true;
+    await clearBrowserCaches([details.state.fqdn]);
     browser.tabs.reload(details.tabId);
   }
 
   const pathname = new URL(details.url).pathname;
   if (csp) {
     if (
-      !(originStateHolder.current as OriginStateVerifiedManifest).verifyCSP(
-        csp,
-        pathname,
-      )
+      !(
+        details.state.pendingOrigin.current as OriginStateVerifiedManifest
+      ).verifyCSP(csp, pathname)
     ) {
       return new WebcatError(WebcatErrorCode.CSP.MISMATCH, [String(pathname)]);
     }
@@ -183,14 +181,14 @@ export async function validateResponseHeaders(
       "info",
       `CSP validated for path ${pathname}`,
       details.tabId,
-      fqdn,
+      details.state.fqdn,
     );
   } else if (details.fromCache === true || details.statusCode === 304) {
     logger.addLog(
       "debug",
       `Skipping CSP check for cached/304 response on path ${pathname}`,
       details.tabId,
-      fqdn,
+      details.state.fqdn,
     );
   } else {
     return new WebcatError(WebcatErrorCode.Headers.MISSING_CRITICAL, [
@@ -202,7 +200,7 @@ export async function validateResponseHeaders(
   // It's important not do do it for sub_frames, otherwise validating a subresource
   // would display as if the entire site was verified
   if (details.type === "main_frame") {
-    setOKIcon(details.tabId, originStateHolder.current.delegation);
+    setOKIcon(details.tabId, details.state.pendingOrigin.current.delegation);
   }
 }
 
@@ -219,26 +217,34 @@ function assertVerifiedManifest(
   }
 }
 
+function assertHeadersAvailable<T>(
+  details: BeforeRequestDetails & T,
+): asserts details is HeadersReceivedDetails & T {
+  if (!("responseHeaders" in details)) {
+    throw new Error("response headers not available when expected");
+  }
+}
+
 export async function validateResponseContent(
-  event: RequestEvent<BeforeRequestDetails>,
-  originStateHolder: OriginStateHolder,
-  cachePartition: CachePartition,
+  details: Stateful<BeforeRequestDetails>,
 ) {
   function deny(filter: browser.webRequest.StreamFilter) {
     // DENIED
     filter.write(new Uint8Array([68, 69, 78, 73, 69, 68]));
   }
 
-  const details = event.details;
   const pathname = new URL(details.url).pathname;
-  const fqdn = getFQDN(details.url);
+  const originStateHolder = details.state.pendingOrigin;
+  if (!originStateHolder) {
+    throw new Error("missing pendingOrigin in request state");
+  }
 
   let manifest!: Manifest;
   const filter = browser.webRequest.filterResponseData(details.requestId);
   const source: Promise<ArrayBuffer>[] = [];
   filter.onstart = () => {
-    const details = event.details as HeadersReceivedDetails;
     assertVerifiedManifest(originStateHolder);
+    assertHeadersAvailable(details);
     manifest = originStateHolder.current.manifest;
     // If a pass-through media type isn't in the manifest, bail before receiving
     // any data so large files don't get buffered into the extension for nothing.
@@ -263,11 +269,12 @@ export async function validateResponseContent(
             const hooks = getHooks(
               hooksType.page,
               manifest.wasm,
-              cachePartition.firstParty,
+              details.state.cachePartition.firstParty,
               // Hooks are only injected to workers, and CSP restrictions only allow
               // same-origin workers, so the request's web origin is the URL's origin;
               // determine whether the URL is same-origin with the first party
-              cachePartition.firstParty === new URL(details.url).origin,
+              details.state.cachePartition.firstParty ===
+                new URL(details.url).origin,
             );
             source.push(hooks.then((h) => stringToUint8Array(h).buffer));
           }
@@ -320,7 +327,7 @@ export async function validateResponseContent(
         "warn",
         `Request canceled, url: ${details.url}`,
         details.tabId,
-        fqdn,
+        details.state.fqdn,
       );
       filter.close();
       return;
@@ -346,7 +353,7 @@ export async function validateResponseContent(
       filter.close();
       errorpage(
         details.tabId,
-        fqdn,
+        details.state.fqdn,
         new WebcatError(WebcatErrorCode.File.MISSING, [pathname]),
       );
       return;
@@ -365,7 +372,7 @@ export async function validateResponseContent(
       filter.close();
       errorpage(
         details.tabId,
-        fqdn,
+        details.state.fqdn,
         new WebcatError(WebcatErrorCode.File.MISMATCH, [
           pathname,
           String(manifest_hash),
@@ -376,7 +383,12 @@ export async function validateResponseContent(
     }
 
     // If everything is OK then we can just write the raw blob back
-    logger.addLog("info", `${pathname} verified.`, details.tabId, fqdn);
+    logger.addLog(
+      "info",
+      `${pathname} verified.`,
+      details.tabId,
+      details.state.fqdn,
+    );
 
     await writeQueue;
     filter.write(blob);

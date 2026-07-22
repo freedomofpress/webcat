@@ -1,37 +1,31 @@
-import { db, origins, requestInfo, tabs } from "./../globals";
+import { BeforeRequestDetails } from "../browser/requests";
+import { db, origins, tabs } from "./../globals";
 import { CacheKey } from "./cache";
-import { metadataRequestSource } from "./interfaces/base";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
   BundleFetcher,
   OriginStateHolder,
   OriginStateInitial,
 } from "./interfaces/originstate";
-import { CachePartition, RequestInfo } from "./interfaces/requestinfo";
+import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
 import { enforceHTTPS, validateProtocolAndPort } from "./validators";
 
-export async function validateOrigin(
-  fqdn: string,
-  url: string,
-  tabId: number,
-  type: metadataRequestSource,
-  requestId: string,
-  cachePartition: CachePartition,
-) {
+export async function validateOrigin(details: Stateful<BeforeRequestDetails>) {
+  const { fqdn, cachePartition, isFrame } = details.state;
   const enrollment_hash = await db.getFQDNEnrollment(fqdn, cachePartition);
   if (enrollment_hash.length === 0) {
     //console.debug(`${url} is not enrolled, skipping...`);
     return;
   }
 
-  if (type === metadataRequestSource.main_frame) {
-    setIcon(tabId);
+  if (isFrame) {
+    setIcon(details.tabId);
   }
 
   // See https://github.com/freedomofpress/webcat/issues/1
-  const urlobj = new URL(url);
+  const urlobj = new URL(details.url);
 
   if (!validateProtocolAndPort(urlobj)) {
     return new WebcatError(WebcatErrorCode.URL.UNSUPPORTED, [
@@ -46,17 +40,14 @@ export async function validateOrigin(
   }
 
   // Nothing can go wrong in this func anymore hopefully, let's add the reference
-  if (type === metadataRequestSource.main_frame) {
-    tabs.set(tabId, cachePartition);
+  if (isFrame) {
+    tabs.set(details.tabId, cachePartition);
   }
 
   const cached = origins.get(CacheKey(fqdn, cachePartition));
   if (cached) {
     // Pin the holder to this request so later stages cannot race against LRU eviction
-    requestInfo.set(
-      requestId,
-      new RequestInfo({ pendingOrigin: cached, cachePartition }),
-    );
+    details.state.pendingOrigin = cached;
     return;
   }
 
@@ -64,7 +55,7 @@ export async function validateOrigin(
   logger.addLog(
     "info",
     `${fqdn} is enrolled, but we do not have metadata yet.`,
-    tabId,
+    details.tabId,
     fqdn,
   );
 
@@ -81,10 +72,7 @@ export async function validateOrigin(
     cachePartition,
   );
   const origin = new OriginStateHolder(newOriginState);
-  requestInfo.set(
-    requestId,
-    new RequestInfo({ pendingOrigin: origin, cachePartition }),
-  );
+  details.state.pendingOrigin = origin;
 
   // See https://github.com/freedomofpress/webcat/issues/95
   await origin.current.fetcher.awaitAll();

@@ -35,7 +35,7 @@ import {
   SigsumSignatures,
 } from "./interfaces/bundle";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
-import { CachePartition } from "./interfaces/requestinfo";
+import { CachePartition } from "./interfaces/requeststate";
 import { parseContentSecurityPolicy } from "./parsers";
 import { FRAME_TYPES } from "./resources";
 import { getFQDNSafe } from "./utils";
