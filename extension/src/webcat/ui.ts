@@ -1,4 +1,6 @@
+import { RequestDetails } from "../browser/requests";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
+import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { clearBrowserCaches, getFQDN } from "./utils";
 
@@ -77,21 +79,19 @@ export function setErrorIcon(tabId: number) {
 }
 
 export async function errorpage(
-  tabId: number,
-  fqdn: string,
+  details: Stateful<RequestDetails>,
   error?: WebcatError,
-  replace = true,
 ) {
   const tabIds = new Set<number>();
   const frameLookups = [];
-  if (tabId < 0) {
+  if (details.tabId < 0) {
     const tabs = await browser.tabs.query({});
     for (const tab of tabs) {
       if (
         tab.url &&
         tab.id &&
         /https?:\/\//i.test(tab.url) &&
-        fqdn === getFQDN(tab.url)
+        details.state.fqdn === getFQDN(tab.url)
       ) {
         tabIds.add(tab.id);
       } else if (tab.id) {
@@ -100,7 +100,7 @@ export async function errorpage(
             frames.forEach((frame) => {
               if (
                 /https?:\/\//i.test(frame.url) &&
-                fqdn === getFQDN(frame.url)
+                details.state.fqdn === getFQDN(frame.url)
               ) {
                 tabIds.add(frame.tabId);
               }
@@ -111,12 +111,12 @@ export async function errorpage(
     }
     await Promise.all(frameLookups);
   } else {
-    tabIds.add(tabId);
+    tabIds.add(details.tabId);
   }
 
   const code = error?.code ?? "WEBCAT_ERROR_UNDEFINED";
 
-  const params = new URLSearchParams({ code, host: fqdn });
+  const params = new URLSearchParams({ code, host: details.state.fqdn });
 
   if (
     (code === WebcatErrorCode.File.MISMATCH ||
@@ -132,10 +132,13 @@ export async function errorpage(
   const tabUpdates: Promise<browser.tabs.Tab>[] = [];
   tabIds.forEach((tabId) =>
     tabUpdates.push(
-      browser.tabs.update(tabId, { url: errorPageUrl, loadReplace: replace }),
+      browser.tabs.update(tabId, {
+        url: errorPageUrl,
+        loadReplace: !details.state.isFrame,
+      }),
     ),
   );
   await Promise.all(tabUpdates);
 
-  await clearBrowserCaches([fqdn]);
+  await clearBrowserCaches([details.state.fqdn]);
 }
