@@ -5,9 +5,10 @@ import {
   FETCH_TIMEOUT_MS,
   UPDATE_INTERVAL_MS,
 } from "./config";
-import { db, nonOrigins, origins } from "./globals";
+import { nonOrigins, origins } from "./globals";
 import validator_set from "./validator_set.json";
 import { isInPartition } from "./webcat/cache";
+import { WebcatDatabase } from "./webcat/db";
 import { WebcatRequestHandler } from "./webcat/handler";
 import { setErrorIcon } from "./webcat/ui";
 import { EnrollmentUpdater } from "./webcat/updater";
@@ -47,7 +48,8 @@ browser.windows.onRemoved.addListener(async () => {
   }
 });
 
-const requestHandler = new WebcatRequestHandler();
+const db = new WebcatDatabase();
+const requestHandler = new WebcatRequestHandler(db);
 const updater = new EnrollmentUpdater({
   endpoint: endpoint,
   database: db,

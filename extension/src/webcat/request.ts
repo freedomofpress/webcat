@@ -1,6 +1,7 @@
 import { BeforeRequestDetails } from "../browser/requests";
-import { db, origins, tabs } from "./../globals";
+import { origins, tabs } from "./../globals";
 import { CacheKey } from "./cache";
+import { WebcatDatabase } from "./db";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
   BundleFetcher,
@@ -39,7 +40,10 @@ export function enforceHTTPS(urlobj: URL): string | undefined {
   }
 }
 
-export async function validateOrigin(details: Stateful<BeforeRequestDetails>) {
+export async function validateOrigin(
+  db: WebcatDatabase,
+  details: Stateful<BeforeRequestDetails>,
+) {
   const { fqdn, cachePartition, isFrame } = details.state;
   const enrollment_hash = await db.getFQDNEnrollment(fqdn, cachePartition);
   if (enrollment_hash.length === 0) {
