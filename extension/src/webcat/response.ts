@@ -2,9 +2,7 @@ import {
   BeforeRequestDetails,
   HeadersReceivedDetails,
 } from "../browser/requests";
-import { origins } from "./../globals";
 import { CacheKey } from "./cache";
-import { WebcatDatabase } from "./db";
 import {
   base64UrlToUint8Array,
   stringToUint8Array,
@@ -13,16 +11,17 @@ import {
 } from "./encoding";
 import { HookBuilder } from "./hookbuilder";
 import { Enrollment, Manifest } from "./interfaces/bundle";
+import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
+import { OriginStateHolder } from "./interfaces/originstate";
+import { Stateful } from "./interfaces/requeststate";
+import { logger } from "./logger";
 import {
   OriginStateFailed,
-  OriginStateHolder,
   OriginStateInitial,
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
-} from "./interfaces/originstate";
-import { Stateful } from "./interfaces/requeststate";
-import { logger } from "./logger";
+} from "./originstate";
 import { PASS_THROUGH_TYPES } from "./resources";
 import { errorpage, setOKIcon } from "./ui";
 import {
@@ -78,10 +77,10 @@ export class ResponseValidator {
   readonly #endMarker = stringToUint8Array(
     `__WEBCAT_END__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
   );
-  readonly #db: WebcatDatabase;
+  readonly #db: Database;
   readonly #hooks: HookBuilder;
 
-  constructor(db: WebcatDatabase, hooks: HookBuilder) {
+  constructor(db: Database, hooks: HookBuilder) {
     this.#db = db;
     this.#hooks = hooks;
   }
@@ -190,7 +189,7 @@ export class ResponseValidator {
         `Detected new version ${version}, current_version ${details.state.pendingOrigin.current.manifest.version}`,
         details,
       );
-      origins.delete(
+      this.#db.origins.delete(
         CacheKey(details.state.fqdn, details.state.cachePartition),
       );
       // Mark the holder so any sibling request that shares it won't re-insert

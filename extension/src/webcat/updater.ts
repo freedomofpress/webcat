@@ -7,8 +7,8 @@ import {
   WebcatLeavesFile,
 } from "@freedomofpress/ics23/dist/webcat";
 
-import { WebcatDatabase } from "./db";
 import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
+import { Database } from "./interfaces/database";
 import { arraysEqual } from "./utils";
 
 declare const __IS_TESTING__: boolean;
@@ -26,7 +26,7 @@ export class UpdateEvent extends Event {
 
 export type EnrollmentUpdaterOptions = {
   endpoint: string;
-  database: WebcatDatabase;
+  database: Database;
   validatorSet: ValidatorJson;
   checkInterval?: number;
   updateInterval?: number;
@@ -43,7 +43,7 @@ export class EnrollmentUpdater extends EventTarget {
   static readonly DefaultFetchTimeout = 3000; // 3 seconds
 
   readonly #endpoint: string;
-  readonly #db: WebcatDatabase;
+  readonly #db: Database;
   readonly #validatorSet: ValidatorJson;
   readonly #checkInterval: number;
   readonly #updateInterval: number;

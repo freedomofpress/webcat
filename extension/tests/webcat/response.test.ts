@@ -19,14 +19,14 @@ import {
   WebcatError,
   WebcatErrorCode,
 } from "../../src/webcat/interfaces/errors";
+import { Stateful } from "../../src/webcat/interfaces/requeststate";
 import {
   BundleFetcher,
   OriginStateFailed,
   OriginStateInitial,
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
-} from "../../src/webcat/interfaces/originstate";
-import { Stateful } from "../../src/webcat/interfaces/requeststate";
+} from "../../src/webcat/originstate";
 import {
   isSafeRelativeLocation,
   ResponseValidator,

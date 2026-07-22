@@ -1,15 +1,14 @@
 import { BeforeRequestDetails } from "../browser/requests";
-import { origins } from "./../globals";
 import { CacheKey } from "./cache";
-import { WebcatDatabase } from "./db";
+import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
+import { Stateful } from "./interfaces/requeststate";
+import { logger } from "./logger";
 import {
   BundleFetcher,
   OriginStateHolder,
   OriginStateInitial,
-} from "./interfaces/originstate";
-import { Stateful } from "./interfaces/requeststate";
-import { logger } from "./logger";
+} from "./originstate";
 import { setIcon } from "./ui";
 
 declare const __IS_TESTING__: boolean;
@@ -41,7 +40,7 @@ export function enforceHTTPS(urlobj: URL): string | undefined {
 }
 
 export async function validateOrigin(
-  db: WebcatDatabase,
+  db: Database,
   details: Stateful<BeforeRequestDetails>,
 ) {
   const { fqdn, cachePartition, isFrame } = details.state;
@@ -70,7 +69,7 @@ export async function validateOrigin(
     return { redirectUrl: redirect };
   }
 
-  const cached = origins.get(CacheKey(fqdn, cachePartition));
+  const cached = db.origins.get(CacheKey(fqdn, cachePartition));
   if (cached) {
     // Pin the holder to this request so later stages cannot race against LRU eviction
     details.state.pendingOrigin = cached;

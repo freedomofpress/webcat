@@ -5,17 +5,14 @@ import {
   RequestHandler,
 } from "../browser/requests";
 import { ContentScript } from "../browser/scripting";
-import { origins } from "../globals";
 import { CacheKey } from "./cache";
-import { WebcatDatabase } from "./db";
 import { HookBuilder } from "./hookbuilder";
+import { Database } from "./interfaces/database";
 import { WebcatError } from "./interfaces/errors";
-import {
-  OriginStateHolder,
-  OriginStateVerifiedManifest,
-} from "./interfaces/originstate";
-import { CachePartition, Stateful } from "./interfaces/requeststate";
+import { CachePartition, OriginStateHolder } from "./interfaces/originstate";
+import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
+import { OriginStateVerifiedManifest } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
@@ -34,11 +31,11 @@ export interface WebcatRequestHandler extends RequestHandler {
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebcatRequestHandler extends RequestHandler {
   readonly #hooks = new HookBuilder();
-  readonly #db: WebcatDatabase;
+  readonly #db: Database;
   readonly #contentScript = new ContentScript(this.#hooks.getStaticHookPath());
   readonly #responseValidator: ResponseValidator;
 
-  constructor(db: WebcatDatabase) {
+  constructor(db: Database) {
     super();
     this.#db = db;
     this.#responseValidator = new ResponseValidator(this.#db, this.#hooks);
@@ -87,7 +84,7 @@ export class WebcatRequestHandler extends RequestHandler {
 
     // For non-frames, check for cached origin
     if (!details.state.isFrame) {
-      details.state.pendingOrigin = origins.get(
+      details.state.pendingOrigin = this.#db.origins.get(
         CacheKey(details.state.fqdn, details.state.cachePartition),
       );
     }
@@ -214,7 +211,7 @@ export class WebcatRequestHandler extends RequestHandler {
     }
     const incoming = (holder.current as OriginStateVerifiedManifest).manifest
       .version;
-    const existing = origins.get(CacheKey(fqdn, cachePartition));
+    const existing = this.#db.origins.get(CacheKey(fqdn, cachePartition));
     if (existing && existing.current.status === "verified_manifest") {
       const current = (existing.current as OriginStateVerifiedManifest).manifest
         .version;
@@ -222,7 +219,7 @@ export class WebcatRequestHandler extends RequestHandler {
         return;
       }
     }
-    origins.set(CacheKey(fqdn, cachePartition), holder);
+    this.#db.origins.set(CacheKey(fqdn, cachePartition), holder);
   }
 
   /**

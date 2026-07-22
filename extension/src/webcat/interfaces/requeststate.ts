@@ -1,6 +1,4 @@
-import { OriginStateHolder } from "./originstate";
-
-export type CachePartition = { firstParty: string; incognito: boolean };
+import { CachePartition, OriginStateHolder } from "./originstate";
 
 export type RequestState = {
   fqdn: string;
