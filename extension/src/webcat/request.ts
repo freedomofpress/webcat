@@ -11,7 +11,7 @@ import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
 
-function validateProtocolAndPort(urlobj: URL): boolean {
+export function validateProtocolAndPort(urlobj: URL): boolean {
   if (
     !["80", "443", ""].includes(urlobj.port) ||
     !["http:", "https:"].includes(urlobj.protocol)
@@ -22,7 +22,7 @@ function validateProtocolAndPort(urlobj: URL): boolean {
   }
 }
 
-function enforceHTTPS(urlobj: URL): string | undefined {
+export function enforceHTTPS(urlobj: URL): string | undefined {
   if (
     urlobj.protocol !== "https:" &&
     urlobj.hostname.substring(urlobj.hostname.lastIndexOf(".")) !== ".onion"
