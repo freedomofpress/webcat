@@ -325,8 +325,7 @@ export async function validateResponseContent(
       deny(filter);
       filter.close();
       errorpage(
-        details.tabId,
-        details.state.fqdn,
+        details,
         new WebcatError(WebcatErrorCode.File.MISSING, [pathname]),
       );
       return;
@@ -344,8 +343,7 @@ export async function validateResponseContent(
       deny(filter);
       filter.close();
       errorpage(
-        details.tabId,
-        details.state.fqdn,
+        details,
         new WebcatError(WebcatErrorCode.File.MISMATCH, [
           pathname,
           String(manifest_hash),

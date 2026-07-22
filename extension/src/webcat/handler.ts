@@ -95,12 +95,7 @@ export class WebcatRequestHandler extends RequestHandler {
       if (result instanceof WebcatError) {
         if (details.state.isFrame) {
           tabs.delete(details.tabId);
-          errorpage(
-            details.tabId,
-            details.state.fqdn,
-            result,
-            !details.state.isFrame,
-          );
+          errorpage(details, result);
         }
         return blockingResponse.set({ cancel: true });
       }
@@ -141,12 +136,7 @@ export class WebcatRequestHandler extends RequestHandler {
         details,
       );
       tabs.delete(details.tabId);
-      errorpage(
-        details.tabId,
-        details.state.fqdn,
-        result,
-        !FRAME_TYPES.includes(details.type),
-      );
+      errorpage(details, result);
       return blockingResponse.set({ cancel: true });
     }
 
