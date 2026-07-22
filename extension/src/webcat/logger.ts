@@ -1,4 +1,6 @@
+import { RequestDetails } from "../browser/requests";
 import { LogEntry } from "./interfaces/log";
+import { Stateful } from "./interfaces/requeststate";
 
 type ConsoleLevel = "log" | "warn" | "error" | "info" | "debug";
 const globalLogs: LogEntry[] = [];
@@ -55,6 +57,51 @@ class Logger {
         `[${logEntry.timestamp.toISOString()}] [${tab}] [${logEntry.origin}] ${logEntry.message}`,
       );
     }
+  }
+
+  /** Adds a log entry with the default level. */
+  public log(
+    message: string,
+    details: Stateful<RequestDetails>,
+    stack?: string,
+  ) {
+    this.addLog("log", message, details.tabId, details.state.fqdn, stack);
+  }
+
+  /** Adds a warning log entry. */
+  public warn(
+    message: string,
+    details: Stateful<RequestDetails>,
+    stack?: string,
+  ) {
+    this.addLog("warn", message, details.tabId, details.state.fqdn, stack);
+  }
+
+  /** Adds an error log entry. */
+  public error(
+    message: string,
+    details: Stateful<RequestDetails>,
+    stack?: string,
+  ) {
+    this.addLog("error", message, details.tabId, details.state.fqdn, stack);
+  }
+
+  /** Adds an informational log entry. */
+  public info(
+    message: string,
+    details: Stateful<RequestDetails>,
+    stack?: string,
+  ) {
+    this.addLog("info", message, details.tabId, details.state.fqdn, stack);
+  }
+
+  /** Add a debug log entry. */
+  public debug(
+    message: string,
+    details: Stateful<RequestDetails>,
+    stack?: string,
+  ) {
+    this.addLog("debug", message, details.tabId, details.state.fqdn, stack);
   }
 
   /**

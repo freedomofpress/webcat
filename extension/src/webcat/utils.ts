@@ -1,3 +1,4 @@
+import { BeforeRequestDetails } from "../browser/requests";
 import { firstPartyKey } from "../globals";
 import { logger } from "./logger";
 
@@ -90,7 +91,7 @@ export async function clearBrowserCaches(fqdns: string[]) {
  * Determines the first-party origin (FPO) for a given request
  */
 export async function getFirstParty(
-  details: browser.webRequest._OnBeforeRequestDetails,
+  details: BeforeRequestDetails,
 ): Promise<string> {
   if (details.tabId === -1 || details.frameId === 0) {
     // This might be a SharedWorker or a ServiceWorker,

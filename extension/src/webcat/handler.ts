@@ -71,12 +71,7 @@ export class WebcatRequestHandler extends RequestHandler {
 
     // Frame-only pre-setup: retry pending list updates
     if (details.state.isFrame) {
-      logger.addLog(
-        "info",
-        `Loading ${details.type} ${details.url}`,
-        details.tabId,
-        details.state.fqdn,
-      );
+      logger.info(`Loading ${details.type} ${details.url}`, details);
       const beforeframeload = new RequestEvent(
         "beforeframeload",
         event.details,
@@ -112,12 +107,7 @@ export class WebcatRequestHandler extends RequestHandler {
       if (result) {
         // HTTPS redirect; browser reissues under a fresh requestId.
         if (details.state.isFrame) {
-          logger.addLog(
-            "info",
-            `Redirecting to https`,
-            details.tabId,
-            details.state.fqdn,
-          );
+          logger.info(`Redirecting to https`, details);
         }
         return blockingResponse.set(result);
       }
@@ -146,11 +136,9 @@ export class WebcatRequestHandler extends RequestHandler {
 
     const result = await validateResponseHeaders(details);
     if (result instanceof WebcatError) {
-      logger.addLog(
-        "error",
+      logger.error(
         `Error when parsing response headers: ${result}: ${result.details?.join(", ")}`,
-        details.tabId,
-        details.state.fqdn,
+        details,
       );
       tabs.delete(details.tabId);
       errorpage(

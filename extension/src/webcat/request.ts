@@ -52,12 +52,7 @@ export async function validateOrigin(details: Stateful<BeforeRequestDetails>) {
   }
 
   // Generate a new state for the origin
-  logger.addLog(
-    "info",
-    `${fqdn} is enrolled, but we do not have metadata yet.`,
-    details.tabId,
-    fqdn,
-  );
+  logger.info(`${fqdn} is enrolled, but we do not have metadata yet.`, details);
 
   // Policy hash is checked at the top and then later again
   const newFetcher = new BundleFetcher(

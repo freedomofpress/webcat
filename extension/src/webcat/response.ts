@@ -28,7 +28,6 @@ import { errorpage, setOKIcon } from "./ui";
 import {
   arraysEqual,
   clearBrowserCaches,
-  getFQDN,
   isNewerSemver,
   SHA256,
 } from "./utils";
@@ -50,11 +49,9 @@ export async function validateResponseHeaders(
   }
   // Some headers, such as CSP, needs to always be validated
 
-  logger.addLog(
-    "info",
+  logger.info(
     `Validating response headers, url: ${details.url} status: ${details.state.pendingOrigin.current.status}`,
-    details.tabId,
-    details.state.fqdn,
+    details,
   );
 
   // Step 1: Extract headers, normalize, check for duplicates and mandatory ones
@@ -103,12 +100,7 @@ export async function validateResponseHeaders(
       return (details.state.pendingOrigin.current as OriginStateFailed).error;
     }
 
-    logger.addLog(
-      "debug",
-      "Header parsing complete",
-      details.tabId,
-      getFQDN(details.url),
-    );
+    logger.debug("Header parsing complete", details);
 
     // Step 3: Populate and validate the manifest
     details.state.pendingOrigin.current = await (
@@ -126,12 +118,7 @@ export async function validateResponseHeaders(
       );
     }
 
-    logger.addLog(
-      "info",
-      `Metadata for ${details.url} loaded`,
-      details.tabId,
-      details.state.fqdn,
-    );
+    logger.info(`Metadata for ${details.url} loaded`, details);
   }
 
   // Now, we should have the manifest, and can validate the CSP based on path
@@ -153,11 +140,9 @@ export async function validateResponseHeaders(
     version &&
     isNewerSemver(version, details.state.pendingOrigin.current.manifest.version)
   ) {
-    logger.addLog(
-      "info",
+    logger.info(
       `Detected new version ${version}, current_version ${details.state.pendingOrigin.current.manifest.version}`,
-      details.tabId,
-      details.state.fqdn,
+      details,
     );
     origins.delete(CacheKey(details.state.fqdn, details.state.cachePartition));
     // Mark the holder so any sibling request that shares it won't re-insert
@@ -177,18 +162,11 @@ export async function validateResponseHeaders(
       return new WebcatError(WebcatErrorCode.CSP.MISMATCH, [String(pathname)]);
     }
 
-    logger.addLog(
-      "info",
-      `CSP validated for path ${pathname}`,
-      details.tabId,
-      details.state.fqdn,
-    );
+    logger.info(`CSP validated for path ${pathname}`, details);
   } else if (details.fromCache === true || details.statusCode === 304) {
-    logger.addLog(
-      "debug",
+    logger.debug(
       `Skipping CSP check for cached/304 response on path ${pathname}`,
-      details.tabId,
-      details.state.fqdn,
+      details,
     );
   } else {
     return new WebcatError(WebcatErrorCode.Headers.MISSING_CRITICAL, [
@@ -323,12 +301,7 @@ export async function validateResponseContent(
         await details.completed;
       }
     } catch {
-      logger.addLog(
-        "warn",
-        `Request canceled, url: ${details.url}`,
-        details.tabId,
-        details.state.fqdn,
-      );
+      logger.warn(`Request canceled, url: ${details.url}`, details);
       filter.close();
       return;
     }
@@ -383,12 +356,7 @@ export async function validateResponseContent(
     }
 
     // If everything is OK then we can just write the raw blob back
-    logger.addLog(
-      "info",
-      `${pathname} verified.`,
-      details.tabId,
-      details.state.fqdn,
-    );
+    logger.info(`${pathname} verified.`, details);
 
     await writeQueue;
     filter.write(blob);
