@@ -8,7 +8,6 @@ export const origins = new LRUCache<
   OriginStateHolder
 >(lru_cache_size);
 export const nonOrigins = new LRUSet<CacheKey<CachePartition>>(lru_set_size);
-export const tabs: Map<number, CachePartition> = new Map();
 
 declare const __IS_TESTING__: boolean;
 if (__IS_TESTING__) {
@@ -16,7 +15,6 @@ if (__IS_TESTING__) {
     value: {
       origins,
       nonOrigins,
-      tabs,
     },
   });
 }
