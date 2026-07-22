@@ -1,5 +1,4 @@
 import { BeforeRequestDetails, RequestEvent } from "./browser/requests";
-import { ContentScript } from "./browser/scripting";
 import {
   CHECK_INTERVAL_MS,
   endpoint,
@@ -49,7 +48,6 @@ browser.windows.onRemoved.addListener(async () => {
 });
 
 const requestHandler = new WebcatRequestHandler();
-const contentScript = new ContentScript("dist/hooks/content.js");
 const updater = new EnrollmentUpdater({
   endpoint: endpoint,
   database: db,
@@ -70,8 +68,7 @@ requestHandler.addEventListener(
 updater.addEventListener("updated", async () => {
   try {
     const fqdns = await db.listAllFQDNs();
-    requestHandler.bind(fqdns);
-    const newFqdns = await contentScript.bind(fqdns);
+    const newFqdns = await requestHandler.bind(fqdns);
     await clearBrowserCaches(newFqdns);
   } catch (error) {
     console.error("[webcat] Bundled list import failed:", error);

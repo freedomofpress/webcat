@@ -10,8 +10,7 @@ import {
   Uint8ArrayToBase64Url,
   Uint8ArrayToString,
 } from "./encoding";
-import { getHooks } from "./genhooks";
-import { hooksType } from "./interfaces/base";
+import { HookBuilder } from "./hookbuilder";
 import { Enrollment, Manifest } from "./interfaces/bundle";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
@@ -205,6 +204,7 @@ function assertHeadersAvailable<T>(
 
 export async function validateResponseContent(
   details: Stateful<BeforeRequestDetails>,
+  hookBuilder: HookBuilder,
 ) {
   function deny(filter: browser.webRequest.StreamFilter) {
     // DENIED
@@ -244,8 +244,7 @@ export async function validateResponseContent(
           header.value !== undefined
         ) {
           if (WORKER_FETCH_DESTINATIONS.includes(header.value)) {
-            const hooks = getHooks(
-              hooksType.page,
+            const hooks = hookBuilder.getPageHooks(
               manifest.wasm,
               details.state.cachePartition.firstParty,
               // Hooks are only injected to workers, and CSP restrictions only allow

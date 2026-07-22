@@ -1,7 +1,3 @@
-import { BeforeRequestDetails } from "../browser/requests";
-import { firstPartyKey } from "../globals";
-import { logger } from "./logger";
-
 export function getFQDN(url: string): string {
   const urlobj = new URL(url);
   return urlobj.hostname;
@@ -85,79 +81,4 @@ export async function clearBrowserCaches(fqdns: string[]) {
   // in 10 minutes. Figure out a way to deal with it safely. See
   // https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/handlerBehaviorChanged
   await browser.webRequest.handlerBehaviorChanged();
-}
-
-/**
- * Determines the first-party origin (FPO) for a given request
- */
-export async function getFirstParty(
-  details: BeforeRequestDetails,
-): Promise<string> {
-  if (details.tabId === -1 || details.frameId === 0) {
-    // This might be a SharedWorker or a ServiceWorker,
-    // or a Worker request affected by https://bugzilla.mozilla.org/show_bug.cgi?id=2048884
-    for (const url of [details.url, details.documentUrl, details.originUrl]) {
-      if (url === undefined) continue;
-      const markerIndex = url.lastIndexOf("#");
-      if (markerIndex !== -1) {
-        try {
-          const efpo = Uint8Array.fromBase64(url.substring(markerIndex + 1), {
-            alphabet: "base64url",
-          });
-          const fpo = await crypto.subtle.decrypt(
-            {
-              name: "AES-GCM",
-              iv: efpo.slice(0, 12),
-            },
-            await firstPartyKey,
-            efpo.slice(12),
-          );
-          // Encrypted FPO found in a SharedWorker or Worker URL hash, added there via hooked API
-          return new TextDecoder().decode(fpo);
-        } catch {
-          // The fragment was not a valid encrypted FPO; ignore
-        }
-      }
-    }
-    // No FPO found in URL hash; fall through
-  }
-  if (details.frameAncestors?.length) {
-    // This is a request with frameAncestors; FPO is the origin of the topmost (last) ancestor
-    return new URL(
-      details.frameAncestors[details.frameAncestors.length - 1].url,
-    ).origin;
-  }
-  if (details.frameId !== 0) {
-    // Subresource of a Worker in a frame; no frameAncestors available; check the tab
-    const frames = await browser.webNavigation.getAllFrames({
-      tabId: details.tabId,
-    });
-    if (frames.find((frame) => frame.frameId === details.frameId)) {
-      // Frame still exists; FPO is the origin of the frame with frameId === 0
-      return new URL(frames.find((frame) => frame.frameId === 0)?.url || "")
-        .origin;
-    }
-    logger.addLog(
-      "warn",
-      `Cannot determine first-party origin for '${details.url}'; using unique cache partition`,
-      details.tabId,
-      getFQDN(details.url),
-    );
-    return details.requestId;
-  }
-  if (details.documentUrl) {
-    // Loading into the top-level document; FPO is the origin of documentUrl
-    return new URL(details.documentUrl).origin;
-  }
-  if (details.type === "main_frame") {
-    // Top-level navigation; FPO is the origin of the request URL
-    return new URL(details.url).origin;
-  }
-  logger.addLog(
-    "error",
-    `No first-party origin found for '${details.url}'`,
-    details.tabId,
-    getFQDN(details.url),
-  );
-  return details.requestId;
 }

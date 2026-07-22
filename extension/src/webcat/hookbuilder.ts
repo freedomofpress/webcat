@@ -1,0 +1,130 @@
+import contentHooks from "./../../dist/hooks/content.js?raw";
+import pageHooks from "./../../dist/hooks/page.js?raw";
+
+const hooks = {
+  content_script: contentHooks,
+  page: pageHooks,
+};
+
+/**
+ * Builds hooks using unique cryptographic keys.
+ */
+export class HookBuilder {
+  readonly #firstPartyKey: Promise<CryptoKey>;
+  readonly #firstPartySalt: Uint8Array<ArrayBuffer>;
+
+  constructor() {
+    this.#firstPartyKey = crypto.subtle.generateKey(
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"],
+    );
+    this.#firstPartySalt = crypto.getRandomValues(
+      new Uint8Array(new ArrayBuffer(256 / 8)), // SHA-256 length
+    );
+  }
+
+  /**
+   * @returns the path to the static content script file
+   */
+  getStaticHookPath() {
+    return "dist/hooks/content.js";
+  }
+
+  /**
+   * @param wasm an array of hashes to validate WASM modules against
+   * @param firstParty the first-party origin of the associated page
+   * @param sameOrigin true if the target document is same-origin with the first party
+   * @returns hook code ready to be injected directly to a script file
+   */
+  async getPageHooks(wasm: string[], firstParty: string, sameOrigin: boolean) {
+    return this.#get("page", wasm, firstParty, sameOrigin);
+  }
+
+  /**
+   * @param wasm an array of hashes to validate WASM modules against
+   * @param firstParty the first-party origin of the associated page
+   * @param sameOrigin true if the target document is same-origin with the first party
+   * @returns hook code ready to be included in a content script
+   */
+  async getContentScriptHooks(
+    wasm: string[],
+    firstParty: string,
+    sameOrigin: boolean,
+  ) {
+    return this.#get("content_script", wasm, firstParty, sameOrigin);
+  }
+
+  /**
+   * @param url a URL where an encrypted fragment has been added via a hook
+   * @returns the decrypted fragment
+   */
+  async decryptFragment(url: string) {
+    const markerIndex = url.lastIndexOf("#");
+    if (markerIndex === -1) {
+      throw new Error("no fragment present when decrypting");
+    }
+    const efpo = Uint8Array.fromBase64(url.substring(markerIndex + 1), {
+      alphabet: "base64url",
+    });
+    const fpo = await crypto.subtle.decrypt(
+      {
+        name: "AES-GCM",
+        iv: efpo.slice(0, 12),
+      },
+      await this.#firstPartyKey,
+      efpo.slice(12),
+    );
+    return new TextDecoder().decode(fpo);
+  }
+
+  async #get(
+    type: "page" | "content_script",
+    wasm: string[],
+    firstParty: string,
+    sameOrigin: boolean,
+  ) {
+    // Generate deterministic IV using HKDF and SHA-256. Using firstParty as the input
+    // ensures the same IV is never used for encrypting two different plaintext. Using
+    // firstPartySalt instead of the default zero salt ensures an attacker can't generate
+    // collisions.
+    const iv = await crypto.subtle.deriveBits(
+      {
+        name: "HKDF",
+        hash: "SHA-256",
+        salt: this.#firstPartySalt,
+        info: new ArrayBuffer(),
+      },
+      await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(firstParty),
+        { name: "HKDF" },
+        false,
+        ["deriveBits"],
+      ),
+      96,
+    );
+    // Encrypt firstParty
+    const ct = new Uint8Array(
+      await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        await this.#firstPartyKey,
+        new TextEncoder().encode(firstParty),
+      ),
+    );
+    // Construct the first party URL fragment value
+    const efpo = new Uint8Array(iv.byteLength + ct.byteLength);
+    efpo.set(new Uint8Array(iv));
+    efpo.set(ct, iv.byteLength);
+    const efpoBase64 = efpo.toBase64({ alphabet: "base64url" });
+    // Return the hook script updated with data
+    return hooks[type].replace(
+      '"__DATA_PLACEHOLDER__"',
+      JSON.stringify({
+        hashes: wasm,
+        firstParty: efpoBase64,
+        sameOriginWithFirstParty: sameOrigin,
+      }),
+    );
+  }
+}

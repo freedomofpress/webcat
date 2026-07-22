@@ -15,14 +15,6 @@ export const db = new WebcatDatabase();
 export const endMarker = stringToUint8Array(
   `__WEBCAT_END__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
 );
-export const firstPartyKey = crypto.subtle.generateKey(
-  { name: "AES-GCM", length: 256 },
-  false,
-  ["encrypt", "decrypt"],
-);
-export const firstPartySalt = crypto.getRandomValues(
-  new Uint8Array(new ArrayBuffer(256 / 8)), // SHA-256 length
-);
 
 declare const __IS_TESTING__: boolean;
 if (__IS_TESTING__) {

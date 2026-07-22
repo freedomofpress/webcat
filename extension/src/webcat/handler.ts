@@ -4,10 +4,10 @@ import {
   RequestEvent,
   RequestHandler,
 } from "../browser/requests";
+import { ContentScript } from "../browser/scripting";
 import { origins, tabs } from "../globals";
 import { CacheKey } from "./cache";
-import { getHooks } from "./genhooks";
-import { hooksType } from "./interfaces/base";
+import { HookBuilder } from "./hookbuilder";
 import { WebcatError } from "./interfaces/errors";
 import {
   OriginStateHolder,
@@ -23,12 +23,7 @@ import {
   validateResponseHeaders,
 } from "./response";
 import { errorpage } from "./ui";
-import {
-  getFirstParty,
-  getFQDN,
-  isExtensionRequest,
-  isNewerSemver,
-} from "./utils";
+import { getFQDN, isExtensionRequest, isNewerSemver } from "./utils";
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export interface WebcatRequestHandler extends RequestHandler {
@@ -41,10 +36,18 @@ export interface WebcatRequestHandler extends RequestHandler {
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebcatRequestHandler extends RequestHandler {
+  readonly #hooks = new HookBuilder();
+  readonly #contentScript = new ContentScript(this.#hooks.getStaticHookPath());
+
   constructor() {
     super();
     this.addEventListener("beforerequest", this.#onRequest);
     this.addEventListener("headersreceived", this.#onHeaders);
+  }
+
+  async bind(fqdns: string[]): Promise<string[]> {
+    super.bind(fqdns);
+    return this.#contentScript.bind(fqdns);
   }
 
   async #initializeState(
@@ -54,7 +57,7 @@ export class WebcatRequestHandler extends RequestHandler {
       state: {
         fqdn: getFQDN(details.url),
         cachePartition: {
-          firstParty: await getFirstParty(details),
+          firstParty: await this.#getFirstParty(details),
           incognito: !!details.incognito,
         },
         isFrame: FRAME_TYPES.includes(details.type),
@@ -113,7 +116,7 @@ export class WebcatRequestHandler extends RequestHandler {
       return;
     }
 
-    await validateResponseContent(details);
+    await validateResponseContent(details, this.#hooks);
   }
 
   async #onHeaders(event: RequestEvent<HeadersReceivedDetails>) {
@@ -182,8 +185,7 @@ export class WebcatRequestHandler extends RequestHandler {
         browser.webNavigation.onDOMContentLoaded.removeListener(listener);
 
         await browser.tabs.executeScript(details.tabId, {
-          code: await getHooks(
-            hooksType.content_script,
+          code: await this.#hooks.getContentScriptHooks(
             wasm,
             details.state.cachePartition.firstParty,
             details.state.cachePartition.firstParty ===
@@ -222,5 +224,64 @@ export class WebcatRequestHandler extends RequestHandler {
       }
     }
     origins.set(CacheKey(fqdn, cachePartition), holder);
+  }
+
+  /**
+   * Determines the first-party origin (FPO) for a given request
+   */
+  async #getFirstParty(details: BeforeRequestDetails): Promise<string> {
+    if (details.tabId === -1 || details.frameId === 0) {
+      // This might be a SharedWorker or a ServiceWorker,
+      // or a Worker request affected by https://bugzilla.mozilla.org/show_bug.cgi?id=2048884
+      for (const url of [details.url, details.documentUrl, details.originUrl]) {
+        if (url === undefined) continue;
+        try {
+          // Try to decrypt the URL fragment; if successful, the result is the FPO
+          return await this.#hooks.decryptFragment(url);
+        } catch {
+          // The fragment was not a valid encrypted FPO; ignore
+        }
+      }
+      // No FPO found in URL hash; fall through
+    }
+    if (details.frameAncestors?.length) {
+      // This is a request with frameAncestors; FPO is the origin of the topmost (last) ancestor
+      return new URL(
+        details.frameAncestors[details.frameAncestors.length - 1].url,
+      ).origin;
+    }
+    if (details.frameId !== 0) {
+      // Subresource of a Worker in a frame; no frameAncestors available; check the tab
+      const frames = await browser.webNavigation.getAllFrames({
+        tabId: details.tabId,
+      });
+      if (frames.find((frame) => frame.frameId === details.frameId)) {
+        // Frame still exists; FPO is the origin of the frame with frameId === 0
+        return new URL(frames.find((frame) => frame.frameId === 0)?.url || "")
+          .origin;
+      }
+      logger.addLog(
+        "warn",
+        `Cannot determine first-party origin for '${details.url}'; using unique cache partition`,
+        details.tabId,
+        getFQDN(details.url),
+      );
+      return details.requestId;
+    }
+    if (details.documentUrl) {
+      // Loading into the top-level document; FPO is the origin of documentUrl
+      return new URL(details.documentUrl).origin;
+    }
+    if (details.type === "main_frame") {
+      // Top-level navigation; FPO is the origin of the request URL
+      return new URL(details.url).origin;
+    }
+    logger.addLog(
+      "error",
+      `No first-party origin found for '${details.url}'`,
+      details.tabId,
+      getFQDN(details.url),
+    );
+    return details.requestId;
   }
 }
