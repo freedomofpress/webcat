@@ -10,7 +10,27 @@ import {
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
-import { enforceHTTPS, validateProtocolAndPort } from "./validators";
+
+function validateProtocolAndPort(urlobj: URL): boolean {
+  if (
+    !["80", "443", ""].includes(urlobj.port) ||
+    !["http:", "https:"].includes(urlobj.protocol)
+  ) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
+function enforceHTTPS(urlobj: URL): string | undefined {
+  if (
+    urlobj.protocol !== "https:" &&
+    urlobj.hostname.substring(urlobj.hostname.lastIndexOf(".")) !== ".onion"
+  ) {
+    urlobj.protocol = "https:";
+    return urlobj.toString();
+  }
+}
 
 export async function validateOrigin(details: Stateful<BeforeRequestDetails>) {
   const { fqdn, cachePartition, isFrame } = details.state;
