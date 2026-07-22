@@ -1,6 +1,6 @@
 import { bundle_name, bundle_prev_name } from "../../config";
-import { db } from "../../globals";
 import { canonicalize } from "../canonicalize";
+import { WebcatDatabase } from "../db";
 import { stringToUint8Array } from "../encoding";
 import { arraysEqual } from "../utils";
 import { SHA256 } from "../utils";
@@ -188,7 +188,10 @@ export class OriginStateInitial extends OriginStateBase {
     super(fetcher, scheme, port, fqdn, enrollment_hash, cachePartition);
   }
 
-  public async verifyDelegation(delegation: string): Promise<boolean> {
+  public async verifyDelegation(
+    db: WebcatDatabase,
+    delegation: string,
+  ): Promise<boolean> {
     const delegation_hash = await db.getFQDNEnrollment(
       delegation,
       this.cachePartition,
@@ -202,11 +205,12 @@ export class OriginStateInitial extends OriginStateBase {
   // It will also return errors while fetching the bundles (though they are generated in awaitBundles)
   // and tell the next stages whether they should use the current or the previous bundle
   public async verifyEnrollment(
+    db: WebcatDatabase,
     enrollment?: Enrollment,
     delegation?: string,
   ): Promise<OriginStateVerifiedEnrollment | OriginStateFailed> {
     let verified_delegation;
-    if (delegation && (await this.verifyDelegation(delegation))) {
+    if (delegation && (await this.verifyDelegation(db, delegation))) {
       verified_delegation = delegation;
     }
 
@@ -320,6 +324,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
   }
 
   public async verifyManifest(
+    db: WebcatDatabase,
     manifest?: Manifest,
     signatures?: SigsumSignatures | SigstoreSignatures,
   ): Promise<OriginStateVerifiedManifest | OriginStateFailed> {
@@ -375,6 +380,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     // Validate the default CSP
     try {
       await validateCSP(
+        db,
         manifest.default_csp,
         valid_sources,
         this.cachePartition,
@@ -394,7 +400,7 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       if (manifest.extra_csp.hasOwnProperty(path)) {
         const csp = manifest.extra_csp[path];
         try {
-          await validateCSP(csp, valid_sources, this.cachePartition);
+          await validateCSP(db, csp, valid_sources, this.cachePartition);
         } catch (e) {
           return new OriginStateFailed(
             this,

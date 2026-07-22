@@ -24,8 +24,8 @@ import {
   RawPublicKey,
 } from "@freedomofpress/sigsum/dist/types";
 
-import { db } from "./../globals";
 import { canonicalize } from "./canonicalize";
+import { WebcatDatabase } from "./db";
 import { base64UrlToUint8Array, stringToUint8Array } from "./encoding";
 import {
   Manifest,
@@ -40,6 +40,7 @@ import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDNSafe } from "./utils";
 
 export async function validateCSP(
+  db: WebcatDatabase,
   csp: string,
   valid_sources: Set<string>,
   cachePartition: CachePartition,

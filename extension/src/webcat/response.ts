@@ -4,6 +4,7 @@ import {
 } from "../browser/requests";
 import { origins } from "./../globals";
 import { CacheKey } from "./cache";
+import { WebcatDatabase } from "./db";
 import {
   base64UrlToUint8Array,
   stringToUint8Array,
@@ -77,9 +78,11 @@ export class ResponseValidator {
   readonly #endMarker = stringToUint8Array(
     `__WEBCAT_END__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
   );
+  readonly #db: WebcatDatabase;
   readonly #hooks: HookBuilder;
 
-  constructor(hooks: HookBuilder) {
+  constructor(db: WebcatDatabase, hooks: HookBuilder) {
+    this.#db = db;
     this.#hooks = hooks;
   }
 
@@ -129,11 +132,11 @@ export class ResponseValidator {
         }
         details.state.pendingOrigin.current = await (
           details.state.pendingOrigin.current as OriginStateInitial
-        ).verifyEnrollment(enrollment, delegation);
+        ).verifyEnrollment(this.#db, enrollment, delegation);
       } else {
         details.state.pendingOrigin.current = await (
           details.state.pendingOrigin.current as OriginStateInitial
-        ).verifyEnrollment(undefined, delegation);
+        ).verifyEnrollment(this.#db, undefined, delegation);
       }
 
       if (details.state.pendingOrigin.current.status === "failed") {
@@ -145,7 +148,7 @@ export class ResponseValidator {
       // Step 3: Populate and validate the manifest
       details.state.pendingOrigin.current = await (
         details.state.pendingOrigin.current as OriginStateVerifiedEnrollment
-      ).verifyManifest();
+      ).verifyManifest(this.#db);
       if (details.state.pendingOrigin.current.status === "failed") {
         return (details.state.pendingOrigin.current as OriginStateFailed).error;
       }

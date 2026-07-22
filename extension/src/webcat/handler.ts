@@ -7,6 +7,7 @@ import {
 import { ContentScript } from "../browser/scripting";
 import { origins, tabs } from "../globals";
 import { CacheKey } from "./cache";
+import { WebcatDatabase } from "./db";
 import { HookBuilder } from "./hookbuilder";
 import { WebcatError } from "./interfaces/errors";
 import {
@@ -33,11 +34,14 @@ export interface WebcatRequestHandler extends RequestHandler {
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebcatRequestHandler extends RequestHandler {
   readonly #hooks = new HookBuilder();
+  readonly #db: WebcatDatabase;
   readonly #contentScript = new ContentScript(this.#hooks.getStaticHookPath());
-  readonly #responseValidator = new ResponseValidator(this.#hooks);
+  readonly #responseValidator: ResponseValidator;
 
-  constructor() {
+  constructor(db: WebcatDatabase) {
     super();
+    this.#db = db;
+    this.#responseValidator = new ResponseValidator(this.#db, this.#hooks);
     this.addEventListener("beforerequest", this.#onRequest);
     this.addEventListener("headersreceived", this.#onHeaders);
   }
@@ -91,7 +95,7 @@ export class WebcatRequestHandler extends RequestHandler {
     // If no origin was available in cache, perform full validation;
     // for frames, this is done every time
     if (!details.state.pendingOrigin) {
-      const result = await validateOrigin(details);
+      const result = await validateOrigin(this.#db, details);
       if (result instanceof WebcatError) {
         if (details.state.isFrame) {
           tabs.delete(details.tabId);
