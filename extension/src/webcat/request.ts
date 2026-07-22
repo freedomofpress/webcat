@@ -11,9 +11,13 @@ import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { setIcon } from "./ui";
 
+declare const __IS_TESTING__: boolean;
+
+const allowedPorts = __IS_TESTING__ ? ["8080", "8443", ""] : ["80", "443", ""];
+
 export function validateProtocolAndPort(urlobj: URL): boolean {
   if (
-    !["80", "443", ""].includes(urlobj.port) ||
+    !allowedPorts.includes(urlobj.port) ||
     !["http:", "https:"].includes(urlobj.protocol)
   ) {
     return false;
@@ -28,6 +32,9 @@ export function enforceHTTPS(urlobj: URL): string | undefined {
     urlobj.hostname.substring(urlobj.hostname.lastIndexOf(".")) !== ".onion"
   ) {
     urlobj.protocol = "https:";
+    if (__IS_TESTING__) {
+      urlobj.port = "8443";
+    }
     return urlobj.toString();
   }
 }
