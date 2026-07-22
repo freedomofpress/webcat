@@ -30,7 +30,6 @@ import {
   isNewerSemver,
   SHA256,
 } from "./utils";
-import { extractAndValidateHeaders } from "./validators";
 
 const WORKER_FETCH_DESTINATIONS = [
   "worker",
@@ -61,6 +60,19 @@ function assertHeadersAvailable<T>(
   }
 }
 
+function isSafeRelativeLocation(value: string): boolean {
+  value = value.trim();
+
+  // No scheme, no protocol-relative, no backslashes
+  return (
+    (value.startsWith("/") ||
+      value.startsWith("../") ||
+      value.startsWith("./")) &&
+    !value.startsWith("//") &&
+    !value.includes("\\")
+  );
+}
+
 export class ResponseValidator {
   readonly #endMarker = stringToUint8Array(
     `__WEBCAT_END__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
@@ -83,7 +95,7 @@ export class ResponseValidator {
     );
 
     // Step 1: Extract headers, normalize, check for duplicates and mandatory ones
-    const result = extractAndValidateHeaders(details);
+    const result = this.#extractAndValidateHeaders(details);
 
     if (result instanceof WebcatError) {
       return result; // or wrap it
@@ -215,6 +227,94 @@ export class ResponseValidator {
     if (details.type === "main_frame") {
       setOKIcon(details.tabId, details.state.pendingOrigin.current.delegation);
     }
+  }
+
+  #extractAndValidateHeaders(
+    details: Stateful<HeadersReceivedDetails>,
+  ): Map<string, string> | WebcatError {
+    // Ensure that response headers exist.
+    if (!details.responseHeaders) {
+      return new WebcatError(WebcatErrorCode.Headers.MISSING);
+    }
+
+    // Define the critical headers we care about.
+    const criticalHeaders = new Set(["content-security-policy"]);
+
+    const forbiddenHeaders = new Set([
+      // See https://github.com/freedomofpress/webcat/issues/23
+      // Furthermore, as reported by TBD there's the risk of TBD
+      //"location",
+      // See https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Refresh
+      // It's just another way to achieve redirects
+      "refresh",
+      // See https://github.com/freedomofpress/webcat/issues/24
+      "link",
+    ]);
+
+    // Track seen critical headers to detect duplicates.
+    const seenCriticalHeaders = new Set<string>();
+    const normalizedHeaders = new Map<string, string>();
+    const headers: string[] = [];
+
+    // Loop over each header, normalize the name, and store its value.
+    for (const header of details.responseHeaders) {
+      if (header.name && header.value) {
+        const lowerName = header.name.toLowerCase();
+        const value = header.value;
+
+        // Check and block in case of forbidden headers
+        // Location header: block entirely for sub-resources (redirects would
+        // cause the resource to be matched against the destination path,
+        // allowing a server to swap or reorder resources). Only main
+        // navigations (main_frame / sub_frame) may use safe relative redirects.
+        if (lowerName === "location") {
+          if (!details.state.isFrame) {
+            return new WebcatError(
+              WebcatErrorCode.Headers.LOCATION_SUBRESOURCE,
+              [String(value)],
+            );
+          }
+          if (!isSafeRelativeLocation(value)) {
+            return new WebcatError(WebcatErrorCode.Headers.LOCATION_EXTERNAL, [
+              String(value),
+            ]);
+          }
+        } else if (forbiddenHeaders.has(lowerName)) {
+          return new WebcatError(WebcatErrorCode.Headers.FORBIDDEN, [
+            String(lowerName),
+          ]);
+        }
+
+        // Check for duplicates among critical headers.
+        if (criticalHeaders.has(lowerName)) {
+          if (seenCriticalHeaders.has(lowerName)) {
+            return new WebcatError(WebcatErrorCode.Headers.DUPLICATE, [
+              String(lowerName),
+            ]);
+          }
+          seenCriticalHeaders.add(lowerName);
+        }
+
+        normalizedHeaders.set(lowerName, header.value);
+        headers.push(lowerName);
+      }
+    }
+
+    // Firefox may omit CSP from extension events for responses that are
+    // satisfied by cache, including some 304 revalidation flows.
+    if (details.fromCache !== true && details.statusCode !== 304) {
+      // Ensure all critical headers are present.
+      for (const criticalHeader of criticalHeaders) {
+        if (!normalizedHeaders.has(criticalHeader)) {
+          return new WebcatError(WebcatErrorCode.Headers.MISSING_CRITICAL, [
+            String(criticalHeader),
+          ]);
+        }
+      }
+    }
+
+    // Retrieve the Content-Security-Policy (CSP) header (safe to use non-null assertion here based on the check above).
+    return normalizedHeaders;
   }
 
   async validateContent(details: Stateful<BeforeRequestDetails>) {
