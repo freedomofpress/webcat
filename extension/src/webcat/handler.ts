@@ -17,11 +17,7 @@ import { CachePartition, Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
-import {
-  markResponseContent,
-  validateResponseContent,
-  validateResponseHeaders,
-} from "./response";
+import { ResponseValidator } from "./response";
 import { errorpage } from "./ui";
 import { getFQDN, isExtensionRequest, isNewerSemver } from "./utils";
 
@@ -38,6 +34,7 @@ export interface WebcatRequestHandler extends RequestHandler {
 export class WebcatRequestHandler extends RequestHandler {
   readonly #hooks = new HookBuilder();
   readonly #contentScript = new ContentScript(this.#hooks.getStaticHookPath());
+  readonly #responseValidator = new ResponseValidator(this.#hooks);
 
   constructor() {
     super();
@@ -116,7 +113,7 @@ export class WebcatRequestHandler extends RequestHandler {
       return;
     }
 
-    await validateResponseContent(details, this.#hooks);
+    await this.#responseValidator.validateContent(details);
   }
 
   async #onHeaders(event: RequestEvent<HeadersReceivedDetails>) {
@@ -132,7 +129,7 @@ export class WebcatRequestHandler extends RequestHandler {
       throw new Error("missing pendingOrigin in request state");
     }
 
-    const result = await validateResponseHeaders(details);
+    const result = await this.#responseValidator.validateHeaders(details);
     if (result instanceof WebcatError) {
       logger.error(
         `Error when parsing response headers: ${result}: ${result.details?.join(", ")}`,
@@ -149,7 +146,7 @@ export class WebcatRequestHandler extends RequestHandler {
       details.state.cachePartition,
     );
 
-    markResponseContent(event.details);
+    this.#responseValidator.markContent(event.details);
 
     // Here we must have already validated the enrollment and the manifest
     // and thus should have all the information, but we haven't started
