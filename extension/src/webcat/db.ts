@@ -1,16 +1,18 @@
-import { nonOrigins, origins } from "../globals"; // caching maps
-import { CacheKey } from "./cache";
-import { CachePartition } from "./interfaces/requeststate";
+import { lru_cache_size, lru_set_size } from "../config";
+import { CacheKey, LRUCache, LRUSet } from "./cache";
+import { BlockMeta, Database } from "./interfaces/database";
+import { CachePartition } from "./interfaces/originstate";
+import { OriginStateHolder } from "./originstate";
 import { extractHostname, extractRawHash } from "./parsers";
 
 const META_KEY = "block_meta";
 
-export interface BlockMeta {
-  blockTime: number;
-  rootHash: string;
-}
+export class WebcatDatabase implements Database {
+  readonly origins = new LRUCache<CacheKey<CachePartition>, OriginStateHolder>(
+    lru_cache_size,
+  );
+  readonly nonOrigins = new LRUSet<CacheKey<CachePartition>>(lru_set_size);
 
-export class WebcatDatabase {
   async updateList(
     leaves: readonly (readonly [string, string])[],
     meta: BlockMeta,
@@ -27,8 +29,8 @@ export class WebcatDatabase {
 
     await browser.storage.local.set(batch);
 
-    origins.clear();
-    nonOrigins.clear();
+    this.origins.clear();
+    this.nonOrigins.clear();
 
     console.log(`[webcat] Replaced list with ${leaves.length} entries`);
   }
@@ -48,7 +50,7 @@ export class WebcatDatabase {
     cachePartition: CachePartition,
   ): Promise<Uint8Array> {
     // 1. Positive-cache hit
-    const originState = origins.get(CacheKey(fqdn, cachePartition));
+    const originState = this.origins.get(CacheKey(fqdn, cachePartition));
     if (originState) {
       const cached = originState.current.enrollment_hash;
       if (!cached) {
@@ -60,7 +62,7 @@ export class WebcatDatabase {
     }
 
     // 2. Negative-cache hit
-    if (nonOrigins.has(CacheKey(fqdn, cachePartition))) {
+    if (this.nonOrigins.has(CacheKey(fqdn, cachePartition))) {
       return new Uint8Array();
     }
 
@@ -70,7 +72,7 @@ export class WebcatDatabase {
     if (stored) {
       return new Uint8Array(stored);
     } else {
-      nonOrigins.add(CacheKey(fqdn, cachePartition));
+      this.nonOrigins.add(CacheKey(fqdn, cachePartition));
       return new Uint8Array();
     }
   }

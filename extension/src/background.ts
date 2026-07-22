@@ -5,7 +5,6 @@ import {
   FETCH_TIMEOUT_MS,
   UPDATE_INTERVAL_MS,
 } from "./config";
-import { nonOrigins, origins } from "./globals";
 import validator_set from "./validator_set.json";
 import { isInPartition } from "./webcat/cache";
 import { WebcatDatabase } from "./webcat/db";
@@ -15,6 +14,8 @@ import { EnrollmentUpdater } from "./webcat/updater";
 import { clearBrowserCaches } from "./webcat/utils";
 
 console.log("[webcat] Starting up background");
+
+const db = new WebcatDatabase();
 
 // Not the best performance idea to act on all tab just for this
 browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -35,20 +36,19 @@ browser.tabs.onCreated.addListener((tab) => {
 browser.windows.onRemoved.addListener(async () => {
   const windows = await browser.windows.getAll();
   if (windows.filter((win) => win.incognito).length === 0) {
-    for (const key of origins.keys()) {
+    for (const key of db.origins.keys()) {
       if (isInPartition(key, { incognito: true })) {
-        origins.delete(key);
+        db.origins.delete(key);
       }
     }
-    for (const value of nonOrigins.values()) {
+    for (const value of db.nonOrigins.values()) {
       if (isInPartition(value, { incognito: true })) {
-        nonOrigins.delete(value);
+        db.nonOrigins.delete(value);
       }
     }
   }
 });
 
-const db = new WebcatDatabase();
 const requestHandler = new WebcatRequestHandler(db);
 const updater = new EnrollmentUpdater({
   endpoint: endpoint,
@@ -77,3 +77,13 @@ updater.addEventListener("updated", async () => {
   }
 });
 updater.start();
+
+declare const __IS_TESTING__: boolean;
+if (__IS_TESTING__) {
+  Object.defineProperty(globalThis, "state", {
+    value: {
+      origins: db.origins,
+      nonOrigins: db.nonOrigins,
+    },
+  });
+}

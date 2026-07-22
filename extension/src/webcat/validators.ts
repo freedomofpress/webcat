@@ -25,7 +25,6 @@ import {
 } from "@freedomofpress/sigsum/dist/types";
 
 import { canonicalize } from "./canonicalize";
-import { WebcatDatabase } from "./db";
 import { base64UrlToUint8Array, stringToUint8Array } from "./encoding";
 import {
   Manifest,
@@ -34,13 +33,14 @@ import {
   SigsumEnrollment,
   SigsumSignatures,
 } from "./interfaces/bundle";
+import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
-import { CachePartition } from "./interfaces/requeststate";
+import { CachePartition } from "./interfaces/originstate";
 import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDNSafe } from "./utils";
 
 export async function validateCSP(
-  db: WebcatDatabase,
+  db: Database,
   csp: string,
   valid_sources: Set<string>,
   cachePartition: CachePartition,
