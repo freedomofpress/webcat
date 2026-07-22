@@ -1,6 +1,6 @@
 import { nonOrigins, origins } from "../globals"; // caching maps
 import { CacheKey } from "./cache";
-import { CachePartition } from "./interfaces/requestinfo";
+import { CachePartition } from "./interfaces/requeststate";
 import { extractHostname, extractRawHash } from "./parsers";
 
 const META_KEY = "block_meta";

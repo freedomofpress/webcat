@@ -20,7 +20,7 @@ import {
   SigsumSignatures,
 } from "./bundle";
 import { WebcatError, WebcatErrorCode } from "./errors";
-import { CachePartition } from "./requestinfo";
+import { CachePartition } from "./requeststate";
 
 type BundleFetch = {
   promise: Promise<Response>;
