@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { HeadersReceivedDetails } from "../../src/browser/requests";
 import { canonicalize } from "../../src/webcat/canonicalize";
 import { stringToUint8Array } from "../../src/webcat/encoding";
+import { HookBuilder } from "../../src/webcat/hookbuilder";
 import type {
   Enrollment,
   Manifest,
@@ -21,6 +23,11 @@ import {
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "../../src/webcat/interfaces/originstate";
+import { Stateful } from "../../src/webcat/interfaces/requeststate";
+import {
+  isSafeRelativeLocation,
+  ResponseValidator,
+} from "../../src/webcat/response";
 import { SHA256 } from "../../src/webcat/utils";
 
 function makeDummyFetcher(): BundleFetcher {
@@ -692,5 +699,224 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
   it("returns false for incorrect CSP", () => {
     const badCsp = "default-src 'self'; script-src 'self';";
     expect(verifiedManifestState.verifyCSP(badCsp, "/")).toBe(false);
+  });
+});
+
+describe("ResponseValidator.extractAndValidateHeaders", () => {
+  let rv: ResponseValidator;
+
+  beforeEach(() => {
+    rv = new ResponseValidator({} as HookBuilder);
+  });
+
+  it("requires CSP for non-cached responses", () => {
+    const details = {
+      responseHeaders: [{ name: "x-webcat-version", value: "1.2.3" }],
+      fromCache: false,
+      state: {},
+    } as Stateful<HeadersReceivedDetails>;
+
+    const result = rv.extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as { code: string }).code).toBe(
+      WebcatErrorCode.Headers.MISSING_CRITICAL,
+    );
+  });
+
+  it("allows missing CSP for fully cached responses", () => {
+    const details = {
+      responseHeaders: [{ name: "x-webcat-version", value: "1.2.3" }],
+      fromCache: true,
+      state: {},
+    } as Stateful<HeadersReceivedDetails>;
+
+    const result = rv.extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Map);
+    expect((result as Map<string, string>).has("content-security-policy")).toBe(
+      false,
+    );
+  });
+
+  it("allows missing CSP for 304 responses", () => {
+    const details = {
+      responseHeaders: [{ name: "x-webcat-version", value: "1.2.3" }],
+      fromCache: false,
+      statusCode: 304,
+      state: {},
+    } as Stateful<HeadersReceivedDetails>;
+
+    const result = rv.extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Map);
+    expect((result as Map<string, string>).has("content-security-policy")).toBe(
+      false,
+    );
+  });
+
+  it("blocks Location header on sub-resource requests (script)", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "/other.js" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "script",
+      state: {},
+    } as Stateful<HeadersReceivedDetails>;
+
+    const result = rv.extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as { code: string }).code).toBe(
+      WebcatErrorCode.Headers.LOCATION_SUBRESOURCE,
+    );
+  });
+
+  it("blocks Location header on sub-resource requests (stylesheet)", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "/other.css" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "stylesheet",
+      state: {},
+    } as Stateful<HeadersReceivedDetails>;
+
+    const result = rv.extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as { code: string }).code).toBe(
+      WebcatErrorCode.Headers.LOCATION_SUBRESOURCE,
+    );
+  });
+
+  it("blocks Location header on sub-resource requests (xmlhttprequest)", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "/api/other" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "xmlhttprequest",
+      state: {},
+    } as Stateful<HeadersReceivedDetails>;
+
+    const result = rv.extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as { code: string }).code).toBe(
+      WebcatErrorCode.Headers.LOCATION_SUBRESOURCE,
+    );
+  });
+
+  it("allows safe relative Location header on main_frame", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "/login" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "main_frame",
+      state: { isFrame: true },
+    } as Stateful<HeadersReceivedDetails>;
+
+    const result = rv.extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Map);
+  });
+
+  it("allows safe relative Location header on sub_frame", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "/embed" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "sub_frame",
+      state: { isFrame: true },
+    } as Stateful<HeadersReceivedDetails>;
+
+    const result = rv.extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Map);
+  });
+
+  it("blocks external Location header even on main_frame", () => {
+    const details = {
+      responseHeaders: [
+        { name: "Location", value: "https://evil.com" },
+        { name: "Content-Security-Policy", value: "default-src 'self'" },
+      ],
+      fromCache: false,
+      type: "main_frame",
+      state: { isFrame: true },
+    } as Stateful<HeadersReceivedDetails>;
+
+    const result = rv.extractAndValidateHeaders(details);
+
+    expect(result).toBeInstanceOf(Error);
+    expect((result as { code: string }).code).toBe(
+      WebcatErrorCode.Headers.LOCATION_EXTERNAL,
+    );
+  });
+});
+
+describe("isSafeRelativeLocation", () => {
+  it("allows absolute-path relative locations", () => {
+    expect(isSafeRelativeLocation("/")).toBe(true);
+    expect(isSafeRelativeLocation("/login")).toBe(true);
+    expect(isSafeRelativeLocation("/a/b/c")).toBe(true);
+  });
+
+  it("allows parent-relative paths", () => {
+    expect(isSafeRelativeLocation("../login")).toBe(true);
+    expect(isSafeRelativeLocation("../a/b")).toBe(true);
+  });
+
+  it("allows same-relative paths", () => {
+    expect(isSafeRelativeLocation("./login")).toBe(true);
+  });
+
+  it("trims whitespace before validation", () => {
+    expect(isSafeRelativeLocation(" /login ")).toBe(true);
+    expect(isSafeRelativeLocation("  ../login")).toBe(true);
+  });
+
+  it("rejects protocol-relative URLs", () => {
+    expect(isSafeRelativeLocation("//evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("///evil.com")).toBe(false);
+  });
+
+  it("rejects absolute URLs with schemes", () => {
+    expect(isSafeRelativeLocation("https://evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("http://evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("ftp://evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("javascript:alert(1)")).toBe(false);
+    expect(isSafeRelativeLocation("blob:abcd")).toBe(false);
+    expect(isSafeRelativeLocation("data:text/plain,hi")).toBe(false);
+  });
+
+  it("rejects backslash-based paths", () => {
+    expect(isSafeRelativeLocation("\\evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("/\\evil.com")).toBe(false);
+    expect(isSafeRelativeLocation("\\\\evil.com")).toBe(false);
+  });
+
+  it("rejects bare relative paths", () => {
+    expect(isSafeRelativeLocation("login")).toBe(false);
+  });
+
+  it("allows encoded slashes (no decoding is performed)", () => {
+    expect(isSafeRelativeLocation("/%2f%2fevil.com")).toBe(true);
+    expect(isSafeRelativeLocation("%2f%2fevil.com")).toBe(false);
+  });
+
+  it("allows control characters (current behavior)", () => {
+    expect(isSafeRelativeLocation("/foo\nbar")).toBe(true);
+    expect(isSafeRelativeLocation("/foo\rbar")).toBe(true);
+    expect(isSafeRelativeLocation("/foo\tbar")).toBe(true);
   });
 });

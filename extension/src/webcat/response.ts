@@ -60,7 +60,7 @@ function assertHeadersAvailable<T>(
   }
 }
 
-function isSafeRelativeLocation(value: string): boolean {
+export function isSafeRelativeLocation(value: string): boolean {
   value = value.trim();
 
   // No scheme, no protocol-relative, no backslashes
@@ -95,7 +95,7 @@ export class ResponseValidator {
     );
 
     // Step 1: Extract headers, normalize, check for duplicates and mandatory ones
-    const result = this.#extractAndValidateHeaders(details);
+    const result = this.extractAndValidateHeaders(details);
 
     if (result instanceof WebcatError) {
       return result; // or wrap it
@@ -229,7 +229,7 @@ export class ResponseValidator {
     }
   }
 
-  #extractAndValidateHeaders(
+  extractAndValidateHeaders(
     details: Stateful<HeadersReceivedDetails>,
   ): Map<string, string> | WebcatError {
     // Ensure that response headers exist.
