@@ -31,10 +31,6 @@ export default defineConfig({
             __dirname,
             "./src/mocks/ics23.mock.ts",
           ),
-          "./validators": path.resolve(
-            __dirname,
-            "./src/mocks/validators.mock.ts",
-          ),
         },
       }
     : {},
