@@ -1,3 +1,4 @@
+import { KVStore } from "../browser/kvstore";
 import contentHooks from "./../../dist/hooks/content.js?raw";
 import pageHooks from "./../../dist/hooks/page.js?raw";
 
@@ -10,18 +11,52 @@ const hooks = {
  * Builds hooks using unique cryptographic keys.
  */
 export class HookBuilder {
-  readonly #firstPartyKey: Promise<CryptoKey>;
-  readonly #firstPartySalt: Uint8Array<ArrayBuffer>;
+  #firstPartyKey: Promise<CryptoKey>;
+  #firstPartySalt: Promise<Uint8Array<ArrayBuffer>>;
 
-  constructor() {
-    this.#firstPartyKey = crypto.subtle.generateKey(
-      { name: "AES-GCM", length: 256 },
-      false,
-      ["encrypt", "decrypt"],
-    );
-    this.#firstPartySalt = crypto.getRandomValues(
-      new Uint8Array(new ArrayBuffer(256 / 8)), // SHA-256 length
-    );
+  constructor(store: KVStore) {
+    this.#firstPartyKey = store
+      .get("firstPartyKey", "session")
+      .then(async (raw: ArrayBuffer) => {
+        let key: CryptoKey;
+        const algorithm = { name: "AES-GCM", length: 256 };
+        const extractable = true;
+        const usages = ["encrypt", "decrypt"] as KeyUsage[];
+        if (!raw) {
+          key = await crypto.subtle.generateKey(algorithm, extractable, usages);
+          store.set(
+            {
+              firstPartyKey: await crypto.subtle.exportKey("raw", key),
+            },
+            "session",
+          );
+        } else {
+          key = await crypto.subtle.importKey(
+            "raw",
+            raw,
+            algorithm,
+            extractable,
+            usages,
+          );
+        }
+        return key;
+      });
+    this.#firstPartySalt = store
+      .get("firstPartySalt", "session")
+      .then((salt) => {
+        if (!salt) {
+          salt = crypto.getRandomValues(
+            new Uint8Array(256 / 8), // SHA-256 length
+          );
+          store.set(
+            {
+              firstPartySalt: salt,
+            },
+            "session",
+          );
+        }
+        return salt;
+      });
   }
 
   /**
@@ -92,7 +127,7 @@ export class HookBuilder {
       {
         name: "HKDF",
         hash: "SHA-256",
-        salt: this.#firstPartySalt,
+        salt: await this.#firstPartySalt,
         info: new ArrayBuffer(),
       },
       await crypto.subtle.importKey(
