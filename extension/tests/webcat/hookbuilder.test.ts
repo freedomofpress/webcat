@@ -10,7 +10,7 @@ vi.mock("../../dist/hooks/page.js?raw", () => ({
 }));
 
 vi.spyOn(crypto.subtle, "generateKey").mockImplementation(
-  (_a: AlgorithmIdentifier, _e: boolean, u: Iterable<KeyUsage>) => {
+  (algorithm: AlgorithmIdentifier, extractable: boolean, keyUsages: Iterable<KeyUsage>) => {
     return crypto.subtle.importKey(
       "jwk",
       {
@@ -20,9 +20,9 @@ vi.spyOn(crypto.subtle, "generateKey").mockImplementation(
         key_ops: ["encrypt", "decrypt"],
         kty: "oct",
       },
-      _a,
-      _e,
-      Array.from(u),
+      algorithm,
+      extractable,
+      Array.from(keyUsages),
     );
   },
 );
