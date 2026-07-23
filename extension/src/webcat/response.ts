@@ -74,7 +74,12 @@ export function isSafeRelativeLocation(value: string): boolean {
 }
 
 export class ResponseValidator {
-  readonly #endMarker = stringToUint8Array(
+  
+  // #marker is ephemeral, not persisted anywhere, but that's ok:
+  // ResponseValidator attaches a StreamFilter that prevents the
+  // background service worker from terminating while a response
+  // is being processed
+  readonly #marker = stringToUint8Array(
     `__WEBCAT_END__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
   );
   readonly #db: Database;
@@ -376,28 +381,28 @@ export class ResponseValidator {
     };
 
     let writeQueue: Promise<void> = Promise.resolve();
-    let endMarkerSeen = false;
+    let markerSeen = false;
     filter.ondata = (event: { data: ArrayBuffer }) => {
       // The data here is usually chunked; normally it would be streamed down as
       // we get it but since we can hash the content only at the end, we have to
       // wait until we have everything before deciding if the response content
       // matches the manifest or not. So we are saving it and we will build a
-      // blob later. If the data is the end marker, flush all buffered data;
+      // blob later. If the data is the marker, flush all buffered data;
       // anything received up to that point is from this or other extensions, not
       // the network.
-      if (arraysEqual(this.#endMarker, new Uint8Array(event.data))) {
+      if (arraysEqual(this.#marker, new Uint8Array(event.data))) {
         source.forEach((hook) => {
           writeQueue = writeQueue.then(async () => filter.write(await hook));
         });
         source.length = 0;
-        endMarkerSeen = true;
+        markerSeen = true;
       } else {
         source.push(Promise.resolve(event.data));
       }
     };
 
     filter.onstop = async () => {
-      if (!endMarkerSeen && !PASS_THROUGH_TYPES.has(details.type)) {
+      if (!markerSeen && !PASS_THROUGH_TYPES.has(details.type)) {
         // The request terminated early, before headers were received,
         // possibly because the user navigated away. Close without
         // writing anything; don't display an error.
@@ -492,7 +497,7 @@ export class ResponseValidator {
     endMarkerInjector.onstart = () => {
       // Inject the end marker, signaling the end of extension hooks and
       // the start of code that should be validated
-      endMarkerInjector.write(this.#endMarker);
+      endMarkerInjector.write(this.#marker);
       endMarkerInjector.disconnect();
     };
   }
