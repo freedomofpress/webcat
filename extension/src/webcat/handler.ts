@@ -1,3 +1,4 @@
+import { NamespacedKVStore } from "../browser/kvstore";
 import {
   BeforeRequestDetails,
   HeadersReceivedDetails,
@@ -30,14 +31,16 @@ export interface WebcatRequestHandler extends RequestHandler {
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebcatRequestHandler extends RequestHandler {
-  readonly #hooks = new HookBuilder();
-  readonly #db: Database;
-  readonly #contentScript = new ContentScript(this.#hooks.getStaticHookPath());
+  readonly #db: Database & NamespacedKVStore;
+  readonly #hooks: HookBuilder;
+  readonly #contentScript: ContentScript;
   readonly #responseValidator: ResponseValidator;
 
-  constructor(db: Database) {
+  constructor(db: Database & NamespacedKVStore) {
     super();
     this.#db = db;
+    this.#hooks = new HookBuilder(db.namespace("hooks"));
+    this.#contentScript = new ContentScript(this.#hooks.getStaticHookPath());
     this.#responseValidator = new ResponseValidator(this.#db, this.#hooks);
     this.addEventListener("beforerequest", this.#onRequest);
     this.addEventListener("headersreceived", this.#onHeaders);
