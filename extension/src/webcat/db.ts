@@ -1,3 +1,4 @@
+import { NamespacedKVStore } from "../browser/kvstore";
 import { lru_cache_size, lru_set_size } from "../config";
 import { CacheKey, LRUCache, LRUSet } from "./cache";
 import { BlockMeta, Database } from "./interfaces/database";
@@ -7,27 +8,31 @@ import { extractHostname, extractRawHash } from "./parsers";
 
 const META_KEY = "block_meta";
 
-export class WebcatDatabase implements Database {
+export class WebcatDatabase extends NamespacedKVStore implements Database {
   readonly origins = new LRUCache<CacheKey<CachePartition>, OriginStateHolder>(
     lru_cache_size,
   );
   readonly nonOrigins = new LRUSet<CacheKey<CachePartition>>(lru_set_size);
+  readonly enrollments = this.namespace("enrollments");
+
+  constructor(namespace = "WEBCAT") {
+    super(namespace);
+  }
 
   async updateList(
     leaves: readonly (readonly [string, string])[],
     meta: BlockMeta,
   ): Promise<void> {
-    await browser.storage.local.clear();
-
     const batch: Record<string, unknown> = {};
     for (const [reverseKey, hexHash] of leaves) {
       const hostname = extractHostname(reverseKey);
       const rawHash = extractRawHash(hexHash);
       batch[hostname] = Array.from(rawHash);
     }
-    batch[META_KEY] = meta;
 
-    await browser.storage.local.set(batch);
+    await this.enrollments.clear();
+    await this.enrollments.set(batch);
+    await this.set({ [META_KEY]: meta });
 
     this.origins.clear();
     this.nonOrigins.clear();
@@ -36,13 +41,11 @@ export class WebcatDatabase implements Database {
   }
 
   async getBlockMeta(): Promise<BlockMeta | null> {
-    const result = await browser.storage.local.get(META_KEY);
-    return (result[META_KEY] as BlockMeta) ?? null;
+    return (await this.get(META_KEY)) ?? null;
   }
 
   async listAllFQDNs(): Promise<string[]> {
-    const all = await browser.storage.local.get(null);
-    return Object.keys(all).filter((k) => k !== META_KEY);
+    return await this.enrollments.getKeys();
   }
 
   async getFQDNEnrollment(
@@ -67,8 +70,7 @@ export class WebcatDatabase implements Database {
     }
 
     // 3. Storage lookup
-    const result = await browser.storage.local.get(fqdn);
-    const stored = result[fqdn];
+    const stored = await this.enrollments.get(fqdn);
     if (stored) {
       return new Uint8Array(stored);
     } else {
@@ -78,20 +80,18 @@ export class WebcatDatabase implements Database {
   }
 
   async setLastChecked(): Promise<void> {
-    await browser.storage.session.set({ lastChecked: Date.now() });
+    await this.set({ lastChecked: Date.now() }, "session");
   }
 
   async getLastChecked(): Promise<number | null> {
-    const result = await browser.storage.session.get("lastChecked");
-    return result.lastChecked ?? null;
+    return (await this.get("lastChecked", "session")) ?? null;
   }
 
   async setLastUpdated(): Promise<void> {
-    await browser.storage.session.set({ lastUpdated: Date.now() });
+    await this.set({ lastUpdated: Date.now() }, "session");
   }
 
   async getLastUpdated(): Promise<number | null> {
-    const result = await browser.storage.session.get("lastUpdated");
-    return result.lastUpdated ?? null;
+    return (await this.get("lastUpdated", "session")) ?? null;
   }
 }
