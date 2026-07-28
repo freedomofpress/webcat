@@ -67,7 +67,11 @@ requestHandler.addEventListener(
   },
 );
 
-updater.addEventListener("updated", async () => {
+const firstUpdate = true;
+updater.addEventListener("updated", async (event) => {
+  if (!event.success || !firstUpdate) {
+    return;
+  }
   try {
     const fqdns = await db.listAllFQDNs();
     const newFqdns = await requestHandler.bind(fqdns);
