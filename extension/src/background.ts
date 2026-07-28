@@ -67,7 +67,7 @@ requestHandler.addEventListener(
   },
 );
 
-const firstUpdate = true;
+let firstUpdate = true;
 updater.addEventListener("updated", async (event) => {
   if (!event.success && !firstUpdate) {
     return;
@@ -76,6 +76,7 @@ updater.addEventListener("updated", async (event) => {
     const fqdns = await db.listAllFQDNs();
     const newFqdns = await requestHandler.bind(fqdns);
     await clearBrowserCaches(newFqdns);
+    firstUpdate = false;
   } catch (error) {
     console.error("[webcat] Bundled list import failed:", error);
   }
