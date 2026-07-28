@@ -89,7 +89,7 @@ export class EnrollmentUpdater extends EventTarget {
 
     console.log("[webcat] Importing bundled list");
     this.update(true)
-      .then(async () => {
+      .finally(async () => {
         console.log("[webcat] Attempting network update");
         await this.#checkAndUpdate();
       })
