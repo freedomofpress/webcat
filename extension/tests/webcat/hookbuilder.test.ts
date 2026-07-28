@@ -75,9 +75,12 @@ describe("HookBuilder", () => {
   it("should embed inputs into content script hooks", async () => {
     await expect(
       hb.getContentScriptHooks([], "https://example.com", false),
-    ).resolves.toBe(
-      `content {{ {"hashes":[],"firstParty":"egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM=","sameOriginWithFirstParty":false} }}`,
-    );
+    ).resolves.toStrictEqual([
+      expect.any(Function),
+      [
+        '{"hashes":[],"firstParty":"egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM=","sameOriginWithFirstParty":false}',
+      ],
+    ]);
     expect(store.set).toHaveBeenCalledWith(
       { firstPartySalt: new Uint8Array(256 / 8).fill(0) },
       "session",

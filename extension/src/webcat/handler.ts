@@ -35,6 +35,7 @@ export class WebcatRequestHandler extends RequestHandler {
   readonly #hooks: HookBuilder;
   readonly #contentScript: ContentScript;
   readonly #responseValidator: ResponseValidator;
+  readonly #bound = Promise.withResolvers<void>();
 
   constructor(db: Database & NamespacedKVStore) {
     super();
@@ -48,7 +49,20 @@ export class WebcatRequestHandler extends RequestHandler {
 
   override async bind(fqdns: string[]): Promise<string[]> {
     super.bind(fqdns);
-    return this.#contentScript.bind(fqdns);
+    const newFqdns = await this.#contentScript.bind(fqdns);
+    this.#bound.resolve();
+    return newFqdns;
+  }
+
+  /**
+   * Binds the handler to <all_urls>. Unlike {@link bind}, does not bind
+   * content scripts. The bindAll method can be called synchronously before
+   * FQDNs are available, but it should be always followed by a call to
+   * {@link bind} to both restrict the scope of the binding and bind content
+   * scripts.
+   */
+  bindAll() {
+    super.bind(["<all_urls>"]);
   }
 
   protected override getListenerOptions(fqdns: string[], type: "beforerequest"): [browser.webRequest.RequestFilter, browser.webRequest.OnBeforeRequestOptions[]]; // prettier-ignore
@@ -56,14 +70,27 @@ export class WebcatRequestHandler extends RequestHandler {
   protected override getListenerOptions(fqdns: string[], type: "headersreceived"): [browser.webRequest.RequestFilter, browser.webRequest.OnHeadersReceivedOptions[]]; // prettier-ignore
   protected override getListenerOptions(fqdns: string[], type: "erroroccurred" | "completed"): [browser.webRequest.RequestFilter]; // prettier-ignore
   protected override getListenerOptions(fqdns: string[], type: string) {
+    let all = false;
+    for (let i: number; (i = fqdns.indexOf("<all_urls>")) !== -1; ) {
+      // If fqdns contains <all_urls>, remove it before continuing
+      fqdns = [...fqdns.slice(0, i), ...fqdns.slice(i + 1)];
+      all = true;
+    }
+    let result: ReturnType<RequestHandler["getListenerOptions"]>;
     if (type === "beforeheaders") {
       // Request headers are only needed for script requests;
       // avoid attaching listeners unnecessarily
       const [filter, options] = super.getListenerOptions(fqdns, type);
       filter.types = ["script"];
-      return [filter, options];
+      result = [filter, options];
+    } else {
+      result = super.getListenerOptions(fqdns, type);
     }
-    return super.getListenerOptions(fqdns, type);
+    if (all) {
+      // Add the previously removed <all_urls>
+      result[0].urls.push("<all_urls>");
+    }
+    return result;
   }
 
   async #initializeState(
@@ -87,6 +114,9 @@ export class WebcatRequestHandler extends RequestHandler {
       return;
     }
     const details = await this.#initializeState(event.details);
+
+    // Block until the handler has been fully bound
+    await this.#bound.promise;
 
     // Frame-only pre-setup: retry pending list updates
     if (details.state.isFrame) {
@@ -198,15 +228,21 @@ export class WebcatRequestHandler extends RequestHandler {
 
         browser.webNavigation.onDOMContentLoaded.removeListener(listener);
 
-        await browser.tabs.executeScript(details.tabId, {
-          code: await this.#hooks.getContentScriptHooks(
-            wasm,
-            details.state.cachePartition.firstParty,
-            details.state.cachePartition.firstParty ===
-              new URL(details.url).origin,
-          ),
-          runAt: "document_start",
-          frameId: details.frameId,
+        const [func, args] = await this.#hooks.getContentScriptHooks(
+          wasm,
+          details.state.cachePartition.firstParty,
+          details.state.cachePartition.firstParty ===
+            new URL(details.url).origin,
+        );
+        await browser.scripting.executeScript({
+          target: {
+            tabId: details.tabId,
+            frameIds: [details.frameId],
+          },
+          func,
+          args,
+          injectImmediately: true,
+          world: "ISOLATED",
         });
       };
 
