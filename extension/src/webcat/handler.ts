@@ -43,9 +43,24 @@ export class WebcatRequestHandler extends RequestHandler {
     this.addEventListener("headersreceived", this.#onHeaders);
   }
 
-  async bind(fqdns: string[]): Promise<string[]> {
+  override async bind(fqdns: string[]): Promise<string[]> {
     super.bind(fqdns);
     return this.#contentScript.bind(fqdns);
+  }
+
+  protected override getListenerOptions(fqdns: string[], type: "beforerequest"): [browser.webRequest.RequestFilter, browser.webRequest.OnBeforeRequestOptions[]]; // prettier-ignore
+  protected override getListenerOptions(fqdns: string[], type: "beforeheaders"): [browser.webRequest.RequestFilter, browser.webRequest.OnBeforeSendHeadersOptions[]]; // prettier-ignore
+  protected override getListenerOptions(fqdns: string[], type: "headersreceived"): [browser.webRequest.RequestFilter, browser.webRequest.OnHeadersReceivedOptions[]]; // prettier-ignore
+  protected override getListenerOptions(fqdns: string[], type: "erroroccurred" | "completed"): [browser.webRequest.RequestFilter]; // prettier-ignore
+  protected override getListenerOptions(fqdns: string[], type: string) {
+    if (type === "beforeheaders") {
+      // Request headers are only needed for script requests;
+      // avoid attaching listeners unnecessarily
+      const [filter, options] = super.getListenerOptions(fqdns, type);
+      filter.types = ["script"];
+      return [filter, options];
+    }
+    return super.getListenerOptions(fqdns, type);
   }
 
   async #initializeState(
