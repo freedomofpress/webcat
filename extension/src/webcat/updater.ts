@@ -33,10 +33,17 @@ export type EnrollmentUpdaterOptions = {
   fetchTimeout?: number;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export interface EnrollmentUpdater extends EventTarget {
+  addEventListener: EventTarget["addEventListener"] &
+    ((type: "updated", callback: (event: UpdateEvent) => void) => void);
+}
+
 /**
  * Handles loading enrollment updates periodically from the endpoint,
  * storing them to the database, and notifying event consumers.
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class EnrollmentUpdater extends EventTarget {
   static readonly DefaultCheckInterval = 5 * 60 * 1000; // 5 minutes
   static readonly DefaultUpdateInterval = 60 * 60 * 1000; // 1 hour
