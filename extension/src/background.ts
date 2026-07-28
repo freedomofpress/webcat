@@ -69,7 +69,7 @@ requestHandler.addEventListener(
 
 const firstUpdate = true;
 updater.addEventListener("updated", async (event) => {
-  if (!event.success || !firstUpdate) {
+  if (!event.success && !firstUpdate) {
     return;
   }
   try {
