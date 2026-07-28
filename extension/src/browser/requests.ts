@@ -208,8 +208,6 @@ export class RequestHandler extends EventTarget {
    * @param fqdns A list of fully-qualified domain names to bind to.
    */
   bind(fqdns: string[]) {
-    const urls = buildUrlPatterns(fqdns);
-
     // The registration needs to be different from the existing one
     const before = (details: browser.webRequest._OnBeforeRequestDetails) =>
       this.#beforeRequest(details);
@@ -225,20 +223,26 @@ export class RequestHandler extends EventTarget {
       this.#completed(details);
 
     // Add new listeners first, then remove the old ones
-    browser.webRequest.onBeforeRequest.addListener(before, { urls }, [
-      "blocking",
-    ]);
+    browser.webRequest.onBeforeRequest.addListener(
+      before,
+      ...this.getListenerOptions(fqdns, "beforerequest"),
+    );
     browser.webRequest.onBeforeSendHeaders.addListener(
       beforeHeaders,
-      { urls },
-      ["blocking", "requestHeaders"],
+      ...this.getListenerOptions(fqdns, "beforeheaders"),
     );
-    browser.webRequest.onHeadersReceived.addListener(headers, { urls }, [
-      "blocking",
-      "responseHeaders",
-    ]);
-    browser.webRequest.onErrorOccurred.addListener(errorOccurred, { urls });
-    browser.webRequest.onCompleted.addListener(completed, { urls });
+    browser.webRequest.onHeadersReceived.addListener(
+      headers,
+      ...this.getListenerOptions(fqdns, "headersreceived"),
+    );
+    browser.webRequest.onErrorOccurred.addListener(
+      errorOccurred,
+      ...this.getListenerOptions(fqdns, "erroroccurred"),
+    );
+    browser.webRequest.onCompleted.addListener(
+      completed,
+      ...this.getListenerOptions(fqdns, "completed"),
+    );
 
     const previous = this.#currentListeners;
     this.#currentListeners = {
@@ -267,8 +271,30 @@ export class RequestHandler extends EventTarget {
     }
 
     console.log(
-      `[webcat] RequestHandler.bind: registered listeners for ${urls.length} URL(s)`,
+      `[webcat] RequestHandler.bind: registered listeners for ${fqdns.length} URL(s)`,
     );
+  }
+
+  protected getListenerOptions(fqdns: string[], type: "beforerequest"): [browser.webRequest.RequestFilter, browser.webRequest.OnBeforeRequestOptions[]]; // prettier-ignore
+  protected getListenerOptions(fqdns: string[], type: "beforeheaders"): [browser.webRequest.RequestFilter, browser.webRequest.OnBeforeSendHeadersOptions[]]; // prettier-ignore
+  protected getListenerOptions(fqdns: string[], type: "headersreceived"): [browser.webRequest.RequestFilter, browser.webRequest.OnHeadersReceivedOptions[]]; // prettier-ignore
+  protected getListenerOptions(fqdns: string[], type: "erroroccurred" | "completed"): [browser.webRequest.RequestFilter]; // prettier-ignore
+  protected getListenerOptions(fqdns: string[], type: string): [browser.webRequest.RequestFilter] | [browser.webRequest.RequestFilter, (browser.webRequest.OnBeforeRequestOptions[] | browser.webRequest.OnBeforeSendHeadersOptions[] | browser.webRequest.OnHeadersReceivedOptions[])]; // prettier-ignore
+  protected getListenerOptions(fqdns: string[], type: string) {
+    const urls = buildUrlPatterns(fqdns);
+    switch (type) {
+      case "beforerequest":
+        return [{ urls }, ["blocking"]];
+      case "beforeheaders":
+        return [{ urls }, ["blocking", "requestHeaders"]];
+      case "headersreceived":
+        return [{ urls }, ["blocking", "responseHeaders"]];
+      case "erroroccurred":
+      case "completed":
+        return [{ urls }];
+      default:
+        throw new TypeError(`unrecognized handler type '${type}'`);
+    }
   }
 
   async #beforeRequest(
@@ -284,10 +310,8 @@ export class RequestHandler extends EventTarget {
   async #beforeHeaders(
     d: browser.webRequest._OnBeforeSendHeadersDetails,
   ): Promise<browser.webRequest.BlockingResponse> {
-    const details = Object.assign(
-      this.#details.get(d.requestId) as BeforeRequestDetails,
-      d,
-    );
+    const base = this.#details.get(d.requestId) ?? new RequestDetailsBase();
+    const details = Object.assign(base, d);
     const event = new RequestEvent("beforeheaders", details);
     this.dispatchEvent(event);
     return await event.blockingResponse.ready();
@@ -296,20 +320,16 @@ export class RequestHandler extends EventTarget {
   async #headersReceived(
     d: browser.webRequest._OnHeadersReceivedDetails,
   ): Promise<browser.webRequest.BlockingResponse> {
-    const details = Object.assign(
-      this.#details.get(d.requestId) as BeforeHeadersDetails,
-      d,
-    );
+    const base = this.#details.get(d.requestId) ?? new RequestDetailsBase();
+    const details = Object.assign(base, d);
     const event = new RequestEvent("headersreceived", details);
     this.dispatchEvent(event);
     return await event.blockingResponse.ready();
   }
 
   #errorOccurred(d: browser.webRequest._OnErrorOccurredDetails) {
-    const details = Object.assign(
-      this.#details.get(d.requestId) as BeforeRequestDetails,
-      d,
-    );
+    const base = this.#details.get(d.requestId) ?? new RequestDetailsBase();
+    const details = Object.assign(base, d);
     details.fail();
     const event = new RequestEvent("erroroccurred", details);
     this.dispatchEvent(event);
@@ -317,10 +337,8 @@ export class RequestHandler extends EventTarget {
   }
 
   #completed(d: browser.webRequest._OnCompletedDetails) {
-    const details = Object.assign(
-      this.#details.get(d.requestId) as HeadersReceivedDetails,
-      d,
-    );
+    const base = this.#details.get(d.requestId) ?? new RequestDetailsBase();
+    const details = Object.assign(base, d);
     details.complete();
     const event = new RequestEvent("completed", details);
     this.dispatchEvent(event);
