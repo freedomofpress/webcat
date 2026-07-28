@@ -74,7 +74,6 @@ export function isSafeRelativeLocation(value: string): boolean {
 }
 
 export class ResponseValidator {
-  
   // #marker is ephemeral, not persisted anywhere, but that's ok:
   // ResponseValidator attaches a StreamFilter that prevents the
   // background service worker from terminating while a response
