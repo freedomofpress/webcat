@@ -16,7 +16,7 @@ import { logger } from "./logger";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
-import { errorpage } from "./ui";
+import { errorpage, setErrorIcon } from "./ui";
 import { getFQDN, isExtensionRequest, isNewerSemver } from "./utils";
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
@@ -44,6 +44,13 @@ export class WebcatRequestHandler extends RequestHandler {
     this.#responseValidator = new ResponseValidator(this.#db, this.#hooks);
     this.addEventListener("beforerequest", this.#onRequest);
     this.addEventListener("headersreceived", this.#onHeaders);
+    browser.webNavigation.onCommitted.addListener(this.#onErrorPageNavigation, {
+      url: [
+        {
+          urlPrefix: browser.runtime.getURL("pages/error.html"),
+        },
+      ],
+    });
   }
 
   override async bind(fqdns: string[]): Promise<string[]> {
@@ -332,5 +339,9 @@ export class WebcatRequestHandler extends RequestHandler {
       getFQDN(details.url),
     );
     return details.requestId;
+  }
+
+  #onErrorPageNavigation(details: browser.webNavigation._OnCommittedDetails) {
+    setErrorIcon(details.tabId);
   }
 }
