@@ -10,7 +10,7 @@ import { CacheKey } from "./cache";
 import { HookBuilder } from "./hookbuilder";
 import { Database } from "./interfaces/database";
 import { WebcatError } from "./interfaces/errors";
-import { CachePartition, OriginStateHolder } from "./interfaces/originstate";
+import { CachePartition, OriginState } from "./interfaces/originstate";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { validateOrigin } from "./request";
@@ -155,7 +155,7 @@ export class WebcatRequestHandler extends RequestHandler {
       }
     }
 
-    // No holder means the fqdn isn't enrolled
+    // No origin state means the fqdn isn't enrolled
     if (!details.state.pendingOrigin) {
       return;
     }
@@ -215,9 +215,9 @@ export class WebcatRequestHandler extends RequestHandler {
 
     if (
       FRAME_TYPES.includes(details.type) &&
-      details.state.pendingOrigin.current.manifest
+      details.state.pendingOrigin.manifest
     ) {
-      const wasm = details.state.pendingOrigin.current.manifest.wasm;
+      const wasm = details.state.pendingOrigin.manifest.wasm;
 
       const listener = async (
         navDetails: browser.webNavigation._OnDOMContentLoadedDetails,
@@ -253,24 +253,24 @@ export class WebcatRequestHandler extends RequestHandler {
 
   #commitVerifiedOrigin(
     fqdn: string,
-    holder: OriginStateHolder,
+    newState: OriginState,
     cachePartition: CachePartition,
   ): void {
-    if (holder.stale) {
+    if (newState.stale) {
       return;
     }
-    if (!holder.current.isManifestVerified()) {
+    if (!newState.isManifestVerified()) {
       return;
     }
-    const incoming = holder.current.manifest.version;
-    const existing = this.#db.origins.get(CacheKey(fqdn, cachePartition));
-    if (existing && existing.current.isManifestVerified()) {
-      const current = existing.current.manifest.version;
+    const incoming = newState.manifest.version;
+    const currentState = this.#db.origins.get(CacheKey(fqdn, cachePartition));
+    if (currentState && currentState.isManifestVerified()) {
+      const current = currentState.manifest.version;
       if (!isNewerSemver(incoming, current)) {
         return;
       }
     }
-    this.#db.origins.set(CacheKey(fqdn, cachePartition), holder);
+    this.#db.origins.set(CacheKey(fqdn, cachePartition), newState);
   }
 
   /**

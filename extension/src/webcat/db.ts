@@ -3,13 +3,13 @@ import { lru_cache_size, lru_set_size } from "../config";
 import { CacheKey, LRUCache, LRUSet } from "./cache";
 import { BlockMeta, Database } from "./interfaces/database";
 import { CachePartition } from "./interfaces/originstate";
-import { OriginStateHolder } from "./originstate";
+import { OriginState } from "./originstate";
 import { extractHostname, extractRawHash } from "./parsers";
 
 const META_KEY = "block_meta";
 
 export class WebcatDatabase extends NamespacedKVStore implements Database {
-  readonly origins = new LRUCache<CacheKey<CachePartition>, OriginStateHolder>(
+  readonly origins = new LRUCache<CacheKey<CachePartition>, OriginState>(
     lru_cache_size,
   );
   readonly nonOrigins = new LRUSet<CacheKey<CachePartition>>(lru_set_size);
@@ -55,7 +55,7 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
     // 1. Positive-cache hit
     const originState = this.origins.get(CacheKey(fqdn, cachePartition));
     if (originState) {
-      const cached = originState.current.enrollment_hash;
+      const cached = originState.enrollment_hash;
       if (!cached) {
         throw new Error(
           "FATAL: cached origin exists without an enrollment_hash",

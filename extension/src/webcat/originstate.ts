@@ -15,7 +15,6 @@ import {
   CachePartition,
   OriginState as IOriginState,
   OriginStateFailed,
-  OriginStateHolder as IOriginStateHolder,
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
@@ -105,12 +104,6 @@ export class BundleFetcher implements Iterable<BundleFetch> {
   }
 }
 
-export class OriginStateHolder implements IOriginStateHolder {
-  public stale: boolean = false;
-
-  constructor(public current: OriginState) {}
-}
-
 // The OriginState class caches origins and assumes safe defaults. We assume we are enrolled and nothing is verified.
 export class OriginState implements IOriginState {
   public status:
@@ -129,8 +122,9 @@ export class OriginState implements IOriginState {
   public valid_sources?: Set<string>;
   public delegation?: string;
   public readonly cachePartition: CachePartition;
-
   public error?: WebcatError;
+
+  stale = false;
 
   #db: Database;
 

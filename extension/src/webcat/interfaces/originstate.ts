@@ -10,7 +10,7 @@ import { WebcatError } from "./errors";
 export type CachePartition = { firstParty: string; incognito: boolean };
 
 export interface OriginState {
-  status:
+  readonly status:
     | "request_sent"
     | "verified_enrollment"
     | "verified_manifest"
@@ -27,6 +27,8 @@ export interface OriginState {
   readonly delegation?: string;
   readonly cachePartition: CachePartition;
   readonly error?: WebcatError;
+
+  stale: boolean;
 
   verifyEnrollment(enrollment?: Enrollment, delegation?: string): Promise<void>;
   verifyManifest(
@@ -50,8 +52,3 @@ export type OriginStateVerifiedManifest = OriginState & {
   manifest: Manifest;
 };
 export type OriginStateFailed = OriginState & { status: "failed" };
-
-export interface OriginStateHolder {
-  stale: boolean;
-  current: OriginState;
-}

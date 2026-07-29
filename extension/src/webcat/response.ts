@@ -14,7 +14,7 @@ import { Enrollment, Manifest } from "./interfaces/bundle";
 import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
-  OriginStateHolder,
+  OriginState,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
 import { Stateful } from "./interfaces/requeststate";
@@ -37,11 +37,9 @@ const WORKER_FETCH_DESTINATIONS = [
 ];
 
 function assertVerifiedManifest(
-  holder: OriginStateHolder,
-): asserts holder is OriginStateHolder & {
-  current: OriginStateVerifiedManifest;
-} {
-  if (!holder.current.isManifestVerified()) {
+  originState: OriginState,
+): asserts originState is OriginStateVerifiedManifest {
+  if (!originState.isManifestVerified()) {
     throw new Error("origin is not populated when it was expected");
   }
 }
@@ -90,7 +88,7 @@ export class ResponseValidator {
     // Some headers, such as CSP, needs to always be validated
 
     logger.info(
-      `Validating response headers, url: ${details.url} status: ${details.state.pendingOrigin.current.status}`,
+      `Validating response headers, url: ${details.url} status: ${details.state.pendingOrigin.status}`,
       details,
     );
 
@@ -112,7 +110,7 @@ export class ResponseValidator {
     const enrollment_header = normalizedHeaders.get("x-webcat-enrollment");
 
     // Step 2: Populate the required headers in the origin and check the policy
-    if (details.state.pendingOrigin.current.status === "request_sent") {
+    if (details.state.pendingOrigin.status === "request_sent") {
       // let's check for delegation and add it only when populating the orgin the first time
 
       // enrollment info can be bundled with the manifest or passed in header
@@ -127,34 +125,34 @@ export class ResponseValidator {
         } catch {
           return new WebcatError(WebcatErrorCode.Headers.ENROLLMENT_MALFORMED);
         }
-        await details.state.pendingOrigin.current.verifyEnrollment(
+        await details.state.pendingOrigin.verifyEnrollment(
           enrollment,
           delegation,
         );
       } else {
-        await details.state.pendingOrigin.current.verifyEnrollment(
+        await details.state.pendingOrigin.verifyEnrollment(
           undefined,
           delegation,
         );
       }
 
-      if (details.state.pendingOrigin.current.isFailed()) {
-        return details.state.pendingOrigin.current.error;
+      if (details.state.pendingOrigin.isFailed()) {
+        return details.state.pendingOrigin.error;
       }
 
       logger.debug("Header parsing complete", details);
 
       // Step 3: Populate and validate the manifest
-      await details.state.pendingOrigin.current.verifyManifest();
-      if (details.state.pendingOrigin.current.isFailed()) {
-        return details.state.pendingOrigin.current.error;
+      await details.state.pendingOrigin.verifyManifest();
+      if (details.state.pendingOrigin.isFailed()) {
+        return details.state.pendingOrigin.error;
       }
 
       // Step 4: Ensure we are at the expected final state now
       // This should never happen
-      if (!details.state.pendingOrigin.current.isManifestVerified()) {
+      if (!details.state.pendingOrigin.isManifestVerified()) {
         throw new Error(
-          `Error with the origin state: expected origin to be in state verified_manifest, got ${details.state.pendingOrigin.current.status}`,
+          `Error with the origin state: expected origin to be in state verified_manifest, got ${details.state.pendingOrigin.status}`,
         );
       }
 
@@ -163,10 +161,7 @@ export class ResponseValidator {
 
     // Now, we should have the manifest, and can validate the CSP based on path
     /* DEVELOPMENT GUARD */
-    if (
-      !details.state.pendingOrigin.current.manifest ||
-      details.state.pendingOrigin.current.status !== "verified_manifest"
-    ) {
+    if (!details.state.pendingOrigin.isManifestVerified()) {
       // Though this should never happen?
       throw new Error(
         "Validating headers, but no valid manifest for the origin has been found.",
@@ -178,20 +173,17 @@ export class ResponseValidator {
     // has been updated and that users should update the manifest before loading
     if (
       version &&
-      isNewerSemver(
-        version,
-        details.state.pendingOrigin.current.manifest.version,
-      )
+      isNewerSemver(version, details.state.pendingOrigin.manifest.version)
     ) {
       logger.info(
-        `Detected new version ${version}, current_version ${details.state.pendingOrigin.current.manifest.version}`,
+        `Detected new version ${version}, current_version ${details.state.pendingOrigin.manifest.version}`,
         details,
       );
       this.#db.origins.delete(
         CacheKey(details.state.fqdn, details.state.cachePartition),
       );
-      // Mark the holder so any sibling request that shares it won't re-insert
-      // it via commitVerifiedOrigin later
+      // Mark the origin state so any sibling request that shares it won't
+      // re-insert it via commitVerifiedOrigin later
       details.state.pendingOrigin.stale = true;
       await clearBrowserCaches([details.state.fqdn]);
       browser.tabs.reload(details.tabId);
@@ -199,7 +191,7 @@ export class ResponseValidator {
 
     const pathname = new URL(details.url).pathname;
     if (csp) {
-      if (!details.state.pendingOrigin.current.verifyCSP(csp, pathname)) {
+      if (!details.state.pendingOrigin.verifyCSP(csp, pathname)) {
         return new WebcatError(WebcatErrorCode.CSP.MISMATCH, [
           String(pathname),
         ]);
@@ -221,7 +213,7 @@ export class ResponseValidator {
     // It's important not do do it for sub_frames, otherwise validating a subresource
     // would display as if the entire site was verified
     if (details.type === "main_frame") {
-      setOKIcon(details.tabId, details.state.pendingOrigin.current.delegation);
+      setOKIcon(details.tabId, details.state.pendingOrigin.delegation);
     }
   }
 
@@ -320,8 +312,8 @@ export class ResponseValidator {
     }
 
     const pathname = new URL(details.url).pathname;
-    const originStateHolder = details.state.pendingOrigin;
-    if (!originStateHolder) {
+    const originState = details.state.pendingOrigin;
+    if (!originState) {
       throw new Error("missing pendingOrigin in request state");
     }
 
@@ -329,9 +321,9 @@ export class ResponseValidator {
     const filter = browser.webRequest.filterResponseData(details.requestId);
     const source: Promise<ArrayBuffer>[] = [];
     filter.onstart = () => {
-      assertVerifiedManifest(originStateHolder);
+      assertVerifiedManifest(originState);
       assertHeadersAvailable(details);
-      manifest = originStateHolder.current.manifest;
+      manifest = originState.manifest;
       // If a pass-through media type isn't in the manifest, bail before receiving
       // any data so large files don't get buffered into the extension for nothing.
       if (
@@ -469,7 +461,7 @@ export class ResponseValidator {
       // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
       filter.close();
       if (details.type === "main_frame") {
-        setOKIcon(details.tabId, originStateHolder.current.delegation);
+        setOKIcon(details.tabId, originState.delegation);
       }
       // Redirect the main frame to an error page
     };
