@@ -13,15 +13,12 @@ import { HookBuilder } from "./hookbuilder";
 import { Enrollment, Manifest } from "./interfaces/bundle";
 import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
-import { OriginStateHolder } from "./interfaces/originstate";
+import {
+  OriginStateHolder,
+  OriginStateVerifiedManifest,
+} from "./interfaces/originstate";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
-import {
-  OriginStateFailed,
-  OriginStateInitial,
-  OriginStateVerifiedEnrollment,
-  OriginStateVerifiedManifest,
-} from "./originstate";
 import { PASS_THROUGH_TYPES } from "./resources";
 import { errorpage, setOKIcon } from "./ui";
 import {
@@ -44,10 +41,7 @@ function assertVerifiedManifest(
 ): asserts holder is OriginStateHolder & {
   current: OriginStateVerifiedManifest;
 } {
-  if (
-    holder.current.status !== "verified_manifest" ||
-    !(holder.current as OriginStateVerifiedManifest).manifest
-  ) {
+  if (!holder.current.isManifestVerified()) {
     throw new Error("origin is not populated when it was expected");
   }
 }
@@ -133,32 +127,32 @@ export class ResponseValidator {
         } catch {
           return new WebcatError(WebcatErrorCode.Headers.ENROLLMENT_MALFORMED);
         }
-        details.state.pendingOrigin.current = await (
-          details.state.pendingOrigin.current as OriginStateInitial
-        ).verifyEnrollment(this.#db, enrollment, delegation);
+        await details.state.pendingOrigin.current.verifyEnrollment(
+          enrollment,
+          delegation,
+        );
       } else {
-        details.state.pendingOrigin.current = await (
-          details.state.pendingOrigin.current as OriginStateInitial
-        ).verifyEnrollment(this.#db, undefined, delegation);
+        await details.state.pendingOrigin.current.verifyEnrollment(
+          undefined,
+          delegation,
+        );
       }
 
-      if (details.state.pendingOrigin.current.status === "failed") {
-        return (details.state.pendingOrigin.current as OriginStateFailed).error;
+      if (details.state.pendingOrigin.current.isFailed()) {
+        return details.state.pendingOrigin.current.error;
       }
 
       logger.debug("Header parsing complete", details);
 
       // Step 3: Populate and validate the manifest
-      details.state.pendingOrigin.current = await (
-        details.state.pendingOrigin.current as OriginStateVerifiedEnrollment
-      ).verifyManifest(this.#db);
-      if (details.state.pendingOrigin.current.status === "failed") {
-        return (details.state.pendingOrigin.current as OriginStateFailed).error;
+      await details.state.pendingOrigin.current.verifyManifest();
+      if (details.state.pendingOrigin.current.isFailed()) {
+        return details.state.pendingOrigin.current.error;
       }
 
       // Step 4: Ensure we are at the expected final state now
       // This should never happen
-      if (details.state.pendingOrigin.current.status !== "verified_manifest") {
+      if (!details.state.pendingOrigin.current.isManifestVerified()) {
         throw new Error(
           `Error with the origin state: expected origin to be in state verified_manifest, got ${details.state.pendingOrigin.current.status}`,
         );
@@ -205,11 +199,7 @@ export class ResponseValidator {
 
     const pathname = new URL(details.url).pathname;
     if (csp) {
-      if (
-        !(
-          details.state.pendingOrigin.current as OriginStateVerifiedManifest
-        ).verifyCSP(csp, pathname)
-      ) {
+      if (!details.state.pendingOrigin.current.verifyCSP(csp, pathname)) {
         return new WebcatError(WebcatErrorCode.CSP.MISMATCH, [
           String(pathname),
         ]);
