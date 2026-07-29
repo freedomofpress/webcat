@@ -13,7 +13,6 @@ import { WebcatError } from "./interfaces/errors";
 import { CachePartition, OriginStateHolder } from "./interfaces/originstate";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
-import { OriginStateVerifiedManifest } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
@@ -260,15 +259,13 @@ export class WebcatRequestHandler extends RequestHandler {
     if (holder.stale) {
       return;
     }
-    if (holder.current.status !== "verified_manifest") {
+    if (!holder.current.isManifestVerified()) {
       return;
     }
-    const incoming = (holder.current as OriginStateVerifiedManifest).manifest
-      .version;
+    const incoming = holder.current.manifest.version;
     const existing = this.#db.origins.get(CacheKey(fqdn, cachePartition));
-    if (existing && existing.current.status === "verified_manifest") {
-      const current = (existing.current as OriginStateVerifiedManifest).manifest
-        .version;
+    if (existing && existing.current.isManifestVerified()) {
+      const current = existing.current.manifest.version;
       if (!isNewerSemver(incoming, current)) {
         return;
       }

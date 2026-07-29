@@ -4,11 +4,7 @@ import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
-import {
-  BundleFetcher,
-  OriginStateHolder,
-  OriginStateInitial,
-} from "./originstate";
+import { BundleFetcher, OriginState, OriginStateHolder } from "./originstate";
 import { setIcon } from "./ui";
 
 declare const __IS_TESTING__: boolean;
@@ -83,7 +79,8 @@ export async function validateOrigin(
   const newFetcher = new BundleFetcher(
     `${urlobj.protocol}//${fqdn}:${urlobj.port}`,
   );
-  const newOriginState = new OriginStateInitial(
+  const newOriginState = new OriginState(
+    db,
     newFetcher,
     urlobj.protocol,
     urlobj.port,
