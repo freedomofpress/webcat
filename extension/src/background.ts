@@ -6,7 +6,6 @@ import {
   UPDATE_INTERVAL_MS,
 } from "./config";
 import validator_set from "./validator_set.json";
-import { isInPartition } from "./webcat/cache";
 import { WebcatDatabase } from "./webcat/db";
 import { WebcatRequestHandler } from "./webcat/handler";
 import { EnrollmentUpdater } from "./webcat/updater";
@@ -15,23 +14,6 @@ import { clearBrowserCaches } from "./webcat/utils";
 console.log("[webcat] Starting up background");
 
 const db = new WebcatDatabase();
-
-// Handle incognito sessions ending
-browser.windows.onRemoved.addListener(async () => {
-  const windows = await browser.windows.getAll();
-  if (windows.filter((win) => win.incognito).length === 0) {
-    for (const key of db.origins.keys()) {
-      if (isInPartition(key, { incognito: true })) {
-        db.origins.delete(key);
-      }
-    }
-    for (const value of db.nonOrigins.values()) {
-      if (isInPartition(value, { incognito: true })) {
-        db.nonOrigins.delete(value);
-      }
-    }
-  }
-});
 
 const requestHandler = new WebcatRequestHandler(db);
 const updater = new EnrollmentUpdater({
