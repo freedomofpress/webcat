@@ -34,9 +34,9 @@ type BundleFetch = {
   value?: Bundle;
 };
 
-export class BundleFetcher implements Iterable<BundleFetch> {
-  public readonly current: BundleFetch;
-  public readonly previous: BundleFetch;
+export class BundleFetcher {
+  readonly current: BundleFetch;
+  readonly previous: BundleFetch;
 
   constructor(base: string) {
     this.current = {
@@ -52,13 +52,8 @@ export class BundleFetcher implements Iterable<BundleFetch> {
     };
   }
 
-  *[Symbol.iterator](): IterableIterator<BundleFetch> {
-    yield this.current;
-    yield this.previous;
-  }
-
-  public async awaitAll(): Promise<void> {
-    for (const slot of this) {
+  async awaitAll(): Promise<void> {
+    for (const slot of [this.current, this.previous]) {
       if (slot.value || slot.error) {
         continue;
       }
@@ -106,49 +101,49 @@ export class BundleFetcher implements Iterable<BundleFetch> {
 
 // The OriginState class caches origins and assumes safe defaults. We assume we are enrolled and nothing is verified.
 export class OriginState implements IOriginState {
-  public status:
+  status:
     | "request_sent"
     | "verified_enrollment"
     | "verified_manifest"
     | "failed";
-  public readonly scheme: string;
-  public readonly port: string;
-  public readonly fqdn: string;
-  public readonly enrollment_hash: Uint8Array;
-  public fetcher: BundleFetcher;
-  public bundle?: Bundle;
-  public enrollment?: Enrollment;
-  public manifest?: Manifest;
-  public valid_sources?: Set<string>;
-  public delegation?: string;
-  public readonly cachePartition: CachePartition;
-  public error?: WebcatError;
+
+  readonly #db: Database;
+  readonly #cachePartition: CachePartition;
+  readonly enrollment_hash: Uint8Array;
+
+  #bundle?: Bundle;
+  fetcher: BundleFetcher;
+  enrollment?: Enrollment;
+  manifest?: Manifest;
+  delegation?: string;
+  error?: WebcatError;
 
   stale = false;
-
-  #db: Database;
 
   // Due to list logic, we support only one app per domain, and that should be a privileged one
   // But that is enforced in request.ts
   constructor(
     db: Database,
     fetcher: BundleFetcher,
-    scheme: string,
-    port: string,
-    fqdn: string,
     enrollment_hash: Uint8Array,
     cachePartition: CachePartition,
     delegation?: string,
   ) {
     this.#db = db;
     this.fetcher = fetcher;
-    this.scheme = scheme;
-    this.port = port;
-    this.fqdn = fqdn;
     this.enrollment_hash = enrollment_hash;
-    this.cachePartition = cachePartition;
+    this.#cachePartition = cachePartition;
     this.delegation = delegation;
     this.status = "request_sent";
+  }
+
+  isRequestSent(): boolean {
+    return (
+      this.status === "request_sent" &&
+      this.enrollment === undefined &&
+      this.manifest === undefined &&
+      this.error === undefined
+    );
   }
 
   #fail(error: WebcatError) {
@@ -172,10 +167,9 @@ export class OriginState implements IOriginState {
     );
   }
 
-  #setVerifiedManifest(manifest: Manifest, valid_sources: Set<string>) {
+  #setVerifiedManifest(manifest: Manifest) {
     this.status = "verified_manifest";
     this.manifest = manifest;
-    this.valid_sources = valid_sources;
   }
 
   isManifestVerified(): this is OriginStateVerifiedManifest {
@@ -185,7 +179,7 @@ export class OriginState implements IOriginState {
   async #verifyDelegation(delegation: string): Promise<boolean> {
     const delegation_hash = await this.#db.getFQDNEnrollment(
       delegation,
-      this.cachePartition,
+      this.#cachePartition,
     );
     return (
       delegation_hash && arraysEqual(delegation_hash, this.enrollment_hash)
@@ -195,7 +189,7 @@ export class OriginState implements IOriginState {
   // This functiont ries to verify the enrollment information against the value in the local list
   // It will also return errors while fetching the bundles (though they are generated in awaitBundles)
   // and tell the next stages whether they should use the current or the previous bundle
-  public async verifyEnrollment(enrollment?: Enrollment, delegation?: string) {
+  async verifyEnrollment(enrollment?: Enrollment, delegation?: string) {
     let verified_delegation;
     if (delegation && (await this.#verifyDelegation(delegation))) {
       verified_delegation = delegation;
@@ -221,7 +215,7 @@ export class OriginState implements IOriginState {
     // In this case, we already tried both bundles and we should bail
     // Or we got direct enrollment passed, and we shpuldn't fallback automatically
     if (match) {
-      this.bundle = this.fetcher.current.value;
+      this.#bundle = this.fetcher.current.value;
     } else {
       // If we are here, and the previous fetch failed, we fail on MISMATCH
       // because it means the main enrollment MISMATCHED and there's no fallback
@@ -239,7 +233,7 @@ export class OriginState implements IOriginState {
       if (!arraysEqual(this.enrollment_hash, canonicalized_hash_prev)) {
         return this.#fail(new WebcatError(WebcatErrorCode.Enrollment.MISMATCH));
       }
-      this.bundle = this.fetcher.previous.value;
+      this.#bundle = this.fetcher.previous.value;
     }
 
     let err: WebcatError | null = null;
@@ -274,7 +268,7 @@ export class OriginState implements IOriginState {
     return this.#setVerifiedEnrollment(enrollment, verified_delegation);
   }
 
-  public async verifyManifest(
+  async verifyManifest(
     manifest?: Manifest,
     signatures?: SigsumSignatures | SigstoreSignatures,
   ) {
@@ -288,9 +282,9 @@ export class OriginState implements IOriginState {
     if (!manifest || !signatures) {
       // awaitBundle checks already that manifest exists
       // eslint-disable-next-line
-      manifest = this.bundle!.manifest;
+      manifest = this.#bundle!.manifest;
       // eslint-disable-next-line
-      signatures = this.bundle!.signatures;
+      signatures = this.#bundle!.signatures;
     }
 
     let verify_error: WebcatError | null = null;
@@ -336,7 +330,7 @@ export class OriginState implements IOriginState {
         this.#db,
         manifest.default_csp,
         valid_sources,
-        this.cachePartition,
+        this.#cachePartition,
       );
     } catch (e) {
       //return new OriginStateFailed(this, `failed parsing default_csp: ${e}`);
@@ -352,7 +346,7 @@ export class OriginState implements IOriginState {
       if (manifest.extra_csp.hasOwnProperty(path)) {
         const csp = manifest.extra_csp[path];
         try {
-          await validateCSP(this.#db, csp, valid_sources, this.cachePartition);
+          await validateCSP(this.#db, csp, valid_sources, this.#cachePartition);
         } catch (e) {
           return this.#fail(
             new WebcatError(WebcatErrorCode.Manifest.EXTRA_CSP_INVALID, [
@@ -368,10 +362,10 @@ export class OriginState implements IOriginState {
         );
       }
     }
-    return this.#setVerifiedManifest(manifest, valid_sources);
+    return this.#setVerifiedManifest(manifest);
   }
 
-  public verifyCSP(csp: string, pathname: string) {
+  verifyCSP(csp: string, pathname: string) {
     if (!this.isManifestVerified()) {
       throw new Error("verifyCSP called before verifyManifest");
     }

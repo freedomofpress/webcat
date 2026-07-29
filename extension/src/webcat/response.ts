@@ -87,10 +87,7 @@ export class ResponseValidator {
     }
     // Some headers, such as CSP, needs to always be validated
 
-    logger.info(
-      `Validating response headers, url: ${details.url} status: ${details.state.pendingOrigin.status}`,
-      details,
-    );
+    logger.info(`Validating response headers, url: ${details.url}`, details);
 
     // Step 1: Extract headers, normalize, check for duplicates and mandatory ones
     const result = this.extractAndValidateHeaders(details);
@@ -110,7 +107,7 @@ export class ResponseValidator {
     const enrollment_header = normalizedHeaders.get("x-webcat-enrollment");
 
     // Step 2: Populate the required headers in the origin and check the policy
-    if (details.state.pendingOrigin.status === "request_sent") {
+    if (details.state.pendingOrigin.isRequestSent()) {
       // let's check for delegation and add it only when populating the orgin the first time
 
       // enrollment info can be bundled with the manifest or passed in header
@@ -152,7 +149,7 @@ export class ResponseValidator {
       // This should never happen
       if (!details.state.pendingOrigin.isManifestVerified()) {
         throw new Error(
-          `Error with the origin state: expected origin to be in state verified_manifest, got ${details.state.pendingOrigin.status}`,
+          `Error with the origin state: expected origin to be in state verified_manifest`,
         );
       }
 

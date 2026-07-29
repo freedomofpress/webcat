@@ -1,5 +1,4 @@
 import {
-  Bundle,
   Enrollment,
   Manifest,
   SigstoreSignatures,
@@ -10,22 +9,10 @@ import { WebcatError } from "./errors";
 export type CachePartition = { firstParty: string; incognito: boolean };
 
 export interface OriginState {
-  readonly status:
-    | "request_sent"
-    | "verified_enrollment"
-    | "verified_manifest"
-    | "failed";
-  readonly scheme: string;
-  readonly port: string;
-  readonly fqdn: string;
   readonly enrollment_hash: Uint8Array;
-  bundle?: Bundle;
   readonly enrollment?: Enrollment;
   readonly manifest?: Manifest;
-  readonly valid_signers?: Set<string>;
-  readonly valid_sources?: Set<string>;
   readonly delegation?: string;
-  readonly cachePartition: CachePartition;
   readonly error?: WebcatError;
 
   stale: boolean;
@@ -37,18 +24,18 @@ export interface OriginState {
   ): Promise<void>;
   verifyCSP(csp: string, pathname: string): boolean;
 
+  isRequestSent(): boolean;
   isEnrollmentVerified(): this is OriginStateVerifiedEnrollment;
   isManifestVerified(): this is OriginStateVerifiedManifest;
   isFailed(): this is OriginStateFailed;
 }
 
 export type OriginStateVerifiedEnrollment = OriginState & {
-  status: "verified_enrollment";
   enrollment: Enrollment;
 };
-
 export type OriginStateVerifiedManifest = OriginState & {
-  status: "verified_manifest";
   manifest: Manifest;
 };
-export type OriginStateFailed = OriginState & { status: "failed" };
+export type OriginStateFailed = OriginState & {
+  error: WebcatError;
+};

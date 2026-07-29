@@ -187,9 +187,6 @@ describe("OriginState.verifyEnrollment", () => {
     state = new OriginState(
       db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       enrollmentHash,
       cachePartition,
     );
@@ -219,9 +216,6 @@ describe("OriginState.verifyEnrollment", () => {
     const mutatedState = new OriginState(
       db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
@@ -241,9 +235,6 @@ describe("OriginState.verifyEnrollment", () => {
     const mutatedState = new OriginState(
       db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
@@ -263,9 +254,6 @@ describe("OriginState.verifyEnrollment", () => {
     const mutatedState = new OriginState(
       db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
@@ -285,9 +273,6 @@ describe("OriginState.verifyEnrollment", () => {
     const mutatedState = new OriginState(
       db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
@@ -332,9 +317,6 @@ describe("OriginState.verifyEnrollment (sigstore)", () => {
     state = new OriginState(
       db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       enrollmentHash,
       cachePartition,
     );
@@ -357,9 +339,6 @@ describe("OriginState.verifyEnrollment (sigstore)", () => {
     const mutatedState = new OriginState(
       db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
@@ -384,9 +363,6 @@ describe("OriginState.verifyEnrollment (sigstore)", () => {
     const mutatedState = new OriginState(
       db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
@@ -439,9 +415,6 @@ describe("OriginState.verifyManifest", () => {
     state = new OriginState(
       db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       enrollmentHash,
       cachePartition,
     );
@@ -578,9 +551,6 @@ describe("OriginState.verifyManifest (sigstore)", () => {
     state = new OriginState(
       db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       enrollmentHash,
       cachePartition,
     );
@@ -667,9 +637,6 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
     state = new OriginState(
       db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       enrollmentHash,
       cachePartition,
     );

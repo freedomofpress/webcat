@@ -82,9 +82,6 @@ export async function validateOrigin(
   const newOriginState = new OriginState(
     db,
     newFetcher,
-    urlobj.protocol,
-    urlobj.port,
-    fqdn,
     enrollment_hash,
     cachePartition,
   );
