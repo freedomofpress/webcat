@@ -81,6 +81,7 @@ export function setErrorIcon(tabId: number) {
 export async function errorpage(
   details: Stateful<RequestDetails>,
   error?: WebcatError,
+  replace = !details.state.isFrame,
 ) {
   const tabIds = new Set<number>();
   const frameLookups = [];
@@ -134,7 +135,7 @@ export async function errorpage(
     tabUpdates.push(
       browser.tabs.update(tabId, {
         url: errorPageUrl,
-        loadReplace: !details.state.isFrame,
+        loadReplace: replace,
       }),
     ),
   );
