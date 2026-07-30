@@ -1,10 +1,10 @@
-import { CachePartition, OriginStateHolder } from "./originstate";
+import { CachePartition, OriginState } from "./originstate";
 
 export type RequestState = {
   fqdn: string;
   isFrame: boolean;
   cachePartition: CachePartition;
-  pendingOrigin?: OriginStateHolder;
+  pendingOrigin?: OriginState;
 };
 
 export type Stateful<T> = T & {

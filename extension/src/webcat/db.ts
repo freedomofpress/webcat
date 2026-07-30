@@ -1,17 +1,18 @@
 import { NamespacedKVStore } from "../browser/kvstore";
 import { lru_cache_size, lru_set_size } from "../config";
-import { CacheKey, LRUCache, LRUSet } from "./cache";
+import { CacheKey, LRUSet, PersistentLRUCache } from "./cache";
 import { BlockMeta, Database } from "./interfaces/database";
 import { CachePartition } from "./interfaces/originstate";
-import { OriginStateHolder } from "./originstate";
+import { OriginState } from "./originstate";
 import { extractHostname, extractRawHash } from "./parsers";
 
 const META_KEY = "block_meta";
 
 export class WebcatDatabase extends NamespacedKVStore implements Database {
-  readonly origins = new LRUCache<CacheKey<CachePartition>, OriginStateHolder>(
-    lru_cache_size,
-  );
+  readonly origins = new PersistentLRUCache<
+    CacheKey<CachePartition>,
+    OriginState
+  >(lru_cache_size, this.namespace("origins"), "session", OriginState);
   readonly nonOrigins = new LRUSet<CacheKey<CachePartition>>(lru_set_size);
   readonly enrollments = this.namespace("enrollments");
 
@@ -34,8 +35,8 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
     await this.enrollments.set(batch);
     await this.set({ [META_KEY]: meta });
 
-    this.origins.clear();
-    this.nonOrigins.clear();
+    await this.origins.clear();
+    await this.nonOrigins.clear();
 
     console.log(`[webcat] Replaced list with ${leaves.length} entries`);
   }
@@ -53,9 +54,9 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
     cachePartition: CachePartition,
   ): Promise<Uint8Array> {
     // 1. Positive-cache hit
-    const originState = this.origins.get(CacheKey(fqdn, cachePartition));
+    const originState = await this.origins.get(CacheKey(fqdn, cachePartition));
     if (originState) {
-      const cached = originState.current.enrollment_hash;
+      const cached = originState.enrollment_hash;
       if (!cached) {
         throw new Error(
           "FATAL: cached origin exists without an enrollment_hash",
@@ -65,7 +66,7 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
     }
 
     // 2. Negative-cache hit
-    if (this.nonOrigins.has(CacheKey(fqdn, cachePartition))) {
+    if (await this.nonOrigins.has(CacheKey(fqdn, cachePartition))) {
       return new Uint8Array();
     }
 
@@ -74,7 +75,7 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
     if (stored) {
       return new Uint8Array(stored);
     } else {
-      this.nonOrigins.add(CacheKey(fqdn, cachePartition));
+      await this.nonOrigins.add(CacheKey(fqdn, cachePartition));
       return new Uint8Array();
     }
   }

@@ -1,27 +1,49 @@
-import { Bundle, Enrollment, Manifest } from "./bundle";
+import {
+  Enrollment,
+  Manifest,
+  SigstoreSignatures,
+  SigsumSignatures,
+} from "./bundle";
+import { WebcatError } from "./errors";
 
 export type CachePartition = { firstParty: string; incognito: boolean };
 
+export type OriginStateObject = {
+  status: "verified_manifest";
+  enrollment_hash: string;
+  manifest: Manifest;
+  delegation?: string;
+};
+
 export interface OriginState {
-  status:
-    | "request_sent"
-    | "verified_enrollment"
-    | "verified_manifest"
-    | "failed";
-  readonly scheme: string;
-  readonly port: string;
-  readonly fqdn: string;
   readonly enrollment_hash: Uint8Array;
-  bundle?: Bundle;
   readonly enrollment?: Enrollment;
   readonly manifest?: Manifest;
-  readonly valid_signers?: Set<string>;
-  readonly valid_sources?: Set<string>;
   readonly delegation?: string;
-  readonly cachePartition: CachePartition;
+  readonly error?: WebcatError;
+
+  stale: boolean;
+
+  verifyEnrollment(enrollment?: Enrollment, delegation?: string): Promise<void>;
+  verifyManifest(
+    manifest?: Manifest,
+    signatures?: SigsumSignatures | SigstoreSignatures,
+  ): Promise<void>;
+  verifyCSP(csp: string, pathname: string): boolean;
+
+  isRequestSent(): boolean;
+  isEnrollmentVerified(): this is OriginStateVerifiedEnrollment;
+  isManifestVerified(): this is OriginStateVerifiedManifest;
+  isFailed(): this is OriginStateFailed;
 }
 
-export interface OriginStateHolder {
-  stale: boolean;
-  current: OriginState;
-}
+export type OriginStateVerifiedEnrollment = OriginState & {
+  enrollment: Enrollment;
+};
+export type OriginStateVerifiedManifest = OriginState & {
+  manifest: Manifest;
+  toPOJO(): OriginStateObject;
+};
+export type OriginStateFailed = OriginState & {
+  error: WebcatError;
+};

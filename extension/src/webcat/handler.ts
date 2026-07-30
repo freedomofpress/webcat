@@ -10,10 +10,9 @@ import { CacheKey } from "./cache";
 import { HookBuilder } from "./hookbuilder";
 import { Database } from "./interfaces/database";
 import { WebcatError } from "./interfaces/errors";
-import { CachePartition, OriginStateHolder } from "./interfaces/originstate";
+import { CachePartition, OriginState } from "./interfaces/originstate";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
-import { OriginStateVerifiedManifest } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
@@ -35,6 +34,7 @@ export class WebcatRequestHandler extends RequestHandler {
   readonly #hooks: HookBuilder;
   readonly #contentScript: ContentScript;
   readonly #responseValidator: ResponseValidator;
+  readonly #bound = Promise.withResolvers<void>();
 
   constructor(db: Database & NamespacedKVStore) {
     super();
@@ -48,7 +48,20 @@ export class WebcatRequestHandler extends RequestHandler {
 
   override async bind(fqdns: string[]): Promise<string[]> {
     super.bind(fqdns);
-    return this.#contentScript.bind(fqdns);
+    const newFqdns = await this.#contentScript.bind(fqdns);
+    this.#bound.resolve();
+    return newFqdns;
+  }
+
+  /**
+   * Binds the handler to <all_urls>. Unlike {@link bind}, does not bind
+   * content scripts. The bindAll method can be called synchronously before
+   * FQDNs are available, but it should be always followed by a call to
+   * {@link bind} to both restrict the scope of the binding and bind content
+   * scripts.
+   */
+  bindAll() {
+    super.bind(["<all_urls>"]);
   }
 
   protected override getListenerOptions(fqdns: string[], type: "beforerequest"): [browser.webRequest.RequestFilter, browser.webRequest.OnBeforeRequestOptions[]]; // prettier-ignore
@@ -56,14 +69,27 @@ export class WebcatRequestHandler extends RequestHandler {
   protected override getListenerOptions(fqdns: string[], type: "headersreceived"): [browser.webRequest.RequestFilter, browser.webRequest.OnHeadersReceivedOptions[]]; // prettier-ignore
   protected override getListenerOptions(fqdns: string[], type: "erroroccurred" | "completed"): [browser.webRequest.RequestFilter]; // prettier-ignore
   protected override getListenerOptions(fqdns: string[], type: string) {
+    let all = false;
+    for (let i: number; (i = fqdns.indexOf("<all_urls>")) !== -1; ) {
+      // If fqdns contains <all_urls>, remove it before continuing
+      fqdns = [...fqdns.slice(0, i), ...fqdns.slice(i + 1)];
+      all = true;
+    }
+    let result: ReturnType<RequestHandler["getListenerOptions"]>;
     if (type === "beforeheaders") {
       // Request headers are only needed for script requests;
       // avoid attaching listeners unnecessarily
       const [filter, options] = super.getListenerOptions(fqdns, type);
       filter.types = ["script"];
-      return [filter, options];
+      result = [filter, options];
+    } else {
+      result = super.getListenerOptions(fqdns, type);
     }
-    return super.getListenerOptions(fqdns, type);
+    if (all) {
+      // Add the previously removed <all_urls>
+      result[0].urls.push("<all_urls>");
+    }
+    return result;
   }
 
   async #initializeState(
@@ -88,6 +114,9 @@ export class WebcatRequestHandler extends RequestHandler {
     }
     const details = await this.#initializeState(event.details);
 
+    // Block until the handler has been fully bound
+    await this.#bound.promise;
+
     // Frame-only pre-setup: retry pending list updates
     if (details.state.isFrame) {
       logger.info(`Loading ${details.type} ${details.url}`, details);
@@ -102,7 +131,7 @@ export class WebcatRequestHandler extends RequestHandler {
 
     // For non-frames, check for cached origin
     if (!details.state.isFrame) {
-      details.state.pendingOrigin = this.#db.origins.get(
+      details.state.pendingOrigin = await this.#db.origins.get(
         CacheKey(details.state.fqdn, details.state.cachePartition),
       );
     }
@@ -126,7 +155,7 @@ export class WebcatRequestHandler extends RequestHandler {
       }
     }
 
-    // No holder means the fqdn isn't enrolled
+    // No origin state means the fqdn isn't enrolled
     if (!details.state.pendingOrigin) {
       return;
     }
@@ -157,7 +186,7 @@ export class WebcatRequestHandler extends RequestHandler {
       return blockingResponse.set({ cancel: true });
     }
 
-    this.#commitVerifiedOrigin(
+    await this.#commitVerifiedOrigin(
       details.state.fqdn,
       details.state.pendingOrigin,
       details.state.cachePartition,
@@ -186,9 +215,9 @@ export class WebcatRequestHandler extends RequestHandler {
 
     if (
       FRAME_TYPES.includes(details.type) &&
-      details.state.pendingOrigin.current.manifest
+      details.state.pendingOrigin.manifest
     ) {
-      const wasm = details.state.pendingOrigin.current.manifest.wasm;
+      const wasm = details.state.pendingOrigin.manifest.wasm;
 
       const listener = async (
         navDetails: browser.webNavigation._OnDOMContentLoadedDetails,
@@ -198,15 +227,21 @@ export class WebcatRequestHandler extends RequestHandler {
 
         browser.webNavigation.onDOMContentLoaded.removeListener(listener);
 
-        await browser.tabs.executeScript(details.tabId, {
-          code: await this.#hooks.getContentScriptHooks(
-            wasm,
-            details.state.cachePartition.firstParty,
-            details.state.cachePartition.firstParty ===
-              new URL(details.url).origin,
-          ),
-          runAt: "document_start",
-          frameId: details.frameId,
+        const [func, args] = await this.#hooks.getContentScriptHooks(
+          wasm,
+          details.state.cachePartition.firstParty,
+          details.state.cachePartition.firstParty ===
+            new URL(details.url).origin,
+        );
+        await browser.scripting.executeScript({
+          target: {
+            tabId: details.tabId,
+            frameIds: [details.frameId],
+          },
+          func,
+          args,
+          injectImmediately: true,
+          world: "ISOLATED",
         });
       };
 
@@ -216,28 +251,28 @@ export class WebcatRequestHandler extends RequestHandler {
     return;
   }
 
-  #commitVerifiedOrigin(
+  async #commitVerifiedOrigin(
     fqdn: string,
-    holder: OriginStateHolder,
+    newState: OriginState,
     cachePartition: CachePartition,
-  ): void {
-    if (holder.stale) {
+  ): Promise<void> {
+    if (newState.stale) {
       return;
     }
-    if (holder.current.status !== "verified_manifest") {
+    if (!newState.isManifestVerified()) {
       return;
     }
-    const incoming = (holder.current as OriginStateVerifiedManifest).manifest
-      .version;
-    const existing = this.#db.origins.get(CacheKey(fqdn, cachePartition));
-    if (existing && existing.current.status === "verified_manifest") {
-      const current = (existing.current as OriginStateVerifiedManifest).manifest
-        .version;
+    const incoming = newState.manifest.version;
+    const currentState = await this.#db.origins.get(
+      CacheKey(fqdn, cachePartition),
+    );
+    if (currentState && currentState.isManifestVerified()) {
+      const current = currentState.manifest.version;
       if (!isNewerSemver(incoming, current)) {
         return;
       }
     }
-    this.#db.origins.set(CacheKey(fqdn, cachePartition), holder);
+    await this.#db.origins.set(CacheKey(fqdn, cachePartition), newState);
   }
 
   /**

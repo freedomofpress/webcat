@@ -4,11 +4,7 @@ import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
-import {
-  BundleFetcher,
-  OriginStateHolder,
-  OriginStateInitial,
-} from "./originstate";
+import { BundleFetcher, OriginState } from "./originstate";
 import { setIcon } from "./ui";
 
 declare const __IS_TESTING__: boolean;
@@ -69,9 +65,9 @@ export async function validateOrigin(
     return { redirectUrl: redirect };
   }
 
-  const cached = db.origins.get(CacheKey(fqdn, cachePartition));
+  const cached = await db.origins.get(CacheKey(fqdn, cachePartition));
   if (cached) {
-    // Pin the holder to this request so later stages cannot race against LRU eviction
+    // Pin the origin state to this request so later stages cannot race against LRU eviction
     details.state.pendingOrigin = cached;
     return;
   }
@@ -83,19 +79,16 @@ export async function validateOrigin(
   const newFetcher = new BundleFetcher(
     `${urlobj.protocol}//${fqdn}:${urlobj.port}`,
   );
-  const newOriginState = new OriginStateInitial(
+  const newOriginState = new OriginState(
+    db,
     newFetcher,
-    urlobj.protocol,
-    urlobj.port,
-    fqdn,
     enrollment_hash,
     cachePartition,
   );
-  const origin = new OriginStateHolder(newOriginState);
-  details.state.pendingOrigin = origin;
+  details.state.pendingOrigin = newOriginState;
 
   // See https://github.com/freedomofpress/webcat/issues/95
-  await origin.current.fetcher.awaitAll();
+  await newOriginState.fetcher.awaitAll();
 
   return;
 
