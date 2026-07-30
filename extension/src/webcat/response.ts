@@ -444,6 +444,7 @@ export class ResponseValidator {
         errorpage(
           details,
           new WebcatError(WebcatErrorCode.File.MISSING, [pathname]),
+          true,
         );
         return;
       }
@@ -466,6 +467,7 @@ export class ResponseValidator {
             String(manifest_hash),
             String(Uint8ArrayToBase64Url(new Uint8Array(content_hash))),
           ]),
+          true,
         );
         return;
       }
