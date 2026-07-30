@@ -8,6 +8,13 @@ import { WebcatError } from "./errors";
 
 export type CachePartition = { firstParty: string; incognito: boolean };
 
+export type OriginStateObject = {
+  status: "verified_manifest";
+  enrollment_hash: string;
+  manifest: Manifest;
+  delegation?: string;
+};
+
 export interface OriginState {
   readonly enrollment_hash: Uint8Array;
   readonly enrollment?: Enrollment;
@@ -35,6 +42,7 @@ export type OriginStateVerifiedEnrollment = OriginState & {
 };
 export type OriginStateVerifiedManifest = OriginState & {
   manifest: Manifest;
+  toPOJO(): OriginStateObject;
 };
 export type OriginStateFailed = OriginState & {
   error: WebcatError;

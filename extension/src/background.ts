@@ -36,14 +36,14 @@ browser.tabs.onCreated.addListener((tab) => {
 browser.windows.onRemoved.addListener(async () => {
   const windows = await browser.windows.getAll();
   if (windows.filter((win) => win.incognito).length === 0) {
-    for (const key of db.origins.keys()) {
+    for (const key of await db.origins.keys()) {
       if (isInPartition(key, { incognito: true })) {
-        db.origins.delete(key);
+        await db.origins.delete(key);
       }
     }
-    for (const value of db.nonOrigins.values()) {
+    for (const value of await db.nonOrigins.values()) {
       if (isInPartition(value, { incognito: true })) {
-        db.nonOrigins.delete(value);
+        await db.nonOrigins.delete(value);
       }
     }
   }
