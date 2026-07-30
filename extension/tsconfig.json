@@ -7,7 +7,7 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "types": ["firefox-webext-browser", "vite/client"],
+    "types": ["firefox-webext-browser", "vite/client", "node"],
     "resolveJsonModule": true,
     "outDir": "./dist",
     "noEmit": true

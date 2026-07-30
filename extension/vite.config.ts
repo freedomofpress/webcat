@@ -1,6 +1,6 @@
 import path from "path";
-import { defineConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
+import { defineConfig } from "vitest/config";
 
 const isTesting = process.env.TESTING === "true";
 

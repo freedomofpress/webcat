@@ -21,6 +21,7 @@
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
     "@types/firefox": "^0.0.34",
     "@types/firefox-webext-browser": "^143.0.0",
+    "@types/node": "^26.1.2",
     "@vitest/browser": "^4.1.8",
     "@vitest/coverage-v8": "^4.1.8",
     "dpdm": "^4.2.0",
