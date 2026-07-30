@@ -176,7 +176,7 @@ export class ResponseValidator {
         `Detected new version ${version}, current_version ${details.state.pendingOrigin.manifest.version}`,
         details,
       );
-      this.#db.origins.delete(
+      await this.#db.origins.delete(
         CacheKey(details.state.fqdn, details.state.cachePartition),
       );
       // Mark the origin state so any sibling request that shares it won't

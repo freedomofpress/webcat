@@ -65,7 +65,7 @@ export async function validateOrigin(
     return { redirectUrl: redirect };
   }
 
-  const cached = db.origins.get(CacheKey(fqdn, cachePartition));
+  const cached = await db.origins.get(CacheKey(fqdn, cachePartition));
   if (cached) {
     // Pin the origin state to this request so later stages cannot race against LRU eviction
     details.state.pendingOrigin = cached;

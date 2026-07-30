@@ -15,6 +15,7 @@ import {
   CachePartition,
   OriginState as IOriginState,
   OriginStateFailed,
+  OriginStateObject,
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
@@ -398,5 +399,36 @@ export class OriginState implements IOriginState {
     const correctCSP = bestMatch ? extraCSP[bestMatch] : defaultCSP;
 
     return csp === correctCSP;
+  }
+
+  toPOJO(): OriginStateObject {
+    if (!this.isManifestVerified()) {
+      throw new Error(
+        "cannot serialize OriginState before verifying the manifest",
+      );
+    }
+
+    return {
+      status: "verified_manifest",
+      enrollment_hash: this.enrollment_hash.toBase64(),
+      manifest: this.manifest,
+      delegation: this.delegation,
+    };
+  }
+
+  static fromPOJO(pojo: OriginStateObject) {
+    if (pojo.status !== "verified_manifest") {
+      throw new Error("cannot deserialize an unverified OriginState");
+    }
+    const restored = new OriginState(
+      {} as Database,
+      {} as BundleFetcher,
+      Uint8Array.fromBase64(pojo.enrollment_hash),
+      {} as CachePartition,
+    );
+    restored.status = pojo.status;
+    restored.manifest = pojo.manifest;
+    restored.delegation = pojo.delegation;
+    return restored;
   }
 }

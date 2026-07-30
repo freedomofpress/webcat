@@ -28,17 +28,20 @@ export class KVStore {
     }
     return keys.filter((key) => key.startsWith(`${prefix}`));
   }
+
+  async remove(key: string, area: "local" | "session" = "local") {
+    return browser.storage[area].remove(key);
+  }
 }
 
 /**
  * Namespaced key-value storage.
  */
-export class NamespacedKVStore extends KVStore {
+export class NamespacedKVStore implements KVStore {
   readonly #namespace: string;
   readonly #store: KVStore;
 
   constructor(namespace: string, store: KVStore = new KVStore()) {
-    super();
     this.#namespace = namespace;
     this.#store = store;
   }
@@ -71,6 +74,11 @@ export class NamespacedKVStore extends KVStore {
     return namespacedKeys.map((key) =>
       key.substring(this.#namespace.length + 1),
     );
+  }
+
+  async remove(key: string, area?: "local" | "session"): Promise<void> {
+    const namespacedKey = `${this.#namespace}:${key}`;
+    return this.#store.remove(namespacedKey, area);
   }
 
   namespace(namespace: string) {

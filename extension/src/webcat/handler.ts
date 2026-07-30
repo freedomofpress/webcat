@@ -131,7 +131,7 @@ export class WebcatRequestHandler extends RequestHandler {
 
     // For non-frames, check for cached origin
     if (!details.state.isFrame) {
-      details.state.pendingOrigin = this.#db.origins.get(
+      details.state.pendingOrigin = await this.#db.origins.get(
         CacheKey(details.state.fqdn, details.state.cachePartition),
       );
     }
@@ -186,7 +186,7 @@ export class WebcatRequestHandler extends RequestHandler {
       return blockingResponse.set({ cancel: true });
     }
 
-    this.#commitVerifiedOrigin(
+    await this.#commitVerifiedOrigin(
       details.state.fqdn,
       details.state.pendingOrigin,
       details.state.cachePartition,
@@ -251,11 +251,11 @@ export class WebcatRequestHandler extends RequestHandler {
     return;
   }
 
-  #commitVerifiedOrigin(
+  async #commitVerifiedOrigin(
     fqdn: string,
     newState: OriginState,
     cachePartition: CachePartition,
-  ): void {
+  ): Promise<void> {
     if (newState.stale) {
       return;
     }
@@ -263,14 +263,16 @@ export class WebcatRequestHandler extends RequestHandler {
       return;
     }
     const incoming = newState.manifest.version;
-    const currentState = this.#db.origins.get(CacheKey(fqdn, cachePartition));
+    const currentState = await this.#db.origins.get(
+      CacheKey(fqdn, cachePartition),
+    );
     if (currentState && currentState.isManifestVerified()) {
       const current = currentState.manifest.version;
       if (!isNewerSemver(incoming, current)) {
         return;
       }
     }
-    this.#db.origins.set(CacheKey(fqdn, cachePartition), newState);
+    await this.#db.origins.set(CacheKey(fqdn, cachePartition), newState);
   }
 
   /**
