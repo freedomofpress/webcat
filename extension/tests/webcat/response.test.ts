@@ -2,6 +2,7 @@ import { TrustedRoot } from "@freedomofpress/sigstore-browser";
 import { beforeEach, describe, expect, it, Mock, vi } from "vitest";
 
 import { HeadersReceivedDetails } from "../../src/browser/requests";
+import config from "../../src/config";
 import { canonicalize } from "../../src/webcat/canonicalize";
 import { WebcatDatabase } from "../../src/webcat/db";
 import { stringToUint8Array } from "../../src/webcat/encoding";
@@ -29,7 +30,7 @@ import { SHA256 } from "../../src/webcat/utils";
 
 function makeDummyFetcher(): BundleFetcher {
   // base URL is irrelevant, fetch will never be awaited in these tests
-  return new BundleFetcher("https://example.com");
+  return new BundleFetcher("https://example.com", config.default);
 }
 
 // --- Mocks ---
@@ -183,7 +184,7 @@ describe("OriginState.verifyEnrollment", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    db = new WebcatDatabase();
+    db = new WebcatDatabase(config.default);
     state = new OriginState(
       db,
       makeDummyFetcher(),
@@ -313,7 +314,7 @@ describe("OriginState.verifyEnrollment (sigstore)", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    db = new WebcatDatabase();
+    db = new WebcatDatabase(config.default);
     state = new OriginState(
       db,
       makeDummyFetcher(),
@@ -411,7 +412,7 @@ describe("OriginState.verifyManifest", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    db = new WebcatDatabase();
+    db = new WebcatDatabase(config.default);
     state = new OriginState(
       db,
       makeDummyFetcher(),
@@ -547,7 +548,7 @@ describe("OriginState.verifyManifest (sigstore)", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    db = new WebcatDatabase();
+    db = new WebcatDatabase(config.default);
     state = new OriginState(
       db,
       makeDummyFetcher(),
@@ -633,7 +634,7 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    db = new WebcatDatabase();
+    db = new WebcatDatabase(config.default);
     state = new OriginState(
       db,
       makeDummyFetcher(),
@@ -687,7 +688,10 @@ describe("ResponseValidator.extractAndValidateHeaders", () => {
   let rv: ResponseValidator;
 
   beforeEach(() => {
-    rv = new ResponseValidator(new WebcatDatabase(), {} as HookBuilder);
+    rv = new ResponseValidator(
+      new WebcatDatabase(config.default),
+      {} as HookBuilder,
+    );
   });
 
   it("requires CSP for non-cached responses", () => {

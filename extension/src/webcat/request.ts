@@ -4,7 +4,7 @@ import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
-import { BundleFetcher, OriginState } from "./originstate";
+import { BundleFetcher, BundleFetcherConfig, OriginState } from "./originstate";
 import { setIcon } from "./ui";
 
 const allowedPorts = import.meta.env.VITE_TESTING
@@ -38,6 +38,7 @@ export function enforceHTTPS(urlobj: URL): string | undefined {
 export async function validateOrigin(
   db: Database,
   details: Stateful<BeforeRequestDetails>,
+  config: BundleFetcherConfig,
 ) {
   const { fqdn, cachePartition, isFrame } = details.state;
   const enrollment_hash = await db.getFQDNEnrollment(fqdn, cachePartition);
@@ -78,6 +79,7 @@ export async function validateOrigin(
   // Policy hash is checked at the top and then later again
   const newFetcher = new BundleFetcher(
     `${urlobj.protocol}//${fqdn}:${urlobj.port}`,
+    config,
   );
   const newOriginState = new OriginState(
     db,
