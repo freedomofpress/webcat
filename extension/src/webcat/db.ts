@@ -1,5 +1,4 @@
 import { NamespacedKVStore } from "../browser/kvstore";
-import { lru_cache_size, lru_set_size } from "../config";
 import { CacheKey, LRUSet, PersistentLRUCache } from "./cache";
 import { BlockMeta, Database } from "./interfaces/database";
 import { CachePartition } from "./interfaces/originstate";
@@ -8,16 +7,26 @@ import { extractHostname, extractRawHash } from "./parsers";
 
 const META_KEY = "block_meta";
 
+export type WebcatDatabaseConfig = {
+  namespace: string;
+  originCacheSize: number;
+  nonOriginCacheSize: number;
+};
+
 export class WebcatDatabase extends NamespacedKVStore implements Database {
-  readonly origins = new PersistentLRUCache<
-    CacheKey<CachePartition>,
-    OriginState
-  >(lru_cache_size, this.namespace("origins"), "session", OriginState);
-  readonly nonOrigins = new LRUSet<CacheKey<CachePartition>>(lru_set_size);
+  readonly origins: PersistentLRUCache<CacheKey<CachePartition>, OriginState>;
+  readonly nonOrigins: LRUSet<CacheKey<CachePartition>>;
   readonly enrollments = this.namespace("enrollments");
 
-  constructor(namespace = "WEBCAT") {
-    super(namespace);
+  constructor(config: WebcatDatabaseConfig) {
+    super(config.namespace);
+    this.origins = new PersistentLRUCache(
+      config.originCacheSize,
+      this.namespace("origins"),
+      "session",
+      OriginState,
+    );
+    this.nonOrigins = new LRUSet(config.nonOriginCacheSize);
   }
 
   async updateList(

@@ -13,6 +13,7 @@ import { WebcatError } from "./interfaces/errors";
 import { CachePartition, OriginState } from "./interfaces/originstate";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
+import { BundleFetcherConfig } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
@@ -31,14 +32,16 @@ export interface WebcatRequestHandler extends RequestHandler {
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebcatRequestHandler extends RequestHandler {
   readonly #db: Database & NamespacedKVStore;
+  readonly #config: BundleFetcherConfig;
   readonly #hooks: HookBuilder;
   readonly #contentScript: ContentScript;
   readonly #responseValidator: ResponseValidator;
   readonly #bound = Promise.withResolvers<void>();
 
-  constructor(db: Database & NamespacedKVStore) {
+  constructor(db: Database & NamespacedKVStore, config: BundleFetcherConfig) {
     super();
     this.#db = db;
+    this.#config = config;
     this.#hooks = new HookBuilder(db.namespace("hooks"));
     this.#contentScript = new ContentScript(this.#hooks.getStaticHookPath());
     this.#responseValidator = new ResponseValidator(this.#db, this.#hooks);
@@ -154,7 +157,7 @@ export class WebcatRequestHandler extends RequestHandler {
     // If no origin was available in cache, perform full validation;
     // for frames, this is done every time
     if (!details.state.pendingOrigin) {
-      const result = await validateOrigin(this.#db, details);
+      const result = await validateOrigin(this.#db, details, this.#config);
       if (result instanceof WebcatError) {
         if (details.state.isFrame) {
           errorpage(details, result);

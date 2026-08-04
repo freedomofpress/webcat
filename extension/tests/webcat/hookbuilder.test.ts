@@ -45,6 +45,7 @@ class MockKVStore {
   set = vi.fn();
   clear = vi.fn();
   getKeys = vi.fn();
+  remove = vi.fn();
 }
 
 describe("HookBuilder", () => {

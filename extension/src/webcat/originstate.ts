@@ -1,4 +1,3 @@
-import { bundle_name, bundle_prev_name } from "../config";
 import { canonicalize } from "./canonicalize";
 import { stringToUint8Array } from "./encoding";
 import {
@@ -35,19 +34,24 @@ type BundleFetch = {
   value?: Bundle;
 };
 
+export type BundleFetcherConfig = {
+  bundlePath: string;
+  bundlePrevPath: string;
+};
+
 export class BundleFetcher {
   readonly current: BundleFetch;
   readonly previous: BundleFetch;
 
-  constructor(base: string) {
+  constructor(base: string, config: BundleFetcherConfig) {
     this.current = {
-      promise: fetch(`${base}${bundle_name}`, {
+      promise: fetch(`${base}${config.bundlePath}`, {
         cache: "no-store",
       }),
     };
 
     this.previous = {
-      promise: fetch(`${base}${bundle_prev_name}`, {
+      promise: fetch(`${base}${config.bundlePrevPath}`, {
         cache: "no-store",
       }),
     };
