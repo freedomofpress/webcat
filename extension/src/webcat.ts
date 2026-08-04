@@ -1,27 +1,21 @@
 import { BeforeRequestDetails, RequestEvent } from "./browser/requests";
-import {
-  CHECK_INTERVAL_MS,
-  endpoint,
-  FETCH_TIMEOUT_MS,
-  UPDATE_INTERVAL_MS,
-} from "./config";
-import validator_set from "./validator_set.json";
+import { WebcatConfig } from "./config";
 import { WebcatDatabase } from "./webcat/db";
 import { WebcatRequestHandler } from "./webcat/handler";
 import { EnrollmentUpdater } from "./webcat/updater";
 import { clearBrowserCaches } from "./webcat/utils";
 
-function start() {
-  const db = new WebcatDatabase();
-  const requestHandler = new WebcatRequestHandler(db);
-  const updater = new EnrollmentUpdater({
-    endpoint: endpoint,
-    database: db,
-    validatorSet: validator_set,
-    checkInterval: CHECK_INTERVAL_MS,
-    updateInterval: UPDATE_INTERVAL_MS,
-    fetchTimeout: FETCH_TIMEOUT_MS,
-  });
+function start(config: WebcatConfig) {
+  const db = new WebcatDatabase(config);
+  const requestHandler = new WebcatRequestHandler(db, config);
+  const updater = new EnrollmentUpdater(
+    Object.assign(
+      {
+        database: db,
+      },
+      config,
+    ),
+  );
 
   requestHandler.bindAll();
   requestHandler.addEventListener(

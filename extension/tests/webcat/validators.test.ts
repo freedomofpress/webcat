@@ -1,6 +1,7 @@
 // validateCSP.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import config from "../../src/config";
 import { WebcatDatabase } from "../../src/webcat/db";
 import { validateCSP } from "../../src/webcat/validators";
 
@@ -46,7 +47,7 @@ describe("validateCSP", () => {
 
   beforeEach(() => {
     valid_sources = new Set();
-    db = new WebcatDatabase();
+    db = new WebcatDatabase(config.default);
   });
 
   // Test 1: Pass when default-src is 'none' (other directives are not required)
