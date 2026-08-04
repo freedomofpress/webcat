@@ -6,7 +6,7 @@ import {
   RequestHandler,
 } from "../browser/requests";
 import { ContentScript } from "../browser/scripting";
-import { CacheKey } from "./cache";
+import { CacheKey, isInPartition } from "./cache";
 import { HookBuilder } from "./hookbuilder";
 import { Database } from "./interfaces/database";
 import { WebcatError } from "./interfaces/errors";
@@ -17,7 +17,7 @@ import { OriginStateVerifiedManifest } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
-import { errorpage } from "./ui";
+import { errorpage, setErrorIcon } from "./ui";
 import { getFQDN, isExtensionRequest, isNewerSemver } from "./utils";
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
@@ -44,6 +44,17 @@ export class WebcatRequestHandler extends RequestHandler {
     this.#responseValidator = new ResponseValidator(this.#db, this.#hooks);
     this.addEventListener("beforerequest", this.#onRequest);
     this.addEventListener("headersreceived", this.#onHeaders);
+    browser.webNavigation.onCommitted.addListener(
+      this.#onErrorPageNavigation.bind(this),
+      {
+        url: [
+          {
+            urlPrefix: browser.runtime.getURL("pages/error.html"),
+          },
+        ],
+      },
+    );
+    browser.windows.onRemoved.addListener(this.#onWindowClosed.bind(this));
   }
 
   override async bind(fqdns: string[]): Promise<string[]> {
@@ -297,5 +308,26 @@ export class WebcatRequestHandler extends RequestHandler {
       getFQDN(details.url),
     );
     return details.requestId;
+  }
+
+  #onErrorPageNavigation(details: browser.webNavigation._OnCommittedDetails) {
+    setErrorIcon(details.tabId);
+  }
+
+  async #onWindowClosed() {
+    // Handle incognito sessions ending
+    const windows = await browser.windows.getAll();
+    if (windows.filter((win) => win.incognito).length === 0) {
+      for (const key of this.#db.origins.keys()) {
+        if (isInPartition(key, { incognito: true })) {
+          this.#db.origins.delete(key);
+        }
+      }
+      for (const value of this.#db.nonOrigins.values()) {
+        if (isInPartition(value, { incognito: true })) {
+          this.#db.nonOrigins.delete(value);
+        }
+      }
+    }
   }
 }
