@@ -2,7 +2,7 @@ import path from "path";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import { defineConfig } from "vitest/config";
 
-const isTesting = process.env.TESTING === "true";
+const isTesting = process.env.VITE_TESTING === "true";
 
 export default defineConfig({
   build: {
@@ -34,9 +34,6 @@ export default defineConfig({
         },
       }
     : {},
-  define: {
-    __IS_TESTING__: isTesting,
-  },
   plugins: [viteSingleFile()],
   test: {
     globals: true,

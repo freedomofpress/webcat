@@ -7,9 +7,9 @@ import { logger } from "./logger";
 import { BundleFetcher, OriginState } from "./originstate";
 import { setIcon } from "./ui";
 
-declare const __IS_TESTING__: boolean;
-
-const allowedPorts = __IS_TESTING__ ? ["8080", "8443", ""] : ["80", "443", ""];
+const allowedPorts = import.meta.env.VITE_TESTING
+  ? ["8080", "8443", ""]
+  : ["80", "443", ""];
 
 export function validateProtocolAndPort(urlobj: URL): boolean {
   if (
@@ -28,7 +28,7 @@ export function enforceHTTPS(urlobj: URL): string | undefined {
     urlobj.hostname.substring(urlobj.hostname.lastIndexOf(".")) !== ".onion"
   ) {
     urlobj.protocol = "https:";
-    if (__IS_TESTING__) {
+    if (import.meta.env.VITE_TESTING) {
       urlobj.port = "8443";
     }
     return urlobj.toString();

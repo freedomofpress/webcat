@@ -11,8 +11,6 @@ import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { Database } from "./interfaces/database";
 import { arraysEqual } from "./utils";
 
-declare const __IS_TESTING__: boolean;
-
 export class UpdateEvent extends Event {
   readonly local: boolean;
   readonly success: boolean;
@@ -132,7 +130,7 @@ export class EnrollmentUpdater extends EventTarget {
       const block = await (await blockResponse).json();
       console.log("[webcat] Update block fetched");
 
-      if (__IS_TESTING__) {
+      if (import.meta.env.VITE_TESTING) {
         const reschedule = block.__WEBCAT_TEST_SCHEDULE_UPDATE__;
         if (reschedule) {
           console.log(
@@ -256,7 +254,7 @@ export class EnrollmentUpdater extends EventTarget {
       if (
         lastUpdated === null ||
         Date.now() - lastUpdated >= this.#updateInterval ||
-        __IS_TESTING__
+        import.meta.env.VITE_TESTING
       ) {
         console.log("[webcat] Running scheduled update (alarm check)");
         try {

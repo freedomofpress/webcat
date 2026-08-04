@@ -14,7 +14,7 @@ build:
 	npm run build
 
 build-test:
-	TESTING=true npm run build
+	VITE_TESTING=true npm run build
 
 fetch-data:
 	mkdir -p data
