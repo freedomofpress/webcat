@@ -11,6 +11,7 @@ vi.mock("../../src/webcat/logger", () => ({
   logger: { addLog: vi.fn() },
 }));
 
+import config from "../../src/config";
 import { WebcatDatabase } from "../../src/webcat/db";
 
 // ---------------------------------------------------------------------------
@@ -70,7 +71,7 @@ describe("WebcatDatabase", () => {
 
   beforeEach(() => {
     fakeBrowserStorage();
-    db = new WebcatDatabase();
+    db = new WebcatDatabase(config.default);
   });
 
   it("updateList stores and retrieves enrollment by fqdn", async () => {
