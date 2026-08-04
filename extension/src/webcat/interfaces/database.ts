@@ -1,5 +1,5 @@
 import { CacheKey, LRUCache, LRUSet } from "../cache";
-import { CachePartition, OriginStateHolder } from "./originstate";
+import { CachePartition, OriginState } from "./originstate";
 
 export interface BlockMeta {
   blockTime: number;
@@ -7,7 +7,7 @@ export interface BlockMeta {
 }
 
 export interface Database {
-  readonly origins: LRUCache<CacheKey<CachePartition>, OriginStateHolder>;
+  readonly origins: LRUCache<CacheKey<CachePartition>, OriginState>;
   readonly nonOrigins: LRUSet<CacheKey<CachePartition>>;
   updateList(
     leaves: readonly (readonly [string, string])[],

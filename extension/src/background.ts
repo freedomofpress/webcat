@@ -25,6 +25,7 @@ const updater = new EnrollmentUpdater({
   fetchTimeout: FETCH_TIMEOUT_MS,
 });
 
+requestHandler.bindAll();
 requestHandler.addEventListener(
   "beforeframeload",
   async (event: RequestEvent<BeforeRequestDetails>) => {

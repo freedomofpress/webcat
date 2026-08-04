@@ -20,13 +20,7 @@ import {
   WebcatErrorCode,
 } from "../../src/webcat/interfaces/errors";
 import { Stateful } from "../../src/webcat/interfaces/requeststate";
-import {
-  BundleFetcher,
-  OriginStateFailed,
-  OriginStateInitial,
-  OriginStateVerifiedEnrollment,
-  OriginStateVerifiedManifest,
-} from "../../src/webcat/originstate";
+import { BundleFetcher, OriginState } from "../../src/webcat/originstate";
 import {
   isSafeRelativeLocation,
   ResponseValidator,
@@ -165,10 +159,10 @@ const SIGNER3 = "c2lnbmVyMw";
 //   OriginStateInitial.verifyEnrollment
 // ─────────────────────────────────────────────
 //
-describe("OriginStateInitial.verifyEnrollment", () => {
+describe("OriginState.verifyEnrollment", () => {
   let enrollment: SigsumEnrollment;
   let enrollmentHash: Uint8Array;
-  let state: OriginStateInitial;
+  let state: OriginState;
   let db: WebcatDatabase;
   const cachePartition = {
     firstParty: "https://example.com",
@@ -189,35 +183,29 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    state = new OriginStateInitial(
+    db = new WebcatDatabase();
+    state = new OriginState(
+      db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       enrollmentHash,
       cachePartition,
     );
-    db = new WebcatDatabase();
   });
 
   it("accepts a valid enrollment that matches hash", async () => {
-    const res = await state.verifyEnrollment(db, enrollment);
+    await state.verifyEnrollment(enrollment);
 
-    expect(res).toBeInstanceOf(OriginStateVerifiedEnrollment);
-    expect((res as OriginStateVerifiedEnrollment).enrollment).toEqual(
-      enrollment,
-    );
+    expect(state.isEnrollmentVerified()).toBe(true);
+    expect(state.enrollment).toEqual(enrollment);
   });
 
   it("fails when enrollment hash mismatches", async () => {
     const different: SigsumEnrollment = { ...enrollment, threshold: 3 };
 
-    const res = await state.verifyEnrollment(db, different);
+    await state.verifyEnrollment(different);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    const failed = res as OriginStateFailed;
-
-    expect(failed.error.code).toBe(WebcatErrorCode.Enrollment.MISMATCH);
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(WebcatErrorCode.Enrollment.MISMATCH);
   });
 
   it("fails when signers is not an array", async () => {
@@ -225,21 +213,17 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     const mutated = { ...enrollment, signers: null as any };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginStateInitial(
+    const mutatedState = new OriginState(
+      db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
 
-    const res = await mutatedState.verifyEnrollment(db, mutated);
+    await mutatedState.verifyEnrollment(mutated);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    const failed = res as OriginStateFailed;
-
-    expect(failed.error.code).toBe(
+    expect(mutatedState.isFailed()).toBe(true);
+    expect(mutatedState.error?.code).toBe(
       WebcatErrorCode.Enrollment.SIGNERS_MALFORMED,
     );
   });
@@ -248,40 +232,36 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     const mutated = { ...enrollment, signers: [] };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginStateInitial(
+    const mutatedState = new OriginState(
+      db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
 
-    const res = await mutatedState.verifyEnrollment(db, mutated);
+    await mutatedState.verifyEnrollment(mutated);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    const failed = res as OriginStateFailed;
-
-    expect(failed.error.code).toBe(WebcatErrorCode.Enrollment.SIGNERS_EMPTY);
+    expect(mutatedState.isFailed()).toBe(true);
+    expect(mutatedState.error?.code).toBe(
+      WebcatErrorCode.Enrollment.SIGNERS_EMPTY,
+    );
   });
 
   it("fails when threshold <= 0", async () => {
     const mutated = { ...enrollment, threshold: 0 };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginStateInitial(
+    const mutatedState = new OriginState(
+      db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
 
-    const res = await mutatedState.verifyEnrollment(db, mutated);
+    await mutatedState.verifyEnrollment(mutated);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
+    expect(mutatedState.isFailed()).toBe(true);
+    expect(mutatedState.error?.code).toBe(
       WebcatErrorCode.Enrollment.THRESHOLD_MALFORMED,
     );
   });
@@ -290,19 +270,17 @@ describe("OriginStateInitial.verifyEnrollment", () => {
     const mutated = { ...enrollment, threshold: 10 };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginStateInitial(
+    const mutatedState = new OriginState(
+      db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
 
-    const res = await mutatedState.verifyEnrollment(db, mutated);
+    await mutatedState.verifyEnrollment(mutated);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
+    expect(mutatedState.isFailed()).toBe(true);
+    expect(mutatedState.error?.code).toBe(
       WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE,
     );
   });
@@ -310,13 +288,13 @@ describe("OriginStateInitial.verifyEnrollment", () => {
 
 //
 // ─────────────────────────────────────────────
-//   OriginStateInitial.verifyEnrollment (sigstore)
+//   OriginState.verifyEnrollment (sigstore)
 // ─────────────────────────────────────────────
 //
-describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
+describe("OriginState.verifyEnrollment (sigstore)", () => {
   let enrollment: SigstoreEnrollment;
   let enrollmentHash: Uint8Array;
-  let state: OriginStateInitial;
+  let state: OriginState;
   let db: WebcatDatabase;
   const trustedRoot = {} as unknown as SigstoreEnrollment["trusted_root"];
   const cachePartition = {
@@ -335,24 +313,20 @@ describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    state = new OriginStateInitial(
+    db = new WebcatDatabase();
+    state = new OriginState(
+      db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       enrollmentHash,
       cachePartition,
     );
-    db = new WebcatDatabase();
   });
 
   it("accepts a valid sigstore enrollment that matches hash", async () => {
-    const res = await state.verifyEnrollment(db, enrollment);
+    await state.verifyEnrollment(enrollment);
 
-    expect(res).toBeInstanceOf(OriginStateVerifiedEnrollment);
-    expect((res as OriginStateVerifiedEnrollment).enrollment).toEqual(
-      enrollment,
-    );
+    expect(state.isEnrollmentVerified()).toBe(true);
+    expect(state.enrollment).toEqual(enrollment);
   });
 
   it("fails when trusted_root is missing", async () => {
@@ -362,19 +336,17 @@ describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
     };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginStateInitial(
+    const mutatedState = new OriginState(
+      db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
 
-    const res = await mutatedState.verifyEnrollment(db, mutated);
+    await mutatedState.verifyEnrollment(mutated);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
+    expect(mutatedState.isFailed()).toBe(true);
+    expect(mutatedState.error?.code).toBe(
       WebcatErrorCode.Enrollment.TRUSTED_ROOT_MISSING,
     );
   });
@@ -388,19 +360,17 @@ describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
     };
 
     const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginStateInitial(
+    const mutatedState = new OriginState(
+      db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       mutatedHash,
       cachePartition,
     );
 
-    const res = await mutatedState.verifyEnrollment(db, mutated);
+    await mutatedState.verifyEnrollment(mutated);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
+    expect(mutatedState.isFailed()).toBe(true);
+    expect(mutatedState.error?.code).toBe(
       WebcatErrorCode.Enrollment.CLAIMS_EMPTY,
     );
   });
@@ -408,14 +378,13 @@ describe("OriginStateInitial.verifyEnrollment (sigstore)", () => {
 
 //
 // ─────────────────────────────────────────────
-//   OriginStateVerifiedEnrollment.verifyManifest
+//   OriginState.verifyManifest
 // ─────────────────────────────────────────────
 //
-describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
+describe("OriginState.verifyManifest", () => {
   let enrollment: Enrollment;
   let enrollmentHash: Uint8Array;
-  let initial: OriginStateInitial;
-  let verifiedEnrollment: OriginStateVerifiedEnrollment;
+  let state: OriginState;
   let db: WebcatDatabase;
   const cachePartition = {
     firstParty: "https://example.com",
@@ -442,18 +411,15 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    initial = new OriginStateInitial(
+    db = new WebcatDatabase();
+    state = new OriginState(
+      db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       enrollmentHash,
       cachePartition,
     );
-    db = new WebcatDatabase();
 
-    const res = await initial.verifyEnrollment(db, enrollment);
-    verifiedEnrollment = res as OriginStateVerifiedEnrollment;
+    await state.verifyEnrollment(enrollment);
 
     manifest = {
       name: "test-app",
@@ -476,23 +442,19 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
   });
 
   it("accepts a valid manifest", async () => {
-    const res = await verifiedEnrollment.verifyManifest(
-      db,
-      manifest,
-      signatures,
-    );
+    await state.verifyManifest(manifest, signatures);
 
-    expect(res).toBeInstanceOf(OriginStateVerifiedManifest);
-    expect((res as OriginStateVerifiedManifest).manifest).toEqual(manifest);
+    expect(state.isManifestVerified()).toBe(true);
+    expect(state.manifest).toEqual(manifest);
   });
 
   it("fails when not enough signatures", async () => {
     const tooFew: SigsumSignatures = { [SIGNER1]: "signature1" };
 
-    const res = await verifiedEnrollment.verifyManifest(db, manifest, tooFew);
+    await state.verifyManifest(manifest, tooFew);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(
       WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED,
     );
   });
@@ -500,29 +462,19 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
   it("fails when files list empty", async () => {
     const emptyFiles = { ...manifest, files: {} };
 
-    const res = await verifiedEnrollment.verifyManifest(
-      db,
-      emptyFiles,
-      signatures,
-    );
+    await state.verifyManifest(emptyFiles, signatures);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
-      WebcatErrorCode.Manifest.FILES_MISSING,
-    );
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(WebcatErrorCode.Manifest.FILES_MISSING);
   });
 
   it("fails when default_csp missing", async () => {
     const badManifest = { ...manifest, default_csp: "" };
 
-    const res = await verifiedEnrollment.verifyManifest(
-      db,
-      badManifest,
-      signatures,
-    );
+    await state.verifyManifest(badManifest, signatures);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(
       WebcatErrorCode.Manifest.DEFAULT_CSP_MISSING,
     );
   });
@@ -530,14 +482,10 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
   it("fails when default_index file is missing", async () => {
     const badManifest = { ...manifest, default_index: "/missing.html" };
 
-    const res = await verifiedEnrollment.verifyManifest(
-      db,
-      badManifest,
-      signatures,
-    );
+    await state.verifyManifest(badManifest, signatures);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(
       WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING_FILE,
     );
   });
@@ -547,16 +495,10 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     // @ts-expect-error simulate missing wasm
     delete badManifest.wasm;
 
-    const res = await verifiedEnrollment.verifyManifest(
-      db,
-      badManifest,
-      signatures,
-    );
+    await state.verifyManifest(badManifest, signatures);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
-      WebcatErrorCode.Manifest.WASM_MISSING,
-    );
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(WebcatErrorCode.Manifest.WASM_MISSING);
   });
 
   it("fails when expired", async () => {
@@ -566,29 +508,22 @@ describe("OriginStateVerifiedEnrollment.verifyManifest", () => {
     // Force timestamps extremely old
     mock.mockResolvedValue([10, 20, 30]);
 
-    const res = await verifiedEnrollment.verifyManifest(
-      db,
-      manifest,
-      signatures,
-    );
+    await state.verifyManifest(manifest, signatures);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
-      WebcatErrorCode.Manifest.EXPIRED,
-    );
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(WebcatErrorCode.Manifest.EXPIRED);
   });
 });
 
 //
 // ─────────────────────────────────────────────
-//   OriginStateVerifiedEnrollment.verifyManifest (sigstore)
+//   OriginState.verifyManifest (sigstore)
 // ─────────────────────────────────────────────
 //
-describe("OriginStateVerifiedEnrollment.verifyManifest (sigstore)", () => {
+describe("OriginState.verifyManifest (sigstore)", () => {
   let enrollment: Enrollment;
   let enrollmentHash: Uint8Array;
-  let initial: OriginStateInitial;
-  let verifiedEnrollment: OriginStateVerifiedEnrollment;
+  let state: OriginState;
   let manifest: Manifest;
   let signatures: SigstoreSignatures;
   let db: WebcatDatabase;
@@ -612,18 +547,15 @@ describe("OriginStateVerifiedEnrollment.verifyManifest (sigstore)", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    initial = new OriginStateInitial(
+    db = new WebcatDatabase();
+    state = new OriginState(
+      db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       enrollmentHash,
       cachePartition,
     );
-    db = new WebcatDatabase();
 
-    const res = await initial.verifyEnrollment(db, enrollment);
-    verifiedEnrollment = res as OriginStateVerifiedEnrollment;
+    await state.verifyEnrollment(enrollment);
 
     manifest = {
       name: "test-app",
@@ -648,14 +580,10 @@ describe("OriginStateVerifiedEnrollment.verifyManifest (sigstore)", () => {
   });
 
   it("accepts a valid sigstore manifest", async () => {
-    const res = await verifiedEnrollment.verifyManifest(
-      db,
-      manifest,
-      signatures,
-    );
+    await state.verifyManifest(manifest, signatures);
 
-    expect(res).toBeInstanceOf(OriginStateVerifiedManifest);
-    expect((res as OriginStateVerifiedManifest).manifest).toEqual(manifest);
+    expect(state.isManifestVerified()).toBe(true);
+    expect(state.manifest).toEqual(manifest);
   });
 
   it("fails when sigstore verification fails", async () => {
@@ -666,16 +594,10 @@ describe("OriginStateVerifiedEnrollment.verifyManifest (sigstore)", () => {
       new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED),
     );
 
-    const res = await verifiedEnrollment.verifyManifest(
-      db,
-      manifest,
-      signatures,
-    );
+    await state.verifyManifest(manifest, signatures);
 
-    expect(res).toBeInstanceOf(OriginStateFailed);
-    expect((res as OriginStateFailed).error.code).toBe(
-      WebcatErrorCode.Manifest.VERIFY_FAILED,
-    );
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(WebcatErrorCode.Manifest.VERIFY_FAILED);
   });
 });
 
@@ -687,9 +609,7 @@ describe("OriginStateVerifiedEnrollment.verifyManifest (sigstore)", () => {
 describe("OriginStateVerifiedManifest.verifyCSP", () => {
   let enrollment: Enrollment;
   let enrollmentHash: Uint8Array;
-  let initial: OriginStateInitial;
-  let verifiedEnrollment: OriginStateVerifiedEnrollment;
-  let verifiedManifestState: OriginStateVerifiedManifest;
+  let state: OriginState;
   let db: WebcatDatabase;
 
   const cachePartition = {
@@ -713,18 +633,15 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    initial = new OriginStateInitial(
+    db = new WebcatDatabase();
+    state = new OriginState(
+      db,
       makeDummyFetcher(),
-      "https:",
-      "443",
-      "example.com",
       enrollmentHash,
       cachePartition,
     );
-    db = new WebcatDatabase();
 
-    const res = await initial.verifyEnrollment(db, enrollment);
-    verifiedEnrollment = res as OriginStateVerifiedEnrollment;
+    await state.verifyEnrollment(enrollment);
 
     const manifest: Manifest = {
       name: "test-app",
@@ -743,29 +660,26 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
       wasm: [],
     };
 
-    verifiedManifestState = new OriginStateVerifiedManifest(
-      verifiedEnrollment,
-      manifest,
-      new Set(["example.com"]),
-    );
+    state.status = "verified_manifest";
+    state.manifest = manifest;
   });
 
   it("matches default CSP for /", () => {
-    expect(verifiedManifestState.verifyCSP(defaultCSP, "/")).toBe(true);
+    expect(state.verifyCSP(defaultCSP, "/")).toBe(true);
   });
 
   it("matches extra CSP for exact path", () => {
     const csp = "default-src 'none'; script-src 'self' 'unsafe-inline';";
-    expect(verifiedManifestState.verifyCSP(csp, "/admin")).toBe(true);
+    expect(state.verifyCSP(csp, "/admin")).toBe(true);
   });
 
   it("falls back to default CSP", () => {
-    expect(verifiedManifestState.verifyCSP(defaultCSP, "/other")).toBe(true);
+    expect(state.verifyCSP(defaultCSP, "/other")).toBe(true);
   });
 
   it("returns false for incorrect CSP", () => {
     const badCsp = "default-src 'self'; script-src 'self';";
-    expect(verifiedManifestState.verifyCSP(badCsp, "/")).toBe(false);
+    expect(state.verifyCSP(badCsp, "/")).toBe(false);
   });
 });
 
