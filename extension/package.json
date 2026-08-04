@@ -3,10 +3,19 @@
   "type": "module",
   "version": "2.7.1",
   "description": "",
-  "main": "src/background.ts",
+  "files": [
+    "dist/lib"
+  ],
+  "exports": {
+    "./webcat/*": "./dist/lib/webcat/*.js",
+    "./browser/*": "./dist/lib/browser/*.js",
+    "./validator_set": "./dist/lib/validator_set.js"
+  },
   "scripts": {
     "build:hooks": "tsc -p tsconfig.hooks.json && vite build --config vite.config.hooks.page.ts && vite build --config vite.config.hooks.content.ts",
+    "build:lib": "npm run build:hooks && vite build --config vite.config.lib.ts && tsc -p tsconfig.lib.json && cp src/validator_set.d.ts dist/lib/validator_set.d.ts",
     "build": "npm run build:hooks && tsc && vite build",
+    "prepack": "npm run build:lib",
     "test": "npm run build:hooks && vitest",
     "coverage": "npm run build:hooks && vitest --coverage",
     "test:playwright": "vitest --config vite.config.playwright.ts",
