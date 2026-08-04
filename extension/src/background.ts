@@ -50,8 +50,7 @@ updater.addEventListener("updated", async (event) => {
 });
 updater.start();
 
-declare const __IS_TESTING__: boolean;
-if (__IS_TESTING__) {
+if (import.meta.env.VITE_TESTING) {
   Object.defineProperty(globalThis, "state", {
     value: {
       origins: db.origins,
