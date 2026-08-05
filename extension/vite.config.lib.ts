@@ -15,7 +15,7 @@ export default defineConfig({
         globSync("src/*/**/*.ts")
           .filter((file) => !file.includes("/hooks/"))
           .filter((file) => !file.includes("/mocks/"))
-          .concat("src/validator_set.json")
+          .concat(["src/webcat.ts", "src/config.ts", "src/validator_set.json"])
           .map((file) => [
             path.relative(
               "src",

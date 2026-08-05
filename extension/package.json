@@ -7,6 +7,8 @@
     "dist/lib"
   ],
   "exports": {
+    ".": "./dist/lib/webcat.js",
+    "./config": "./dist/lib/config.js",
     "./webcat/*": "./dist/lib/webcat/*.js",
     "./browser/*": "./dist/lib/browser/*.js",
     "./validator_set": "./dist/lib/validator_set.js"
