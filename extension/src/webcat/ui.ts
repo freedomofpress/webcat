@@ -5,9 +5,14 @@ import { logger } from "./logger";
 import { clearBrowserCaches, getFQDN } from "./utils";
 
 let iconsPath = "icons";
+let pagesPath = "pages";
 
 export function setIconsPath(path: string) {
   iconsPath = path;
+}
+
+export function setPagesPath(path: string) {
+  pagesPath = path;
 }
 
 export function isDarkTheme(): boolean {
@@ -133,14 +138,11 @@ export async function errorpage(
     params.set("file", error.details[0]);
   }
 
-  const errorPageUrl =
-    browser.runtime.getURL("pages/error.html") + `#${params.toString()}`;
-
   const tabUpdates: Promise<browser.tabs.Tab>[] = [];
   tabIds.forEach((tabId) =>
     tabUpdates.push(
       browser.tabs.update(tabId, {
-        url: errorPageUrl,
+        url: getErrorPageURL(params),
         loadReplace: replace,
       }),
     ),
@@ -148,4 +150,14 @@ export async function errorpage(
   await Promise.all(tabUpdates);
 
   await clearBrowserCaches([details.state.fqdn]);
+}
+
+export function getErrorPageURL(params?: URLSearchParams) {
+  if (params) {
+    return (
+      browser.runtime.getURL(`${pagesPath}/error.html`) +
+      `#${params.toString()}`
+    );
+  }
+  return browser.runtime.getURL(`${pagesPath}/error.html`);
 }
