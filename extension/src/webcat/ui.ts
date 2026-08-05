@@ -4,6 +4,12 @@ import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { clearBrowserCaches, getFQDN } from "./utils";
 
+let iconsPath = "icons";
+
+export function setIconsPath(path: string) {
+  iconsPath = path;
+}
+
 export function isDarkTheme(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
@@ -19,7 +25,7 @@ export function setIcon(tabId: number) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat.SVG`,
+    path: `${iconsPath}/${theme}/webcat.SVG`,
   });
   browser.pageAction.setTitle({
     tabId,
@@ -45,7 +51,7 @@ export function setOKIcon(tabId: number, delegation?: string) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-ok.SVG`,
+    path: `${iconsPath}/${theme}/webcat-ok.SVG`,
   });
 
   let message = browser.i18n.getMessage("webcatVerificationSuccessful");
@@ -70,7 +76,7 @@ export function setErrorIcon(tabId: number) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-error.SVG`,
+    path: `${iconsPath}/${theme}/webcat-error.SVG`,
   });
   browser.pageAction.setTitle({
     tabId: tabId,
