@@ -6,7 +6,8 @@
   "files": [
     "dist/lib",
     "data",
-    "icons"
+    "icons",
+    "pages"
   ],
   "exports": {
     ".": "./dist/lib/webcat.js",
@@ -16,7 +17,8 @@
     "./validator_set": "./dist/lib/validator_set.js",
     "./data/*.json": "./data/*.json",
     "./icons/light/*.SVG": "./icons/light/*.SVG",
-    "./icons/dark/*.SVG": "./icons/dark/*.SVG"
+    "./icons/dark/*.SVG": "./icons/dark/*.SVG",
+    "./pages/*": "./pages/*"
   },
   "scripts": {
     "build:hooks": "tsc -p tsconfig.hooks.json && vite build --config vite.config.hooks.page.ts && vite build --config vite.config.hooks.content.ts",
