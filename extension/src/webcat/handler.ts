@@ -17,7 +17,7 @@ import { BundleFetcherConfig } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
-import { errorpage, setErrorIcon } from "./ui";
+import { errorpage, getErrorPageURL, setErrorIcon } from "./ui";
 import { getFQDN, isExtensionRequest, isNewerSemver } from "./utils";
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
@@ -52,7 +52,7 @@ export class WebcatRequestHandler extends RequestHandler {
       {
         url: [
           {
-            urlPrefix: browser.runtime.getURL("pages/error.html"),
+            urlPrefix: getErrorPageURL(),
           },
         ],
       },

@@ -5,7 +5,10 @@ import { EnrollmentUpdaterOptions } from "./webcat/updater";
 
 export type WebcatConfig = BundleFetcherConfig &
   WebcatDatabaseConfig &
-  Omit<EnrollmentUpdaterOptions, "database"> & { iconsPath: string };
+  Omit<EnrollmentUpdaterOptions, "database"> & {
+    iconsPath: string;
+    pagesPath: string;
+  };
 
 const defaultConfig: WebcatConfig = {
   namespace: "WEBCAT",
@@ -25,6 +28,7 @@ const defaultConfig: WebcatConfig = {
   fetchTimeout: 3000, // 3 second timeout for fetches
 
   iconsPath: "icons",
+  pagesPath: "pages",
 };
 
 const testConfig: WebcatConfig = Object.assign(structuredClone(defaultConfig), {
