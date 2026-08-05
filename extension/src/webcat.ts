@@ -2,6 +2,7 @@ import { BeforeRequestDetails, RequestEvent } from "./browser/requests";
 import config, { WebcatConfig } from "./config";
 import { WebcatDatabase } from "./webcat/db";
 import { WebcatRequestHandler } from "./webcat/handler";
+import { setIconsPath } from "./webcat/ui";
 import { EnrollmentUpdater } from "./webcat/updater";
 import { clearBrowserCaches } from "./webcat/utils";
 
@@ -10,6 +11,8 @@ function start(options?: Partial<WebcatConfig>) {
   const db = new WebcatDatabase(cfg);
   const requestHandler = new WebcatRequestHandler(db, cfg);
   const updater = new EnrollmentUpdater(Object.assign({ database: db }, cfg));
+
+  setIconsPath(cfg.iconsPath);
 
   requestHandler.bindAll();
   requestHandler.addEventListener(
