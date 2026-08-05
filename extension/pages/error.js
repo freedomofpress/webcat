@@ -5,7 +5,7 @@ document.addEventListener("DOMContentLoaded", () => {
         (child) => child.outerHTML,
       );
       const msg = browser.i18n.getMessage(
-        el.getAttribute("data-i18n"),
+        "WEBCAT_" + el.getAttribute("data-i18n"),
         substitutions,
       );
       if (msg === "") {
@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const host = params.get("host") || "";
   const file = params.get("file") || "";
 
-  setText("error-host", host || browser.i18n.getMessage("thisSite"));
+  setText("error-host", host || browser.i18n.getMessage("WEBCAT_thisSite"));
   setText("debug-code", code);
 
   if (file) {
@@ -36,8 +36,8 @@ document.addEventListener("DOMContentLoaded", () => {
     advancedPanel.hidden = !advancedPanel.hidden;
     advancedButton.setAttribute("aria-expanded", String(!advancedPanel.hidden));
     advancedButton.textContent = advancedPanel.hidden
-      ? browser.i18n.getMessage("advanced")
-      : browser.i18n.getMessage("hideAdvanced");
+      ? browser.i18n.getMessage("WEBCAT_advanced")
+      : browser.i18n.getMessage("WEBCAT_hideAdvanced");
   });
 
   // The error page took a history slot
