@@ -4,6 +4,17 @@ import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { clearBrowserCaches, getFQDN } from "./utils";
 
+let iconsPath = "icons";
+let pagesPath = "pages";
+
+export function setIconsPath(path: string) {
+  iconsPath = path;
+}
+
+export function setPagesPath(path: string) {
+  pagesPath = path;
+}
+
 export function isDarkTheme(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
@@ -19,7 +30,7 @@ export function setIcon(tabId: number) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat.SVG`,
+    path: `${iconsPath}/${theme}/webcat.SVG`,
   });
   browser.pageAction.setTitle({
     tabId,
@@ -45,7 +56,7 @@ export function setOKIcon(tabId: number, delegation?: string) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-ok.SVG`,
+    path: `${iconsPath}/${theme}/webcat-ok.SVG`,
   });
 
   let message = browser.i18n.getMessage("webcatVerificationSuccessful");
@@ -70,7 +81,7 @@ export function setErrorIcon(tabId: number) {
   browser.pageAction.show(tabId);
   browser.pageAction.setIcon({
     tabId: tabId,
-    path: `icons/${theme}/webcat-error.SVG`,
+    path: `${iconsPath}/${theme}/webcat-error.SVG`,
   });
   browser.pageAction.setTitle({
     tabId: tabId,
@@ -126,14 +137,11 @@ export async function errorpage(
     params.set("file", error.details[0]);
   }
 
-  const errorPageUrl =
-    browser.runtime.getURL("pages/error.html") + `#${params.toString()}`;
-
   const tabUpdates: Promise<browser.tabs.Tab>[] = [];
   tabIds.forEach((tabId) =>
     tabUpdates.push(
       browser.tabs.update(tabId, {
-        url: errorPageUrl,
+        url: getErrorPageURL(params),
         loadReplace: !details.state.isFrame,
       }),
     ),
@@ -141,4 +149,14 @@ export async function errorpage(
   await Promise.all(tabUpdates);
 
   await clearBrowserCaches([details.state.fqdn]);
+}
+
+export function getErrorPageURL(params?: URLSearchParams) {
+  if (params) {
+    return (
+      browser.runtime.getURL(`${pagesPath}/error.html`) +
+      `#${params.toString()}`
+    );
+  }
+  return browser.runtime.getURL(`${pagesPath}/error.html`);
 }

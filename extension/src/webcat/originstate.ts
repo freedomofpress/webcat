@@ -1,4 +1,3 @@
-import { bundle_name, bundle_prev_name } from "../config";
 import { canonicalize } from "./canonicalize";
 import { stringToUint8Array } from "./encoding";
 import {
@@ -13,7 +12,11 @@ import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import {
   CachePartition,
-  OriginStateHolder as IOriginStateHolder,
+  OriginState as IOriginState,
+  OriginStateFailed,
+  OriginStateObject,
+  OriginStateVerifiedEnrollment,
+  OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
 import { arraysEqual } from "./utils";
 import { SHA256 } from "./utils";
@@ -31,31 +34,31 @@ type BundleFetch = {
   value?: Bundle;
 };
 
-export class BundleFetcher implements Iterable<BundleFetch> {
-  public readonly current: BundleFetch;
-  public readonly previous: BundleFetch;
+export type BundleFetcherConfig = {
+  bundlePath: string;
+  bundlePrevPath: string;
+};
 
-  constructor(base: string) {
+export class BundleFetcher {
+  readonly current: BundleFetch;
+  readonly previous: BundleFetch;
+
+  constructor(base: string, config: BundleFetcherConfig) {
     this.current = {
-      promise: fetch(`${base}${bundle_name}`, {
+      promise: fetch(`${base}${config.bundlePath}`, {
         cache: "no-store",
       }),
     };
 
     this.previous = {
-      promise: fetch(`${base}${bundle_prev_name}`, {
+      promise: fetch(`${base}${config.bundlePrevPath}`, {
         cache: "no-store",
       }),
     };
   }
 
-  *[Symbol.iterator](): IterableIterator<BundleFetch> {
-    yield this.current;
-    yield this.previous;
-  }
-
-  public async awaitAll(): Promise<void> {
-    for (const slot of this) {
+  async awaitAll(): Promise<void> {
+    for (const slot of [this.current, this.previous]) {
       if (slot.value || slot.error) {
         continue;
       }
@@ -101,103 +104,87 @@ export class BundleFetcher implements Iterable<BundleFetch> {
   }
 }
 
-export class OriginStateHolder implements IOriginStateHolder {
-  public stale: boolean = false;
-
-  constructor(
-    public current:
-      | OriginStateBase
-      | OriginStateInitial
-      | OriginStateVerifiedEnrollment
-      | OriginStateVerifiedManifest
-      | OriginStateFailed,
-  ) {}
-}
-
 // The OriginState class caches origins and assumes safe defaults. We assume we are enrolled and nothing is verified.
-export abstract class OriginStateBase {
-  abstract status:
+export class OriginState implements IOriginState {
+  status:
     | "request_sent"
     | "verified_enrollment"
     | "verified_manifest"
     | "failed";
-  public readonly scheme: string;
-  public readonly port: string;
-  public readonly fqdn: string;
-  public readonly enrollment_hash: Uint8Array;
-  public fetcher: BundleFetcher;
-  public bundle?: Bundle;
-  public readonly enrollment?: Enrollment;
-  public readonly manifest?: Manifest;
-  public readonly valid_signers?: Set<string>;
-  public readonly valid_sources?: Set<string>;
-  public readonly delegation?: string;
-  public readonly cachePartition: CachePartition;
+
+  readonly #db: Database;
+  readonly #cachePartition: CachePartition;
+  readonly enrollment_hash: Uint8Array;
+
+  #bundle?: Bundle;
+  fetcher: BundleFetcher;
+  enrollment?: Enrollment;
+  manifest?: Manifest;
+  delegation?: string;
+  error?: WebcatError;
+
+  stale = false;
 
   // Due to list logic, we support only one app per domain, and that should be a privileged one
   // But that is enforced in request.ts
   constructor(
+    db: Database,
     fetcher: BundleFetcher,
-    scheme: string,
-    port: string,
-    fqdn: string,
     enrollment_hash: Uint8Array,
     cachePartition: CachePartition,
     delegation?: string,
   ) {
+    this.#db = db;
     this.fetcher = fetcher;
-    this.scheme = scheme;
-    this.port = port;
-    this.fqdn = fqdn;
     this.enrollment_hash = enrollment_hash;
-    this.cachePartition = cachePartition;
+    this.#cachePartition = cachePartition;
     this.delegation = delegation;
+    this.status = "request_sent";
   }
-}
 
-export class OriginStateFailed extends OriginStateBase {
-  public readonly status = "failed" as const;
-  public readonly error: WebcatError;
-
-  constructor(prev: OriginStateBase, error: WebcatError) {
-    super(
-      prev.fetcher,
-      prev.scheme,
-      prev.port,
-      prev.fqdn,
-      prev.enrollment_hash,
-      prev.cachePartition,
-      prev.delegation,
+  isRequestSent(): boolean {
+    return (
+      this.status === "request_sent" &&
+      this.enrollment === undefined &&
+      this.manifest === undefined &&
+      this.error === undefined
     );
-    Object.assign(this, prev);
-    // We must set it again because we are copying
-    this.status = "failed" as const;
+  }
+
+  #fail(error: WebcatError) {
+    this.status = "failed";
     this.error = error;
   }
-}
 
-export class OriginStateInitial extends OriginStateBase {
-  public status = "request_sent" as const;
-  public bundle?: Bundle;
-
-  constructor(
-    fetcher: BundleFetcher,
-    scheme: string,
-    port: string,
-    fqdn: string,
-    enrollment_hash: Uint8Array,
-    cachePartition: CachePartition,
-  ) {
-    super(fetcher, scheme, port, fqdn, enrollment_hash, cachePartition);
+  isFailed(): this is OriginStateFailed {
+    return this.status === "failed";
   }
 
-  public async verifyDelegation(
-    db: Database,
-    delegation: string,
-  ): Promise<boolean> {
-    const delegation_hash = await db.getFQDNEnrollment(
+  #setVerifiedEnrollment(enrollment: Enrollment, delegation?: string) {
+    this.status = "verified_enrollment";
+    this.enrollment = enrollment;
+    this.delegation = delegation;
+  }
+
+  isEnrollmentVerified(): this is OriginStateVerifiedEnrollment {
+    return (
+      this.status === "verified_enrollment" && this.enrollment !== undefined
+    );
+  }
+
+  #setVerifiedManifest(manifest: Manifest) {
+    this.status = "verified_manifest";
+    this.manifest = manifest;
+  }
+
+  isManifestVerified(): this is OriginStateVerifiedManifest {
+    return this.status === "verified_manifest" && this.manifest !== undefined;
+  }
+
+  async #verifyDelegation(delegation: string): Promise<boolean> {
+    const delegation_hash = await this.#db.getFQDNEnrollment(
       delegation,
-      this.cachePartition,
+      this.#cachePartition,
     );
     return (
       delegation_hash && arraysEqual(delegation_hash, this.enrollment_hash)
@@ -207,27 +194,21 @@ export class OriginStateInitial extends OriginStateBase {
   // This functiont ries to verify the enrollment information against the value in the local list
   // It will also return errors while fetching the bundles (though they are generated in awaitBundles)
   // and tell the next stages whether they should use the current or the previous bundle
-  public async verifyEnrollment(
-    db: Database,
-    enrollment?: Enrollment,
-    delegation?: string,
-  ): Promise<OriginStateVerifiedEnrollment | OriginStateFailed> {
+  async verifyEnrollment(enrollment?: Enrollment, delegation?: string) {
     let verified_delegation;
-    if (delegation && (await this.verifyDelegation(db, delegation))) {
+    if (delegation && (await this.#verifyDelegation(delegation))) {
       verified_delegation = delegation;
     }
 
     // Enrollment info can be fetched from a manifest bundle,
     // or we should support supplying it differently, such is in http headers
     if (!enrollment) {
-      // It could mismatch because our list is outdated, but it should exists nevertheless
       if (!this.fetcher.current.value) {
-        // eslint-disable-next-line
-        return new OriginStateFailed(this, this.fetcher.current.error!);
+        if (!this.fetcher.current.error) {
+          throw new Error("verifyEnrollment called before fetcher is ready");
+        }
+        return this.#fail(this.fetcher.current.error);
       }
-
-      // We can assert here because the check is guaranteed in awaitBundle
-
       enrollment = this.fetcher.current.value.enrollment;
     }
 
@@ -239,15 +220,12 @@ export class OriginStateInitial extends OriginStateBase {
     // In this case, we already tried both bundles and we should bail
     // Or we got direct enrollment passed, and we shpuldn't fallback automatically
     if (match) {
-      this.bundle = this.fetcher.current.value;
+      this.#bundle = this.fetcher.current.value;
     } else {
       // If we are here, and the previous fetch failed, we fail on MISMATCH
       // because it means the main enrollment MISMATCHED and there's no fallback
       if (!this.fetcher.previous.value) {
-        return new OriginStateFailed(
-          this,
-          new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
-        );
+        return this.#fail(new WebcatError(WebcatErrorCode.Enrollment.MISMATCH));
       }
       enrollment = this.fetcher.previous.value.enrollment;
 
@@ -258,12 +236,9 @@ export class OriginStateInitial extends OriginStateBase {
 
       // If this also fails it's fatal
       if (!arraysEqual(this.enrollment_hash, canonicalized_hash_prev)) {
-        return new OriginStateFailed(
-          this,
-          new WebcatError(WebcatErrorCode.Enrollment.MISMATCH),
-        );
+        return this.#fail(new WebcatError(WebcatErrorCode.Enrollment.MISMATCH));
       }
-      this.bundle = this.fetcher.previous.value;
+      this.#bundle = this.fetcher.previous.value;
     }
 
     let err: WebcatError | null = null;
@@ -277,7 +252,7 @@ export class OriginStateInitial extends OriginStateBase {
     }
 
     if (err) {
-      return new OriginStateFailed(this, err);
+      return this.#fail(err);
     }
 
     //const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60;
@@ -295,42 +270,16 @@ export class OriginStateInitial extends OriginStateBase {
     // parse the compiled sigsum policy once here instead of doing that
     // at every verification. Currently the sigsum-ts lib does not support that
     // and maybe more abstraction there would be useful
-    return new OriginStateVerifiedEnrollment(
-      this,
-      enrollment,
-      verified_delegation,
-    );
-  }
-}
-
-export class OriginStateVerifiedEnrollment extends OriginStateBase {
-  public readonly status = "verified_enrollment" as const;
-  public readonly enrollment: Enrollment;
-  public bundle?: Bundle;
-
-  constructor(
-    prev: OriginStateInitial,
-    enrollment: Enrollment,
-    delegation: string | undefined,
-  ) {
-    super(
-      prev.fetcher,
-      prev.scheme,
-      prev.port,
-      prev.fqdn,
-      prev.enrollment_hash,
-      prev.cachePartition,
-      delegation,
-    );
-    this.enrollment = enrollment;
-    this.bundle = prev.bundle;
+    return this.#setVerifiedEnrollment(enrollment, verified_delegation);
   }
 
-  public async verifyManifest(
-    db: Database,
+  async verifyManifest(
     manifest?: Manifest,
     signatures?: SigsumSignatures | SigstoreSignatures,
-  ): Promise<OriginStateVerifiedManifest | OriginStateFailed> {
+  ) {
+    if (!this.isEnrollmentVerified()) {
+      throw new Error("verifyManifest called before verifyEnrollment");
+    }
     // Manifest info can be fetched from a manifest bundle,
     // or we should support supplying it differently
     // If enrollment information is passed from headers or another source, then we do not support
@@ -338,9 +287,9 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     if (!manifest || !signatures) {
       // awaitBundle checks already that manifest exists
       // eslint-disable-next-line
-      manifest = this.bundle!.manifest;
+      manifest = this.#bundle!.manifest;
       // eslint-disable-next-line
-      signatures = this.bundle!.signatures;
+      signatures = this.#bundle!.signatures;
     }
 
     let verify_error: WebcatError | null = null;
@@ -367,12 +316,12 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     }
 
     if (verify_error) {
-      return new OriginStateFailed(this, verify_error);
+      return this.#fail(verify_error);
     }
 
     const format_error = validateManifest(manifest);
     if (format_error) {
-      return new OriginStateFailed(this, format_error);
+      return this.#fail(format_error);
     }
 
     // ValidateCSP will populate this based on hosts presents in both
@@ -383,15 +332,14 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
     // Validate the default CSP
     try {
       await validateCSP(
-        db,
+        this.#db,
         manifest.default_csp,
         valid_sources,
-        this.cachePartition,
+        this.#cachePartition,
       );
     } catch (e) {
       //return new OriginStateFailed(this, `failed parsing default_csp: ${e}`);
-      return new OriginStateFailed(
-        this,
+      return this.#fail(
         new WebcatError(WebcatErrorCode.Manifest.DEFAULT_CSP_INVALID, [
           String(e),
         ]),
@@ -403,56 +351,29 @@ export class OriginStateVerifiedEnrollment extends OriginStateBase {
       if (manifest.extra_csp.hasOwnProperty(path)) {
         const csp = manifest.extra_csp[path];
         try {
-          await validateCSP(db, csp, valid_sources, this.cachePartition);
+          await validateCSP(this.#db, csp, valid_sources, this.#cachePartition);
         } catch (e) {
-          return new OriginStateFailed(
-            this,
+          return this.#fail(
             new WebcatError(WebcatErrorCode.Manifest.EXTRA_CSP_INVALID, [
               String(e),
             ]),
           );
         }
       } else {
-        return new OriginStateFailed(
-          this,
+        return this.#fail(
           new WebcatError(WebcatErrorCode.Manifest.EXTRA_CSP_MALFORMED, [
             String(path),
           ]),
         );
       }
     }
-    const next = new OriginStateVerifiedManifest(this, manifest, valid_sources);
-    return next;
-  }
-}
-
-export class OriginStateVerifiedManifest extends OriginStateBase {
-  public readonly status = "verified_manifest" as const;
-  public readonly enrollment: Enrollment;
-  public readonly manifest: Manifest;
-  public readonly valid_sources: Set<string> = new Set();
-
-  constructor(
-    prev: OriginStateVerifiedEnrollment,
-    manifest: Manifest,
-    valid_sources: Set<string>,
-  ) {
-    super(
-      prev.fetcher,
-      prev.scheme,
-      prev.port,
-      prev.fqdn,
-      prev.enrollment_hash,
-      prev.cachePartition,
-      prev.delegation,
-    );
-    this.enrollment = prev.enrollment;
-    this.manifest = manifest;
-    this.valid_sources = valid_sources;
-    this.bundle = prev.bundle;
+    return this.#setVerifiedManifest(manifest);
   }
 
-  public verifyCSP(csp: string, pathname: string) {
+  verifyCSP(csp: string, pathname: string) {
+    if (!this.isManifestVerified()) {
+      throw new Error("verifyCSP called before verifyManifest");
+    }
     // Consider only the first CSP. See
     // https://github.com/freedomofpress/webcat/issues/160
     csp = csp.split(",")[0];
@@ -482,5 +403,36 @@ export class OriginStateVerifiedManifest extends OriginStateBase {
     const correctCSP = bestMatch ? extraCSP[bestMatch] : defaultCSP;
 
     return csp === correctCSP;
+  }
+
+  toPOJO(): OriginStateObject {
+    if (!this.isManifestVerified()) {
+      throw new Error(
+        "cannot serialize OriginState before verifying the manifest",
+      );
+    }
+
+    return {
+      status: "verified_manifest",
+      enrollment_hash: this.enrollment_hash.toBase64(),
+      manifest: this.manifest,
+      delegation: this.delegation,
+    };
+  }
+
+  static fromPOJO(pojo: OriginStateObject) {
+    if (pojo.status !== "verified_manifest") {
+      throw new Error("cannot deserialize an unverified OriginState");
+    }
+    const restored = new OriginState(
+      {} as Database,
+      {} as BundleFetcher,
+      Uint8Array.fromBase64(pojo.enrollment_hash),
+      {} as CachePartition,
+    );
+    restored.status = pojo.status;
+    restored.manifest = pojo.manifest;
+    restored.delegation = pojo.delegation;
+    return restored;
   }
 }

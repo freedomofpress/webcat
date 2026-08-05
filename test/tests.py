@@ -267,7 +267,8 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
     for err in rejections:
         check.is_none(err, "Expected rejection should be present in actual rejections")
 
-    cache_keys = json.loads(browser.execute("JSON.stringify(state.origins.keys())", in_extension=True))
+    browser.execute("var keys; state.origins.keys().then(k => keys = k);", in_extension=True)
+    cache_keys = json.loads(browser.execute("JSON.stringify(keys)", in_extension=True))
     if origin_cached:
         assert [f"{dnsnames[0]}?firstParty={urllib.parse.quote(first_party, safe="")},incognito={"true" if incognito else "false"}"] == cache_keys
     else:

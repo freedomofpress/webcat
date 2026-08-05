@@ -1,3 +1,5 @@
+import { KVStore } from "../browser/kvstore";
+
 declare const CacheKeySymbol: unique symbol;
 export type CacheKey<T> = string & { [CacheKeySymbol]: T | undefined };
 export function CacheKey<T extends { [index: string]: { toString(): string } }>(
@@ -34,94 +36,159 @@ export function isInPartition<
 }
 
 export class LRUCache<K, V> {
-  private cache: Map<K, V>;
-  private limit: number;
+  #cache: Map<K, V>;
+  #limit: number;
 
   constructor(limit: number) {
-    this.limit = limit;
-    this.cache = new Map<K, V>();
+    this.#limit = limit;
+    this.#cache = new Map<K, V>();
   }
 
-  get(key: K): V | undefined {
-    if (!this.cache.has(key)) return undefined;
+  async get(key: K): Promise<V | undefined> {
+    if (!this.#cache.has(key)) return undefined;
 
-    const value = this.cache.get(key) as V;
-    this.cache.delete(key);
-    this.cache.set(key, value);
+    const value = this.#cache.get(key) as V;
+    this.#cache.delete(key);
+    this.#cache.set(key, value);
     return value;
   }
 
-  set(key: K, value: V): void {
-    if (this.cache.has(key)) {
+  async set(key: K, value: V): Promise<void> {
+    if (this.#cache.has(key)) {
       // Remove the old value to update its position
-      this.cache.delete(key);
-    } else if (this.cache.size >= this.limit) {
+      this.#cache.delete(key);
+    } else if (this.#cache.size >= this.#limit) {
       // Remove the least recently used key (first key in the Map)
-      const oldestKey = this.cache.keys().next().value;
+      const oldestKey = this.#cache.keys().next().value;
       if (oldestKey !== undefined) {
-        this.cache.delete(oldestKey);
+        this.#cache.delete(oldestKey);
       }
     }
-    this.cache.set(key, value);
+    this.#cache.set(key, value);
   }
 
-  has(key: K): boolean {
-    return this.cache.has(key);
+  async has(key: K): Promise<boolean> {
+    return this.#cache.has(key);
   }
 
-  keys(): K[] {
-    return Array.from(this.cache.keys());
+  async keys(): Promise<K[]> {
+    return Array.from(this.#cache.keys());
   }
 
-  delete(key: K): void {
-    this.cache.delete(key);
+  async delete(key: K): Promise<void> {
+    this.#cache.delete(key);
   }
 
-  clear(): void {
-    this.cache.clear();
+  async clear(): Promise<void> {
+    this.#cache.clear();
+  }
+}
+
+type pojoifiable = { toPOJO(): object };
+type PersistentLRUCacheArgs<V> = V extends pojoifiable
+  ? [number, KVStore, "session" | "local", { fromPOJO(pojo: object): V }]
+  : [number, KVStore, "session" | "local"];
+export class PersistentLRUCache<
+  K extends string,
+  V extends pojoifiable | unknown,
+> extends LRUCache<K, V> {
+  readonly #store: KVStore;
+  readonly #area: "session" | "local";
+  readonly #depojoifier: PersistentLRUCacheArgs<V>[3];
+  readonly #ready: Promise<void>;
+
+  constructor(...[limit, store, area, depojoifier]: PersistentLRUCacheArgs<V>) {
+    super(limit);
+    this.#store = store;
+    this.#area = area;
+    this.#depojoifier = depojoifier;
+    this.#ready = this.#load();
+  }
+
+  async #load() {
+    const keys = (await this.#store.getKeys("", this.#area)) as K[];
+    for (const key of keys) {
+      const pojo = await this.#store.get(key, this.#area);
+      const v = this.#depojoifier?.fromPOJO(pojo) ?? pojo;
+      await super.set(key, v);
+    }
+  }
+
+  override async get(key: K): Promise<V | undefined> {
+    await this.#ready;
+    return super.get(key);
+  }
+
+  override async set(key: K, value: V): Promise<void> {
+    await this.#ready;
+    const pojo = (value as pojoifiable)?.toPOJO() ?? value;
+    await this.#store.set({ [key]: pojo }, this.#area);
+    return super.set(key, value);
+  }
+
+  override async has(key: K): Promise<boolean> {
+    await this.#ready;
+    return super.has(key);
+  }
+
+  override async keys(): Promise<K[]> {
+    await this.#ready;
+    return super.keys();
+  }
+
+  override async delete(key: K): Promise<void> {
+    await this.#ready;
+    await this.#store.remove(key, this.#area);
+    return super.delete(key);
+  }
+
+  override async clear(): Promise<void> {
+    await this.#ready;
+    await this.#store.clear("", this.#area);
+    return super.clear();
   }
 }
 
 export class LRUSet<T> {
-  private cache: Set<T>;
-  private limit: number;
+  #cache: Set<T>;
+  #limit: number;
 
   constructor(limit: number) {
-    this.limit = limit;
-    this.cache = new Set<T>();
+    this.#limit = limit;
+    this.#cache = new Set<T>();
   }
 
-  has(value: T): boolean {
-    if (!this.cache.has(value)) return false;
+  async has(value: T): Promise<boolean> {
+    if (!this.#cache.has(value)) return false;
     // Move the accessed value to the end to mark it as recently used
-    this.cache.delete(value);
-    this.cache.add(value);
+    this.#cache.delete(value);
+    this.#cache.add(value);
     return true;
   }
 
-  add(value: T): void {
-    if (this.cache.has(value)) {
+  async add(value: T): Promise<void> {
+    if (this.#cache.has(value)) {
       // Remove the old value to update its position
-      this.cache.delete(value);
-    } else if (this.cache.size >= this.limit) {
+      this.#cache.delete(value);
+    } else if (this.#cache.size >= this.#limit) {
       // Remove the least recently used value (first item in the Set)
-      const oldestValue = this.cache.values().next().value;
+      const oldestValue = this.#cache.values().next().value;
       if (oldestValue !== undefined) {
-        this.cache.delete(oldestValue);
+        this.#cache.delete(oldestValue);
       }
     }
-    this.cache.add(value);
+    this.#cache.add(value);
   }
 
-  values(): T[] {
-    return Array.from(this.cache.values());
+  async values(): Promise<T[]> {
+    return Array.from(this.#cache.values());
   }
 
-  delete(value: T): void {
-    this.cache.delete(value);
+  async delete(value: T): Promise<void> {
+    this.#cache.delete(value);
   }
 
-  clear(): void {
-    this.cache.clear();
+  async clear(): Promise<void> {
+    this.#cache.clear();
   }
 }

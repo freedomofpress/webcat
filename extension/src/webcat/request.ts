@@ -4,16 +4,12 @@ import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
-import {
-  BundleFetcher,
-  OriginStateHolder,
-  OriginStateInitial,
-} from "./originstate";
+import { BundleFetcher, BundleFetcherConfig, OriginState } from "./originstate";
 import { setIcon } from "./ui";
 
-declare const __IS_TESTING__: boolean;
-
-const allowedPorts = __IS_TESTING__ ? ["8080", "8443", ""] : ["80", "443", ""];
+const allowedPorts = import.meta.env.VITE_TESTING
+  ? ["8080", "8443", ""]
+  : ["80", "443", ""];
 
 export function validateProtocolAndPort(urlobj: URL): boolean {
   if (
@@ -32,7 +28,7 @@ export function enforceHTTPS(urlobj: URL): string | undefined {
     urlobj.hostname.substring(urlobj.hostname.lastIndexOf(".")) !== ".onion"
   ) {
     urlobj.protocol = "https:";
-    if (__IS_TESTING__) {
+    if (import.meta.env.VITE_TESTING) {
       urlobj.port = "8443";
     }
     return urlobj.toString();
@@ -42,6 +38,7 @@ export function enforceHTTPS(urlobj: URL): string | undefined {
 export async function validateOrigin(
   db: Database,
   details: Stateful<BeforeRequestDetails>,
+  config: BundleFetcherConfig,
 ) {
   const { fqdn, cachePartition, isFrame } = details.state;
   const enrollment_hash = await db.getFQDNEnrollment(fqdn, cachePartition);
@@ -69,9 +66,9 @@ export async function validateOrigin(
     return { redirectUrl: redirect };
   }
 
-  const cached = db.origins.get(CacheKey(fqdn, cachePartition));
+  const cached = await db.origins.get(CacheKey(fqdn, cachePartition));
   if (cached) {
-    // Pin the holder to this request so later stages cannot race against LRU eviction
+    // Pin the origin state to this request so later stages cannot race against LRU eviction
     details.state.pendingOrigin = cached;
     return;
   }
@@ -82,20 +79,18 @@ export async function validateOrigin(
   // Policy hash is checked at the top and then later again
   const newFetcher = new BundleFetcher(
     `${urlobj.protocol}//${fqdn}:${urlobj.port}`,
+    config,
   );
-  const newOriginState = new OriginStateInitial(
+  const newOriginState = new OriginState(
+    db,
     newFetcher,
-    urlobj.protocol,
-    urlobj.port,
-    fqdn,
     enrollment_hash,
     cachePartition,
   );
-  const origin = new OriginStateHolder(newOriginState);
-  details.state.pendingOrigin = origin;
+  details.state.pendingOrigin = newOriginState;
 
   // See https://github.com/freedomofpress/webcat/issues/95
-  await origin.current.fetcher.awaitAll();
+  await newOriginState.fetcher.awaitAll();
 
   return;
 

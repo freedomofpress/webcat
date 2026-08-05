@@ -11,8 +11,6 @@ import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { Database } from "./interfaces/database";
 import { arraysEqual } from "./utils";
 
-declare const __IS_TESTING__: boolean;
-
 export class UpdateEvent extends Event {
   readonly local: boolean;
   readonly success: boolean;
@@ -26,6 +24,7 @@ export class UpdateEvent extends Event {
 
 export type EnrollmentUpdaterOptions = {
   endpoint: string;
+  localDataPath: string;
   database: Database;
   validatorSet: ValidatorJson;
   checkInterval?: number;
@@ -50,6 +49,7 @@ export class EnrollmentUpdater extends EventTarget {
   static readonly DefaultFetchTimeout = 3000; // 3 seconds
 
   readonly #endpoint: string;
+  readonly #localDataPath: string;
   readonly #db: Database;
   readonly #validatorSet: ValidatorJson;
   readonly #checkInterval: number;
@@ -62,6 +62,7 @@ export class EnrollmentUpdater extends EventTarget {
   constructor(options: EnrollmentUpdaterOptions) {
     super();
     this.#endpoint = options.endpoint;
+    this.#localDataPath = options.localDataPath;
     this.#db = options.database;
     this.#validatorSet = options.validatorSet;
     this.#checkInterval =
@@ -113,8 +114,8 @@ export class EnrollmentUpdater extends EventTarget {
       if (local) {
         // Use bundled files at install or update time
         console.log("[webcat] Loading bundled update files");
-        leavesUrl = browser.runtime.getURL("data/list.json");
-        blocksUrl = browser.runtime.getURL("data/block.json");
+        leavesUrl = browser.runtime.getURL(`${this.#localDataPath}/list.json`);
+        blocksUrl = browser.runtime.getURL(`${this.#localDataPath}/block.json`);
       } else {
         // Use network endpoints for production
         console.log("[webcat] Fetching update files");
@@ -132,7 +133,7 @@ export class EnrollmentUpdater extends EventTarget {
       const block = await (await blockResponse).json();
       console.log("[webcat] Update block fetched");
 
-      if (__IS_TESTING__) {
+      if (import.meta.env.VITE_TESTING) {
         const reschedule = block.__WEBCAT_TEST_SCHEDULE_UPDATE__;
         if (reschedule) {
           console.log(
@@ -256,7 +257,7 @@ export class EnrollmentUpdater extends EventTarget {
       if (
         lastUpdated === null ||
         Date.now() - lastUpdated >= this.#updateInterval ||
-        __IS_TESTING__
+        import.meta.env.VITE_TESTING
       ) {
         console.log("[webcat] Running scheduled update (alarm check)");
         try {

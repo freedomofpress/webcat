@@ -1,9 +1,8 @@
 import { KVStore } from "../browser/kvstore";
-import contentHooks from "./../../dist/hooks/content.js?raw";
 import pageHooks from "./../../dist/hooks/page.js?raw";
 
 const hooks = {
-  content_script: contentHooks,
+  content_script: '"__DATA_PLACEHOLDER__"',
   page: pageHooks,
 };
 
@@ -86,8 +85,25 @@ export class HookBuilder {
     wasm: string[],
     firstParty: string,
     sameOrigin: boolean,
-  ) {
-    return this.#get("content_script", wasm, firstParty, sameOrigin);
+  ): Promise<[func: (data: string) => void, args: [data: string]]> {
+    const data = await this.#get(
+      "content_script",
+      wasm,
+      firstParty,
+      sameOrigin,
+    );
+    return [
+      function (data: string) {
+        const scope = window as unknown as {
+          hooks?: { [index: string]: { data: unknown } };
+        };
+        for (const name in scope.hooks) {
+          console.log(`[WEBCAT] Updating hook: ${name}`);
+          scope.hooks[name].data = JSON.parse(data);
+        }
+      },
+      [data],
+    ];
   }
 
   /**
