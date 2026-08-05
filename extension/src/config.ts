@@ -16,6 +16,7 @@ const defaultConfig: WebcatConfig = {
   bundlePrevPath: "/.well-known/webcat/bundle-prev.json",
 
   endpoint: "https://webcat.freedom.press/",
+  localDataPath: "data",
   validatorSet: validator_set,
   // During alpha, update every hour. Wall-clock based so that sleep/suspend
   // doesn't silently postpone updates.
