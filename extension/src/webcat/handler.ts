@@ -68,7 +68,7 @@ export class WebcatRequestHandler extends RequestHandler {
   }
 
   /**
-   * Binds the handler to <all_urls>. Unlike {@link bind}, does not bind
+   * Binds the handler to `<all_urls>`. Unlike {@link bind}, does not bind
    * content scripts. The bindAll method can be called synchronously before
    * FQDNs are available, but it should be always followed by a call to
    * {@link bind} to both restrict the scope of the binding and bind content
