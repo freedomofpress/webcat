@@ -94,6 +94,7 @@ describe("isDue", () => {
   beforeEach(() => {
     db = createMockDb();
     updater = new EnrollmentUpdater({
+      localDataPath: "data",
       endpoint: "https://example.com/",
       database: db as never,
       validatorSet: {} as ValidatorJson,
@@ -166,6 +167,7 @@ describe("update", () => {
   beforeEach(() => {
     db = createMockDb();
     updater = new EnrollmentUpdater({
+      localDataPath: "data",
       endpoint: "https://example.com/",
       database: db as never,
       validatorSet: {} as ValidatorJson,
@@ -277,6 +279,7 @@ describe("handleUpdateAlarm", () => {
   beforeEach(async () => {
     db = createMockDb();
     updater = new EnrollmentUpdater({
+      localDataPath: "data",
       endpoint: "https://example.com/",
       database: db as never,
       validatorSet: {} as ValidatorJson,
@@ -351,6 +354,7 @@ describe("retryIfFailed", () => {
   beforeEach(() => {
     db = createMockDb();
     updater = new EnrollmentUpdater({
+      localDataPath: "data",
       endpoint: "https://example.com/",
       database: db as never,
       validatorSet: {} as ValidatorJson,
@@ -412,6 +416,7 @@ describe("start", () => {
   beforeEach(() => {
     db = createMockDb();
     updater = new EnrollmentUpdater({
+      localDataPath: "data",
       endpoint: "https://example.com/",
       database: db as never,
       validatorSet: {} as ValidatorJson,

@@ -24,6 +24,7 @@ export class UpdateEvent extends Event {
 
 export type EnrollmentUpdaterOptions = {
   endpoint: string;
+  localDataPath: string;
   database: Database;
   validatorSet: ValidatorJson;
   checkInterval?: number;
@@ -48,6 +49,7 @@ export class EnrollmentUpdater extends EventTarget {
   static readonly DefaultFetchTimeout = 3000; // 3 seconds
 
   readonly #endpoint: string;
+  readonly #localDataPath: string;
   readonly #db: Database;
   readonly #validatorSet: ValidatorJson;
   readonly #checkInterval: number;
@@ -60,6 +62,7 @@ export class EnrollmentUpdater extends EventTarget {
   constructor(options: EnrollmentUpdaterOptions) {
     super();
     this.#endpoint = options.endpoint;
+    this.#localDataPath = options.localDataPath;
     this.#db = options.database;
     this.#validatorSet = options.validatorSet;
     this.#checkInterval =
@@ -111,8 +114,8 @@ export class EnrollmentUpdater extends EventTarget {
       if (local) {
         // Use bundled files at install or update time
         console.log("[webcat] Loading bundled update files");
-        leavesUrl = browser.runtime.getURL("data/list.json");
-        blocksUrl = browser.runtime.getURL("data/block.json");
+        leavesUrl = browser.runtime.getURL(`${this.#localDataPath}/list.json`);
+        blocksUrl = browser.runtime.getURL(`${this.#localDataPath}/block.json`);
       } else {
         // Use network endpoints for production
         console.log("[webcat] Fetching update files");
