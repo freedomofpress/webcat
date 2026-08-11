@@ -380,7 +380,12 @@ export class ResponseValidator {
     };
 
     filter.onstop = async () => {
-      if (!markerSeen && !PASS_THROUGH_TYPES.has(details.type)) {
+      assertHeadersAvailable(details);
+      if (
+        !markerSeen &&
+        !PASS_THROUGH_TYPES.has(details.type) &&
+        !details.fromCache
+      ) {
         // The request terminated early, before headers were received,
         // possibly because the user navigated away. Close without
         // writing anything; don't display an error.
@@ -468,6 +473,7 @@ export class ResponseValidator {
 
   markContent(details: HeadersReceivedDetails) {
     if (PASS_THROUGH_TYPES.has(details.type)) return;
+    if (details.fromCache) return;
     // Install a marking filter at the last possible moment: after
     // all extensions, including WEBCAT and NoScript, have injected their
     // hooks, but before receiving any code from the network
