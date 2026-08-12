@@ -48,20 +48,19 @@ export class LRUCache<K, V> {
     if (!this.#cache.has(key)) return undefined;
 
     const value = this.#cache.get(key) as V;
-    this.#cache.delete(key);
-    this.#cache.set(key, value);
+    await this.set(key, value);
     return value;
   }
 
   async set(key: K, value: V): Promise<void> {
     if (this.#cache.has(key)) {
       // Remove the old value to update its position
-      this.#cache.delete(key);
+      await this.delete(key);
     } else if (this.#cache.size >= this.#limit) {
       // Remove the least recently used key (first key in the Map)
       const oldestKey = this.#cache.keys().next().value;
       if (oldestKey !== undefined) {
-        this.#cache.delete(oldestKey);
+        await this.delete(oldestKey);
       }
     }
     this.#cache.set(key, value);
@@ -121,9 +120,9 @@ export class PersistentLRUCache<
 
   override async set(key: K, value: V): Promise<void> {
     await this.#ready;
-    const pojo = (value as pojoifiable)?.toPOJO() ?? value;
+    const pojo = (value as pojoifiable)?.toPOJO?.() ?? value;
+    await super.set(key, value);
     await this.#store.set({ [key]: pojo }, this.#area);
-    return super.set(key, value);
   }
 
   override async has(key: K): Promise<boolean> {
