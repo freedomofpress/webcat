@@ -35,50 +35,115 @@ export function isInPartition<
   return Object.keys(partition).length === 0;
 }
 
-export class LRUCache<K, V> {
-  #cache: Map<K, V>;
-  #limit: number;
+class Lock implements Disposable {
+  readonly mutex: Mutex;
+  #users = 0;
 
-  constructor(limit: number) {
+  constructor(mutex: Mutex) {
+    this.mutex = mutex;
+  }
+
+  get [Symbol.dispose]() {
+    this.#users++;
+    return () => {
+      this.#users--;
+      if (this.#users === 0) {
+        this.mutex.release();
+      }
+    };
+  }
+}
+
+if (!Symbol.dispose) {
+  // Workaround for a bug in TypeScript downleveling
+  const { get } = Object.getOwnPropertyDescriptor(
+    Lock.prototype,
+    Symbol.dispose,
+  ) as PropertyDescriptor;
+  Object.defineProperty(Lock.prototype, Symbol.for("Symbol.dispose"), { get });
+  delete Lock.prototype[Symbol.dispose];
+}
+
+class Mutex {
+  #resolvers: ((s: Lock) => void)[] = [];
+  #lock?: Lock;
+
+  async acquire(lock?: Lock) {
+    if (this.#lock === undefined) {
+      this.#lock = new Lock(this);
+      return this.#lock;
+    } else if (lock && lock === this.#lock) {
+      return this.#lock;
+    } else {
+      return new Promise<Lock>((resolve) => {
+        this.#resolvers.push(resolve);
+      });
+    }
+  }
+
+  release() {
+    if (this.#resolvers.length > 0) {
+      this.#lock = new Lock(this);
+      const next = this.#resolvers.shift();
+      next?.(this.#lock);
+    } else {
+      this.#lock = undefined;
+    }
+  }
+}
+
+export class LRUCache<K, V> {
+  protected readonly mutex: Mutex;
+  readonly #cache: Map<K, V>;
+  readonly #limit: number;
+
+  constructor(limit: number, _?: Mutex) {
+    this.mutex = _ || new Mutex();
     this.#limit = limit;
     this.#cache = new Map<K, V>();
   }
 
-  async get(key: K): Promise<V | undefined> {
+  async get(key: K, _?: Lock): Promise<V | undefined> {
+    using lock = await this.mutex.acquire(_);
     if (!this.#cache.has(key)) return undefined;
 
     const value = this.#cache.get(key) as V;
-    await this.set(key, value);
+    await this.set(key, value, lock);
     return value;
   }
 
-  async set(key: K, value: V): Promise<void> {
+  async set(key: K, value: V, _?: Lock): Promise<void> {
+    using lock = await this.mutex.acquire(_);
     if (this.#cache.has(key)) {
       // Remove the old value to update its position
-      await this.delete(key);
+      await this.delete(key, lock);
     } else if (this.#cache.size >= this.#limit) {
       // Remove the least recently used key (first key in the Map)
       const oldestKey = this.#cache.keys().next().value;
       if (oldestKey !== undefined) {
-        await this.delete(oldestKey);
+        await this.delete(oldestKey, lock);
       }
     }
     this.#cache.set(key, value);
   }
 
-  async has(key: K): Promise<boolean> {
+  async has(key: K, _?: Lock): Promise<boolean> {
+    using _lock = await this.mutex.acquire(_);
     return this.#cache.has(key);
   }
 
-  async keys(): Promise<K[]> {
+  async keys(_?: Lock): Promise<K[]> {
+    using _lock = await this.mutex.acquire(_);
     return Array.from(this.#cache.keys());
   }
 
-  async delete(key: K): Promise<void> {
+  async delete(key: K, _?: Lock): Promise<void> {
+    using _lock = await this.mutex.acquire(_);
     this.#cache.delete(key);
   }
 
-  async clear(): Promise<void> {
+  async clear(_?: Lock): Promise<void> {
+    using _lock = await this.mutex.acquire(_);
     this.#cache.clear();
   }
 }
@@ -113,38 +178,41 @@ export class PersistentLRUCache<
     }
   }
 
-  override async get(key: K): Promise<V | undefined> {
+  override async get(key: K, _?: Lock): Promise<V | undefined> {
     await this.#ready;
-    return super.get(key);
+    return super.get(key, _);
   }
 
-  override async set(key: K, value: V): Promise<void> {
+  override async set(key: K, value: V, _?: Lock): Promise<void> {
     await this.#ready;
+    using lock = await this.mutex.acquire(_);
     const pojo = (value as pojoifiable)?.toPOJO?.() ?? value;
-    await super.set(key, value);
+    await super.set(key, value, lock);
     await this.#store.set({ [key]: pojo }, this.#area);
   }
 
-  override async has(key: K): Promise<boolean> {
+  override async has(key: K, _?: Lock): Promise<boolean> {
     await this.#ready;
-    return super.has(key);
+    return super.has(key, _);
   }
 
-  override async keys(): Promise<K[]> {
+  override async keys(_?: Lock): Promise<K[]> {
     await this.#ready;
-    return super.keys();
+    return super.keys(_);
   }
 
-  override async delete(key: K): Promise<void> {
+  override async delete(key: K, _?: Lock): Promise<void> {
     await this.#ready;
+    using lock = await this.mutex.acquire(_);
     await this.#store.remove(key, this.#area);
-    return super.delete(key);
+    return super.delete(key, lock);
   }
 
-  override async clear(): Promise<void> {
+  override async clear(_?: Lock): Promise<void> {
     await this.#ready;
+    using lock = await this.mutex.acquire(_);
     await this.#store.clear("", this.#area);
-    return super.clear();
+    return super.clear(lock);
   }
 }
 
