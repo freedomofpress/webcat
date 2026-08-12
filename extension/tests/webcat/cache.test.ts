@@ -19,7 +19,7 @@ class MockKVStore {
     this.data.clear();
   });
   getKeys = vi.fn().mockImplementation(async () => {
-    return this.data.keys();
+    return Array.from(this.data.keys());
   });
   remove = vi.fn().mockImplementation(async (key: string) => {
     this.data.delete(key);
@@ -76,6 +76,67 @@ describe.each([
     await expect(cache.keys()).resolves.toStrictEqual(
       expect.objectContaining({ length: 1 }),
     );
+  });
+});
+
+describe("LRUCache", () => {
+  it("should set atomically", async () => {
+    const cache = new (class extends LRUCache<string, number> {
+      constructor() {
+        super(1);
+      }
+      // LRUCache.set calls delete when evicting
+      async delete(...args: [string]) {
+        await super.delete(...args);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    })();
+    // Set twice to trigger eviction and the timeout
+    // Do not await; the operations should still be atomic
+    cache.set("a", 1);
+    cache.set("a", 2);
+    await expect(cache.get("a")).resolves.toBe(2);
+  });
+
+  it("should get atomically", async () => {
+    const cache = new (class extends LRUCache<string, number> {
+      constructor() {
+        super(3);
+      }
+      // LRUCache.get calls set to update key order
+      async set(...args: [string, number]) {
+        await super.set(...args);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    })();
+    await cache.set("a", 1);
+    await cache.set("b", 2);
+    // Get without awaiting; the order of the keys should change
+    cache.get("a");
+    await expect(cache.keys()).resolves.toStrictEqual(["b", "a"]);
+  });
+});
+
+describe("PersistentLRUCache", () => {
+  it("should set atomically", async () => {
+    const store = new MockKVStore();
+    store.set.mockImplementation(async function (
+      this: MockKVStore,
+      items: Record<string, unknown>,
+    ) {
+      if (items.a) {
+        // Introduce an artificial delay to the first set call
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      for (const key in items) {
+        this.data.set(key, items[key]);
+      }
+    });
+    const cache = new PersistentLRUCache(3, store, "session");
+    cache.set("a", 1);
+    cache.set("b", 2);
+    await expect(cache.keys()).resolves.toStrictEqual(["a", "b"]);
+    await expect(store.getKeys()).resolves.toStrictEqual(["a", "b"]);
   });
 });
 
