@@ -340,9 +340,9 @@ export class OriginState implements IOriginState {
     // Validate the default CSP
     try {
       await validateCSP(
-        this.#db,
         manifest.default_csp,
         valid_sources,
+        this.#db,
         this.#cachePartition,
       );
     } catch (e) {
@@ -359,7 +359,7 @@ export class OriginState implements IOriginState {
       if (manifest.extra_csp.hasOwnProperty(path)) {
         const csp = manifest.extra_csp[path];
         try {
-          await validateCSP(this.#db, csp, valid_sources, this.#cachePartition);
+          await validateCSP(csp, valid_sources, this.#db, this.#cachePartition);
         } catch (e) {
           return this.#fail(
             new WebcatError(WebcatErrorCode.Manifest.EXTRA_CSP_INVALID, [
