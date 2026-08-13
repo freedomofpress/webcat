@@ -40,10 +40,10 @@ import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDNSafe } from "./utils";
 
 export async function validateCSP(
-  db: Database,
   csp: string,
   valid_sources: Set<string>,
-  cachePartition: CachePartition,
+  db?: Database,
+  cachePartition?: CachePartition,
 ) {
   // See https://github.com/freedomofpress/webcat/issues/9
   // https://github.com/freedomofpress/webcat/issues/3
@@ -169,7 +169,13 @@ export async function validateCSP(
         );
       }
 
-      if ((await db.getFQDNEnrollment(fqdn, cachePartition)).length !== 0) {
+      if (valid_sources.has(fqdn)) {
+        return true;
+      } else if (
+        db &&
+        cachePartition &&
+        (await db.getFQDNEnrollment(fqdn, cachePartition)).length !== 0
+      ) {
         valid_sources.add(fqdn);
         return true;
       } else {

@@ -1,8 +1,6 @@
 // validateCSP.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import config from "../../src/config";
-import { WebcatDatabase } from "../../src/webcat/db";
 import { validateCSP } from "../../src/webcat/validators";
 
 // Mocks (unchanged)
@@ -39,23 +37,15 @@ vi.mock("../../src/webcat/db", () => {
 
 describe("validateCSP", () => {
   let valid_sources: Set<string>;
-  const cachePartition = {
-    firstParty: "https://example.com",
-    incognito: false,
-  };
-  let db: WebcatDatabase;
 
   beforeEach(() => {
     valid_sources = new Set();
-    db = new WebcatDatabase(config.default);
   });
 
   // Test 1: Pass when default-src is 'none' (other directives are not required)
   it("should pass when default-src is 'none' even if no other directives are provided", async () => {
     const csp = "default-src 'none'";
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).resolves.toBeUndefined();
+    await expect(validateCSP(csp, valid_sources)).resolves.toBeUndefined();
   });
 
   // Test 2: Pass with default-src 'self' and all required directives valid
@@ -69,9 +59,7 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).resolves.toBeUndefined();
+    await expect(validateCSP(csp, valid_sources)).resolves.toBeUndefined();
   });
 
   // Test 3: Missing object-src when default-src is not 'none'
@@ -85,9 +73,7 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow(
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
       "default-src is not none, and object-src is not defined.",
     );
   });
@@ -103,9 +89,9 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow("Non-allowed object-src directive 'self'");
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
+      "Non-allowed object-src directive 'self'",
+    );
   });
 
   // Test 5: Missing script-src when default-src is not 'none'
@@ -119,9 +105,7 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow(
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
       "default-src is not none, and script-src is not defined.",
     );
   });
@@ -137,9 +121,9 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow("default-src is not none, and style-src is not defined.");
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
+      "default-src is not none, and style-src is not defined.",
+    );
   });
 
   // Test 7: Missing worker-src when default-src is not 'none'
@@ -153,9 +137,7 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       // worker-src missing
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow(
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
       "default-src is not none, and worker-src is not defined.",
     );
   });
@@ -170,9 +152,7 @@ describe("validateCSP", () => {
       "worker-src 'self'",
       // child-src and frame-src missing
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow(
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
       "default-src is not none, and neither frame-src or child-src are defined.",
     );
   });
@@ -188,9 +168,7 @@ describe("validateCSP", () => {
       "frame-src evil.com",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow(
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
       "frame-src value evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed.",
     );
   });
@@ -240,9 +218,7 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow(
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
       "child-src value http://evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed.",
     );
   });
@@ -258,9 +234,7 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).resolves.toBeUndefined();
+    await expect(validateCSP(csp, valid_sources)).resolves.toBeUndefined();
   });
 
   // Test 15: Invalid frame-src with a wildcard "*"
@@ -274,9 +248,9 @@ describe("validateCSP", () => {
       "frame-src *",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow("frame-src cannot contain * which is unsupported.");
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
+      "frame-src cannot contain * which is unsupported.",
+    );
   });
 
   // Test 16: Invalid script-src containing 'unsafe-inline'
@@ -290,9 +264,7 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow(
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
       "script-src cannot contain 'unsafe-inline' which is unsupported.",
     );
   });
@@ -308,9 +280,7 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).resolves.toBeUndefined();
+    await expect(validateCSP(csp, valid_sources)).resolves.toBeUndefined();
   });
 
   // Test 18: Valid script-src containing 'wasm-unsafe-eval'
@@ -324,9 +294,7 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).resolves.toBeUndefined();
+    await expect(validateCSP(csp, valid_sources)).resolves.toBeUndefined();
   });
 
   // Test 19: Valid style-src with a valid hash source
@@ -340,9 +308,7 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).resolves.toBeUndefined();
+    await expect(validateCSP(csp, valid_sources)).resolves.toBeUndefined();
   });
 
   // Test 20: Non-enrolled child-src should throw (simulate non-enrollment)
@@ -356,9 +322,7 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow(
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
       "child-src value evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed.",
     );
   });
@@ -374,9 +338,9 @@ describe("validateCSP", () => {
       "frame-src 'self'",
       "worker-src 'self'",
     ].join("; ");
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow("script-src cannot contain blob: which is unsupported.");
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
+      "script-src cannot contain blob: which is unsupported.",
+    );
   });
 
   // See https://github.com/freedomofpress/webcat/issues/99
@@ -391,9 +355,7 @@ describe("validateCSP", () => {
       "worker-src 'self'",
     ].join("; ");
 
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow(
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
       "default-src is not none, and object-src is not defined.",
     );
   });
@@ -402,9 +364,9 @@ describe("validateCSP", () => {
   it("should throw when CSP contains a comma (multiple policies)", async () => {
     const csp = "script-src 'unsafe-eval', script-src 'self'";
 
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow("CSP contains a comma");
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
+      "CSP contains a comma",
+    );
   });
 
   it("should throw when a valid CSP is followed by a comma and garbage", async () => {
@@ -417,8 +379,8 @@ describe("validateCSP", () => {
         "worker-src 'self'",
       ].join("; ") + ", @invalid-policy";
 
-    await expect(
-      validateCSP(db, csp, valid_sources, cachePartition),
-    ).rejects.toThrow("CSP contains a comma");
+    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
+      "CSP contains a comma",
+    );
   });
 });
