@@ -77,8 +77,4 @@ export async function clearBrowserCaches(fqdns: string[]) {
     { serviceWorkers: true },
   );
   await browser.browsingData.remove({}, { cache: true });
-  // TODO: This call fails silently if invoked more than 20 times
-  // in 10 minutes. Figure out a way to deal with it safely. See
-  // https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/handlerBehaviorChanged
-  await browser.webRequest.handlerBehaviorChanged();
 }
