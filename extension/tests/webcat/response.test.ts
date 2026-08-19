@@ -21,10 +21,7 @@ import {
 } from "../../src/webcat/interfaces/errors";
 import { Stateful } from "../../src/webcat/interfaces/requeststate";
 import { BundleFetcher, OriginState } from "../../src/webcat/originstate";
-import {
-  isSafeRelativeLocation,
-  ResponseValidator,
-} from "../../src/webcat/response";
+import { isSameOriginURL, ResponseValidator } from "../../src/webcat/response";
 import { SHA256 } from "../../src/webcat/utils";
 
 function makeDummyFetcher(): BundleFetcher {
@@ -796,6 +793,7 @@ describe("ResponseValidator.extractAndValidateHeaders", () => {
 
   it("allows safe relative Location header on main_frame", () => {
     const details = {
+      url: "https://example.com/",
       responseHeaders: [
         { name: "Location", value: "/login" },
         { name: "Content-Security-Policy", value: "default-src 'self'" },
@@ -812,6 +810,7 @@ describe("ResponseValidator.extractAndValidateHeaders", () => {
 
   it("allows safe relative Location header on sub_frame", () => {
     const details = {
+      url: "https://example.com/",
       responseHeaders: [
         { name: "Location", value: "/embed" },
         { name: "Content-Security-Policy", value: "default-src 'self'" },
@@ -828,6 +827,7 @@ describe("ResponseValidator.extractAndValidateHeaders", () => {
 
   it("blocks external Location header even on main_frame", () => {
     const details = {
+      url: "https://example.com/",
       responseHeaders: [
         { name: "Location", value: "https://evil.com" },
         { name: "Content-Security-Policy", value: "default-src 'self'" },
@@ -846,59 +846,128 @@ describe("ResponseValidator.extractAndValidateHeaders", () => {
   });
 });
 
-describe("isSafeRelativeLocation", () => {
+describe("isSameOriginURL", () => {
   it("allows absolute-path relative locations", () => {
-    expect(isSafeRelativeLocation("/")).toBe(true);
-    expect(isSafeRelativeLocation("/login")).toBe(true);
-    expect(isSafeRelativeLocation("/a/b/c")).toBe(true);
+    expect(isSameOriginURL("/", "https://example.com/path/?q=1")).toBe(true);
+    expect(isSameOriginURL("/login", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+    expect(isSameOriginURL("/a/b/c", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
   });
 
   it("allows parent-relative paths", () => {
-    expect(isSafeRelativeLocation("../login")).toBe(true);
-    expect(isSafeRelativeLocation("../a/b")).toBe(true);
+    expect(isSameOriginURL("../login", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+    expect(isSameOriginURL("../a/b", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
   });
 
   it("allows same-relative paths", () => {
-    expect(isSafeRelativeLocation("./login")).toBe(true);
+    expect(isSameOriginURL("./login", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
   });
 
-  it("trims whitespace before validation", () => {
-    expect(isSafeRelativeLocation(" /login ")).toBe(true);
-    expect(isSafeRelativeLocation("  ../login")).toBe(true);
+  it("allows whitespace", () => {
+    expect(isSameOriginURL(" /login ", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+    expect(isSameOriginURL("  ../login", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
   });
 
-  it("rejects protocol-relative URLs", () => {
-    expect(isSafeRelativeLocation("//evil.com")).toBe(false);
-    expect(isSafeRelativeLocation("///evil.com")).toBe(false);
+  it("rejects cross-origin protocol-relative URLs", () => {
+    expect(isSameOriginURL("//evil.com", "https://example.com/path/?q=1")).toBe(
+      false,
+    );
+    expect(
+      isSameOriginURL("///evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
   });
 
-  it("rejects absolute URLs with schemes", () => {
-    expect(isSafeRelativeLocation("https://evil.com")).toBe(false);
-    expect(isSafeRelativeLocation("http://evil.com")).toBe(false);
-    expect(isSafeRelativeLocation("ftp://evil.com")).toBe(false);
-    expect(isSafeRelativeLocation("javascript:alert(1)")).toBe(false);
-    expect(isSafeRelativeLocation("blob:abcd")).toBe(false);
-    expect(isSafeRelativeLocation("data:text/plain,hi")).toBe(false);
+  it("allows same-origin protocol-relative URLs", () => {
+    expect(
+      isSameOriginURL("//example.com", "https://example.com/path/?q=1"),
+    ).toBe(true);
+    expect(
+      isSameOriginURL("///example.com", "https://example.com/path/?q=1"),
+    ).toBe(true);
+  });
+
+  it("rejects cross-origin URLs with schemes", () => {
+    expect(
+      isSameOriginURL("https://evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(
+      isSameOriginURL("http://evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(
+      isSameOriginURL("ftp://evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(
+      isSameOriginURL("javascript:alert(1)", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(isSameOriginURL("blob:abcd", "https://example.com/path/?q=1")).toBe(
+      false,
+    );
+    expect(
+      isSameOriginURL("data:text/plain,hi", "https://example.com/path/?q=1"),
+    ).toBe(false);
+  });
+
+  it("allows same-origin URLs with schemes", () => {
+    expect(
+      isSameOriginURL("https://example.com", "https://example.com/path/?q=1"),
+    ).toBe(true);
+    expect(
+      isSameOriginURL(
+        "https://example.com/index.html",
+        "https://example.com/path/?q=1",
+      ),
+    ).toBe(true);
   });
 
   it("rejects backslash-based paths", () => {
-    expect(isSafeRelativeLocation("\\evil.com")).toBe(false);
-    expect(isSafeRelativeLocation("/\\evil.com")).toBe(false);
-    expect(isSafeRelativeLocation("\\\\evil.com")).toBe(false);
+    expect(
+      isSameOriginURL("\\/evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(
+      isSameOriginURL("/\\evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(
+      isSameOriginURL("\\\\evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
   });
 
-  it("rejects bare relative paths", () => {
-    expect(isSafeRelativeLocation("login")).toBe(false);
+  it("allows bare relative paths", () => {
+    expect(isSameOriginURL("login", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
   });
 
   it("allows encoded slashes (no decoding is performed)", () => {
-    expect(isSafeRelativeLocation("/%2f%2fevil.com")).toBe(true);
-    expect(isSafeRelativeLocation("%2f%2fevil.com")).toBe(false);
+    expect(
+      isSameOriginURL("/%2f%2fevil.com", "https://example.com/path/?q=1"),
+    ).toBe(true);
+    expect(
+      isSameOriginURL("%2f%2fevil.com", "https://example.com/path/?q=1"),
+    ).toBe(true);
   });
 
   it("allows control characters (current behavior)", () => {
-    expect(isSafeRelativeLocation("/foo\nbar")).toBe(true);
-    expect(isSafeRelativeLocation("/foo\rbar")).toBe(true);
-    expect(isSafeRelativeLocation("/foo\tbar")).toBe(true);
+    expect(isSameOriginURL("/foo\nbar", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+    expect(isSameOriginURL("/foo\rbar", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+    expect(isSameOriginURL("/foo\tbar", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
   });
 });
