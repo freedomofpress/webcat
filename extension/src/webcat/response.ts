@@ -52,17 +52,10 @@ function assertHeadersAvailable<T>(
   }
 }
 
-export function isSafeRelativeLocation(value: string): boolean {
-  value = value.trim();
-
-  // No scheme, no protocol-relative, no backslashes
-  return (
-    (value.startsWith("/") ||
-      value.startsWith("../") ||
-      value.startsWith("./")) &&
-    !value.startsWith("//") &&
-    !value.includes("\\")
-  );
+export function isSameOriginURL(target: string, base: string) {
+  const baseURL = new URL(base);
+  const targetURL = new URL(target, baseURL);
+  return targetURL.origin === baseURL.origin;
 }
 
 export class ResponseValidator {
@@ -259,7 +252,7 @@ export class ResponseValidator {
               [String(value)],
             );
           }
-          if (!isSafeRelativeLocation(value)) {
+          if (!isSameOriginURL(value, details.url)) {
             return new WebcatError(WebcatErrorCode.Headers.LOCATION_EXTERNAL, [
               String(value),
             ]);
