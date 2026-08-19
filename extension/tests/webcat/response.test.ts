@@ -662,6 +662,7 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
 
     state.status = "verified_manifest";
     state.manifest = manifest;
+    state.validUntil = 0;
   });
 
   it("matches default CSP for /", () => {

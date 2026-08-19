@@ -66,7 +66,8 @@ export async function validateOrigin(
   }
 
   const cached = await db.origins.get(CacheKey(fqdn, cachePartition));
-  if (cached) {
+  const now = Math.floor(Date.now() / 1000);
+  if (cached && cached.validUntil && cached.validUntil > now) {
     // Pin the origin state to this request so later stages cannot race against LRU eviction
     details.state.pendingOrigin = cached;
     return;

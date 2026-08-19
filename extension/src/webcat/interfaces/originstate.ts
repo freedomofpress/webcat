@@ -13,6 +13,7 @@ export type OriginStateObject = {
   enrollment_hash: string;
   manifest: Manifest;
   delegation?: string;
+  validUntil: number;
 };
 
 export interface OriginState {
@@ -21,6 +22,7 @@ export interface OriginState {
   readonly manifest?: Manifest;
   readonly delegation?: string;
   readonly error?: WebcatError;
+  readonly validUntil?: number;
 
   stale: boolean;
 
@@ -28,7 +30,7 @@ export interface OriginState {
   verifyManifest(
     manifest?: Manifest,
     signatures?: SigsumSignatures | SigstoreSignatures,
-  ): Promise<void>;
+  ): Promise<void | number>;
   verifyCSP(csp: string, pathname: string): boolean;
 
   isRequestSent(): boolean;
@@ -42,6 +44,7 @@ export type OriginStateVerifiedEnrollment = OriginState & {
 };
 export type OriginStateVerifiedManifest = OriginState & {
   manifest: Manifest;
+  validUntil: number;
   toPOJO(): OriginStateObject;
 };
 export type OriginStateFailed = OriginState & {

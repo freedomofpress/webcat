@@ -521,7 +521,7 @@ export async function verifySigsumManifest(
   enrollment: SigsumEnrollment,
   manifest: Manifest,
   signatures: SigsumSignatures,
-): Promise<WebcatError | null> {
+): Promise<WebcatError | number> {
   const canonicalized = stringToUint8Array(canonicalize(manifest));
 
   // The purpose of cloning the original list of signers is to have logic to ensure
@@ -595,7 +595,7 @@ export async function verifySigsumManifest(
     ]);
   }
 
-  return null;
+  return timestamp + enrollment.max_age;
 }
 
 class ClaimPolicy implements VerificationPolicy {
@@ -686,16 +686,21 @@ class ClaimPolicy implements VerificationPolicy {
 }
 
 class CertFreshnessPolicy implements VerificationPolicy {
+  validUntil = 0;
   constructor(private maxAgeSeconds: number) {}
 
   verify(cert: X509Certificate): void {
     const now = Math.floor(Date.now() / 1000);
     const issued = Math.floor(cert.notBefore.getTime() / 1000);
+    const validUntil = issued + this.maxAgeSeconds;
 
-    if (now - issued > this.maxAgeSeconds) {
+    if (now > validUntil) {
       throw new PolicyError(
         `Signing certificate is too old: issued at ${issued}, max age ${this.maxAgeSeconds}s`,
       );
+    }
+    if (!this.validUntil || this.validUntil > validUntil) {
+      this.validUntil = validUntil;
     }
   }
 }
@@ -712,7 +717,7 @@ export async function verifySigstoreManifest(
   enrollment: SigstoreEnrollment,
   manifest: Manifest,
   signatures: SigstoreSignatures,
-): Promise<WebcatError | null> {
+): Promise<WebcatError | number> {
   const verifier = new SigstoreVerifier();
   await verifier.loadSigstoreRoot(enrollment.trusted_root);
 
@@ -747,7 +752,8 @@ export async function verifySigstoreManifest(
   }
 
   // Keep your existing freshness behavior (previously inside IdentityMatch)
-  claimPolicies.push(new CertFreshnessPolicy(enrollment.max_age));
+  const freshnessPolicy = new CertFreshnessPolicy(enrollment.max_age);
+  claimPolicies.push(freshnessPolicy);
 
   const policy = new AllOf(claimPolicies);
 
@@ -774,5 +780,5 @@ export async function verifySigstoreManifest(
     return new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED);
   }
 
-  return null;
+  return freshnessPolicy.validUntil;
 }
