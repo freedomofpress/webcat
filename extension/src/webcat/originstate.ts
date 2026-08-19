@@ -118,6 +118,7 @@ export class OriginState implements IOriginState {
   manifest?: Manifest;
   delegation?: string;
   error?: WebcatError;
+  validUntil?: number;
 
   stale = false;
 
@@ -168,13 +169,18 @@ export class OriginState implements IOriginState {
     );
   }
 
-  #setVerifiedManifest(manifest: Manifest) {
+  #setVerifiedManifest(manifest: Manifest, validUntil: number) {
     this.status = "verified_manifest";
     this.manifest = manifest;
+    this.validUntil = validUntil;
   }
 
   isManifestVerified(): this is OriginStateVerifiedManifest {
-    return this.status === "verified_manifest" && this.manifest !== undefined;
+    return (
+      this.status === "verified_manifest" &&
+      this.manifest !== undefined &&
+      this.validUntil !== undefined
+    );
   }
 
   async #verifyDelegation(delegation: string): Promise<boolean> {
@@ -272,7 +278,7 @@ export class OriginState implements IOriginState {
   async verifyManifest(
     manifest?: Manifest,
     signatures?: SigsumSignatures | SigstoreSignatures,
-  ) {
+  ): Promise<void> {
     if (!this.isEnrollmentVerified()) {
       throw new Error("verifyManifest called before verifyEnrollment");
     }
@@ -288,11 +294,11 @@ export class OriginState implements IOriginState {
       signatures = this.#bundle!.signatures;
     }
 
-    let verify_error: WebcatError | null = null;
+    let verify_result: WebcatError | number;
 
     switch (this.enrollment.type) {
       case EnrollmentTypes.Sigsum:
-        verify_error = await verifySigsumManifest(
+        verify_result = await verifySigsumManifest(
           this.enrollment,
           manifest,
           signatures as SigsumSignatures,
@@ -300,7 +306,7 @@ export class OriginState implements IOriginState {
         break;
 
       case EnrollmentTypes.Sigstore:
-        verify_error = await verifySigstoreManifest(
+        verify_result = await verifySigstoreManifest(
           this.enrollment,
           manifest,
           signatures as SigstoreSignatures,
@@ -308,11 +314,13 @@ export class OriginState implements IOriginState {
         break;
 
       default:
-        verify_error = new WebcatError(WebcatErrorCode.Enrollment.TYPE_INVALID);
+        verify_result = new WebcatError(
+          WebcatErrorCode.Enrollment.TYPE_INVALID,
+        );
     }
 
-    if (verify_error) {
-      return this.#fail(verify_error);
+    if (verify_result instanceof WebcatError) {
+      return this.#fail(verify_result);
     }
 
     const format_error = validateManifest(manifest);
@@ -363,10 +371,10 @@ export class OriginState implements IOriginState {
         );
       }
     }
-    return this.#setVerifiedManifest(manifest);
+    return this.#setVerifiedManifest(manifest, verify_result);
   }
 
-  verifyCSP(csp: string, pathname: string) {
+  verifyCSP(csp: string, pathname: string): boolean {
     if (!this.isManifestVerified()) {
       throw new Error("verifyCSP called before verifyManifest");
     }
@@ -413,6 +421,7 @@ export class OriginState implements IOriginState {
       enrollment_hash: this.enrollment_hash.toBase64(),
       manifest: this.manifest,
       delegation: this.delegation,
+      validUntil: this.validUntil,
     };
   }
 
@@ -429,6 +438,7 @@ export class OriginState implements IOriginState {
     restored.status = pojo.status;
     restored.manifest = pojo.manifest;
     restored.delegation = pojo.delegation;
+    restored.validUntil = pojo.validUntil;
     return restored;
   }
 }

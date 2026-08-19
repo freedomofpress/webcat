@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const mockVerifyArtifactPolicy = vi.fn();
 
@@ -88,6 +88,9 @@ const manifest: Manifest = {
 };
 
 describe("verifySigstoreManifest claim matching", () => {
+  beforeAll(() => vi.useFakeTimers({ now: new Date("2026-08-19T09:57:23Z") }));
+  afterAll(() => vi.useRealTimers());
+
   it("matches SAN prefixes when claim is prefixed with ^", async () => {
     const enrollment = baseEnrollment({
       "2.5.29.17": "^https://github.com/example/",
@@ -103,7 +106,7 @@ describe("verifySigstoreManifest claim matching", () => {
       signatures,
     );
 
-    expect(result).toBeNull();
+    expect(result).toBe(1787137043);
     expect(mockVerifyArtifactPolicy).toHaveBeenCalled();
   });
 
@@ -123,7 +126,7 @@ describe("verifySigstoreManifest claim matching", () => {
       signatures,
     );
 
-    expect(result).toBeNull();
+    expect(result).toBe(1787137043);
   });
 
   it("keeps exact matching when claim is not wrapped", async () => {

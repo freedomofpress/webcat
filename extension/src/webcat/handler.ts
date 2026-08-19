@@ -142,9 +142,13 @@ export class WebcatRequestHandler extends RequestHandler {
 
     // For non-frames, check for cached origin
     if (!details.state.isFrame) {
-      details.state.pendingOrigin = await this.#db.origins.get(
+      const cached = await this.#db.origins.get(
         CacheKey(details.state.fqdn, details.state.cachePartition),
       );
+      const now = Math.floor(Date.now() / 1000);
+      if (cached?.validUntil && cached.validUntil > now) {
+        details.state.pendingOrigin = cached;
+      }
     }
 
     // If no origin was available in cache, perform full validation;
@@ -279,7 +283,10 @@ export class WebcatRequestHandler extends RequestHandler {
     );
     if (currentState && currentState.isManifestVerified()) {
       const current = currentState.manifest.version;
-      if (!isNewerSemver(incoming, current)) {
+      if (
+        !isNewerSemver(incoming, current) &&
+        currentState.validUntil >= newState.validUntil
+      ) {
         return;
       }
     }
