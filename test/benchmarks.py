@@ -13,10 +13,10 @@ js_code = """
         } else {
             result = performance.timing;
         }
-        if (typeof WebAssembly !== 'undefined' && WebAssembly.__hooked__) {
-            result["webcat_executed"] = true;
-        } else {
-            result["webcat_executed"] = false;
+        try {
+            new WebAssembly.Module(new ArrayBuffer());
+        } catch (err) {
+            result["webcat_executed"] = err.message.includes("WEBCAT");
         }
         return JSON.stringify(result);
     })();
@@ -25,15 +25,22 @@ js_code = """
 @pytest.mark.parametrize("root", [("cases/testapp")], indirect=True)
 @pytest.mark.parametrize("warm", [(False), (True)], ids=["cold", "warm"])
 @pytest.mark.parametrize("addon_installed, enrolled", [(True, True), (True, False), (False, True)], ids=["enrolled", "not_enrolled", "no_extension"])
-def test_benchmark(root, update_server, warm, addon_installed, enrolled, addon_path, request, benchmark):
+def test_benchmark(root, update_server, warm, addon_installed, enrolled, addon_path, request, benchmark, ssl_cert, non_enrolled_dnsnames):
     def setup():
-        server = Server(root=root, headers=EXPECTED_CSP)
+        cert_path, key_path = ssl_cert
+        server = Server(
+            root=root,
+            headers=EXPECTED_CSP,
+            ssl_cert=cert_path,
+            ssl_key=key_path,
+        )
         server.start()
         browser = Browser()
+        browser.trust_cert(cert_path, server.port, non_enrolled_dnsnames)
         browser.start(request.config.getoption("--headless"))
         if addon_installed:
             browser.install_extension(addon_path)
-            sleep(7)
+            update_server.wait_for_update()
         return (), {'browser': browser, 'server': server}
 
     def teardown(browser, server):
@@ -43,7 +50,7 @@ def test_benchmark(root, update_server, warm, addon_installed, enrolled, addon_p
     def run(_, browser, server):
         url = server.url()
         if not enrolled:
-            url = url.replace("127.0.0.1", "localhost")
+            url = server.url(non_enrolled_dnsnames[0])
         browser.navigate(url)
         sleep(2)
         if warm:
