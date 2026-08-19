@@ -53,9 +53,13 @@ function assertHeadersAvailable<T>(
 }
 
 export function isSameOriginURL(target: string, base: string) {
-  const baseURL = new URL(base);
-  const targetURL = new URL(target, baseURL);
-  return targetURL.origin === baseURL.origin;
+  try {
+    const baseURL = new URL(base);
+    const targetURL = new URL(target, baseURL);
+    return targetURL.origin === baseURL.origin;
+  } catch {
+    return false;
+  }
 }
 
 export class ResponseValidator {
