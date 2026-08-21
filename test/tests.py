@@ -506,8 +506,29 @@ def test_drawio(browser, server: Server, update_server: UpdateServer, addon_path
     server.hooks["/.well-known/webcat/bundle.json"] = Hook(open("cases/drawio/.well-known/webcat/bundle.json", "rb").read(), type="application/json")
     browser.install_extension(addon_path)
     update_server.wait_for_update()
-    with server.wait_for(["/images/github-logo.svg"]):
-        browser.navigate(server.url())
 
-    res = browser.execute("document.title")
-    assert res == "Untitled Diagram - draw.io"
+    def error():
+        return browser.execute("Array.from(document.querySelectorAll('.geDialog>div>div:not(:last-child)')).map(e => e.textContent).join(': ')")
+
+    with server.wait_for(["/images/github-logo.svg"]):
+        browser.navigate(f"{server.url()}")
+    title = browser.execute("document.title")
+    check.equal(title, "Untitled Diagram - draw.io")
+    check.equal(error(), "")
+
+    with server.wait_for(["/templates/software/class_1.xml"]):
+        browser.navigate(f"#U{server.url()}/templates/software/class_1.xml")
+    title = browser.execute("document.title")
+    check.equal(title, "class_1.xml - draw.io")
+    check.equal(error(), "")
+    content = browser.execute("document.querySelector('.geDiagramContainer')?.textContent")
+    check.is_in(
+        "Classname"
+        "+ field: type"
+        "+ field: type"
+        "+ field: type"
+        "+ field: type"
+        "+ field: type"
+        "+ method(type): type"
+        "+ method(type): type",
+        content)
