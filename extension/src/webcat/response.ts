@@ -475,7 +475,10 @@ export class ResponseValidator {
       // Inject the end marker, signaling the end of extension hooks and
       // the start of code that should be validated
       endMarkerInjector.write(this.#marker);
-      endMarkerInjector.disconnect();
+      // We'd disconnect here, but that would corrupt the response;
+      // see https://bugzilla.mozilla.org/show_bug.cgi?id=2065230
     };
+    endMarkerInjector.ondata = (event) => endMarkerInjector.write(event.data);
+    endMarkerInjector.onstop = () => endMarkerInjector.close();
   }
 }
