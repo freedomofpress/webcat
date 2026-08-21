@@ -491,3 +491,23 @@ def test_in_memory_cache_on_update(browser, server: Server, update_server: Updat
         browser.navigate(f'{server.url(non_enrolled_dnsnames[0])}/console_log.png')
     res = browser.execute("document.body.textContent")
     assert expected in res
+
+@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer"], indirect=True)
+@pytest.mark.parametrize("config_path, bundle_path, root, headers, hooks", [pytest.param(
+    "cases/drawio/webcat.config.json",
+    "cases/drawio/.well-known/webcat/bundle.json",
+    "cases/drawio/webapp",
+    {
+        "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
+    }, {},
+    id="drawio"
+)], indirect=["root"])
+def test_drawio(browser, server: Server, update_server: UpdateServer, addon_path):
+    server.hooks["/.well-known/webcat/bundle.json"] = Hook(open("cases/drawio/.well-known/webcat/bundle.json", "rb").read(), type="application/json")
+    browser.install_extension(addon_path)
+    update_server.wait_for_update()
+    with server.wait_for(["/images/github-logo.svg"]):
+        browser.navigate(server.url())
+
+    res = browser.execute("document.title")
+    assert res == "Untitled Diagram - draw.io"
