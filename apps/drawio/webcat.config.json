@@ -1,0 +1,9 @@
+{
+    "app": "https://github.com/jgraph/drawio",
+    "version": "v31.1.8",
+    "default_index": "index.html",
+    "default_fallback": "/index.html",
+    "wasm": [],
+    "default_csp": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
+    "extra_csp": {}
+}

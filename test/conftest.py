@@ -105,11 +105,19 @@ def ssl_cert(dnsnames, non_enrolled_dnsnames):
     cert_path, key_path = generate_ssl_cert(tmpdir, dnsnames + non_enrolled_dnsnames)
     return cert_path, key_path
 
+@pytest.fixture(scope="session")
+def config_path():
+    return None
+
+@pytest.fixture(scope="session")
+def bundle_path():
+    return None
+
 @pytest.fixture(scope="function")
-def update_server(root, dnsnames):
+def update_server(bundle_path, root, dnsnames):
     us = UpdateServer()
     us.start()
-    with open(f'{root}/.well-known/webcat/bundle.json') as bundle:
+    with open(bundle_path if bundle_path is not None else f'{root}/.well-known/webcat/bundle.json') as bundle:
         enrollment = json.load(bundle)["enrollment"]
         canonical_enrollment = canonicaljson.encode_canonical_json(enrollment)
         enrollment_hash = hashlib.sha256(canonical_enrollment).hexdigest()
@@ -128,8 +136,8 @@ def bundle_generator():
 # Session-scoped so signing (a sigsum network round trip) happens once. A
 # function-scoped dependency here would tear this down after every test.
 @pytest.fixture(scope="session")
-def root(request, bundle_generator):
-    bundle_generator.sign(request.param)
+def root(request, bundle_generator, config_path, bundle_path):
+    bundle_generator.sign(request.param, config_path, bundle_path)
     return request.param
 
 @pytest.fixture(scope="function")
