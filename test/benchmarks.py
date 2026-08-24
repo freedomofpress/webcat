@@ -39,8 +39,9 @@ def test_benchmark(root, update_server, warm, addon_installed, enrolled, addon_p
         browser.trust_cert(cert_path, server.port, non_enrolled_dnsnames)
         browser.start(request.config.getoption("--headless"))
         if addon_installed:
+            since = update_server.update_count()
             browser.install_extension(addon_path)
-            update_server.wait_for_update()
+            update_server.wait_for_update(since)
         return (), {'browser': browser, 'server': server}
 
     def teardown(browser, server):
