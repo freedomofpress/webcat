@@ -290,6 +290,32 @@ def test_in_memory_cache(browser, server: Server, update_server: UpdateServer, e
     res = browser.execute("document.body.textContent")
     assert expected in res
 
+@pytest.mark.parametrize("browser", ["firefox", "tbb"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks", [
+    ("cases/testapp", EXPECTED_CSP | {"cache-control": "max-age=180"}, FRAMEHOST_HOOK),
+], indirect=["root"])
+def test_cached_workers(browser, server: Server, update_server: UpdateServer, addon_path):
+    browser.install_extension(addon_path)
+    update_server.wait_for_update()
+    paths_to_wait = NON_FRAME_PATHS
+    if isinstance(browser, TorBrowser):
+        # ServiceWorkers are disabled in TBB by NoScript
+        paths_to_wait = paths_to_wait-SERVICEWORKER_PATHS
+    # First navigation fetches and validates from the network and warms the
+    # HTTP cache; the reload serves the worker scripts with fromCache=true
+    with server.wait_for(paths_to_wait):
+        browser.navigate(server.url())
+    counts = {path: Server._counts.get(path, 0) for path in WORKER_PATHS}
+    browser.navigate(server.url())
+    sleep(4) # loading from cache, so can't use server.wait_for
+    refetched = {path for path in WORKER_PATHS if Server._counts.get(path, 0) > counts[path]}
+    assert refetched != WORKER_PATHS, "no worker script was served from cache"
+    res = browser.execute("document.body.textContent")
+    assert "Hello!" in res
+    logs = json.loads(browser.execute("JSON.stringify(window.capture?.logs || [])"))
+    for expected_log in [LOGENTRY_LOAD_WORKER, LOGENTRY_LOAD_SHAREDWORKER, LOGENTRY_LOAD_WASMWORKER]:
+        check.is_in(expected_log, logs)
+
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
     pytest.param("cases/testapp", EXPECTED_CSP, {
