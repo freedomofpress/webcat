@@ -667,15 +667,20 @@ class UpdateServer:
         us._reschedule_in = time_in_seconds
         us._reschedule_once = once
 
-    def wait_for_update(us, timeout=60, settle=1.0):
-        """Block until list.json has been served at least once; returns
-        immediately if it already was, so an early fetch cannot cause a
-        missed wakeup. `settle` then gives the extension time to finish
-        applying the update: a page load overlapping that tail can wedge
-        response filtering and freeze the page mid-load."""
+    def update_count(us):
+        """Fetch count so far; pass to wait_for_update() as `since`."""
+        with us._update_served:
+            return us._update_count
+
+    def wait_for_update(us, since=0, timeout=60, settle=1.0):
+        """Block until list.json has been served more than `since` times.
+        Snapshot `since` before installing the extension, so a fetch
+        landing early is still counted. `settle` then gives the extension
+        time to finish applying the update: a page load overlapping that
+        tail can wedge response filtering and freeze the page mid-load."""
         deadline = monotonic() + timeout
         with us._update_served:
-            while us._update_count < 1:
+            while us._update_count <= since:
                 remaining = deadline - monotonic()
                 if remaining <= 0:
                     raise RuntimeError(f"no update fetch within {timeout}s")
