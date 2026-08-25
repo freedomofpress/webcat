@@ -2,6 +2,7 @@ import os
 import shutil
 import tempfile
 import pytest
+import base64
 from time import sleep
 from helpers import Browser, TorBrowser, Server, Hook, UpdateServer
 import logging
@@ -84,6 +85,40 @@ FRAMEHOST_HOOK = {
         "content-security-policy": "",
     }),
 }
+
+# A valid WASM module exporting run() -> 42, deliberately NOT in the enrolled
+# app's allowlist.
+PRECOMPILED_MODULE_BYTES = bytes([
+    0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00,
+    0x01, 0x05, 0x01, 0x60, 0x00, 0x01, 0x7F,
+    0x03, 0x02, 0x01, 0x00,
+    0x07, 0x07, 0x01, 0x03, 0x72, 0x75, 0x6E, 0x00, 0x00,
+    0x0A, 0x06, 0x01, 0x04, 0x00, 0x41, 0x2A, 0x0B,
+])
+
+# Non-enrolled parent: compile the unauthorized module and hand it to the
+# enrolled child frame as raw bytes and as a precompiled Module.
+_bytes = ",".join(map(str, PRECOMPILED_MODULE_BYTES))
+PRECOMPILED_MODULE_PARENT = Hook(
+    f"""<!doctype html><body><script>
+const child = new URL(new URLSearchParams(location.search).get("child"));
+const bytes = new Uint8Array([{_bytes}]);
+const module = new WebAssembly.Module(bytes);
+const frame = document.createElement("iframe");
+addEventListener("message", (e) => {{
+  if (e.origin !== child.origin) return;
+  if (e.data?.type === "ready")
+    frame.contentWindow.postMessage({{type: "poc", bytes, module}}, child.origin);
+  else if (e.data?.type === "result")
+    document.body.dataset.result = JSON.stringify(e.data);
+}});
+child.searchParams.set("parentOrigin", location.origin);
+frame.src = child.href;
+document.body.append(frame);
+</script>""".encode(),
+    type="text/html",
+    headers={"content-security-policy": ""},
+)
 
 CSS_PATHS = set(map(lambda filename: f"/css/{filename}", os.listdir("./cases/testapp/css/")))
 JS_PATHS = set(map(lambda filename: f"/js/{filename}", os.listdir("./cases/testapp/js/")))
@@ -273,6 +308,74 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
         assert [f"{dnsnames[0]}?firstParty={urllib.parse.quote(first_party, safe="")},incognito={"true" if incognito else "false"}"] == cache_keys
     else:
         assert [] == cache_keys
+
+
+@pytest.mark.parametrize("browser", ["firefox"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks", [
+    pytest.param(
+        "cases/testapp",
+        EXPECTED_CSP,
+        {"/precompiled-module-parent.html": PRECOMPILED_MODULE_PARENT},
+        id="precompiled_module_cross_frame",
+    ),
+], indirect=["root"])
+# Fails today: a cross-frame precompiled Module currently bypasses the WASM
+# allowlist. A fix must make the assertions below pass.
+def test_precompiled_wasm_module_regression(
+    browser: Browser,
+    server: Server,
+    update_server: UpdateServer,
+    addon_path,
+    root,
+    precompiled_module_hosts,
+):
+    """An unauthorized compiled WASM module passed across frames must not run."""
+    module_hash = base64.urlsafe_b64encode(
+        hashlib.sha256(PRECOMPILED_MODULE_BYTES).digest()
+    ).decode().rstrip("=")
+    with open(f"{root}/.well-known/webcat/bundle.json") as bundle_file:
+        bundle = json.load(bundle_file)
+    assert module_hash not in bundle["manifest"]["wasm"]
+
+    canonical_enrollment = canonicaljson.encode_canonical_json(bundle["enrollment"])
+    enrollment_hash = hashlib.sha256(canonical_enrollment).hexdigest()
+    update_server.set(precompiled_module_hosts["enrolled"], enrollment_hash)
+
+    browser.install_extension(addon_path)
+    update_server.wait_for_update()
+
+    parent_url = (
+        f"{server.url(precompiled_module_hosts['non_enrolled'])}"
+        "/precompiled-module-parent.html"
+    )
+    child_url = (
+        f"{server.url(precompiled_module_hosts['enrolled'])}"
+        "/precompiled-module-child.html"
+    )
+    url = f"{parent_url}?{urllib.parse.urlencode({'child': child_url})}"
+    with server.wait_for({
+        "/precompiled-module-parent.html",
+        "/precompiled-module-child.html",
+        "/precompiled-module-child.js",
+    }):
+        browser.navigate(url)
+
+    result = ""
+    for _ in range(100):
+        result = browser.execute("document.body.dataset.result || ''")
+        if result:
+            break
+        sleep(0.1)
+    assert result, (
+        "the precompiled-module PoC did not produce a result: "
+        + browser.execute("document.body.textContent")
+    )
+
+    result = json.loads(result)
+    assert result["rawBytesRejected"] is True, result   # byte path stays blocked
+    assert result["receivedModule"] is True, result     # Module survives the clone
+    assert result["moduleValue"] is None, result         # ...but must NOT execute
+    assert result["moduleError"] is not None, result
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [

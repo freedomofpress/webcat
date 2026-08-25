@@ -100,9 +100,21 @@ def non_enrolled_dnsnames():
     ]
 
 @pytest.fixture(scope="session")
-def ssl_cert(dnsnames, non_enrolled_dnsnames):
+def precompiled_module_hosts():
+    # Sibling hosts are cross-origin but share the webcat.localhost site, so a
+    # WebAssembly.Module can be structured-cloned between their frames.
+    return {
+        "enrolled": "enrolled.webcat.localhost",
+        "non_enrolled": "attacker.webcat.localhost",
+    }
+
+@pytest.fixture(scope="session")
+def ssl_cert(dnsnames, non_enrolled_dnsnames, precompiled_module_hosts):
     tmpdir = tempfile.mkdtemp()
-    cert_path, key_path = generate_ssl_cert(tmpdir, dnsnames + non_enrolled_dnsnames)
+    cert_path, key_path = generate_ssl_cert(
+        tmpdir,
+        dnsnames + non_enrolled_dnsnames + list(precompiled_module_hosts.values()),
+    )
     return cert_path, key_path
 
 @pytest.fixture(scope="session")
@@ -155,7 +167,14 @@ def server(root, headers, hooks, ssl_cert):
     s.stop()
 
 @pytest.fixture(scope="function")
-def browser(request, ssl_cert, server, dnsnames, non_enrolled_dnsnames):
+def browser(
+    request,
+    ssl_cert,
+    server,
+    dnsnames,
+    non_enrolled_dnsnames,
+    precompiled_module_hosts,
+):
     cert_path, _ = ssl_cert
     if request.param == "firefox":
         b = Browser()
@@ -167,7 +186,11 @@ def browser(request, ssl_cert, server, dnsnames, non_enrolled_dnsnames):
         b = TorBrowser(allowed_addons=["webcat@freedom.press"], security_level=TorBrowser.SecurityLevel.Safest)
     else:
         raise RuntimeError(f'unrecognized browser \'{request.param}\'')
-    b.trust_cert(cert_path, server.port, dnsnames + non_enrolled_dnsnames)
+    b.trust_cert(
+        cert_path,
+        server.port,
+        dnsnames + non_enrolled_dnsnames + list(precompiled_module_hosts.values()),
+    )
     b.start(request.config.getoption("--headless"))
     yield b
     b.destroy()
