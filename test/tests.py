@@ -549,7 +549,6 @@ def test_default_fallback(browser: Browser, server: Server, update_server: Updat
             "s.src = '/js/not-in-manifest.js';"
             "document.head.appendChild(s);"
         )
-    sleep(2) # wait for the error page to load
     assert "ERR_WEBCAT_FILE_MISSING" in browser.execute("document.body.textContent")
 
     # A directory path whose default_index entry is missing also falls back on
@@ -557,7 +556,6 @@ def test_default_fallback(browser: Browser, server: Server, update_server: Updat
     # fallback page's relative subresources legitimately fail per #195
     with server.wait_for({"/stale-dir/"}):
         browser.navigate(f"{server.url(dnsnames[0])}/stale-dir/")
-    sleep(2) # extension logs arrive asynchronously
     assert "/stale-dir/ verified." in json.dumps(browser.extension_logs())
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
