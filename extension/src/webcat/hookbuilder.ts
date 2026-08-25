@@ -6,6 +6,12 @@ const hooks = {
   page: pageHooks,
 };
 
+let staticHookPath = "dist/hooks/content.js";
+
+export function setStaticHookPath(path: string) {
+  staticHookPath = path;
+}
+
 /**
  * Builds hooks using unique cryptographic keys.
  */
@@ -62,7 +68,7 @@ export class HookBuilder {
    * @returns the path to the static content script file
    */
   getStaticHookPath() {
-    return "dist/hooks/content.js";
+    return staticHookPath;
   }
 
   /**

@@ -2,12 +2,14 @@ import { BeforeRequestDetails, RequestEvent } from "./browser/requests";
 import config, { WebcatConfig } from "./config";
 import { WebcatDatabase } from "./webcat/db";
 import { WebcatRequestHandler } from "./webcat/handler";
+import { setStaticHookPath } from "./webcat/hookbuilder";
 import { setIconsPath, setPagesPath } from "./webcat/ui";
 import { EnrollmentUpdater } from "./webcat/updater";
 import { clearBrowserCaches } from "./webcat/utils";
 
 function start(options?: Partial<WebcatConfig>) {
   const cfg = Object.assign(structuredClone(config.default), options);
+  setStaticHookPath(cfg.staticHookPath);
   setIconsPath(cfg.iconsPath);
   setPagesPath(cfg.pagesPath);
 

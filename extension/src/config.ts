@@ -6,6 +6,7 @@ import { EnrollmentUpdaterOptions } from "./webcat/updater";
 export type WebcatConfig = BundleFetcherConfig &
   WebcatDatabaseConfig &
   Omit<EnrollmentUpdaterOptions, "database"> & {
+    staticHookPath: string;
     iconsPath: string;
     pagesPath: string;
   };
@@ -27,6 +28,7 @@ const defaultConfig: WebcatConfig = {
   checkInterval: 5 * 60 * 1000, // poll every 5 minutes
   fetchTimeout: 3000, // 3 second timeout for fetches
 
+  staticHookPath: "dist/hooks/content.js",
   iconsPath: "icons",
   pagesPath: "pages",
 };
