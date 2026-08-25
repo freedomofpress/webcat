@@ -22,8 +22,8 @@ import {
 } from "../../src/webcat/interfaces/errors";
 import { Stateful } from "../../src/webcat/interfaces/requeststate";
 import { BundleFetcher, OriginState } from "../../src/webcat/originstate";
-import { isSameOriginURL, ResponseValidator } from "../../src/webcat/response";
-import { SHA256 } from "../../src/webcat/utils";
+import { ResponseValidator } from "../../src/webcat/response";
+import { isSameOriginURL, SHA256 } from "../../src/webcat/utils";
 
 function makeDummyFetcher(): BundleFetcher {
   // base URL is irrelevant, fetch will never be awaited in these tests

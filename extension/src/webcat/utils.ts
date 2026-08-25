@@ -10,6 +10,16 @@ export function getFQDNSafe(url: string): string {
   return getFQDN(url);
 }
 
+export function isSameOriginURL(target: string, base: string) {
+  try {
+    const baseURL = new URL(base);
+    const targetURL = new URL(target, baseURL);
+    return targetURL.origin === baseURL.origin;
+  } catch {
+    return false;
+  }
+}
+
 export function isExtensionRequest(
   details: browser.webRequest._OnBeforeRequestDetails,
 ): boolean {

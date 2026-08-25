@@ -489,6 +489,37 @@ def test_version_refresh(browser: Browser, server: Server, update_server: Update
         browser.execute("location.reload()")
     assert expected in browser.execute("document.body.textContent")
 
+@pytest.mark.parametrize("browser", ["firefox"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks", [
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {}),
+], indirect=["root"])
+def test_bundle_redirect(browser: Browser, server: Server, update_server: UpdateServer, addon_path, root, dnsnames, non_enrolled_dnsnames):
+    bundle_path = "/.well-known/webcat/bundle.json"
+    target = "/redirect-target-bundle.json"
+    with open(f"{root}{bundle_path}", "rb") as f:
+        bundle = f.read()
+    server.hooks[target] = Hook(bundle, type="application/json")
+    browser.install_extension(addon_path)
+    update_server.wait_for_update()
+
+    # A cross-origin redirect of the bundle fetch must be cancelled before it
+    # is followed: validation fails and the target is never requested
+    server.hooks[bundle_path] = Hook(b"", status=302, headers={
+        "Location": f"{server.url(non_enrolled_dnsnames[0])}{target}"})
+    served = Server._counts.get(target, 0)
+    with server.wait_for({"/", bundle_path}):
+        browser.navigate(server.url(dnsnames[0]))
+    res = browser.execute("document.body.textContent")
+    assert "ERR_WEBCAT_BUNDLE_FETCH_ERROR" in res
+    assert Server._counts.get(target, 0) == served, "cross-origin redirect target was fetched"
+
+    # A same-origin redirect is followed and the bundle validates normally
+    server.hooks[bundle_path] = Hook(b"", status=302, headers={
+        "Location": f"{server.url(dnsnames[1])}{target}"})
+    with server.wait_for(NON_FRAME_PATHS):
+        browser.navigate(server.url(dnsnames[1]))
+    assert "Hello!" in browser.execute("document.body.textContent")
+
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
     ("cases/testapp", EXPECTED_CSP | {
