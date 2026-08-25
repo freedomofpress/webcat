@@ -2,8 +2,6 @@
 
 import { hexToUint8Array } from "./encoding";
 
-type ParsedContentSecurityPolicy = Map<string, string[]>;
-
 // "ASCII whitespace is U+0009 TAB, U+000A LF, U+000C FF, U+000D CR, or
 // U+0020 SPACE."
 //
@@ -38,8 +36,8 @@ const ASCII = /^[\x00-\x7f]*$/;
  */
 export function parseContentSecurityPolicy(
   policy: string,
-): ParsedContentSecurityPolicy {
-  const result: ParsedContentSecurityPolicy = new Map();
+): Map<string, string[]> {
+  const result = new Map<string, string[]>();
 
   // "For each token returned by strictly splitting serialized on the
   // U+003B SEMICOLON character (;):"

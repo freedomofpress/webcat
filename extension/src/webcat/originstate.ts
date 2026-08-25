@@ -39,6 +39,7 @@ export type BundleFetcherConfig = {
   bundlePrevPath: string;
 };
 
+/** @internal */
 export class BundleFetcher {
   readonly current: BundleFetch;
   readonly previous: BundleFetch;

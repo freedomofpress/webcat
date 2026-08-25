@@ -1,0 +1,26 @@
+{
+  "entryPoints": [
+    "src/config.ts",
+    "src/webcat.ts",
+    "src/browser/**/*.ts",
+    "src/webcat/**/*.ts"
+  ],
+  "exclude": [
+    "src/webcat/hooks/*.ts"
+  ],
+  "intentionallyNotExported": [
+    "browser.webRequest._OnBeforeRequestDetails",
+    "browser.webRequest._OnHeadersReceivedDetails",
+  ],
+  "externalSymbolLinkMappings": {
+    "typescript": {
+      "Disposable": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/using"
+    }
+  },
+  "ignoredHighlightLanguages": ["mermaid"],
+  "plugin": ["@boneskull/typedoc-plugin-mermaid"],
+  "mermaidSource": "local",
+  "excludeInternal": true,
+  "out": "docs",
+  "displayBasePath": "src"
+}

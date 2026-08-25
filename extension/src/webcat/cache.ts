@@ -37,18 +37,25 @@ export function isInPartition<
 }
 
 export class LRUCache<K, V> {
+  /** @internal */
   protected readonly mutex: Mutex;
   readonly #cache: Map<K, V>;
   readonly #limit: number;
 
-  constructor(limit: number, _?: Mutex) {
-    this.mutex = _ || new Mutex();
+  constructor(limit: number);
+  /** @internal */
+  constructor(limit: number, mutex: Mutex);
+  constructor(limit: number, mutex?: Mutex) {
+    this.mutex = mutex || new Mutex();
     this.#limit = limit;
     this.#cache = new Map<K, V>();
   }
 
-  async get(key: K, _?: Lock): Promise<V | undefined> {
-    using lock = await this.mutex.acquire(_);
+  async get(key: K): Promise<V | undefined>;
+  /** @internal */
+  async get(key: K, l?: Lock): Promise<V | undefined>;
+  async get(key: K, l?: Lock): Promise<V | undefined> {
+    using lock = await this.mutex.acquire(l);
     if (!this.#cache.has(key)) return undefined;
 
     const value = this.#cache.get(key) as V;
@@ -56,8 +63,11 @@ export class LRUCache<K, V> {
     return value;
   }
 
-  async set(key: K, value: V, _?: Lock): Promise<void> {
-    using lock = await this.mutex.acquire(_);
+  async set(key: K, value: V): Promise<void>;
+  /** @internal */
+  async set(key: K, value: V, l?: Lock): Promise<void>;
+  async set(key: K, value: V, l?: Lock): Promise<void> {
+    using lock = await this.mutex.acquire(l);
     if (this.#cache.has(key)) {
       // Remove the old value to update its position
       await this.delete(key, lock);
@@ -71,34 +81,46 @@ export class LRUCache<K, V> {
     this.#cache.set(key, value);
   }
 
-  async has(key: K, _?: Lock): Promise<boolean> {
-    using _lock = await this.mutex.acquire(_);
+  async has(key: K): Promise<boolean>;
+  /** @internal */
+  async has(key: K, l?: Lock): Promise<boolean>;
+  async has(key: K, l?: Lock): Promise<boolean> {
+    using _lock = await this.mutex.acquire(l);
     return this.#cache.has(key);
   }
 
-  async keys(_?: Lock): Promise<K[]> {
-    using _lock = await this.mutex.acquire(_);
+  async keys(): Promise<K[]>;
+  /** @internal */
+  async keys(l?: Lock): Promise<K[]>;
+  async keys(l?: Lock): Promise<K[]> {
+    using _lock = await this.mutex.acquire(l);
     return Array.from(this.#cache.keys());
   }
 
-  async delete(key: K, _?: Lock): Promise<void> {
-    using _lock = await this.mutex.acquire(_);
+  async delete(key: K): Promise<void>
+  /** @internal */
+  async delete(key: K, l?: Lock): Promise<void>;
+  async delete(key: K, l?: Lock): Promise<void> {
+    using _lock = await this.mutex.acquire(l);
     this.#cache.delete(key);
   }
 
-  async clear(_?: Lock): Promise<void> {
-    using _lock = await this.mutex.acquire(_);
+  async clear(): Promise<void>;
+  /** @internal */
+  async clear(l?: Lock): Promise<void>;
+  async clear(l?: Lock): Promise<void> {
+    using _lock = await this.mutex.acquire(l);
     this.#cache.clear();
   }
 }
 
-type pojoifiable = { toPOJO(): object };
-type PersistentLRUCacheArgs<V> = V extends pojoifiable
+export type Pojoifiable = { toPOJO(): object };
+export type PersistentLRUCacheArgs<V> = V extends Pojoifiable
   ? [number, KVStore, "session" | "local", { fromPOJO(pojo: object): V }]
   : [number, KVStore, "session" | "local"];
 export class PersistentLRUCache<
   K extends string,
-  V extends pojoifiable | unknown,
+  V extends Pojoifiable | unknown,
 > extends LRUCache<K, V> {
   readonly #store: KVStore;
   readonly #area: "session" | "local";
@@ -122,39 +144,57 @@ export class PersistentLRUCache<
     }
   }
 
-  override async get(key: K, _?: Lock): Promise<V | undefined> {
+  override async get(key: K): Promise<V | undefined>;
+  /** @internal */
+  override async get(key: K, l?: Lock): Promise<V | undefined>;
+  override async get(key: K, l?: Lock): Promise<V | undefined> {
     await this.#ready;
-    return super.get(key, _);
+    return super.get(key, l);
   }
 
-  override async set(key: K, value: V, _?: Lock): Promise<void> {
+  override async set(key: K, value: V): Promise<void>;
+  /** @internal */
+  override async set(key: K, value: V, l?: Lock): Promise<void>;
+  override async set(key: K, value: V, l?: Lock): Promise<void> {
     await this.#ready;
-    using lock = await this.mutex.acquire(_);
-    const pojo = (value as pojoifiable)?.toPOJO?.() ?? value;
+    using lock = await this.mutex.acquire(l);
+    const pojo = (value as Pojoifiable)?.toPOJO?.() ?? value;
     await super.set(key, value, lock);
     await this.#store.set({ [key]: pojo }, this.#area);
   }
 
-  override async has(key: K, _?: Lock): Promise<boolean> {
+  override async has(key: K): Promise<boolean>;
+  /** @internal */
+  override async has(key: K, l?: Lock): Promise<boolean>;
+  override async has(key: K, l?: Lock): Promise<boolean> {
     await this.#ready;
-    return super.has(key, _);
+    return super.has(key, l);
   }
 
-  override async keys(_?: Lock): Promise<K[]> {
+  override async keys(): Promise<K[]>
+  /** @internal */
+  override async keys(l?: Lock): Promise<K[]>;
+  override async keys(l?: Lock): Promise<K[]> {
     await this.#ready;
-    return super.keys(_);
+    return super.keys(l);
   }
 
-  override async delete(key: K, _?: Lock): Promise<void> {
+  override async delete(key: K): Promise<void>;
+  /** @internal */
+  override async delete(key: K, l?: Lock): Promise<void>;
+  override async delete(key: K, l?: Lock): Promise<void> {
     await this.#ready;
-    using lock = await this.mutex.acquire(_);
+    using lock = await this.mutex.acquire(l);
     await this.#store.remove(key, this.#area);
     return super.delete(key, lock);
   }
 
-  override async clear(_?: Lock): Promise<void> {
+  override async clear(): Promise<void>;
+  /** @internal */
+  override async clear(l?: Lock): Promise<void>;
+  override async clear(l?: Lock): Promise<void> {
     await this.#ready;
-    using lock = await this.mutex.acquire(_);
+    using lock = await this.mutex.acquire(l);
     await this.#store.clear("", this.#area);
     return super.clear(lock);
   }
