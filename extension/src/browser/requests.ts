@@ -14,7 +14,8 @@ type RegisteredListeners = {
   completed?: (details: browser.webRequest._OnCompletedDetails) => void;
 };
 
-class RequestDetailsBase {
+/** @internal */
+export class RequestDetailsBase {
   /**
    * Resolved when the request completes or rejected if a network error occurs.
    */

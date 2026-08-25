@@ -155,5 +155,7 @@ class Logger {
 }
 
 // Export logger and global logs
+/** @internal */
 export const logger = new Logger();
+/** @internal */
 export { globalLogs };
