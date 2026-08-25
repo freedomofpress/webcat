@@ -8,12 +8,12 @@ import { clearBrowserCaches } from "./webcat/utils";
 
 function start(options?: Partial<WebcatConfig>) {
   const cfg = Object.assign(structuredClone(config.default), options);
+  setIconsPath(cfg.iconsPath);
+  setPagesPath(cfg.pagesPath);
+
   const db = new WebcatDatabase(cfg);
   const requestHandler = new WebcatRequestHandler(db, cfg);
   const updater = new EnrollmentUpdater(Object.assign({ database: db }, cfg));
-
-  setIconsPath(cfg.iconsPath);
-  setPagesPath(cfg.pagesPath);
 
   requestHandler.bindAll();
   requestHandler.addEventListener(
