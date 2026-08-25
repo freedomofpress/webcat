@@ -25,6 +25,7 @@ import {
   arraysEqual,
   clearBrowserCaches,
   isNewerSemver,
+  isSameOriginURL,
   SHA256,
 } from "./utils";
 
@@ -49,16 +50,6 @@ function assertHeadersAvailable<T>(
 ): asserts details is HeadersReceivedDetails & T {
   if (!("responseHeaders" in details)) {
     throw new Error("response headers not available when expected");
-  }
-}
-
-export function isSameOriginURL(target: string, base: string) {
-  try {
-    const baseURL = new URL(base);
-    const targetURL = new URL(target, baseURL);
-    return targetURL.origin === baseURL.origin;
-  } catch {
-    return false;
   }
 }
 

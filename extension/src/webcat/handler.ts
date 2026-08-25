@@ -18,7 +18,12 @@ import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
 import { errorpage, getErrorPageURL, setErrorIcon } from "./ui";
-import { getFQDN, isExtensionRequest, isNewerSemver } from "./utils";
+import {
+  getFQDN,
+  isExtensionRequest,
+  isNewerSemver,
+  isSameOriginURL,
+} from "./utils";
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export interface WebcatRequestHandler extends RequestHandler {
@@ -185,8 +190,21 @@ export class WebcatRequestHandler extends RequestHandler {
     using blockingResponse = event.blockingResponse;
     const details = event.details as Stateful<HeadersReceivedDetails>;
 
-    // Skip non-enrolled and extension requests
-    if (!details.state || isExtensionRequest(details)) {
+    // Extension requests (such as bundle fetches) must never redirect
+    // cross-origin: cancel before the browser follows the Location header.
+    // Same-origin hops land back here, so the whole chain is checked.
+    if (isExtensionRequest(details)) {
+      const location = details.responseHeaders?.find(
+        (header) => header.name.toLowerCase() === "location",
+      )?.value;
+      if (location && !isSameOriginURL(location, details.url)) {
+        return blockingResponse.set({ cancel: true });
+      }
+      return;
+    }
+
+    // Skip non-enrolled requests
+    if (!details.state) {
       return;
     }
 
