@@ -5,6 +5,7 @@
   "description": "",
   "files": [
     "dist/lib",
+    "dist/hooks/content.js",
     "data",
     "icons",
     "pages"
@@ -13,6 +14,7 @@
     ".": "./dist/lib/webcat.js",
     "./config": "./dist/lib/config.js",
     "./webcat/*": "./dist/lib/webcat/*.js",
+    "./hooks/*": "./dist/hooks/*",
     "./browser/*": "./dist/lib/browser/*.js",
     "./validator_set": "./dist/lib/validator_set.js",
     "./data/*.json": "./data/*.json",
