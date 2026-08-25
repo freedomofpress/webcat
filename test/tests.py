@@ -529,9 +529,11 @@ def test_default_fallback(browser: Browser, server: Server, update_server: Updat
     # server attempting to swap resources would
     index = open(f"{root}/index.html", "rb").read()
     server.hooks["/stale-page"] = Hook(index, type="text/html")
+    server.hooks["/stale-dir/"] = Hook(index, type="text/html")
     server.hooks["/js/not-in-manifest.js"] = Hook(index, type="text/javascript")
     browser.install_extension(addon_path)
     update_server.wait_for_update()
+    browser.attach_extension_console()
 
     # A main_frame navigation to a path missing from the manifest falls back
     # to default_fallback and verifies
@@ -549,6 +551,14 @@ def test_default_fallback(browser: Browser, server: Server, update_server: Updat
         )
     sleep(2) # wait for the error page to load
     assert "ERR_WEBCAT_FILE_MISSING" in browser.execute("document.body.textContent")
+
+    # A directory path whose default_index entry is missing also falls back on
+    # main_frame navigations (#229). Only the frame itself is asserted: the
+    # fallback page's relative subresources legitimately fail per #195
+    with server.wait_for({"/stale-dir/"}):
+        browser.navigate(f"{server.url(dnsnames[0])}/stale-dir/")
+    sleep(2) # extension logs arrive asynchronously
+    assert "/stale-dir/ verified." in json.dumps(browser.extension_logs())
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
