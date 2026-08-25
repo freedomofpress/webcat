@@ -394,14 +394,16 @@ export class ResponseValidator {
       // Following order of priority:
       // - If there's an exact match, that should be the hash
       // - If the paths ends in /, and there was no exact match, then use default_index
-      // - If everything else fails, it's an error or a catchall case, so attempt default_fallback
-      let manifest_hash: string;
+      // - On main_frame navigations only (stale URLs), use default_fallback;
+      //   subresources must fail instead, or the server could choose which
+      //   resources to serve. See https://github.com/freedomofpress/webcat/issues/195
+      let manifest_hash: string | undefined;
 
       if (manifest.files[pathname]) {
         manifest_hash = manifest.files[pathname];
       } else if (pathname.endsWith("/")) {
         manifest_hash = manifest.files[pathname + manifest.default_index];
-      } else {
+      } else if (details.type === "main_frame") {
         manifest_hash = manifest.files[manifest.default_fallback];
       }
 

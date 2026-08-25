@@ -520,6 +520,36 @@ def test_bundle_redirect(browser: Browser, server: Server, update_server: Update
         browser.navigate(server.url(dnsnames[1]))
     assert "Hello!" in browser.execute("document.body.textContent")
 
+@pytest.mark.parametrize("browser", ["firefox"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks", [
+    ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {}),
+], indirect=["root"])
+def test_default_fallback(browser: Browser, server: Server, update_server: UpdateServer, addon_path, root, dnsnames):
+    # Serve the fallback content for paths missing from the manifest, as a
+    # server attempting to swap resources would
+    index = open(f"{root}/index.html", "rb").read()
+    server.hooks["/stale-page"] = Hook(index, type="text/html")
+    server.hooks["/js/not-in-manifest.js"] = Hook(index, type="text/javascript")
+    browser.install_extension(addon_path)
+    update_server.wait_for_update()
+
+    # A main_frame navigation to a path missing from the manifest falls back
+    # to default_fallback and verifies
+    with server.wait_for({"/stale-page"}):
+        browser.navigate(f"{server.url(dnsnames[0])}/stale-page")
+    assert "Hello!" in browser.execute("document.body.textContent")
+
+    # A subresource missing from the manifest must fail, even if its content
+    # matches default_fallback
+    with server.wait_for({"/js/not-in-manifest.js"}):
+        browser.execute(
+            "var s = document.createElement('script');"
+            "s.src = '/js/not-in-manifest.js';"
+            "document.head.appendChild(s);"
+        )
+    sleep(2) # wait for the error page to load
+    assert "ERR_WEBCAT_FILE_MISSING" in browser.execute("document.body.textContent")
+
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
     ("cases/testapp", EXPECTED_CSP | {
