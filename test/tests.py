@@ -510,8 +510,8 @@ def test_drawio(browser, server: Server, update_server: UpdateServer, addon_path
     def error():
         return browser.execute("Array.from(document.querySelectorAll('.geDialog>div>div:not(:last-child)')).map(e => e.textContent).join(': ')")
 
-    with server.wait_for(["/js/shapes-14-6-5.min.js"]):
-        browser.navigate(f"{server.url()}")
+    with server.wait_for(["/images/github-logo.svg"]):
+        browser.navigate(f"{server.url()}?dark=0")
     title = browser.execute("document.title")
     check.equal(title, "Untitled Diagram - draw.io")
     check.equal(error(), "")
