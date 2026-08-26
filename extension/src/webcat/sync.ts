@@ -1,8 +1,10 @@
+export type Releasable = { release(): void };
+
 export class Lock implements Disposable {
-  readonly mutex: Mutex;
+  readonly mutex: Releasable;
   #users = 0;
 
-  constructor(mutex: Mutex) {
+  constructor(mutex: Releasable) {
     this.mutex = mutex;
   }
 
@@ -27,7 +29,7 @@ if (!Symbol.dispose) {
   delete Lock.prototype[Symbol.dispose];
 }
 
-export class Mutex {
+export class Mutex implements Releasable {
   #resolvers: ((s: Lock) => void)[] = [];
   #lock?: Lock;
 
