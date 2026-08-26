@@ -6,6 +6,7 @@ import {
   RequestHandler,
 } from "../browser/requests";
 import { ContentScript } from "../browser/scripting";
+import { Mutex } from "../browser/sync";
 import { CacheKey, isInPartition } from "./cache";
 import { HookBuilder } from "./hookbuilder";
 import { Database } from "./interfaces/database";
@@ -17,7 +18,6 @@ import { BundleFetcherConfig } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
-import { Mutex } from "./sync";
 import { errorpage, getErrorPageURL, setErrorIcon } from "./ui";
 import {
   clearBrowserCaches,
