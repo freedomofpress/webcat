@@ -44,6 +44,16 @@ describe("Mutex", () => {
     const promise = mutex.acquire(new Lock(mutex));
     expect(inspect(promise)).toContain("<pending>");
   });
+
+  it("reuses a lock", async () => {
+    const mutex = new Mutex();
+    const lock1 = new Lock(mutex);
+    await expect(mutex.acquire(lock1)).resolves.toBe(lock1);
+    const lock2 = new Lock(mutex);
+    const promise = mutex.acquire(lock2);
+    mutex.release();
+    await expect(promise).resolves.toBe(lock2);
+  });
 });
 
 describe("Lock", () => {
