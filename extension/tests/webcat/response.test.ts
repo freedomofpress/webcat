@@ -141,6 +141,9 @@ async function computeEnrollmentHash(
   enrollment: Enrollment,
 ): Promise<Uint8Array> {
   const canonical = canonicalize(enrollment);
+  if (canonical === null) {
+    throw new Error("failed to canonicalize test enrollment");
+  }
   const bytes = stringToUint8Array(canonical);
   const digest = await SHA256(bytes);
   return digest instanceof Uint8Array ? digest : new Uint8Array(digest);

@@ -528,7 +528,21 @@ export async function verifySigsumManifest(
   manifest: Manifest,
   signatures: SigsumSignatures,
 ): Promise<WebcatError | number> {
-  const canonicalized = stringToUint8Array(canonicalize(manifest));
+  // signatures must be a non-null object keyed by public key.
+  const untrusted: unknown = signatures;
+  if (
+    typeof untrusted !== "object" ||
+    untrusted === null ||
+    Array.isArray(untrusted)
+  ) {
+    return new WebcatError(WebcatErrorCode.Bundle.SIGNATURES_MISSING);
+  }
+  // canonicalize returns null for a manifest it cannot encode.
+  const canonical = canonicalize(manifest);
+  if (canonical === null) {
+    return new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED);
+  }
+  const canonicalized = stringToUint8Array(canonical);
 
   // The purpose of cloning the original list of signers is to have logic to ensure
   // that each signers can at most sign once. Since we are dealing with a lot of
@@ -763,6 +777,18 @@ export async function verifySigstoreManifest(
 
   const policy = new AllOf(claimPolicies);
 
+  // signatures must be an array of bundles.
+  if (!Array.isArray(signatures)) {
+    return new WebcatError(WebcatErrorCode.Bundle.SIGNATURES_MISSING);
+  }
+
+  // canonicalize returns null for a manifest it cannot encode.
+  const canonical = canonicalize(manifest);
+  if (canonical === null) {
+    return new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED);
+  }
+  const canonicalized = stringToUint8Array(canonical);
+
   let verified = false;
 
   // Does it make sense for this to be an array? Is there cases where the same manifest
@@ -772,7 +798,7 @@ export async function verifySigstoreManifest(
       verified = await verifier.verifyArtifactPolicy(
         policy,
         bundle,
-        stringToUint8Array(canonicalize(manifest)),
+        canonicalized,
       );
       if (verified) {
         break;

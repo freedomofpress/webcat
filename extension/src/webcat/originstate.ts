@@ -197,6 +197,15 @@ export class OriginState implements IOriginState {
     );
   }
 
+  // Hashes an enrollment; null if it can't be canonicalized.
+  async #enrollmentHash(enrollment: Enrollment): Promise<Uint8Array | null> {
+    const canonicalized = canonicalize(enrollment);
+    if (canonicalized === null) {
+      return null;
+    }
+    return new Uint8Array(await SHA256(stringToUint8Array(canonicalized)));
+  }
+
   // This functiont ries to verify the enrollment information against the value in the local list
   // It will also return errors while fetching the bundles (though they are generated in awaitBundles)
   // and tell the next stages whether they should use the current or the previous bundle
@@ -218,11 +227,13 @@ export class OriginState implements IOriginState {
       enrollment = this.fetcher.current.value.enrollment;
     }
 
-    const canonicalized = stringToUint8Array(canonicalize(enrollment));
-    const canonicalized_hash = new Uint8Array(await SHA256(canonicalized));
+    // An enrollment that does not canonicalize counts as a non-match.
+    const canonicalized_hash = await this.#enrollmentHash(enrollment);
 
     // If it doesn't match, stop early
-    const match = arraysEqual(this.enrollment_hash, canonicalized_hash);
+    const match =
+      canonicalized_hash !== null &&
+      arraysEqual(this.enrollment_hash, canonicalized_hash);
     // In this case, we already tried both bundles and we should bail
     // Or we got direct enrollment passed, and we shpuldn't fallback automatically
     if (match) {
@@ -235,13 +246,13 @@ export class OriginState implements IOriginState {
       }
       enrollment = this.fetcher.previous.value.enrollment;
 
-      const canonicalized_prev = stringToUint8Array(canonicalize(enrollment));
-      const canonicalized_hash_prev = new Uint8Array(
-        await SHA256(canonicalized_prev),
-      );
+      const canonicalized_hash_prev = await this.#enrollmentHash(enrollment);
 
       // If this also fails it's fatal
-      if (!arraysEqual(this.enrollment_hash, canonicalized_hash_prev)) {
+      if (
+        canonicalized_hash_prev === null ||
+        !arraysEqual(this.enrollment_hash, canonicalized_hash_prev)
+      ) {
         return this.#fail(new WebcatError(WebcatErrorCode.Enrollment.MISMATCH));
       }
       this.#bundle = this.fetcher.previous.value;
@@ -291,11 +302,14 @@ export class OriginState implements IOriginState {
     // If enrollment information is passed from headers or another source, then we do not support
     // a fallback bundle at the moment
     if (!manifest || !signatures) {
-      // awaitBundle checks already that manifest exists
-      // eslint-disable-next-line
-      manifest = this.#bundle!.manifest;
-      // eslint-disable-next-line
-      signatures = this.#bundle!.signatures;
+      // The bundle may be absent (header enrollment with a failed fetch).
+      if (!this.#bundle) {
+        return this.#fail(
+          new WebcatError(WebcatErrorCode.Bundle.MANIFEST_MISSING),
+        );
+      }
+      manifest = this.#bundle.manifest;
+      signatures = this.#bundle.signatures;
     }
 
     let verify_result: WebcatError | number;
