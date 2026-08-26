@@ -33,6 +33,7 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
     leaves: readonly (readonly [string, string])[],
     meta: BlockMeta,
   ): Promise<void> {
+    // Build a batch of enrollment entries
     const batch: Record<string, unknown> = {};
     for (const [reverseKey, hexHash] of leaves) {
       const hostname = extractHostname(reverseKey);
@@ -40,10 +41,18 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
       batch[hostname] = Array.from(rawHash);
     }
 
-    await this.enrollments.clear();
+    // Remove enrollments that are not in the update batch
+    const old = await this.enrollments.getKeys();
+    const disenrolled = old.filter((enrollment) => !(enrollment in batch));
+    for (const host of disenrolled) {
+      await this.enrollments.remove(host);
+    }
+
+    // Save the batch
     await this.enrollments.set(batch);
     await this.set({ [META_KEY]: meta });
 
+    // Clear origin caches
     await this.origins.clear();
     await this.nonOrigins.clear();
 
