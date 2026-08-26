@@ -1,5 +1,3 @@
-// From https://github.com/theupdateframework/tuf-js/blob/38d537ea883e8bb38ee6ab17b5f59ee479d0eab2/packages/canonical-json/lib/index.js
-
 const COMMA = ",";
 const COLON = ":";
 const LEFT_SQUARE_BRACKET = "[";
@@ -12,14 +10,17 @@ function canonicalizeString(string: string): string {
   return '"' + escapedString + '"';
 }
 
-// Recursively encodes the supplied object according to the canonical JSON form
-// as specified at http://wiki.laptop.org/go/Canonical_JSON. It's a restricted
+// Recursively encodes the supplied value as canonical JSON. It's a restricted
 // dialect of JSON in which keys are lexically sorted, floats are not allowed,
-// and only double quotes and backslashes are escaped.
-/**
- * JCS-canonicalizes a value. Returns null if it contains a value that cannot
- * be encoded (e.g. a non-integer number).
- */
+// and only double quotes and backslashes are escaped. Archived spec:
+// https://web.archive.org/web/20251209150702/http://wiki.laptop.org/go/Canonical_JSON
+//
+// tuf-js encodes it the same way, and webcat-infra-chain does too (via the
+// olpc-cjson crate), so the enrollment hashes match. Sigstore's canonical JSON
+// diverges, but only on floats and control characters, which should not appear
+// in what we hash.
+//
+// Returns null for anything it can't encode.
 export function canonicalize(object: unknown): string | null {
   const buffer: string[] = [];
   if (typeof object === "string") {
