@@ -16,7 +16,11 @@ function canonicalizeString(string: string): string {
 // as specified at http://wiki.laptop.org/go/Canonical_JSON. It's a restricted
 // dialect of JSON in which keys are lexically sorted, floats are not allowed,
 // and only double quotes and backslashes are escaped.
-export function canonicalize(object: object): string {
+/**
+ * JCS-canonicalizes a value. Returns null if it contains a value that cannot
+ * be encoded (e.g. a non-integer number).
+ */
+export function canonicalize(object: unknown): string | null {
   const buffer: string[] = [];
   if (typeof object === "string") {
     buffer.push(canonicalizeString(object));
@@ -29,32 +33,35 @@ export function canonicalize(object: object): string {
   } else if (Array.isArray(object)) {
     buffer.push(LEFT_SQUARE_BRACKET);
     let first = true;
-    object.forEach((element) => {
+    for (const element of object) {
       if (!first) {
         buffer.push(COMMA);
       }
       first = false;
-      buffer.push(canonicalize(element));
-    });
+      const encoded = canonicalize(element);
+      if (encoded === null) return null;
+      buffer.push(encoded);
+    }
     buffer.push(RIGHT_SQUARE_BRACKET);
   } else if (typeof object === "object") {
     buffer.push(LEFT_CURLY_BRACKET);
     let first = true;
-    Object.keys(object)
-      .sort()
-      .forEach((property) => {
-        if (!first) {
-          buffer.push(COMMA);
-        }
-        first = false;
-        buffer.push(canonicalizeString(property));
-        buffer.push(COLON);
-        // eslint-disable-next-line
-        buffer.push(canonicalize((object as any)[property])); // 'any' as a fallback
-      });
+    for (const property of Object.keys(object).sort()) {
+      if (!first) {
+        buffer.push(COMMA);
+      }
+      first = false;
+      buffer.push(canonicalizeString(property));
+      buffer.push(COLON);
+      const encoded = canonicalize(
+        (object as Record<string, unknown>)[property],
+      );
+      if (encoded === null) return null;
+      buffer.push(encoded);
+    }
     buffer.push(RIGHT_CURLY_BRACKET);
   } else {
-    throw new TypeError("cannot encode " + object);
+    return null;
   }
 
   return buffer.join("");
