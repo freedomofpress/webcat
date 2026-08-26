@@ -1,3 +1,5 @@
+import { Mutex } from "./sync";
+
 /**
  * Persistent key-value storage.
  */
@@ -35,9 +37,12 @@ export class KVStore {
 }
 
 /**
- * Namespaced key-value storage.
+ * Namespaced key-value storage. Operations are atomic within
+ * an instance; distinct instances of the same namespace may
+ * access the same data in an unsafe manner.
  */
 export class NamespacedKVStore implements KVStore {
+  readonly #mutex = new Mutex();
   readonly #namespace: string;
   readonly #store: KVStore;
 
@@ -47,26 +52,30 @@ export class NamespacedKVStore implements KVStore {
   }
 
   async get(key: string, area: "local" | "session" = "local") {
+    using _lock = await this.#mutex.acquire();
     const namespacedKey = `${this.#namespace}:${key}`;
-    return this.#store.get(namespacedKey, area);
+    return await this.#store.get(namespacedKey, area);
   }
 
   async set(
     items: { [key: string]: unknown },
     area: "local" | "session" = "local",
   ) {
+    using _lock = await this.#mutex.acquire();
     const namespacedItems = {} as { [key: string]: unknown };
     for (const key in items) {
       namespacedItems[`${this.#namespace}:${key}`] = items[key];
     }
-    return this.#store.set(namespacedItems, area);
+    return await this.#store.set(namespacedItems, area);
   }
 
   async clear(prefix: string = "", area: "local" | "session" = "local") {
-    return this.#store.clear(`${this.#namespace}:${prefix}`, area);
+    using _lock = await this.#mutex.acquire();
+    return await this.#store.clear(`${this.#namespace}:${prefix}`, area);
   }
 
   async getKeys(prefix: string = "", area: "local" | "session" = "local") {
+    using _lock = await this.#mutex.acquire();
     const namespacedKeys = await this.#store.getKeys(
       `${this.#namespace}:${prefix}`,
       area,
@@ -77,8 +86,9 @@ export class NamespacedKVStore implements KVStore {
   }
 
   async remove(key: string, area?: "local" | "session"): Promise<void> {
+    using _lock = await this.#mutex.acquire();
     const namespacedKey = `${this.#namespace}:${key}`;
-    return this.#store.remove(namespacedKey, area);
+    return await this.#store.remove(namespacedKey, area);
   }
 
   namespace(namespace: string) {

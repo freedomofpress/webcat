@@ -1,5 +1,5 @@
 import { KVStore } from "../browser/kvstore";
-import { Lock, Mutex } from "./sync";
+import { Lock, Mutex } from "../browser/sync";
 
 declare const CacheKeySymbol: unique symbol;
 export type CacheKey<T> = string & { [CacheKeySymbol]: T | undefined };
