@@ -2,7 +2,7 @@ import { inspect } from "node:util";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { Lock, Mutex } from "../../src/webcat/sync";
+import { Lock, Mutex } from "../../src/browser/sync";
 
 describe("Mutex", () => {
   it("only allows one caller at a time to acquire", () => {
