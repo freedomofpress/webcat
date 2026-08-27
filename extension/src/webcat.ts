@@ -5,7 +5,6 @@ import { WebcatRequestHandler } from "./webcat/handler";
 import { setStaticHookPath } from "./webcat/hookbuilder";
 import { setIconsPath, setPagesPath } from "./webcat/ui";
 import { EnrollmentUpdater } from "./webcat/updater";
-import { clearBrowserCaches } from "./webcat/utils";
 
 function start(options?: Partial<WebcatConfig>) {
   const cfg = Object.assign(structuredClone(config.default), options);
@@ -33,8 +32,7 @@ function start(options?: Partial<WebcatConfig>) {
     }
     try {
       const fqdns = await db.listAllFQDNs();
-      const newFqdns = await requestHandler.bind(fqdns);
-      await clearBrowserCaches(newFqdns);
+      await requestHandler.bind(fqdns);
       firstUpdate = false;
     } catch (error) {
       console.error("[webcat] Bundled list import failed:", error);

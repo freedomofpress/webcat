@@ -6,6 +6,7 @@ import {
   RequestHandler,
 } from "../browser/requests";
 import { ContentScript } from "../browser/scripting";
+import { Mutex } from "../browser/sync";
 import { CacheKey, isInPartition } from "./cache";
 import { HookBuilder } from "./hookbuilder";
 import { Database } from "./interfaces/database";
@@ -19,6 +20,7 @@ import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
 import { errorpage, getErrorPageURL, setErrorIcon } from "./ui";
 import {
+  clearBrowserCaches,
   getFQDN,
   isExtensionRequest,
   isNewerSemver,
@@ -41,7 +43,9 @@ export class WebcatRequestHandler extends RequestHandler {
   readonly #hooks: HookBuilder;
   readonly #contentScript: ContentScript;
   readonly #responseValidator: ResponseValidator;
-  readonly #bound = Promise.withResolvers<void>();
+  readonly #mutex = new Mutex();
+  readonly #bindLock = this.#mutex.createLock();
+  readonly #requestLock = this.#mutex.createLock();
 
   constructor(db: Database & NamespacedKVStore, config: BundleFetcherConfig) {
     super();
@@ -63,13 +67,16 @@ export class WebcatRequestHandler extends RequestHandler {
       },
     );
     browser.windows.onRemoved.addListener(this.#onWindowClosed.bind(this));
+
+    // Block requests until first bind
+    this.#mutex.acquire(this.#bindLock);
   }
 
-  override async bind(fqdns: string[]): Promise<string[]> {
+  override async bind(fqdns: string[]) {
+    using _lock = await this.#mutex.acquire(this.#bindLock);
     super.bind(fqdns);
     const newFqdns = await this.#contentScript.bind(fqdns);
-    this.#bound.resolve();
-    return newFqdns;
+    await clearBrowserCaches(newFqdns);
   }
 
   /**
@@ -134,7 +141,7 @@ export class WebcatRequestHandler extends RequestHandler {
     const details = await this.#initializeState(event.details);
 
     // Block until the handler has been fully bound
-    await this.#bound.promise;
+    using _ = await this.#mutex.acquire(this.#requestLock);
 
     // Frame-only pre-setup: retry pending list updates
     if (details.state.isFrame) {

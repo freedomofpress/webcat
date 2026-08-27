@@ -286,7 +286,10 @@ describe("handleUpdateAlarm", () => {
     });
     let resolveUpdated: (() => void) | null = null;
     updated = new Promise<void>((r) => (resolveUpdated = r));
-    updater.addEventListener("updated", resolveUpdated);
+    updater.addEventListener(
+      "updated",
+      (event) => !event.local && resolveUpdated?.(),
+    );
     setupFetchMock();
     db.getBlockMeta.mockResolvedValue(null);
     mockAlarms.onAlarm.addListener.mockImplementation(function (callback) {
@@ -404,6 +407,28 @@ describe("retryIfFailed", () => {
 
     // Retry also fails — should not throw
     await expect(updater.retryIfFailed()).resolves.toBeUndefined();
+  });
+
+  it("does not retry multiple times when called repeatedly", async () => {
+    // Trigger initial failure
+    db.getLastUpdated.mockResolvedValue(null);
+    globalThis.fetch = vi.fn(() => Promise.reject(new Error("network error")));
+    try {
+      await updater.update();
+    } catch {}
+
+    // Set up mocks
+    setupFetchMock();
+    let lastUpdated = null as number | null;
+    db.getLastUpdated.mockImplementation(async () => lastUpdated);
+    db.setLastUpdated.mockImplementation(async (v) => (lastUpdated = v));
+
+    // Retry repeatedly
+    const retry1 = updater.retryIfFailed();
+    const retry2 = updater.retryIfFailed();
+
+    await Promise.all([retry1, retry2]);
+    expect(db.updateList).toHaveBeenCalledOnce();
   });
 });
 
