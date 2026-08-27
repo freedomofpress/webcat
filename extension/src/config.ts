@@ -3,6 +3,7 @@ import { WebcatDatabaseConfig } from "./webcat/db";
 import { BundleFetcherConfig } from "./webcat/originstate";
 import { EnrollmentUpdaterOptions } from "./webcat/updater";
 
+/** @interface */
 export type WebcatConfig = BundleFetcherConfig &
   WebcatDatabaseConfig &
   Omit<EnrollmentUpdaterOptions, "database"> & {
