@@ -97,7 +97,7 @@ export class LRUCache<K, V> {
     return Array.from(this.#cache.keys());
   }
 
-  async delete(key: K): Promise<void>
+  async delete(key: K): Promise<void>;
   /** @internal */
   async delete(key: K, l?: Lock): Promise<void>;
   async delete(key: K, l?: Lock): Promise<void> {
@@ -171,7 +171,7 @@ export class PersistentLRUCache<
     return super.has(key, l);
   }
 
-  override async keys(): Promise<K[]>
+  override async keys(): Promise<K[]>;
   /** @internal */
   override async keys(l?: Lock): Promise<K[]>;
   override async keys(l?: Lock): Promise<K[]> {

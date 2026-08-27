@@ -48,20 +48,20 @@ if (!Symbol.dispose) {
 
 /**
  * A mutex for enforcing execution order in asynchronous code.
- * 
+ *
  * @example
  * class AsyncThing {
  *   #mutex = new Mutex();
  *   async doSomeThings(x) {                    // Guaranteed execution order:
  *     using _ = await this.#mutex.acquire();   //
  *     await thingNumberOne(x);                 // 1.   t.doSomeThings(1)
- *     await thingNumberTwo(x);                 // 1.1. thingNumberOne(1) 
+ *     await thingNumberTwo(x);                 // 1.1. thingNumberOne(1)
  *   }                                          // 1.2. thingNumberTwo(1)
  * }                                            // 2.   t.doSomethings(2)
- *                                              // 2.1. thingNumberOne(2) 
+ *                                              // 2.1. thingNumberOne(2)
  * const t = new AsyncThing();                  // 2.2. thingNumberTwo(2)
  * t.doSomeThings(1);                           // 3.   t.doSomethings(3)
- * t.doSomeThings(2);                           // 3.1. thingNumberOne(3) 
+ * t.doSomeThings(2);                           // 3.1. thingNumberOne(3)
  * t.doSomeThings(3);                           // 3.2. thingNumberTwo(3)
  */
 export class Mutex implements Releasable {
@@ -74,7 +74,7 @@ export class Mutex implements Releasable {
    * is released. Calling `await mutex.acquire(lock)` with the lock that is
    * holding the Mutex returns immediately and returns the same lock, which is
    * useful, for example, in recursive algorithms.
-   * 
+   *
    * @param lock An optional Lock that will be used to hold the Mutex.
    * @returns The Lock currently holding the locked Mutex.
    */

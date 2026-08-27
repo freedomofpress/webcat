@@ -5,12 +5,10 @@
     "src/browser/**/*.ts",
     "src/webcat/**/*.ts"
   ],
-  "exclude": [
-    "src/webcat/hooks/*.ts"
-  ],
+  "exclude": ["src/webcat/hooks/*.ts"],
   "intentionallyNotExported": [
     "browser.webRequest._OnBeforeRequestDetails",
-    "browser.webRequest._OnHeadersReceivedDetails",
+    "browser.webRequest._OnHeadersReceivedDetails"
   ],
   "externalSymbolLinkMappings": {
     "typescript": {
