@@ -7,6 +7,7 @@ import {
   WebcatLeavesFile,
 } from "@freedomofpress/ics23/dist/webcat";
 
+import { Mutex } from "../browser/sync";
 import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { Database } from "./interfaces/database";
 import { arraysEqual } from "./utils";
@@ -56,6 +57,7 @@ export class EnrollmentUpdater extends EventTarget {
   readonly #updateInterval: number;
   readonly #fetchTimeout: number;
   readonly #alarm: string;
+  readonly #mutex = new Mutex();
 
   #lastUpdateFailed = false;
 
@@ -219,7 +221,7 @@ export class EnrollmentUpdater extends EventTarget {
     if (this.#lastUpdateFailed) {
       console.log("[webcat] Retrying failed update on main_frame navigation");
       try {
-        await this.update();
+        await this.#checkAndUpdate();
       } catch (error) {
         console.error("[webcat] Retry update failed:", error);
         // Don't re-throw, don't block navigation
@@ -228,7 +230,8 @@ export class EnrollmentUpdater extends EventTarget {
   }
 
   async #checkAndUpdate(): Promise<void> {
-    if (await this.isDue()) {
+    using _lock = await this.#mutex.acquire();
+    if ((await this.isDue()) || import.meta.env.VITE_TESTING) {
       console.log("[webcat] Running overdue scheduled update");
       try {
         await this.update();
@@ -253,19 +256,7 @@ export class EnrollmentUpdater extends EventTarget {
       return;
     }
     try {
-      const lastUpdated = await this.#db.getLastUpdated();
-      if (
-        lastUpdated === null ||
-        Date.now() - lastUpdated >= this.#updateInterval ||
-        import.meta.env.VITE_TESTING
-      ) {
-        console.log("[webcat] Running scheduled update (alarm check)");
-        try {
-          await this.update();
-        } catch (error) {
-          console.error("[webcat] Scheduled update failed:", error);
-        }
-      }
+      await this.#checkAndUpdate();
     } catch (error) {
       console.error("[webcat] Error in update alarm handler:", error);
     }
