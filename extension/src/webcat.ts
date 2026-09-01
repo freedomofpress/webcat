@@ -5,7 +5,7 @@
  * {@link WebcatConfig}. For a more custom experience, set up
  * {@link WebcatRequestHandler} and {@link EnrollmentUpdater} objects directly
  * instead.
- * 
+ *
  * @example
  * import webcat from "@freedomofpress/webcat";
  * webcat.start({
@@ -14,7 +14,7 @@
  *   iconsPath: "webcat/icons",
  *   pagesPath: "webcat/pages",
  * });
- * 
+ *
  * @module
  */
 import { BeforeRequestDetails, RequestEvent } from "./browser/requests";

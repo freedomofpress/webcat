@@ -19,7 +19,7 @@ export type WebcatConfig = BundleFetcherConfig &
     /**
      * The path to the icons directory. The expected directory structure
      * is as follows:
-     * 
+     *
      * ```
      * iconsPath/
      * ├── dark
