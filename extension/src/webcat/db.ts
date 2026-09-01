@@ -8,8 +8,11 @@ import { extractHostname, extractRawHash } from "./parsers";
 const META_KEY = "block_meta";
 
 export type WebcatDatabaseConfig = {
+  /** A string prefix used for all persisted keys. */
   namespace: string;
+  /** The number of {@link OriginState} objects to cache locally. */
   originCacheSize: number;
+  /** The number of hostnames to store in-memory in the negative origin cache. */
   nonOriginCacheSize: number;
 };
 

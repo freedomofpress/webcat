@@ -24,12 +24,46 @@ export class UpdateEvent extends Event {
 }
 
 export type EnrollmentUpdaterOptions = {
+  /**
+   * The update endpoint that serves verifiable enrollments as `list.json` and
+   * `block.json`.
+   */
   endpoint: string;
+  /**
+   * The path to bundled `list.json` and `block.json` files.
+   */
   localDataPath: string;
+  /**
+   * The database to persist enrollments in.
+   */
   database: Database;
+  /**
+   * The set of CometBFT validators verify enrollments against.
+   */
   validatorSet: ValidatorJson;
+  /**
+   * The time in seconds between enrollment update checks. Determines how often
+   * the extension is activated to check whether an update is due. An update is
+   * only downloaded if, at check time, {@link updateInterval} has elapsed
+   * since the last update.
+   *
+   * @default 5 * 60 * 1000 // 5 minutes
+   */
   checkInterval?: number;
+  /**
+   * The minimum time in seconds between updates. Update checks are run
+   * periodically at an interval determined by this value. An update is only
+   * downloaded when a {@link checkInterval | check } runs and updateInterval
+   * has elapsed since the last update.
+   *
+   * @default 60 * 60 * 1000 // 1 hour
+   */
   updateInterval?: number;
+  /**
+   * The timeout, in milliseconds, of update download attempts.
+   *
+   * @default 3000 // 3 seconds
+   */
   fetchTimeout?: number;
 };
 
