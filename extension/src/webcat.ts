@@ -1,3 +1,22 @@
+/**
+ * This module is the main entrypoint to an uncustomized WEBCAT browser
+ * extension. The module exports a single function,
+ * {@link default.start | start}. For configuration options, see
+ * {@link WebcatConfig}. For a more custom experience, set up
+ * {@link WebcatRequestHandler} and {@link EnrollmentUpdater} objects directly
+ * instead.
+ * 
+ * @example
+ * import webcat from "@freedomofpress/webcat";
+ * webcat.start({
+ *   localDataPath: "webcat/data",
+ *   staticHookPath: "webcat/hooks/content.js",
+ *   iconsPath: "webcat/icons",
+ *   pagesPath: "webcat/pages",
+ * });
+ * 
+ * @module
+ */
 import { BeforeRequestDetails, RequestEvent } from "./browser/requests";
 import { defaults, WebcatConfig } from "./config";
 import { WebcatDatabase } from "./webcat/db";
