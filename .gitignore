@@ -2,3 +2,4 @@ dist/
 extension/data/
 apps/*/.well-known/webcat/
 __pycache__
+api/
