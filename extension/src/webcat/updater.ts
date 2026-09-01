@@ -38,7 +38,7 @@ export type EnrollmentUpdaterOptions = {
    */
   database: Database;
   /**
-   * The set of CometBFT validators verify enrollments against.
+   * The set of CometBFT validators to verify enrollments against.
    */
   validatorSet: ValidatorJson;
   /**
