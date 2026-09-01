@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import config from "../../src/config";
+import { defaults } from "../../src/config";
 import { WebcatDatabase } from "../../src/webcat/db";
 import { WebcatRequestHandler } from "../../src/webcat/handler";
 
@@ -98,8 +98,8 @@ describe("WebcatRequestHandler", () => {
 
     // Race two bind calls
     const wrh = new WebcatRequestHandler(
-      new WebcatDatabase(config.default),
-      config.default,
+      new WebcatDatabase(defaults),
+      defaults,
     );
     const bind1 = wrh.bind(["example.com"]);
     const bind2 = wrh.bind(["example.org"]);
