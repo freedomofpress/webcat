@@ -1,5 +1,5 @@
-import config from "./config";
+import { defaults, test } from "./config";
 import webcat from "./webcat";
 
 console.log("[webcat] Starting up background");
-webcat.start(import.meta.env.VITE_TESTING ? config.test : config.default);
+webcat.start(import.meta.env.VITE_TESTING ? test : defaults);

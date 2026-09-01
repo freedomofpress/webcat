@@ -1,5 +1,5 @@
 import { BeforeRequestDetails, RequestEvent } from "./browser/requests";
-import config, { WebcatConfig } from "./config";
+import { defaults, WebcatConfig } from "./config";
 import { WebcatDatabase } from "./webcat/db";
 import { WebcatRequestHandler } from "./webcat/handler";
 import { setStaticHookPath } from "./webcat/hookbuilder";
@@ -11,10 +11,10 @@ export default {
    * Sets up the full unmodified WEBCAT experience as it is designed to operate
    * in Firefox-based browsers.
    *
-   * @param options See {@link WebcatConfig}.
+   * @param options Configuration options. Defaults to {@link defaults}.
    */
   start(options?: Partial<WebcatConfig>) {
-    const cfg = Object.assign(structuredClone(config.default), options);
+    const cfg = Object.assign(structuredClone(defaults), options);
     setStaticHookPath(cfg.staticHookPath);
     setIconsPath(cfg.iconsPath);
     setPagesPath(cfg.pagesPath);
