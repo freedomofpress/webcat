@@ -19,6 +19,6 @@
   "plugin": ["@boneskull/typedoc-plugin-mermaid"],
   "mermaidSource": "local",
   "excludeInternal": true,
-  "out": "docs",
+  "out": "../api",
   "displayBasePath": "src"
 }
