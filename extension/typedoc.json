@@ -1,4 +1,5 @@
 {
+  "readme": "none",
   "entryPoints": [
     "src/config.ts",
     "src/webcat.ts",
@@ -17,9 +18,6 @@
       "browser.webRequest.BlockingResponse": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse"
     }
   },
-  "ignoredHighlightLanguages": ["mermaid"],
-  "plugin": ["@boneskull/typedoc-plugin-mermaid"],
-  "mermaidSource": "local",
   "excludeInternal": true,
   "out": "../api",
   "displayBasePath": "src"
