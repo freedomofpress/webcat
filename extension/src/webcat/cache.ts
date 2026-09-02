@@ -2,7 +2,15 @@ import { KVStore } from "../browser/kvstore";
 import { Lock, Mutex } from "../browser/sync";
 
 declare const CacheKeySymbol: unique symbol;
+/** @internal */
 export type CacheKey<T> = string & { [CacheKeySymbol]: T | undefined };
+
+/**
+ * Constructs a cache key from a primary string key and a set of attributes,
+ * enabling arbitrary cache partitioning.
+ *
+ * @typeParam T - A string-indexed object type for cache attributes.
+ */
 export function CacheKey<T extends { [index: string]: { toString(): string } }>(
   key: string,
   attrs: T,
@@ -18,6 +26,17 @@ export function CacheKey<T extends { [index: string]: { toString(): string } }>(
           )
       : "")) as CacheKey<T>;
 }
+
+/**
+ * Checks whether a given {@link CacheKey} is in the specified partition.
+ *
+ * @typeParam P The type of the partition attribute object to check against.
+ * @typeParam T The type of the cache partition attributes of the key.
+ * @param key The key to check.
+ * @param partition The cache partition attributes.
+ * @returns true if the key has the specified attributes, i.e. is in the
+ * partition; false otherwise.
+ */
 export function isInPartition<
   P extends { [index: string]: { toString(): string } },
   T extends P,
@@ -36,12 +55,22 @@ export function isInPartition<
   return Object.keys(partition).length === 0;
 }
 
+/**
+ * A fixed-size in-memory cache that automatically evicts the least recently
+ * used entry first when it reaches its size limit.
+ *
+ * @typeParam K The type of cache keys.
+ * @typeParam V The type of values store in this cache.
+ */
 export class LRUCache<K, V> {
   /** @internal */
   protected readonly mutex: Mutex;
   readonly #cache: Map<K, V>;
   readonly #limit: number;
 
+  /**
+   * @param limit The maximum number of entries held by the cache.
+   */
   constructor(limit: number);
   /** @internal */
   constructor(limit: number, mutex: Mutex);
@@ -51,6 +80,12 @@ export class LRUCache<K, V> {
     this.#cache = new Map<K, V>();
   }
 
+  /**
+   * Reads a cached value.
+   *
+   * @param key The key to read.
+   * @returns A Promise that resolves with the value read.
+   */
   async get(key: K): Promise<V | undefined>;
   /** @internal */
   async get(key: K, l?: Lock): Promise<V | undefined>;
@@ -63,6 +98,12 @@ export class LRUCache<K, V> {
     return value;
   }
 
+  /**
+   * Caches a value.
+   *
+   * @param key The key to use.
+   * @param value The value to cache.
+   */
   async set(key: K, value: V): Promise<void>;
   /** @internal */
   async set(key: K, value: V, l?: Lock): Promise<void>;
@@ -81,6 +122,9 @@ export class LRUCache<K, V> {
     this.#cache.set(key, value);
   }
 
+  /**
+   * @returns A Promise that resolves to true if the given key exists in the cache.
+   */
   async has(key: K): Promise<boolean>;
   /** @internal */
   async has(key: K, l?: Lock): Promise<boolean>;
@@ -89,6 +133,9 @@ export class LRUCache<K, V> {
     return this.#cache.has(key);
   }
 
+  /**
+   * @returns A Promise that resolves to an array of the keys in the cache.
+   */
   async keys(): Promise<K[]>;
   /** @internal */
   async keys(l?: Lock): Promise<K[]>;
@@ -97,6 +144,11 @@ export class LRUCache<K, V> {
     return Array.from(this.#cache.keys());
   }
 
+  /**
+   * Clears a single value from the cache.
+   *
+   * @param key The key to clear.
+   */
   async delete(key: K): Promise<void>;
   /** @internal */
   async delete(key: K, l?: Lock): Promise<void>;
@@ -105,6 +157,9 @@ export class LRUCache<K, V> {
     this.#cache.delete(key);
   }
 
+  /**
+   * Clears all values from the cache.
+   */
   async clear(): Promise<void>;
   /** @internal */
   async clear(l?: Lock): Promise<void>;
@@ -114,10 +169,55 @@ export class LRUCache<K, V> {
   }
 }
 
-export type Pojoifiable = { toPOJO(): object };
+/**
+ * An object that can be converted to a {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object | Plain Old JavaScript Object}
+ * compatible with persistence APIs.
+ */
+export type Pojoifiable = {
+  /**
+   * @returns A POJO representation of the object.
+   */
+  toPOJO(): object;
+};
+
+/**
+ * Complementary interface to {@link Pojoifiable}.
+ */
+export interface Depojoifier<V> {
+  /**
+   * @param pojo An object created via {@link Pojoifiable.toPOJO}.
+   * @returns A corresponding {@link Pojoifiable} object.
+   */
+  fromPOJO(pojo: object): V;
+}
+
+/**
+ * Arguments for the {@link PersistentLRUCache} constructor:
+ *  1. limit: the maximum number of entries held by the cache
+ *  2. store: a {@link KVStore} instance to use for persistence
+ *  3. area: the name of the {@link browser.storage.StorageArea | storage area}
+ *    to use
+ *  4. (optional) depojoifier: a {@link Depojoifier} for converting presisted
+ *    POJOs to V; required if and only if V extends {@link Pojoifiable}.
+ *
+ * @typeParam V The type of values stored in the cache.
+ * @expand
+ */
 export type PersistentLRUCacheArgs<V> = V extends Pojoifiable
-  ? [number, KVStore, "session" | "local", { fromPOJO(pojo: object): V }]
+  ? [number, KVStore, "session" | "local", Depojoifier<V>]
   : [number, KVStore, "session" | "local"];
+
+/**
+ * A persistent {@link LRUCache}. Supported value types are limited by the
+ * storage API. In addition to JSON-ifiable values, i.e. Plain Old JavaScript
+ * Objects (POJOs), accepted by the storage API, arbitrary objects that
+ * implement the {@link Pojoifiable} interface can be cached. The conversion
+ * from {@link Pojoifiable} (and back via the {@link Depojoifier} interface) is
+ * handled automatically.
+ *
+ * @typeParam K The type of cache keys.
+ * @typeParam V The type of values store in this cache.
+ */
 export class PersistentLRUCache<
   K extends string,
   V extends Pojoifiable | unknown,
@@ -127,6 +227,7 @@ export class PersistentLRUCache<
   readonly #depojoifier: PersistentLRUCacheArgs<V>[3];
   readonly #ready: Promise<void>;
 
+  /** @param args */
   constructor(...[limit, store, area, depojoifier]: PersistentLRUCacheArgs<V>) {
     super(limit);
     this.#store = store;
@@ -200,15 +301,27 @@ export class PersistentLRUCache<
   }
 }
 
+/**
+ * An unkeyed fixed-size in-memory cache that automatically evicts the least
+ * recently used entry first when it reaches its size limit.
+ *
+ * @typeParam T The type of values to store in this cache.
+ */
 export class LRUSet<T> {
   #cache: Set<T>;
   #limit: number;
 
+  /**
+   * @param limit The maximum number of entries held by the cache.
+   */
   constructor(limit: number) {
     this.#limit = limit;
     this.#cache = new Set<T>();
   }
 
+  /**
+   * @returns A Promise that resolves to true if the given value exists in the cache.
+   */
   async has(value: T): Promise<boolean> {
     if (!this.#cache.has(value)) return false;
     // Move the accessed value to the end to mark it as recently used
@@ -217,6 +330,11 @@ export class LRUSet<T> {
     return true;
   }
 
+  /**
+   * Caches a value.
+   *
+   * @param value The value to cache.
+   */
   async add(value: T): Promise<void> {
     if (this.#cache.has(value)) {
       // Remove the old value to update its position
@@ -231,14 +349,25 @@ export class LRUSet<T> {
     this.#cache.add(value);
   }
 
+  /**
+   * @returns A Promise that resolves to an array of the values in the cache.
+   */
   async values(): Promise<T[]> {
     return Array.from(this.#cache.values());
   }
 
+  /**
+   * Clears a single value from the cache.
+   *
+   * @param value The value to clear.
+   */
   async delete(value: T): Promise<void> {
     this.#cache.delete(value);
   }
 
+  /**
+   * Clears all values from the cache.
+   */
   async clear(): Promise<void> {
     this.#cache.clear();
   }
