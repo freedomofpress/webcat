@@ -7,6 +7,7 @@ import { extractHostname, extractRawHash } from "./parsers";
 
 const META_KEY = "block_meta";
 
+/** @internal @inline */
 export type WebcatDatabaseConfig = {
   /** A string prefix used for all persisted keys. */
   namespace: string;
@@ -16,9 +17,11 @@ export type WebcatDatabaseConfig = {
   nonOriginCacheSize: number;
 };
 
+/** A {@link Database} backed by a {@link NamespacedKVStore}. */
 export class WebcatDatabase extends NamespacedKVStore implements Database {
   readonly origins: PersistentLRUCache<CacheKey<CachePartition>, OriginState>;
   readonly nonOrigins: LRUSet<CacheKey<CachePartition>>;
+  /** A subnamespace for storing enrollment hashes. */
   readonly enrollments = this.namespace("enrollments");
 
   constructor(config: WebcatDatabaseConfig) {
