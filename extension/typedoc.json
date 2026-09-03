@@ -10,6 +10,7 @@
   "intentionallyNotExported": ["browser.webRequest._OnBeforeRequestDetails"],
   "externalSymbolLinkMappings": {
     "typescript": {
+      "fetch": "https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch",
       "Disposable": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/using"
     },
     "@types/firefox-webext-browser": {
