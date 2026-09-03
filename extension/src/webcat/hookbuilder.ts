@@ -19,6 +19,10 @@ export class HookBuilder {
   #firstPartyKey: Promise<CryptoKey>;
   #firstPartySalt: Promise<Uint8Array<ArrayBuffer>>;
 
+  /**
+   * @param store A key-value store for persisting the builder's cryptographic
+   *   key and salt.
+   */
   constructor(store: KVStore) {
     this.#firstPartyKey = store
       .get("firstPartyKey", "session")
@@ -65,27 +69,31 @@ export class HookBuilder {
   }
 
   /**
-   * @returns the path to the static content script file
+   * @returns The path to the static content script file.
    */
   getStaticHookPath() {
     return staticHookPath;
   }
 
   /**
-   * @param wasm an array of hashes to validate WASM modules against
-   * @param firstParty the first-party origin of the associated page
-   * @param sameOrigin true if the target document is same-origin with the first party
-   * @returns hook code ready to be injected directly to a script file
+   * @param wasm An array of hashes to validate WASM modules against.
+   * @param firstParty The first-party origin of the associated page.
+   * @param sameOrigin true if the target document is same-origin with the
+   *   first party.
+   * @returns A Promise that resolves to hook code ready to be injected
+   *   directly to a script file.
    */
   async getPageHooks(wasm: string[], firstParty: string, sameOrigin: boolean) {
     return this.#get("page", wasm, firstParty, sameOrigin);
   }
 
   /**
-   * @param wasm an array of hashes to validate WASM modules against
-   * @param firstParty the first-party origin of the associated page
-   * @param sameOrigin true if the target document is same-origin with the first party
-   * @returns hook code ready to be included in a content script
+   * @param wasm An array of hashes to validate WASM modules against.
+   * @param firstParty The first-party origin of the associated page.
+   * @param sameOrigin true if the target document is same-origin with the
+   *   first party.
+   * @returns A Promise that resolves to hook code ready to be included in a
+   *   content script.
    */
   async getContentScriptHooks(
     wasm: string[],
@@ -113,8 +121,8 @@ export class HookBuilder {
   }
 
   /**
-   * @param url a URL where an encrypted fragment has been added via a hook
-   * @returns the decrypted fragment
+   * @param url A URL with an encrypted fragment added via a hook.
+   * @returns The decrypted fragment.
    */
   async decryptFragment(url: string) {
     const markerIndex = url.lastIndexOf("#");
