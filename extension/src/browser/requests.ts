@@ -178,6 +178,7 @@ export class RequestEvent<T extends RequestDetails> extends Event {
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export interface RequestHandler extends EventTarget {
+  /** @group Methods */
   addEventListener: EventTarget["addEventListener"] &
     ((
       type: "beforerequest",
