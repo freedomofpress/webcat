@@ -53,6 +53,9 @@ function assertHeadersAvailable<T>(
   }
 }
 
+/**
+ * Validates responses from WEBCAT-enrolled origins.
+ */
 export class ResponseValidator {
   // #marker is ephemeral, not persisted anywhere, but that's ok:
   // ResponseValidator attaches a StreamFilter that prevents the
@@ -69,6 +72,13 @@ export class ResponseValidator {
     this.#hooks = hooks;
   }
 
+  /**
+   * Validates response headers.
+   *
+   * @param details The request details object to validate.
+   * @returns A Promise that resolves to undefined on successful validation, or
+   *   to a {@link WebcatError} on validation failure.
+   */
   async validateHeaders(details: Stateful<HeadersReceivedDetails>) {
     if (!details.state.pendingOrigin) {
       throw new Error("missing pendingOrigin in request state");
@@ -202,6 +212,7 @@ export class ResponseValidator {
     }
   }
 
+  /** @internal */
   extractAndValidateHeaders(
     details: Stateful<HeadersReceivedDetails>,
   ): Map<string, string> | WebcatError {
@@ -290,6 +301,11 @@ export class ResponseValidator {
     return normalizedHeaders;
   }
 
+  /**
+   * Validates response content.
+   *
+   * @param details The request details object to validate.
+   */
   async validateContent(details: Stateful<BeforeRequestDetails>) {
     function deny(filter: browser.webRequest.StreamFilter) {
       // DENIED
@@ -457,6 +473,15 @@ export class ResponseValidator {
     };
   }
 
+  /**
+   * Marks the start of response content by injecting a secret token. Must be
+   * called *later* than {@link validateContent}, which will remove the marker.
+   * The counter-intuitive ordering is inherited from
+   * {@link browser.webRequest.StreamFilter | StreamFilter} behavior.
+   *
+   * @param details
+   * @returns
+   */
   markContent(details: HeadersReceivedDetails) {
     if (PASS_THROUGH_TYPES.has(details.type)) return;
     // Install a marking filter at the last possible moment: after

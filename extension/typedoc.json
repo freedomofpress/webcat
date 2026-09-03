@@ -16,7 +16,8 @@
     "@types/firefox-webext-browser": {
       "browser.storage": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/storage",
       "browser.storage.StorageArea": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/storage/StorageArea",
-      "browser.webRequest.BlockingResponse": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse"
+      "browser.webRequest.BlockingResponse": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse",
+      "browser.webRequest.StreamFilter": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter"
     }
   },
   "excludeInternal": true,
