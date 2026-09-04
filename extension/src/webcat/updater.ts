@@ -12,8 +12,21 @@ import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { Database } from "./interfaces/database";
 import { arraysEqual } from "./utils";
 
+/**
+ * An event indicating the completion of an update attempt.
+ */
 export class UpdateEvent extends Event {
+  /**
+   * Indicates whether the update was local or networked. Set to true for
+   * updates loaded from local files and false for updates done over the
+   * network.
+   */
   readonly local: boolean;
+  /**
+   * Indicates whether the update was successful. Set to true if the update
+   * resulted in a new block being applied. If false, the update may have
+   * failed with an error, or there may not have been anything to update.
+   */
   readonly success: boolean;
 
   constructor(success: boolean, local = false) {
@@ -23,18 +36,56 @@ export class UpdateEvent extends Event {
   }
 }
 
-export type EnrollmentUpdaterOptions = {
+/**
+ * Options for an {@link EnrollmentUpdater}.
+ */
+export interface EnrollmentUpdaterOptions {
+  /**
+   * The update endpoint that serves verifiable enrollments as `list.json` and
+   * `block.json`.
+   */
   endpoint: string;
+  /**
+   * The path to bundled `list.json` and `block.json` files.
+   */
   localDataPath: string;
+  /**
+   * The database to persist enrollments in.
+   */
   database: Database;
+  /**
+   * The set of CometBFT validators to verify enrollments against.
+   */
   validatorSet: ValidatorJson;
+  /**
+   * The time in seconds between enrollment update checks. Determines how often
+   * the extension is activated to check whether an update is due. An update is
+   * only downloaded if, at check time, {@link updateInterval} has elapsed
+   * since the last update.
+   *
+   * @defaultValue {@link EnrollmentUpdater.DefaultCheckInterval}
+   */
   checkInterval?: number;
+  /**
+   * The minimum time in seconds between updates. Update checks are run
+   * periodically at an interval determined by this value. An update is only
+   * downloaded when a {@link checkInterval | check } runs and updateInterval
+   * has elapsed since the last update.
+   *
+   * @defaultValue {@link EnrollmentUpdater.DefaultUpdateInterval}
+   */
   updateInterval?: number;
+  /**
+   * The timeout, in milliseconds, of update download attempts.
+   *
+   * @defaultValue {@link EnrollmentUpdater.DefaultFetchTimeout}
+   */
   fetchTimeout?: number;
-};
+}
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export interface EnrollmentUpdater extends EventTarget {
+  /** @group Methods */
   addEventListener: EventTarget["addEventListener"] &
     ((type: "updated", callback: (event: UpdateEvent) => void) => void);
 }
@@ -45,9 +96,21 @@ export interface EnrollmentUpdater extends EventTarget {
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class EnrollmentUpdater extends EventTarget {
-  static readonly DefaultCheckInterval = 5 * 60 * 1000; // 5 minutes
-  static readonly DefaultUpdateInterval = 60 * 60 * 1000; // 1 hour
-  static readonly DefaultFetchTimeout = 3000; // 3 seconds
+  /**
+   * The default value for {@link EnrollmentUpdaterOptions.checkInterval},
+   * 5 minutes.
+   */
+  static readonly DefaultCheckInterval = 5 * 60 * 1000;
+  /**
+   * The default value for {@link EnrollmentUpdaterOptions.updateInterval},
+   * 1 hour.
+   */
+  static readonly DefaultUpdateInterval = 60 * 60 * 1000;
+  /**
+   * The default value for {@link EnrollmentUpdaterOptions.fetchTimeout},
+   * 3 seconds.
+   */
+  static readonly DefaultFetchTimeout = 3000;
 
   readonly #endpoint: string;
   readonly #localDataPath: string;
@@ -214,8 +277,8 @@ export class EnrollmentUpdater extends EventTarget {
   }
 
   /**
-   * Retries an update if the previous attempt failed.
-   * Unlike update, retryIfFailed never throws.
+   * Retries an update if the previous attempt failed. Unlike {@link update},
+   * retryIfFailed never throws.
    */
   async retryIfFailed(): Promise<void> {
     if (this.#lastUpdateFailed) {
@@ -242,7 +305,9 @@ export class EnrollmentUpdater extends EventTarget {
   }
 
   /**
-   * Returns a Promise that resolves to true if an update is overdue.
+   * Determines whether an update is due.
+   *
+   * @returns A Promise that resolves to true if an update is due.
    */
   async isDue(): Promise<boolean> {
     const lastUpdated = await this.#db.getLastUpdated();

@@ -39,6 +39,16 @@ import { CachePartition } from "./interfaces/originstate";
 import { parseContentSecurityPolicy } from "./parsers";
 import { getFQDNSafe } from "./utils";
 
+/**
+ * Validates a Content Security Policy. Enforces the restrictions outlined in
+ * {@link https://docs.webcat.tech/webapp-developers/CSP.html | the CSP docs}. If
+ * db and cachePartition are provided, populates valid_sources from db.
+ *
+ * @param csp The policy string to validate.
+ * @param valid_sources A set of fully-qualified domain names allowed as sources.
+ * @param db
+ * @param cachePartition
+ */
 export async function validateCSP(
   csp: string,
   valid_sources: Set<string>,

@@ -1,0 +1,26 @@
+{
+  "readme": "none",
+  "entryPoints": [
+    "src/config.ts",
+    "src/webcat.ts",
+    "src/browser/**/*.ts",
+    "src/webcat/**/*.ts"
+  ],
+  "exclude": ["src/webcat/hooks/*.ts"],
+  "intentionallyNotExported": ["browser.webRequest._OnBeforeRequestDetails"],
+  "externalSymbolLinkMappings": {
+    "typescript": {
+      "fetch": "https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch",
+      "Disposable": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/using"
+    },
+    "@types/firefox-webext-browser": {
+      "browser.storage": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/storage",
+      "browser.storage.StorageArea": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/storage/StorageArea",
+      "browser.webRequest.BlockingResponse": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/BlockingResponse",
+      "browser.webRequest.StreamFilter": "https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter"
+    }
+  },
+  "excludeInternal": true,
+  "out": "../api",
+  "displayBasePath": "src"
+}

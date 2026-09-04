@@ -35,10 +35,13 @@ type BundleFetch = {
 };
 
 export type BundleFetcherConfig = {
+  /** The path to `bundle.json`. */
   bundlePath: string;
+  /** The path to `bundle-prev.json`. */
   bundlePrevPath: string;
 };
 
+/** @internal */
 export class BundleFetcher {
   readonly current: BundleFetch;
   readonly previous: BundleFetch;

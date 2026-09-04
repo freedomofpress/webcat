@@ -14,7 +14,8 @@ type RegisteredListeners = {
   completed?: (details: browser.webRequest._OnCompletedDetails) => void;
 };
 
-class RequestDetailsBase {
+/** @internal */
+export class RequestDetailsBase {
   /**
    * Resolved when the request completes or rejected if a network error occurs.
    */
@@ -30,23 +31,30 @@ class RequestDetailsBase {
     this.#reject = reject;
   }
 
+  /** @internal */
   complete() {
     this.#resolve();
   }
 
+  /** @internal */
   fail() {
     this.#reject();
   }
 }
 
+/** @interface */
 export type BeforeRequestDetails = RequestDetailsBase &
   browser.webRequest._OnBeforeRequestDetails;
+/** @interface */
 export type BeforeHeadersDetails = BeforeRequestDetails &
   browser.webRequest._OnBeforeSendHeadersDetails;
+/** @interface */
 export type HeadersReceivedDetails = BeforeHeadersDetails &
   browser.webRequest._OnHeadersReceivedDetails;
+/** @interface */
 export type ErrorOccurredDetails = BeforeRequestDetails &
   browser.webRequest._OnErrorOccurredDetails;
+/** @interface */
 export type CompletedDetails = HeadersReceivedDetails &
   browser.webRequest._OnCompletedDetails;
 export type RequestDetails =
@@ -97,6 +105,9 @@ export class BlockingResponse
     this.#pendingScopes = 0;
   }
 
+  /**
+   * Implements the {@link Disposable} interface.
+   */
   get [Symbol.dispose]() {
     this.#pendingScopes++;
     const disposed = false;
@@ -158,6 +169,7 @@ export class RequestEvent<T extends RequestDetails> extends Event {
    */
   readonly blockingResponse = new BlockingResponse();
 
+  /** @internal */
   constructor(type: string, details: T) {
     super(type);
     this.details = details;
@@ -166,6 +178,7 @@ export class RequestEvent<T extends RequestDetails> extends Event {
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export interface RequestHandler extends EventTarget {
+  /** @group Methods */
   addEventListener: EventTarget["addEventListener"] &
     ((
       type: "beforerequest",
@@ -275,10 +288,22 @@ export class RequestHandler extends EventTarget {
     );
   }
 
+  /** @internal */
   protected getListenerOptions(fqdns: string[], type: "beforerequest"): [browser.webRequest.RequestFilter, browser.webRequest.OnBeforeRequestOptions[]]; // prettier-ignore
+  /** @internal */
   protected getListenerOptions(fqdns: string[], type: "beforeheaders"): [browser.webRequest.RequestFilter, browser.webRequest.OnBeforeSendHeadersOptions[]]; // prettier-ignore
+  /** @internal */
   protected getListenerOptions(fqdns: string[], type: "headersreceived"): [browser.webRequest.RequestFilter, browser.webRequest.OnHeadersReceivedOptions[]]; // prettier-ignore
+  /** @internal */
   protected getListenerOptions(fqdns: string[], type: "erroroccurred" | "completed"): [browser.webRequest.RequestFilter]; // prettier-ignore
+  /**
+   * Returns a tuple consisting of a request filter and an optional options
+   * array, used when registering webRequest listeners. Overriding this method
+   * allows changing the registration behavior.
+   *
+   * @param fqdns Fully-qualified domain names to handle requests for.
+   * @param type The type of event to handle.
+   */
   protected getListenerOptions(fqdns: string[], type: string): [browser.webRequest.RequestFilter] | [browser.webRequest.RequestFilter, (browser.webRequest.OnBeforeRequestOptions[] | browser.webRequest.OnBeforeSendHeadersOptions[] | browser.webRequest.OnHeadersReceivedOptions[])]; // prettier-ignore
   protected getListenerOptions(fqdns: string[], type: string) {
     const urls = buildUrlPatterns(fqdns);
