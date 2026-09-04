@@ -318,7 +318,11 @@ export class WebcatRequestHandler extends RequestHandler {
    * Determines the first-party origin (FPO) for a given request
    */
   async #getFirstParty(details: BeforeRequestDetails): Promise<string> {
-    if (details.tabId === -1 || details.frameId === 0) {
+    if (
+      details.tabId === -1 ||
+      details.frameId === -1 ||
+      details.frameId === 0
+    ) {
       // This might be a SharedWorker or a ServiceWorker,
       // or a Worker request affected by https://bugzilla.mozilla.org/show_bug.cgi?id=2048884
       for (const url of [details.url, details.documentUrl, details.originUrl]) {
@@ -338,7 +342,7 @@ export class WebcatRequestHandler extends RequestHandler {
         details.frameAncestors[details.frameAncestors.length - 1].url,
       ).origin;
     }
-    if (details.frameId !== 0) {
+    if (details.frameId !== 0 && details.frameId !== -1) {
       // Subresource of a Worker in a frame; no frameAncestors available; check the tab
       const frames = await browser.webNavigation.getAllFrames({
         tabId: details.tabId,
