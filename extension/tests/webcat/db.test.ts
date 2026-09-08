@@ -11,6 +11,12 @@ vi.mock("../../src/webcat/logger", () => ({
   logger: { addLog: vi.fn() },
 }));
 
+vi.mock("../../src/browser/permissions", () => ({
+  default: {
+    require: vi.fn().mockReturnValue(vi.fn()),
+  },
+}));
+
 import { defaults } from "../../src/config";
 import { WebcatDatabase } from "../../src/webcat/db";
 

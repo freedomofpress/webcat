@@ -1,3 +1,4 @@
+import permissions from "../browser/permissions";
 import {
   BeforeRequestDetails,
   HeadersReceivedDetails,
@@ -56,6 +57,10 @@ function assertHeadersAvailable<T>(
 /**
  * Validates responses from WEBCAT-enrolled origins.
  */
+@permissions.require("tabs")
+@permissions.require("webRequest")
+@permissions.require("webRequestFilterResponse")
+@permissions.require("webRequestFilterResponse.serviceWorkerScript")
 export class ResponseValidator {
   // #marker is ephemeral, not persisted anywhere, but that's ok:
   // ResponseValidator attaches a StreamFilter that prevents the

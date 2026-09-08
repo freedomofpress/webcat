@@ -1,3 +1,4 @@
+import permissions from "../browser/permissions";
 import { RequestDetails } from "../browser/requests";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { Stateful } from "./interfaces/requeststate";
@@ -89,6 +90,7 @@ export function setErrorIcon(tabId: number) {
   });
 }
 
+permissions.require("tabs")(errorpage);
 export async function errorpage(
   details: Stateful<RequestDetails>,
   error?: WebcatError,

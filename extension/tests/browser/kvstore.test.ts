@@ -2,6 +2,12 @@ import { setImmediate } from "node:timers";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../src/browser/permissions", () => ({
+  default: {
+    require: vi.fn().mockReturnValue(vi.fn()),
+  },
+}));
+
 import { NamespacedKVStore } from "../../src/browser/kvstore";
 
 const mockGet = vi.fn().mockImplementation(async (key) => {

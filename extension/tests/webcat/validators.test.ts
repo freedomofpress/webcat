@@ -1,6 +1,12 @@
 // validateCSP.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../src/browser/permissions", () => ({
+  default: {
+    require: vi.fn().mockReturnValue(vi.fn()),
+  },
+}));
+
 import { validateCSP } from "../../src/webcat/validators";
 
 // Mocks (unchanged)

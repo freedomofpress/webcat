@@ -1,6 +1,12 @@
 import { TrustedRoot } from "@freedomofpress/sigstore-browser";
 import { beforeEach, describe, expect, it, Mock, vi } from "vitest";
 
+vi.mock("../../src/browser/permissions", () => ({
+  default: {
+    require: vi.fn().mockReturnValue(vi.fn()),
+  },
+}));
+
 import { HeadersReceivedDetails } from "../../src/browser/requests";
 import { defaults } from "../../src/config";
 import { canonicalize } from "../../src/webcat/canonicalize";

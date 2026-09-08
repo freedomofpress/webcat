@@ -1,4 +1,5 @@
 import { NamespacedKVStore } from "../browser/kvstore";
+import permissions from "../browser/permissions";
 import { CacheKey, LRUSet, PersistentLRUCache } from "./cache";
 import { BlockMeta, Database } from "./interfaces/database";
 import { CachePartition } from "./interfaces/originstate";
@@ -18,6 +19,7 @@ export type WebcatDatabaseConfig = {
 };
 
 /** A {@link Database} backed by a {@link NamespacedKVStore}. */
+@permissions.require("unlimitedStorage")
 export class WebcatDatabase extends NamespacedKVStore implements Database {
   readonly origins: PersistentLRUCache<CacheKey<CachePartition>, OriginState>;
   readonly nonOrigins: LRUSet<CacheKey<CachePartition>>;

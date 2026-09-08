@@ -1,3 +1,5 @@
+import permissions from "../browser/permissions";
+
 export function getFQDN(url: string): string {
   const urlobj = new URL(url);
   return urlobj.hostname;
@@ -73,6 +75,7 @@ export function isNewerSemver(a: string, b: string): boolean {
   return false;
 }
 
+permissions.require("browsingData")(clearBrowserCaches);
 export async function clearBrowserCaches(fqdns: string[]) {
   // Caching is complicated. See:
   //  - https://github.com/freedomofpress/webcat/issues/18

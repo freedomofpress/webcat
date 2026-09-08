@@ -1,6 +1,12 @@
 import { ValidatorJson } from "@freedomofpress/cometbft/dist/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../src/browser/permissions", () => ({
+  default: {
+    require: vi.fn().mockReturnValue(vi.fn()),
+  },
+}));
+
 import { EnrollmentUpdater } from "../../src/webcat/updater";
 
 // Mock the heavy crypto dependencies
