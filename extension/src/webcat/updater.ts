@@ -7,6 +7,7 @@ import {
   WebcatLeavesFile,
 } from "@freedomofpress/ics23/dist/webcat";
 
+import permissions from "../browser/permissions";
 import { Mutex } from "../browser/sync";
 import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { Database } from "./interfaces/database";
@@ -96,6 +97,7 @@ export interface EnrollmentUpdater extends EventTarget {
  * Handles loading enrollment updates periodically from the endpoint,
  * storing them to the database, and notifying event consumers.
  */
+@permissions.require("alarms")
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class EnrollmentUpdater extends EventTarget {
   /**

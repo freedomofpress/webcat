@@ -1,8 +1,10 @@
+import permissions from "./permissions";
 import { Mutex } from "./sync";
 
 /**
  * Persistent key-value storage backed by the {@link browser.storage} API.
  */
+@permissions.require("storage")
 export class KVStore {
   /**
    * Reads a persisted value.

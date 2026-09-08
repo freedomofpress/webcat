@@ -1,8 +1,10 @@
+import permissions from "./permissions";
 import { buildUrlPatterns } from "./utils";
 
 /**
  * Represents a single content script in a static file.
  */
+@permissions.require("scripting")
 export class ContentScript {
   readonly #idPrefix;
   readonly #path: string;

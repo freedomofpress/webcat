@@ -1,3 +1,4 @@
+import permissions from "./permissions";
 import { buildUrlPatterns } from "./utils";
 
 type RegisteredListeners = {
@@ -207,6 +208,8 @@ export interface RequestHandler extends EventTarget {
  * lifecycle of a request and aggregates details such as request headers and
  * response headers to make them available in later stages.
  */
+@permissions.require("webRequest")
+@permissions.require("webRequestBlocking")
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class RequestHandler extends EventTarget {
   readonly #details = new Map<string, RequestDetails>();

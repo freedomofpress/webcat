@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../src/browser/permissions", () => ({
+  default: {
+    require: vi.fn().mockReturnValue(vi.fn()),
+  },
+}));
+
 const mockVerifyArtifactPolicy = vi.fn();
 
 vi.mock("@freedomofpress/sigstore-browser", () => {

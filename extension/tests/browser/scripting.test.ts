@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../src/browser/permissions", () => ({
+  default: {
+    require: vi.fn().mockReturnValue(vi.fn()),
+  },
+}));
+
 import { ContentScript } from "../../src/browser/scripting";
 
 const mockScripting = {

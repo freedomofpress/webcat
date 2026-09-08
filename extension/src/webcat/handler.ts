@@ -1,4 +1,5 @@
 import { NamespacedKVStore } from "../browser/kvstore";
+import permissions from "../browser/permissions";
 import {
   BeforeRequestDetails,
   HeadersReceivedDetails,
@@ -36,6 +37,9 @@ export interface WebcatRequestHandler extends RequestHandler {
     ) => void);
 }
 
+@permissions.require("scripting")
+@permissions.require("webNavigation")
+@permissions.require("<all_urls>")
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebcatRequestHandler extends RequestHandler {
   readonly #db: Database & NamespacedKVStore;
