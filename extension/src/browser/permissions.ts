@@ -1,11 +1,27 @@
+/**
+ * The subject of a permission check. Typically a class or a method, but may
+ * also be a function or any object with a name property.
+ */
 export interface Subject {
+  /** The name of the subject. */
   name: string;
 }
 
+/**
+ * The `permissionerror` event. Notifies the consumer of a missing permission.
+ */
 export class PermissionErrorEvent extends Event {
+  /**
+   * The subject of the missing permission passed to the decorator returned by
+   * {@link PermissionChecker.require}.
+   */
   readonly subject: Subject;
+  /**
+   * The missing permission, as declared via {@link PermissionChecker.require}.
+   */
   readonly permission: string;
 
+  /** @internal */
   constructor(subject: Subject, permission: string) {
     super("permissionerror", { cancelable: true });
     this.subject = subject;
@@ -13,10 +29,20 @@ export class PermissionErrorEvent extends Event {
   }
 }
 
+/**
+ * The `permissionrestored` event. Notifies the consumer of a required
+ * permission gained by a subject.
+ */
 export class PermissionRestoredEvent extends Event {
+  /** The subject that required the permission. */
   readonly subject: Subject;
+  /**
+   * The required permission, as declared via
+   * {@link PermissionChecker.require}.
+   */
   readonly permission: string;
 
+  /** @internal */
   constructor(subject: Subject, permission: string) {
     super("permissionrestored", { cancelable: true });
     this.subject = subject;
@@ -38,6 +64,10 @@ export interface PermissionChecker {
     ) => void);
 }
 
+/**
+ * Checks extension permissions and triggers warnings for missing ones. For
+ * an example, {@link PermissionChecker.require}.
+ */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class PermissionChecker extends EventTarget {
   #requirements = new Map<Subject, Set<string>>();
@@ -49,6 +79,33 @@ export class PermissionChecker extends EventTarget {
     browser.permissions.onRemoved.addListener(this.#handleRemoved.bind(this));
   }
 
+  /**
+   * Creates a decorator that checks for an extension permission. For a class
+   * or method that requires multiple permissions, use multiple decorators.
+   *
+   * Permissions are checked at declaration time, not at instantiation or call
+   * time. Permission checks are asynchronous, best-effort, and do not block
+   * any code from running.
+   *
+   * Permission warnings in the console may be suppressed by calling
+   * {@link PermissionErrorEvent.preventDefault}.
+   *
+   * @param permission The extension permission to require. May be either a
+   *   {@link https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/permissions#api_permissions | named permission}
+   *   or a {@link https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Match_patterns | match pattern}
+   *   for a {@link https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/host_permissions | host permission}.
+   * @returns
+   *
+   * @example
+   * import permissions from "@freedomofpress/webcat/browser/permissions";
+   *
+   * @permissions.require("webRequest")
+   * @permissions.require("webRequestBlocking")
+   * @permissions.require("https://example.com/*")
+   * class ExampleBlocker {
+   *   ...
+   * }
+   */
   require(permission: string) {
     return (subject: Subject) => {
       let requirements = this.#requirements.get(subject);
@@ -61,14 +118,35 @@ export class PermissionChecker extends EventTarget {
     };
   }
 
+  /**
+   * Reads the required permissions for a subject.
+   *
+   * @param subject The subject of the permissions.
+   * @returns The set of permissions declared for the subject via
+   *   {@link require}.
+   */
   getRequired(subject: Subject): Set<string> {
     return new Set(this.#requirements.get(subject));
   }
 
+  /**
+   * Reads the missing permissions for a subject.
+   *
+   * @param subject The subject of the permissions.
+   * @returns The set of missing permissions required by the subject via
+   *   {@link require}.
+   */
   getMissing(subject: Subject): Set<string> {
     return new Set(this.#missing.get(subject));
   }
 
+  /**
+   * Checks the permissions of a given subject.
+   *
+   * @param subject The subject of the permissions.
+   * @returns A Promise that resolves to true if the subject has all the
+   *   permissions required.
+   */
   async check(subject: Subject): Promise<boolean> {
     const requirements = this.#requirements.get(subject) ?? new Set();
     const checks = Array.from(requirements).map((r) =>
@@ -136,4 +214,8 @@ export class PermissionChecker extends EventTarget {
   }
 }
 
+/**
+ * The default {@link PermissionChecker} instance. For an example, see
+ * {@link PermissionChecker.require}.
+ */
 export default new PermissionChecker();
