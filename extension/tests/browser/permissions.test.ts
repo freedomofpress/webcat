@@ -140,18 +140,22 @@ describe("PermissionChecker", () => {
   });
 
   it("keeps track of required and missing permissions", () => {
-    class Class {}
+    // Set up classes and permissions
+    class Class1 {}
+    class Class2 {}
     mockContains.mockReturnValueOnce(thenable(true));
-    permissions.require("webRequest")(Class);
+    permissions.require("webRequest")(Class1);
     mockContains.mockReturnValueOnce(thenable(false));
-    permissions.require("tabs")(Class);
+    permissions.require("tabs")(Class1);
     mockContains.mockReturnValueOnce(thenable(true));
-    permissions.require("https://example.com/*")(Class);
+    permissions.require("https://example.com/*")(Class1);
     mockContains.mockReturnValueOnce(thenable(false));
-    permissions.require("notARealPermission")(Class);
+    permissions.require("notARealPermission")(Class1);
     mockContains.mockReturnValueOnce(thenable(false));
-    permissions.require("scripting")(Class);
-    expect(permissions.getRequired(Class)).toStrictEqual(
+    permissions.require("scripting")(Class1);
+    mockContains.mockReturnValueOnce(thenable(true));
+    permissions.require("https://example.org/*")(Class2);
+    expect(permissions.getRequired(Class1)).toStrictEqual(
       new Set([
         "webRequest",
         "tabs",
@@ -160,10 +164,24 @@ describe("PermissionChecker", () => {
         "scripting",
       ]),
     );
-    expect(permissions.getMissing(Class)).toStrictEqual(
+    expect(permissions.getRequired()).toStrictEqual(
+      new Set([
+        "webRequest",
+        "tabs",
+        "https://example.com/*",
+        "notARealPermission",
+        "scripting",
+        "https://example.org/*",
+      ]),
+    );
+    expect(permissions.getMissing(Class1)).toStrictEqual(
+      new Set(["tabs", "notARealPermission", "scripting"]),
+    );
+    expect(permissions.getMissing()).toStrictEqual(
       new Set(["tabs", "notARealPermission", "scripting"]),
     );
 
+    // Remove some permissions
     mockContains.mockImplementation(
       (p: { permissions: string[]; origins: string[] }) => {
         return thenable(
@@ -174,17 +192,25 @@ describe("PermissionChecker", () => {
       },
     );
     onRemoved();
-    expect(permissions.getMissing(Class)).toStrictEqual(
+    expect(permissions.getMissing(Class1)).toStrictEqual(
+      new Set(["tabs", "notARealPermission", "scripting"]),
+    );
+    expect(permissions.getMissing()).toStrictEqual(
       new Set(["tabs", "notARealPermission", "scripting"]),
     );
 
+    // Grant all permissions
     mockContains.mockReturnValue(thenable(true));
     onAdded();
-    expect(permissions.getMissing(Class)).toStrictEqual(new Set());
+    expect(permissions.getMissing(Class1)).toStrictEqual(new Set());
+    expect(permissions.getMissing()).toStrictEqual(new Set());
 
+    // Grant already granted permissions
     onAdded();
-    expect(permissions.getMissing(Class)).toStrictEqual(new Set());
+    expect(permissions.getMissing(Class1)).toStrictEqual(new Set());
+    expect(permissions.getMissing()).toStrictEqual(new Set());
 
+    // Remove some permissions
     mockContains.mockImplementation(
       (p: { permissions: string[]; origins: string[] }) => {
         return thenable(
@@ -194,7 +220,10 @@ describe("PermissionChecker", () => {
       },
     );
     onRemoved();
-    expect(permissions.getMissing(Class)).toStrictEqual(
+    expect(permissions.getMissing(Class1)).toStrictEqual(
+      new Set(["webRequest", "scripting"]),
+    );
+    expect(permissions.getMissing()).toStrictEqual(
       new Set(["webRequest", "scripting"]),
     );
   });

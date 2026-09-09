@@ -119,25 +119,39 @@ export class PermissionChecker extends EventTarget {
   }
 
   /**
-   * Reads the required permissions for a subject.
+   * Reads the required permissions for a subject. If subject is omitted,
+   * reads the required permissions across all subjects.
    *
    * @param subject The subject of the permissions.
    * @returns The set of permissions declared for the subject via
-   *   {@link require}.
+   *   {@link require}, or if no subject is given, permissions across all
+   *   subjects.
    */
-  getRequired(subject: Subject): Set<string> {
-    return new Set(this.#requirements.get(subject));
+  getRequired(subject?: Subject): Set<string> {
+    if (subject) {
+      return new Set(this.#requirements.get(subject));
+    }
+    return this.#requirements.values().reduce((all, permissions) => {
+      return all.union(permissions);
+    }, new Set<string>());
   }
 
   /**
-   * Reads the missing permissions for a subject.
+   * Reads the missing permissions for a subject. If subject is omitted, reads
+   * the missing permissions across all subjects.
    *
    * @param subject The subject of the permissions.
    * @returns The set of missing permissions required by the subject via
-   *   {@link require}.
+   *   {@link require}, or if no subject is given, missing permissions across
+   *   all subjects.
    */
-  getMissing(subject: Subject): Set<string> {
-    return new Set(this.#missing.get(subject));
+  getMissing(subject?: Subject): Set<string> {
+    if (subject) {
+      return new Set(this.#missing.get(subject));
+    }
+    return this.#missing.values().reduce((all, missing) => {
+      return all.union(missing);
+    }, new Set<string>());
   }
 
   /**
