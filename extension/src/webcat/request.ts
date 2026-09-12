@@ -5,7 +5,7 @@ import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { BundleFetcher, BundleFetcherConfig, OriginState } from "./originstate";
-import { setIcon } from "./ui";
+import { WebcatUI } from "./ui";
 
 const allowedPorts = import.meta.env.VITE_TESTING
   ? ["8080", "8443", ""]
@@ -37,6 +37,7 @@ export function enforceHTTPS(urlobj: URL): string | undefined {
 
 export async function validateOrigin(
   db: Database,
+  ui: WebcatUI,
   details: Stateful<BeforeRequestDetails>,
   config: BundleFetcherConfig,
 ) {
@@ -48,7 +49,7 @@ export async function validateOrigin(
   }
 
   if (isFrame) {
-    setIcon(details.tabId);
+    ui.showIcon(details.tabId);
   }
 
   // See https://github.com/freedomofpress/webcat/issues/1

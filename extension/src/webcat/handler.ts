@@ -19,7 +19,7 @@ import { BundleFetcherConfig } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
-import { errorpage, getErrorPageURL, setErrorIcon } from "./ui";
+import { WebcatUI } from "./ui";
 import {
   clearBrowserCaches,
   getFQDN,
@@ -43,6 +43,7 @@ export interface WebcatRequestHandler extends RequestHandler {
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebcatRequestHandler extends RequestHandler {
   readonly #db: Database & NamespacedKVStore;
+  readonly #ui: WebcatUI;
   readonly #config: BundleFetcherConfig;
   readonly #hooks: HookBuilder;
   readonly #contentScript: ContentScript;
@@ -52,25 +53,24 @@ export class WebcatRequestHandler extends RequestHandler {
 
   #bindLock? = this.#mutex.createLock();
 
-  constructor(db: Database & NamespacedKVStore, config: BundleFetcherConfig) {
+  constructor(
+    db: Database & NamespacedKVStore,
+    ui: WebcatUI,
+    config: BundleFetcherConfig,
+  ) {
     super();
     this.#db = db;
+    this.#ui = ui;
     this.#config = config;
     this.#hooks = new HookBuilder(db.namespace("hooks"));
     this.#contentScript = new ContentScript(this.#hooks.getStaticHookPath());
-    this.#responseValidator = new ResponseValidator(this.#db, this.#hooks);
+    this.#responseValidator = new ResponseValidator(
+      this.#db,
+      this.#ui,
+      this.#hooks,
+    );
     this.addEventListener("beforerequest", this.#onRequest);
     this.addEventListener("headersreceived", this.#onHeaders);
-    browser.webNavigation.onCommitted.addListener(
-      this.#onErrorPageNavigation.bind(this),
-      {
-        url: [
-          {
-            urlPrefix: getErrorPageURL(),
-          },
-        ],
-      },
-    );
     browser.windows.onRemoved.addListener(this.#onWindowClosed.bind(this));
 
     // Block requests until first bind
@@ -180,10 +180,15 @@ export class WebcatRequestHandler extends RequestHandler {
     // If no origin was available in cache, perform full validation;
     // for frames, this is done every time
     if (!details.state.pendingOrigin) {
-      const result = await validateOrigin(this.#db, details, this.#config);
+      const result = await validateOrigin(
+        this.#db,
+        this.#ui,
+        details,
+        this.#config,
+      );
       if (result instanceof WebcatError) {
         if (details.state.isFrame) {
-          errorpage(details, result);
+          this.#ui.showErrorPage(details, result);
         }
         return blockingResponse.set({ cancel: true });
       }
@@ -236,7 +241,7 @@ export class WebcatRequestHandler extends RequestHandler {
         `Error when parsing response headers: ${result}: ${result.details?.join(", ")}`,
         details,
       );
-      errorpage(details, result);
+      this.#ui.showErrorPage(details, result);
       return blockingResponse.set({ cancel: true });
     }
 
@@ -393,10 +398,6 @@ export class WebcatRequestHandler extends RequestHandler {
       getFQDN(details.url),
     );
     return details.requestId;
-  }
-
-  #onErrorPageNavigation(details: browser.webNavigation._OnCommittedDetails) {
-    setErrorIcon(details.tabId);
   }
 
   async #onWindowClosed() {
