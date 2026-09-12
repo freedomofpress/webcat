@@ -1,3 +1,7 @@
+import {
+  BrowserChromeControllerConfig,
+  PathTemplateProperties,
+} from "./browser/chrome";
 import validator_set from "./validator_set";
 import { WebcatDatabaseConfig } from "./webcat/db";
 import { BundleFetcherConfig } from "./webcat/originstate";
@@ -10,34 +14,13 @@ import { EnrollmentUpdaterOptions } from "./webcat/updater";
  */
 export type WebcatConfig = BundleFetcherConfig &
   WebcatDatabaseConfig &
-  Omit<EnrollmentUpdaterOptions, "database"> & {
+  Omit<EnrollmentUpdaterOptions, "database"> &
+  BrowserChromeControllerConfig & {
     /**
      * The path to the static hook content script file, relative to the
      * extension root directory.
      */
     staticHookPath: string;
-    /**
-     * The path to the icons directory. The expected directory structure
-     * is as follows:
-     *
-     * ```
-     * iconsPath/
-     * ├── dark
-     * │   ├── webcat-error.SVG
-     * │   ├── webcat-ok.SVG
-     * │   └── webcat.SVG
-     * └── light
-     *     ├── webcat-error.SVG
-     *     ├── webcat-ok.SVG
-     *     └── webcat.SVG
-     * ```
-     */
-    iconsPath: string;
-    /**
-     * The path to the pages directory containing the extension's standalone
-     * HTML pages and their assets.
-     */
-    pagesPath: string;
   };
 
 /** Default {@link WebcatConfig} values. */
@@ -72,14 +55,15 @@ export const defaults = {
 
   /** {@inheritDoc WebcatConfig.staticHookPath} */
   staticHookPath: "dist/hooks/content.js",
-  /** {@inheritDoc WebcatConfig.iconsPath} */
-  iconsPath: "icons",
-  /** {@inheritDoc WebcatConfig.pagesPath} */
-  pagesPath: "pages",
+  /** {@inheritDoc WebcatConfig.iconPaths} */
+  iconPaths: (p: PathTemplateProperties) =>
+    `icons/${p.colorScheme}/${p.name}.SVG`,
+  /** {@inheritDoc WebcatConfig.pagePaths} */
+  pagePaths: (p: PathTemplateProperties) => `pages/${p.name}.html`,
 } as const satisfies WebcatConfig;
 
 /** @internal */
-export const test: WebcatConfig = Object.assign(structuredClone(defaults), {
+export const test: WebcatConfig = Object.assign(Object.assign({}, defaults), {
   originCacheSize: 2,
   endpoint: "http://localhost:1234/",
 });

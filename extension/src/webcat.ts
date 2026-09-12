@@ -22,7 +22,7 @@ import { defaults, WebcatConfig } from "./config";
 import { WebcatDatabase } from "./webcat/db";
 import { WebcatRequestHandler } from "./webcat/handler";
 import { setStaticHookPath } from "./webcat/hookbuilder";
-import { setIconsPath, setPagesPath } from "./webcat/ui";
+import { WebcatUI } from "./webcat/ui";
 import { EnrollmentUpdater } from "./webcat/updater";
 
 export default {
@@ -33,13 +33,12 @@ export default {
    * @param options Configuration options. Defaults to {@link defaults}.
    */
   start(options?: Partial<WebcatConfig>) {
-    const cfg = Object.assign(structuredClone(defaults), options);
+    const cfg = Object.assign(Object.assign({}, defaults), options);
     setStaticHookPath(cfg.staticHookPath);
-    setIconsPath(cfg.iconsPath);
-    setPagesPath(cfg.pagesPath);
 
     const db = new WebcatDatabase(cfg);
-    const requestHandler = new WebcatRequestHandler(db, cfg);
+    const ui = new WebcatUI(cfg);
+    const requestHandler = new WebcatRequestHandler(db, ui, cfg);
     const updater = new EnrollmentUpdater(Object.assign({ database: db }, cfg));
 
     requestHandler.bindAll();

@@ -9,6 +9,7 @@ vi.mock("../../src/browser/permissions", () => ({
 import { defaults } from "../../src/config";
 import { WebcatDatabase } from "../../src/webcat/db";
 import { WebcatRequestHandler } from "../../src/webcat/handler";
+import { WebcatUI } from "../../src/webcat/ui";
 
 const mockStorageGet = vi.fn().mockResolvedValue({});
 const mockStorageSet = vi.fn();
@@ -82,6 +83,10 @@ vi.stubGlobal("browser", {
   },
 });
 
+vi.stubGlobal("window", {
+  matchMedia: vi.fn().mockReturnValue({ matches: false }),
+});
+
 describe("WebcatRequestHandler", () => {
   it("should bind atomically", async () => {
     // Mock browser.scripting.getRegisteredContentScripts so that the first
@@ -105,6 +110,7 @@ describe("WebcatRequestHandler", () => {
     // Race two bind calls
     const wrh = new WebcatRequestHandler(
       new WebcatDatabase(defaults),
+      new WebcatUI(defaults),
       defaults,
     );
     const bind1 = wrh.bind(["example.com"]);

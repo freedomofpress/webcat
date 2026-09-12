@@ -21,7 +21,7 @@ import {
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { PASS_THROUGH_TYPES } from "./resources";
-import { errorpage, setOKIcon } from "./ui";
+import { WebcatUI } from "./ui";
 import {
   arraysEqual,
   clearBrowserCaches,
@@ -70,10 +70,12 @@ export class ResponseValidator {
     `__WEBCAT_END__{${Uint8ArrayToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}}\n`,
   );
   readonly #db: Database;
+  readonly #ui: WebcatUI;
   readonly #hooks: HookBuilder;
 
-  constructor(db: Database, hooks: HookBuilder) {
+  constructor(db: Database, ui: WebcatUI, hooks: HookBuilder) {
     this.#db = db;
+    this.#ui = ui;
     this.#hooks = hooks;
   }
 
@@ -213,7 +215,10 @@ export class ResponseValidator {
     // It's important not do do it for sub_frames, otherwise validating a subresource
     // would display as if the entire site was verified
     if (details.type === "main_frame") {
-      setOKIcon(details.tabId, details.state.pendingOrigin.delegation);
+      this.#ui.showOKIcon(
+        details.tabId,
+        details.state.pendingOrigin.delegation,
+      );
     }
   }
 
@@ -432,7 +437,7 @@ export class ResponseValidator {
       if (!manifest_hash) {
         deny(filter);
         filter.close();
-        errorpage(
+        this.#ui.showErrorPage(
           details,
           new WebcatError(WebcatErrorCode.File.MISSING, [pathname]),
           true,
@@ -451,7 +456,7 @@ export class ResponseValidator {
       ) {
         deny(filter);
         filter.close();
-        errorpage(
+        this.#ui.showErrorPage(
           details,
           new WebcatError(WebcatErrorCode.File.MISMATCH, [
             pathname,
@@ -472,7 +477,7 @@ export class ResponseValidator {
       // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
       filter.close();
       if (details.type === "main_frame") {
-        setOKIcon(details.tabId, originState.delegation);
+        this.#ui.showOKIcon(details.tabId, originState.delegation);
       }
       // Redirect the main frame to an error page
     };
