@@ -6,6 +6,7 @@ import permissions from "../browser/permissions";
 import { RequestDetails } from "../browser/requests";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { Stateful } from "./interfaces/requeststate";
+import { logger } from "./logger";
 import { clearBrowserCaches, getFQDN } from "./utils";
 
 /**
@@ -42,6 +43,14 @@ export class WebcatUI extends BrowserChromeController {
    *   text.
    */
   async showOKIcon(tabId: number, delegation?: string) {
+    logger.addLog(
+      "info",
+      delegation
+        ? `Setting ok icon (delegation: ${delegation})`
+        : "Setting ok icon",
+      tabId,
+      "",
+    );
     let message = browser.i18n.getMessage("webcatVerificationSuccessful");
     if (delegation) {
       message += ` (${delegation})`;
