@@ -6,16 +6,21 @@ const hooks = {
   page: pageHooks,
 };
 
-let staticHookPath = "dist/hooks/content.js";
-
-export function setStaticHookPath(path: string) {
-  staticHookPath = path;
-}
+/** @internal @inline */
+export type HookBuilderConfig = {
+  /**
+   * The path to the static hook content script file, relative to the
+   * extension root directory.
+   */
+  staticHookPath: string;
+};
 
 /**
  * Builds hooks using unique cryptographic keys.
  */
 export class HookBuilder {
+  readonly #staticHookPath: string;
+
   #firstPartyKey: Promise<CryptoKey>;
   #firstPartySalt: Promise<Uint8Array<ArrayBuffer>>;
 
@@ -23,7 +28,8 @@ export class HookBuilder {
    * @param store A key-value store for persisting the builder's cryptographic
    *   key and salt.
    */
-  constructor(store: KVStore) {
+  constructor(store: KVStore, config: { staticHookPath: string }) {
+    this.#staticHookPath = config.staticHookPath;
     this.#firstPartyKey = store
       .get("firstPartyKey", "session")
       .then(async (raw: ArrayBuffer) => {
@@ -72,7 +78,7 @@ export class HookBuilder {
    * @returns The path to the static content script file.
    */
   getStaticHookPath() {
-    return staticHookPath;
+    return this.#staticHookPath;
   }
 
   /**

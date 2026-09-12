@@ -40,7 +40,7 @@ export class UpdateEvent extends Event {
 /**
  * Options for an {@link EnrollmentUpdater}.
  */
-export interface EnrollmentUpdaterOptions {
+export interface EnrollmentUpdaterConfig {
   /**
    * The update endpoint that serves verifiable enrollments as `list.json` and
    * `block.json`.
@@ -101,17 +101,17 @@ export interface EnrollmentUpdater extends EventTarget {
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class EnrollmentUpdater extends EventTarget {
   /**
-   * The default value for {@link EnrollmentUpdaterOptions.checkInterval},
+   * The default value for {@link EnrollmentUpdaterConfig.checkInterval},
    * 5 minutes.
    */
   static readonly DefaultCheckInterval = 5 * 60 * 1000;
   /**
-   * The default value for {@link EnrollmentUpdaterOptions.updateInterval},
+   * The default value for {@link EnrollmentUpdaterConfig.updateInterval},
    * 1 hour.
    */
   static readonly DefaultUpdateInterval = 60 * 60 * 1000;
   /**
-   * The default value for {@link EnrollmentUpdaterOptions.fetchTimeout},
+   * The default value for {@link EnrollmentUpdaterConfig.fetchTimeout},
    * 3 seconds.
    */
   static readonly DefaultFetchTimeout = 3000;
@@ -129,7 +129,7 @@ export class EnrollmentUpdater extends EventTarget {
 
   #lastUpdateFailed = false;
 
-  constructor(options: EnrollmentUpdaterOptions) {
+  constructor(options: EnrollmentUpdaterConfig) {
     super();
     this.#endpoint = options.endpoint;
     this.#localDataPath = options.localDataPath;
