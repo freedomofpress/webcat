@@ -54,7 +54,7 @@ describe("HookBuilder", () => {
 
   beforeEach(() => {
     store = new MockKVStore();
-    hb = new HookBuilder(store);
+    hb = new HookBuilder(store, { staticHookPath: "hooks.js" });
   });
 
   it("should embed inputs into page hooks", async () => {
@@ -121,7 +121,7 @@ describe("HookBuilder", () => {
         return value;
       }
     });
-    const hb = new HookBuilder(store);
+    const hb = new HookBuilder(store, { staticHookPath: "hooks.js" });
     await expect(
       hb.getPageHooks([], "https://example.com", false),
     ).resolves.toBe(

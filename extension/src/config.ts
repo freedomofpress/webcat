@@ -4,8 +4,9 @@ import {
 } from "./browser/chrome";
 import validator_set from "./validator_set";
 import { WebcatDatabaseConfig } from "./webcat/db";
+import { HookBuilderConfig } from "./webcat/hookbuilder";
 import { BundleFetcherConfig } from "./webcat/originstate";
-import { EnrollmentUpdaterOptions } from "./webcat/updater";
+import { EnrollmentUpdaterConfig } from "./webcat/updater";
 
 /**
  * Global WEBCAT configuration. See {@link defaults}.
@@ -14,14 +15,9 @@ import { EnrollmentUpdaterOptions } from "./webcat/updater";
  */
 export type WebcatConfig = BundleFetcherConfig &
   WebcatDatabaseConfig &
-  Omit<EnrollmentUpdaterOptions, "database"> &
-  BrowserChromeControllerConfig & {
-    /**
-     * The path to the static hook content script file, relative to the
-     * extension root directory.
-     */
-    staticHookPath: string;
-  };
+  HookBuilderConfig &
+  Omit<EnrollmentUpdaterConfig, "database"> &
+  BrowserChromeControllerConfig;
 
 /** Default {@link WebcatConfig} values. */
 export const defaults = {

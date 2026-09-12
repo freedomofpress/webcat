@@ -21,7 +21,6 @@ import { BeforeRequestDetails, RequestEvent } from "./browser/requests";
 import { defaults, WebcatConfig } from "./config";
 import { WebcatDatabase } from "./webcat/db";
 import { WebcatRequestHandler } from "./webcat/handler";
-import { setStaticHookPath } from "./webcat/hookbuilder";
 import { WebcatUI } from "./webcat/ui";
 import { EnrollmentUpdater } from "./webcat/updater";
 
@@ -34,7 +33,6 @@ export default {
    */
   start(options?: Partial<WebcatConfig>) {
     const cfg = Object.assign(Object.assign({}, defaults), options);
-    setStaticHookPath(cfg.staticHookPath);
 
     const db = new WebcatDatabase(cfg);
     const ui = new WebcatUI(cfg);

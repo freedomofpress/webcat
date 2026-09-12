@@ -9,7 +9,7 @@ import {
 import { ContentScript } from "../browser/scripting";
 import { Mutex } from "../browser/sync";
 import { CacheKey, isInPartition } from "./cache";
-import { HookBuilder } from "./hookbuilder";
+import { HookBuilder, HookBuilderConfig } from "./hookbuilder";
 import { Database } from "./interfaces/database";
 import { WebcatError } from "./interfaces/errors";
 import { CachePartition, OriginState } from "./interfaces/originstate";
@@ -56,13 +56,13 @@ export class WebcatRequestHandler extends RequestHandler {
   constructor(
     db: Database & NamespacedKVStore,
     ui: WebcatUI,
-    config: BundleFetcherConfig,
+    config: BundleFetcherConfig & HookBuilderConfig,
   ) {
     super();
     this.#db = db;
     this.#ui = ui;
     this.#config = config;
-    this.#hooks = new HookBuilder(db.namespace("hooks"));
+    this.#hooks = new HookBuilder(db.namespace("hooks"), config);
     this.#contentScript = new ContentScript(this.#hooks.getStaticHookPath());
     this.#responseValidator = new ResponseValidator(
       this.#db,
