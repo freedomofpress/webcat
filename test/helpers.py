@@ -594,9 +594,11 @@ class UpdateServer:
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json")
                     self.end_headers()
+                    now = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
                     block = {
                         "signed_header": {
                             "header": {
+                                "chain_id": "webcat-test-02",
                                 "height": "0",
                                 "app_hash": "",
                                 "last_block_id": {
@@ -615,7 +617,7 @@ class UpdateServer:
                                 "last_results_hash": "00"*32,
                                 "evidence_hash": "00"*32,
                                 "proposer_address": "00"*20,
-                                "time": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
+                                "time": now,
                             },
                             "commit": {
                                 "height": "0",
@@ -629,8 +631,12 @@ class UpdateServer:
                                 },
                                 "signatures": [
                                     {
-                                        "block_id_flag": 0,
+                                        # BLOCK_ID_FLAG_COMMIT; the test build mocks
+                                        # verifyCommit, but importCommit still requires
+                                        # a well-formed signature entry.
+                                        "block_id_flag": 2,
                                         "validator_address": "00"*20,
+                                        "timestamp": now,
                                         "signature": "AA"*43+"==",
                                     },
                                 ],
