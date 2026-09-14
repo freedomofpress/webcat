@@ -22,6 +22,7 @@ const defaultConfig: WebcatConfig = {
   endpoint: "https://webcat.freedom.press/",
   localDataPath: "data",
   validatorSet: validator_set,
+  chainId: "webcat-test-02",
   // During alpha, update every hour. Wall-clock based so that sleep/suspend
   // doesn't silently postpone updates.
   updateInterval: 60 * 60 * 1000, // 1 hour

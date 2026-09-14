@@ -98,6 +98,7 @@ describe("isDue", () => {
       endpoint: "https://example.com/",
       database: db as never,
       validatorSet: {} as ValidatorJson,
+      chainId: "test-chain",
     });
     vi.useFakeTimers();
   });
@@ -171,6 +172,7 @@ describe("update", () => {
       endpoint: "https://example.com/",
       database: db as never,
       validatorSet: {} as ValidatorJson,
+      chainId: "test-chain",
     });
     db.getBlockMeta.mockResolvedValue(null);
     setupFetchMock();
@@ -233,6 +235,20 @@ describe("update", () => {
     });
   });
 
+  it("verifies the block against the configured chain ID", async () => {
+    const { verifyCommit } =
+      await import("@freedomofpress/cometbft/dist/lightclient");
+
+    await updater.update();
+
+    expect(verifyCommit).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      "test-chain",
+    );
+  });
+
   it("skips update when block is already applied", async () => {
     // Block time from verifyCommit mock returns 1000n
     db.getBlockMeta.mockResolvedValue({ blockTime: 1000 });
@@ -283,6 +299,7 @@ describe("handleUpdateAlarm", () => {
       endpoint: "https://example.com/",
       database: db as never,
       validatorSet: {} as ValidatorJson,
+      chainId: "test-chain",
     });
     let resolveUpdated: (() => void) | null = null;
     updated = new Promise<void>((r) => (resolveUpdated = r));
@@ -358,6 +375,7 @@ describe("retryIfFailed", () => {
       endpoint: "https://example.com/",
       database: db as never,
       validatorSet: {} as ValidatorJson,
+      chainId: "test-chain",
     });
     setupFetchMock();
     db.getBlockMeta.mockResolvedValue(null);
@@ -420,6 +438,7 @@ describe("start", () => {
       endpoint: "https://example.com/",
       database: db as never,
       validatorSet: {} as ValidatorJson,
+      chainId: "test-chain",
     });
     let resolveScheduled: (() => void) | null = null;
     scheduled = new Promise<void>((r) => (resolveScheduled = r));
