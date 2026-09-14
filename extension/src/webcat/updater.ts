@@ -27,6 +27,8 @@ export type EnrollmentUpdaterOptions = {
   localDataPath: string;
   database: Database;
   validatorSet: ValidatorJson;
+  /** Expected CometBFT chain ID; blocks from any other chain are rejected. */
+  chainId: string;
   checkInterval?: number;
   updateInterval?: number;
   fetchTimeout?: number;
@@ -52,6 +54,7 @@ export class EnrollmentUpdater extends EventTarget {
   readonly #localDataPath: string;
   readonly #db: Database;
   readonly #validatorSet: ValidatorJson;
+  readonly #chainId: string;
   readonly #checkInterval: number;
   readonly #updateInterval: number;
   readonly #fetchTimeout: number;
@@ -65,6 +68,7 @@ export class EnrollmentUpdater extends EventTarget {
     this.#localDataPath = options.localDataPath;
     this.#db = options.database;
     this.#validatorSet = options.validatorSet;
+    this.#chainId = options.chainId;
     this.#checkInterval =
       options.checkInterval || EnrollmentUpdater.DefaultCheckInterval;
     this.#updateInterval =
@@ -152,7 +156,7 @@ export class EnrollmentUpdater extends EventTarget {
         this.#validatorSet,
       );
       const sh = importCommit(block as CommitJson);
-      const out = await verifyCommit(sh, vset, cryptoIndex);
+      const out = await verifyCommit(sh, vset, cryptoIndex, this.#chainId);
 
       if (out.ok) {
         console.log(
