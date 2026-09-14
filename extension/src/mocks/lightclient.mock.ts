@@ -9,9 +9,15 @@ export async function verifyCommit(
   sh: SignedHeader,
   _vset: ValidatorSet,
   _cryptoIndex: CryptoIndex,
+  expectedChainId: string,
 ): Promise<VerifyOutcome> {
   if (!sh?.header || !sh?.commit) {
     throw new Error("SignedHeader missing header/commit");
+  }
+  if (sh.header.chainId !== expectedChainId) {
+    throw new Error(
+      `Chain ID mismatch: expected ${expectedChainId}, got ${sh.header.chainId}`,
+    );
   }
   if (!sh.commit.blockId) throw new Error("Commit missing BlockID");
   return {
