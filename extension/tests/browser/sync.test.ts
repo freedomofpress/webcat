@@ -54,6 +54,19 @@ describe("Mutex", () => {
     mutex.release();
     await expect(promise).resolves.toBe(lock2);
   });
+
+  it("admits all queued waiters sharing the installed lock", async () => {
+    const mutex = new Mutex();
+    const shared = mutex.createLock();
+    await mutex.acquire(); // held by a different lock
+    const a = mutex.acquire(shared); // queued
+    const b = mutex.acquire(shared); // queued with the same lock
+    mutex.release();
+    await a;
+    // `shared` is now installed, so `b` must be admitted too
+    // Instead it stays pending
+    expect(inspect(b)).not.toContain("<pending>");
+  });
 });
 
 describe("Lock", () => {
