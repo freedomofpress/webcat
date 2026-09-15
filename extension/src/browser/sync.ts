@@ -52,9 +52,22 @@ export class Mutex implements Releasable {
 
   release() {
     if (this.#resolvers.length > 0) {
+      // Run the next queued resolver
       const [next, lock] = this.#resolvers.shift()!; // eslint-disable-line @typescript-eslint/no-non-null-assertion
       this.#lock = lock;
-      next?.(this.#lock);
+      next(this.#lock);
+      // The resolver might release synchronously. If not, and other resolvers
+      // in the queue share the same lock, also run them.
+      while (this.#lock === lock) {
+        const i = this.#resolvers.findIndex(([_, lock]) => {
+          return lock === this.#lock;
+        });
+        if (i === -1) {
+          break;
+        }
+        const [[next]] = this.#resolvers.splice(i, 1);
+        next(this.#lock);
+      }
     } else {
       this.#lock = undefined;
     }
