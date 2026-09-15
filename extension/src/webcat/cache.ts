@@ -197,7 +197,7 @@ export interface Depojoifier<V> {
  *  2. store: a {@link KVStore} instance to use for persistence
  *  3. area: the name of the {@link browser.storage.StorageArea | storage area}
  *    to use
- *  4. (optional) depojoifier: a {@link Depojoifier} for converting presisted
+ *  4. (optional) depojoifier: a {@link Depojoifier} for converting persisted
  *    POJOs to V; required if and only if V extends {@link Pojoifiable}.
  *
  * @typeParam V The type of values stored in the cache.
