@@ -44,8 +44,9 @@ export class WebcatRequestHandler extends RequestHandler {
   readonly #contentScript: ContentScript;
   readonly #responseValidator: ResponseValidator;
   readonly #mutex = new Mutex();
-  readonly #bindLock = this.#mutex.createLock();
   readonly #requestLock = this.#mutex.createLock();
+
+  #bindLock? = this.#mutex.createLock();
 
   constructor(db: Database & NamespacedKVStore, config: BundleFetcherConfig) {
     super();
@@ -73,7 +74,13 @@ export class WebcatRequestHandler extends RequestHandler {
   }
 
   override async bind(fqdns: string[]) {
-    using _lock = await this.#mutex.acquire(this.#bindLock);
+    // On first call, acquire #bindLock, locked in the constructor; on
+    // subsequent calls, acquire a unique lock. This ensures request handling
+    // doesn't run before the first bind and binds don't interleave each other.
+    const lock = this.#bindLock;
+    this.#bindLock = undefined;
+    using _ = await this.#mutex.acquire(lock);
+
     super.bind(fqdns);
     const newFqdns = await this.#contentScript.bind(fqdns);
     await clearBrowserCaches(newFqdns);
