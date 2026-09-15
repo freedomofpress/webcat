@@ -57,8 +57,8 @@ function assertHeadersAvailable<T>(
 /**
  * Validates responses from WEBCAT-enrolled origins.
  */
-@permissions.require("tabs")
 @permissions.require("webRequest")
+@permissions.require("webRequestBlocking")
 @permissions.require("webRequestFilterResponse")
 @permissions.require("webRequestFilterResponse.serviceWorkerScript")
 export class ResponseValidator {

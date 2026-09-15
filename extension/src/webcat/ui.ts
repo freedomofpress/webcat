@@ -91,6 +91,7 @@ export function setErrorIcon(tabId: number) {
 }
 
 permissions.require("tabs")(errorpage);
+permissions.require("webNavigation")(errorpage);
 export async function errorpage(
   details: Stateful<RequestDetails>,
   error?: WebcatError,
