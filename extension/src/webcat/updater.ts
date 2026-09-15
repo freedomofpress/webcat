@@ -60,16 +60,16 @@ export interface EnrollmentUpdaterOptions {
   /** Expected CometBFT chain ID; blocks from any other chain are rejected. */
   chainId: string;
   /**
-   * The time in seconds between enrollment update checks. Determines how often
-   * the extension is activated to check whether an update is due. An update is
-   * only downloaded if, at check time, {@link updateInterval} has elapsed
-   * since the last update.
+   * The time in milliseconds between enrollment update checks. Determines how
+   * often the extension is activated to check whether an update is due. An
+   * update is only downloaded if, at check time, {@link updateInterval} has
+   * elapsed since the last update.
    *
    * @defaultValue {@link EnrollmentUpdater.DefaultCheckInterval}
    */
   checkInterval?: number;
   /**
-   * The minimum time in seconds between updates. Update checks are run
+   * The minimum time in milliseconds between updates. Update checks are run
    * periodically at an interval determined by this value. An update is only
    * downloaded when a {@link checkInterval | check } runs and updateInterval
    * has elapsed since the last update.
