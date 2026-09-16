@@ -242,9 +242,11 @@ export class WebcatRequestHandler extends RequestHandler {
       return;
     }
 
-    // Skip non-enrolled requests
+    // #onRequest attaches state to every non-extension request, so missing
+    // state means the request stage was lost: don't let the response through
     if (!details.state) {
-      return;
+      logger.addLog("error", `Request state lost for ${details.url}; cancelling`, details.tabId, getFQDN(details.url)); // prettier-ignore
+      return blockingResponse.set({ cancel: true });
     }
 
     if (!details.state.pendingOrigin) {

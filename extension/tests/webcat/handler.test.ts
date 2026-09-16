@@ -132,6 +132,25 @@ describe("WebcatRequestHandler", () => {
     ).toStrictEqual(["http://example.org/*", "https://example.org/*"]);
   });
 
+  it("should cancel a response whose request state is missing", async () => {
+    const wrh = new WebcatRequestHandler(
+      new WebcatDatabase(defaults),
+      new WebcatUI(defaults),
+      defaults,
+    );
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "1",
+      tabId: 7,
+      url: "https://example.com/",
+    });
+    const event = new RequestEvent("headersreceived", details as never);
+    wrh.dispatchEvent(event);
+
+    await expect(event.blockingResponse.ready()).resolves.toMatchObject({
+      cancel: true,
+    });
+  });
+
   it("should fail closed with an error page when a listener throws", async () => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
     const wrh = new WebcatRequestHandler(
