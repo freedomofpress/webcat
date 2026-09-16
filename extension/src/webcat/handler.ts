@@ -3,6 +3,7 @@ import permissions from "../browser/permissions";
 import {
   BeforeRequestDetails,
   HeadersReceivedDetails,
+  RequestDetails,
   RequestEvent,
   RequestHandler,
 } from "../browser/requests";
@@ -11,7 +12,7 @@ import { Mutex } from "../browser/sync";
 import { CacheKey, isInPartition } from "./cache";
 import { HookBuilder, HookBuilderConfig } from "./hookbuilder";
 import { Database } from "./interfaces/database";
-import { WebcatError } from "./interfaces/errors";
+import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { CachePartition, OriginState } from "./interfaces/originstate";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
@@ -75,6 +76,21 @@ export class WebcatRequestHandler extends RequestHandler {
 
     // Block requests until first bind
     this.#mutex.acquire(this.#bindLock);
+  }
+
+  protected override failClosed(
+    event: RequestEvent<RequestDetails>,
+    error: unknown,
+  ) {
+    super.failClosed(event, error);
+    // Without request state there is no tab or frame to show an error page in
+    const details = event.details as Stateful<RequestDetails>;
+    if (details.state) {
+      this.#ui.showErrorPage(
+        details,
+        new WebcatError(WebcatErrorCode.Internal.UNEXPECTED),
+      );
+    }
   }
 
   override async bind(fqdns: string[]) {
