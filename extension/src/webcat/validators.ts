@@ -523,7 +523,9 @@ export function validateManifest(manifest: Manifest): WebcatError | null {
   }
 
   if (!manifest.files[manifest.default_fallback]) {
-    return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING);
+    return new WebcatError(
+      WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING_FILE,
+    );
   }
 
   if (!manifest.wasm) {
@@ -717,6 +719,7 @@ class ClaimPolicy implements VerificationPolicy {
 
 class CertFreshnessPolicy implements VerificationPolicy {
   validUntil = 0;
+  expired?: WebcatError;
   constructor(private maxAgeSeconds: number) {}
 
   verify(cert: X509Certificate): void {
@@ -725,6 +728,10 @@ class CertFreshnessPolicy implements VerificationPolicy {
     const validUntil = issued + this.maxAgeSeconds;
 
     if (now > validUntil) {
+      this.expired = new WebcatError(WebcatErrorCode.Manifest.EXPIRED, [
+        String(this.maxAgeSeconds),
+        String(issued),
+      ]);
       throw new PolicyError(
         `Signing certificate is too old: issued at ${issued}, max age ${this.maxAgeSeconds}s`,
       );
@@ -819,7 +826,10 @@ export async function verifySigstoreManifest(
   }
 
   if (!verified) {
-    return new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED);
+    return (
+      freshnessPolicy.expired ??
+      new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED)
+    );
   }
 
   return freshnessPolicy.validUntil;
