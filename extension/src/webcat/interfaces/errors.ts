@@ -7,8 +7,6 @@ import { EnrollmentTypes } from "./bundle"; // eslint-disable-line @typescript-e
  * Error codes related to bundle fetching.
  */
 export enum WebcatErrorFetch {
-  /** Unused. */
-  FETCH_PROMISE_MISSING = "ERR_WEBCAT_BUNDLE_FETCH_PROMISE_MISSING",
   /**
    * The {@link fetch} API call failed. Potential causes include network errors
    * or misconfigured bundle paths.
@@ -183,8 +181,6 @@ export enum WebcatErrorManifest {
  * Error codes related to CSP validation.
  */
 export enum WebcatErrorCSP {
-  /** Unused. */
-  PARSE_FAILED = "ERR_WEBCAT_CSP_PARSE_FAILED",
   /**
    * The CSP returned by the server did not match any of the CSPs declared on
    * the manifest.

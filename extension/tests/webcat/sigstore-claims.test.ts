@@ -49,6 +49,10 @@ import {
   SigstoreEnrollment,
   SigstoreSignatures,
 } from "../../src/webcat/interfaces/bundle";
+import {
+  WebcatError,
+  WebcatErrorCode,
+} from "../../src/webcat/interfaces/errors";
 import { verifySigstoreManifest } from "../../src/webcat/validators";
 
 function createSanCert(san: string) {
@@ -133,6 +137,25 @@ describe("verifySigstoreManifest claim matching", () => {
     );
 
     expect(result).toBe(1787137043);
+  });
+
+  it("returns EXPIRED when the signing certificate is older than max_age", async () => {
+    const enrollment = baseEnrollment({
+      "2.5.29.17": "https://github.com/example/repo",
+    });
+
+    const cert = createSanCert("https://github.com/example/repo");
+    cert.notBefore = new Date(Date.now() - 2 * enrollment.max_age * 1000);
+    const signatures = [{ cert }] as unknown as SigstoreSignatures;
+
+    const result = await verifySigstoreManifest(
+      enrollment,
+      manifest,
+      signatures,
+    );
+
+    expect(result).toBeInstanceOf(WebcatError);
+    expect((result as WebcatError).code).toBe(WebcatErrorCode.Manifest.EXPIRED);
   });
 
   it("keeps exact matching when claim is not wrapped", async () => {
