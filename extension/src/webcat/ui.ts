@@ -118,7 +118,7 @@ export class WebcatUI extends BrowserChromeController {
       tabIds.add(details.tabId);
     }
 
-    const code = error?.code ?? "WEBCAT_ERROR_UNDEFINED";
+    const code = error.code;
 
     const params = new URLSearchParams({ code, host: details.state.fqdn });
 
