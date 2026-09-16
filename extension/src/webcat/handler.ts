@@ -226,7 +226,11 @@ export class WebcatRequestHandler extends RequestHandler {
       return;
     }
 
-    // Skip non-enrolled requests
+    // Requests without state started before this background instance was
+    // running, so #onRequest never saw them. That happens right after
+    // startup, when bindAll has been called but bind hasn't yet: the
+    // <all_urls> listener sees the headers of a non-enrolled origin's request
+    // that was already in flight. It's extremely rare, but we shouldn't block.
     if (!details.state) {
       return;
     }
