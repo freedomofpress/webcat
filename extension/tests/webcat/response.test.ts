@@ -437,7 +437,7 @@ describe("OriginState.verifyManifest", () => {
       default_fallback: "/index.html",
       timestamp: new Date().toISOString(),
       files: {
-        "/index.html": "hash1",
+        "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
       },
       wasm: [],
     };
@@ -572,13 +572,13 @@ describe("OriginState.verifyManifest (sigstore)", () => {
       default_index: "index.html",
       default_fallback: "/index.html",
       files: {
-        "/index.html": "hash1",
-        "/index.html.br": "hash2",
-        "/index.html.gz": "hash3",
-        "/index.html.zst": "hash4",
-        "/index.html.xz": "hash5",
-        "/index.html.bz2": "hash6",
-        "/index.html.lz4": "hash7",
+        "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "/index.html.br": "hash2_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "/index.html.gz": "hash3_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "/index.html.zst": "hash4_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "/index.html.xz": "hash5_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "/index.html.bz2": "hash6_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "/index.html.lz4": "hash7_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
       },
       wasm: [],
     };
@@ -661,8 +661,8 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
       default_fallback: "/index.html",
       timestamp: new Date().toISOString(),
       files: {
-        "/index.html": "hash1",
-        "/admin/index.html": "hash2",
+        "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "/admin/index.html": "hash2_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
       },
       wasm: [],
     };

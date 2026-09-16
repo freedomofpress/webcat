@@ -142,6 +142,10 @@ export enum WebcatErrorManifest {
    */
   FILES_MISSING = "ERR_WEBCAT_MANIFEST_FILES_MISSING",
   /**
+   * A file hash is not an unpadded base64url SHA-256 digest.
+   */
+  FILES_MALFORMED = "ERR_WEBCAT_MANIFEST_FILES_MALFORMED",
+  /**
    * No default index is present on the manifest.
    */
   DEFAULT_INDEX_MISSING = "ERR_WEBCAT_MANIFEST_DEFAULT_INDEX_MISSING",
