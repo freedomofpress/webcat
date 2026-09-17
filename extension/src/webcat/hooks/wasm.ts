@@ -28,11 +28,14 @@ export const wasmHook = updatableHook(
 
     // Async bytecode verifier: uses crypto.subtle.digest with a synchronous
     // fallback for Worklets. Must always return a global.Promise, may never throw.
-    function verifyBytecodeAsync(bufferSource: BufferSource): Promise<void> {
+    function verifyBytecodeAsync(
+      bufferSource: BufferSource,
+    ): Promise<ArrayBuffer> {
       return data.then(({ hashes }) => {
         if (!("crypto" in globalThis)) {
           return Promise.resolve(verifyBytecodeSync(bufferSource));
         }
+        // Extract a copy so the source can't be altered after verification.
         const buffer = extractBuffer(bufferSource);
         return crypto.subtle.digest("SHA-256", buffer).then((digestBuffer) => {
           const hashHex: string = arrayBuffertoBase64Url(digestBuffer);
@@ -42,12 +45,17 @@ export const wasmHook = updatableHook(
             );
           }
           console.log(`[WEBCAT] Verified WASM (async) ${hashHex}`);
+          return buffer;
         });
       });
     }
 
     // Synchronous bytecode verifier: uses the synchronous SHA256(buffer).
-    function verifyBytecodeSync(bufferSource: BufferSource): void {
+    function verifyBytecodeSync(bufferSource: BufferSource): ArrayBuffer {
+      // Per https://github.com/WebAssembly/spec/pull/2084, bufferSource could
+      // be a SharedArrayBuffer, and hence writable from another thread.
+      // Because of that, we need to work on a copy even in the synchronous
+      // case.
       const buffer = extractBuffer(bufferSource);
       const hashHex: string = arrayBuffertoBase64Url(SHA256(buffer));
       if (!scope.data.hashes?.includes(hashHex)) {
@@ -56,14 +64,15 @@ export const wasmHook = updatableHook(
         );
       }
       console.log(`[WEBCAT] Verified WASM (sync) ${hashHex}`);
+      return buffer;
     }
 
     // Helper: Extract an ArrayBuffer from a bufferSource.
     function extractBuffer(bufferSource: BufferSource): ArrayBuffer {
       if (global.ArrayBuffer.isView(bufferSource)) {
-        return bufferSource.buffer as ArrayBuffer;
+        return bufferSource.buffer.slice();
       }
-      return bufferSource as ArrayBuffer;
+      return bufferSource.slice();
     }
 
     // ============================
@@ -87,9 +96,14 @@ export const wasmHook = updatableHook(
           compileOptions,
         );
       } else {
-        return verifyBytecodeAsync(source).then(
-          originalInstantiate.bind(this, source, importObject, compileOptions),
-        );
+        return verifyBytecodeAsync(source).then((verifiedSource) => {
+          return originalInstantiate.call(
+            this,
+            verifiedSource,
+            importObject,
+            compileOptions,
+          );
+        });
       }
     }
     exportFunc(hookedInstantiate, wasm, "instantiate");
@@ -101,9 +115,9 @@ export const wasmHook = updatableHook(
       bufferSource: BufferSource,
       compileOptions?: object,
     ): Promise<WebAssembly.Module> {
-      return verifyBytecodeAsync(bufferSource).then(
-        originalCompile.bind(this, bufferSource, compileOptions),
-      );
+      return verifyBytecodeAsync(bufferSource).then((verifiedSource) => {
+        return originalCompile.call(this, verifiedSource, compileOptions);
+      });
     }
     exportFunc(hookedCompile, wasm, "compile");
 
@@ -113,8 +127,8 @@ export const wasmHook = updatableHook(
       this: typeof wasm,
       bufferSource: BufferSource,
     ): boolean {
-      verifyBytecodeSync(bufferSource);
-      return originalValidate.call(this, bufferSource);
+      const verifiedSource = verifyBytecodeSync(bufferSource);
+      return originalValidate.call(this, verifiedSource);
     }
     exportFunc(hookedValidate, wasm, "validate");
 
@@ -127,16 +141,20 @@ export const wasmHook = updatableHook(
       compileOptions?: object,
     ): Promise<WebAssembly.WebAssemblyInstantiatedSource> {
       return global.Promise.resolve(source)
-        .then((response) => response.clone().arrayBuffer())
-        .then(verifyBytecodeAsync)
-        .then(
-          originalInstantiateStreaming.bind(
+        .then((response) =>
+          Promise.all([response.clone().arrayBuffer(), response.headers]),
+        )
+        .then(([bufferSource, headers]) =>
+          Promise.all([verifyBytecodeAsync(bufferSource), headers]),
+        )
+        .then(([verifiedSource, headers]) => {
+          return originalInstantiateStreaming.call(
             this,
-            source,
+            new Response(verifiedSource, { headers }),
             importObject,
             compileOptions,
-          ),
-        );
+          );
+        });
     }
     exportFunc(hookedInstantiateStreaming, wasm, "instantiateStreaming");
 
@@ -148,9 +166,19 @@ export const wasmHook = updatableHook(
       compileOptions?: object,
     ): Promise<WebAssembly.Module> {
       return global.Promise.resolve(source)
-        .then((response) => response.clone().arrayBuffer())
-        .then(verifyBytecodeAsync)
-        .then(originalCompileStreaming.bind(this, source, compileOptions));
+        .then((response) =>
+          Promise.all([response.clone().arrayBuffer(), response.headers]),
+        )
+        .then(([bufferSource, headers]) =>
+          Promise.all([verifyBytecodeAsync(bufferSource), headers]),
+        )
+        .then(([verifiedSource, headers]) => {
+          return originalCompileStreaming.call(
+            this,
+            new Response(verifiedSource, { headers }),
+            compileOptions,
+          );
+        });
     }
     exportFunc(hookedCompileStreaming, wasm, "compileStreaming");
 
@@ -181,8 +209,8 @@ export const wasmHook = updatableHook(
           "[WEBCAT] Constructor WebAssembly.Module requires 'new'",
         );
       }
-      verifyBytecodeSync(bufferSource);
-      return new OriginalModule(bufferSource);
+      const verifiedSource = verifyBytecodeSync(bufferSource);
+      return new OriginalModule(verifiedSource);
     }
     const hookedModule =
       HookedModule as unknown as WebAssemblyModuleConstructor;
