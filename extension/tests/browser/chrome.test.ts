@@ -16,7 +16,9 @@ vi.stubGlobal("window", {
 
 const mockSetTitle = vi.fn();
 const mockSetIcon = vi.fn();
+const mockSetPopup = vi.fn();
 const mockShow = vi.fn();
+const mockHide = vi.fn();
 const mockUpdate = vi.fn();
 vi.stubGlobal("browser", {
   runtime: {
@@ -29,7 +31,9 @@ vi.stubGlobal("browser", {
   pageAction: {
     setTitle: mockSetTitle,
     setIcon: mockSetIcon,
+    setPopup: mockSetPopup,
     show: mockShow,
+    hide: mockHide,
   },
   tabs: {
     update: mockUpdate,
@@ -74,10 +78,22 @@ describe("BrowserChromeController", () => {
     );
   });
 
+  it("shows the default page action icon", async () => {
+    await expect(bcc.showIcon(345)).resolves.toBeUndefined();
+    expect(mockSetIcon).not.toHaveBeenCalled();
+    expect(mockSetTitle).not.toHaveBeenCalled();
+    expect(mockSetPopup).not.toHaveBeenCalled();
+  });
+
   it("sets the page action icon correctly", async () => {
     iconPaths.mockImplementationOnce(({ name }) => `icons/${name}.png`);
+    pagePaths.mockImplementationOnce(({ name }) => `pages/${name}.html`);
     await expect(
-      bcc.showIcon(123, "warning", "Warning!"),
+      bcc.showIcon(123, {
+        name: "warning",
+        title: "Warning!",
+        popup: { name: "popup" },
+      }),
     ).resolves.toBeUndefined();
     expect(mockSetIcon).toHaveBeenCalledExactlyOnceWith({
       tabId: 123,
@@ -87,12 +103,17 @@ describe("BrowserChromeController", () => {
       tabId: 123,
       title: "Warning!",
     });
+    expect(mockSetPopup).toHaveBeenCalledExactlyOnceWith({
+      tabId: 123,
+      popup:
+        "moz-extension://3a3a9fbd-c94e-42b7-b590-a5842e2c4ed8/pages/popup.html",
+    });
     expect(mockShow).toHaveBeenCalledExactlyOnceWith(123);
   });
 
   it("doesn't throw when setting the icon for an invalid tabId", async () => {
     await expect(
-      bcc.showIcon(-1, "warning", "Warning!"),
+      bcc.showIcon(-1, { name: "warning", title: "Warning!" }),
     ).resolves.toBeUndefined();
     expect(mockSetIcon).not.toHaveBeenCalled();
     expect(mockSetTitle).not.toHaveBeenCalled();
@@ -129,5 +150,10 @@ describe("BrowserChromeController", () => {
   it("doesn't throw when loading a page to an invalid tabId", async () => {
     await expect(bcc.loadPage(-1, "settings")).resolves.toBeUndefined();
     expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it("hides an icon correctly", async () => {
+    await expect(bcc.hideIcon(456)).resolves.toBeUndefined();
+    expect(mockHide).toHaveBeenCalledExactlyOnceWith(456);
   });
 });

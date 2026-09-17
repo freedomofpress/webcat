@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../../src/browser/permissions", () => ({
   default: {
     require: vi.fn().mockReturnValue(vi.fn()),
+    addEventListener: vi.fn(),
   },
 }));
 
@@ -108,11 +109,9 @@ describe("WebcatRequestHandler", () => {
       });
 
     // Race two bind calls
-    const wrh = new WebcatRequestHandler(
-      new WebcatDatabase(defaults),
-      new WebcatUI(defaults),
-      defaults,
-    );
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    const wrh = new WebcatRequestHandler(db, ui, defaults);
     const bind1 = wrh.bind(["example.com"]);
     const bind2 = wrh.bind(["example.org"]);
     await Promise.all([bind1, bind2]);

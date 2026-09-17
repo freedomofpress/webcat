@@ -43,5 +43,11 @@
   },
   "WEBCAT_webcatIsUnavailable": {
     "message": "WEBCAT ei käytettävissä tällä sivustolla."
+  },
+  "WEBCAT_webcatNotOperational": {
+    "message": "WEBCAT ei välttämättä toimi oikein"
+  },
+  "WEBCAT_missingPermissions": {
+    "message": "WEBCATilta puuttuu seuraavat käyttöoikeudet:\n\n$1"
   }
 }

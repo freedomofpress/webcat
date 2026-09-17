@@ -35,7 +35,7 @@ export default {
     const cfg = Object.assign(Object.assign({}, defaults), options);
 
     const db = new WebcatDatabase(cfg);
-    const ui = new WebcatUI(cfg);
+    const ui = new WebcatUI(db, db.namespace("ui"), cfg);
     const requestHandler = new WebcatRequestHandler(db, ui, cfg);
     const updater = new EnrollmentUpdater(Object.assign({ database: db }, cfg));
 
