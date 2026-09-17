@@ -28,7 +28,7 @@ export class HookBuilder {
    * @param store A key-value store for persisting the builder's cryptographic
    *   key and salt.
    */
-  constructor(store: KVStore, config: { staticHookPath: string }) {
+  constructor(store: KVStore, config: HookBuilderConfig) {
     this.#staticHookPath = config.staticHookPath;
     this.#firstPartyKey = store
       .get("firstPartyKey", "session")

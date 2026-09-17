@@ -20,6 +20,20 @@ export type PathTemplateProperties = {
 export type PathTemplate = (p: PathTemplateProperties) => string;
 
 /** @internal @inline */
+export type IconOptions = {
+  /** The name of the icon. */
+  name?: string;
+  /** The title displayed in the icon's tooltip. */
+  title?: string;
+  /** The popup page to display on click. */
+  popup?: {
+    name: string;
+    query?: string | URLSearchParams;
+    fragment?: string | URLSearchParams;
+  };
+};
+
+/** @internal @inline */
 export type BrowserChromeControllerConfig = {
   /** Template for icon paths. */
   iconPaths: PathTemplate;
@@ -79,20 +93,39 @@ export class BrowserChromeController {
   }
 
   /**
-   * Displays a named icon in the browser's URL bar.
+   * Displays an icon in the browser's URL bar.
    *
    * @param tabId The ID of the tab to display the icon in.
-   * @param name The name of the icon.
-   * @param title A title text for the icon.
+   * @param options
    */
-  async showIcon(tabId: number, name: string, title: string) {
+  async showIcon(tabId: number, options?: IconOptions) {
     if (tabId < 0) {
       return;
     }
-    browser.pageAction.setTitle({ tabId, title });
-    const path = this.#iconPaths({ name, colorScheme: this.getColorScheme() });
-    await browser.pageAction.setIcon({ tabId, path });
+    if (options?.title) {
+      browser.pageAction.setTitle({ tabId, title: options.title });
+    }
+    if (options?.name) {
+      const path = this.#iconPaths({
+        name: options.name,
+        colorScheme: this.getColorScheme(),
+      });
+      await browser.pageAction.setIcon({ tabId, path });
+    }
+    if (options?.popup) {
+      const popup = this.getPageURL(options.popup.name, options.popup);
+      browser.pageAction.setPopup({ tabId, popup });
+    }
     await browser.pageAction.show(tabId);
+  }
+
+  /**
+   * Hides the icon shown on a specific tab.
+   *
+   * @param tabId The ID of the tab to hide the icon from.
+   */
+  async hideIcon(tabId: number) {
+    await browser.pageAction.hide(tabId);
   }
 
   /**
