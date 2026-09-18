@@ -19,5 +19,11 @@
   },
   "WEBCAT_webcatIsUnavailable": {
     "message": "WEBCAT unavailable on this site."
+  },
+  "WEBCAT_webcatNotOperational": {
+    "message": "WEBCAT may not be operating correctly"
+  },
+  "WEBCAT_missingPermissions": {
+    "message": "WEBCAT is missing the following permissions:\n\n$1"
   }
 }
