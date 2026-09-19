@@ -145,8 +145,9 @@ export class WebcatRequestHandler extends RequestHandler {
   }
 
   async #onRequest(event: RequestEvent<BeforeRequestDetails>) {
-    using blockingResponse = event.blockingResponse;
+    using blockingResponse = event.createBlockingResponse();
     if (isExtensionRequest(event.details)) {
+      blockingResponse.cancel = false;
       return;
     }
     const details = await this.#initializeState(event.details);
@@ -162,8 +163,12 @@ export class WebcatRequestHandler extends RequestHandler {
         event.details,
       );
       this.dispatchEvent(beforeframeload);
-      await beforeframeload.blockingResponse.ready();
-      blockingResponse.set(beforeframeload.blockingResponse);
+      // A cancel from the beforeframeload listeners ends the request stage;
+      // allowing is left to the checks below
+      const frameResult = await beforeframeload.ready();
+      if (frameResult.cancel) {
+        return blockingResponse.set(frameResult);
+      }
     }
 
     // For non-frames, check for cached origin
@@ -197,20 +202,22 @@ export class WebcatRequestHandler extends RequestHandler {
         if (details.state.isFrame) {
           logger.info(`Redirecting to https`, details);
         }
-        return blockingResponse.set(result);
+        return blockingResponse.set({ ...result, cancel: false });
       }
     }
 
     // No origin state means the fqdn isn't enrolled
     if (!details.state.pendingOrigin) {
+      blockingResponse.cancel = false;
       return;
     }
 
     await this.#responseValidator.validateContent(details);
+    blockingResponse.cancel = false;
   }
 
   async #onHeaders(event: RequestEvent<HeadersReceivedDetails>) {
-    using blockingResponse = event.blockingResponse;
+    using blockingResponse = event.createBlockingResponse();
     const details = event.details as Stateful<HeadersReceivedDetails>;
 
     // Extension requests (such as bundle fetches) must never redirect
@@ -221,8 +228,9 @@ export class WebcatRequestHandler extends RequestHandler {
         (header) => header.name.toLowerCase() === "location",
       )?.value;
       if (location && !isSameOriginURL(location, details.url)) {
-        return blockingResponse.set({ cancel: true });
+        return;
       }
+      blockingResponse.cancel = false;
       return;
     }
 
@@ -232,6 +240,7 @@ export class WebcatRequestHandler extends RequestHandler {
     // <all_urls> listener sees the headers of a non-enrolled origin's request
     // that was already in flight. It's extremely rare, but we shouldn't block.
     if (!details.state) {
+      blockingResponse.cancel = false;
       return;
     }
 
@@ -311,7 +320,7 @@ export class WebcatRequestHandler extends RequestHandler {
       browser.webNavigation.onDOMContentLoaded.addListener(listener);
     }
 
-    return;
+    blockingResponse.cancel = false;
   }
 
   async #commitVerifiedOrigin(

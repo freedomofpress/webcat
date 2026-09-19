@@ -6,6 +6,7 @@ vi.mock("../../src/browser/permissions", () => ({
   },
 }));
 
+import { RequestDetailsBase, RequestEvent } from "../../src/browser/requests";
 import { defaults } from "../../src/config";
 import { WebcatDatabase } from "../../src/webcat/db";
 import { WebcatRequestHandler } from "../../src/webcat/handler";
@@ -81,6 +82,9 @@ vi.stubGlobal("browser", {
   browsingData: {
     remove: mockRemoveBrowsingData,
   },
+  tabs: {
+    update: vi.fn().mockResolvedValue({}),
+  },
 });
 
 vi.stubGlobal("window", {
@@ -125,5 +129,33 @@ describe("WebcatRequestHandler", () => {
     expect(
       mockRegisterContentScripts.mock.calls[1][0][0].matches,
     ).toStrictEqual(["http://example.org/*", "https://example.org/*"]);
+  });
+
+  it("should keep its verdict when an embedder listener allows the request later", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const wrh = new WebcatRequestHandler(
+      new WebcatDatabase(defaults),
+      new WebcatUI(defaults),
+      defaults,
+    );
+    // An embedding extension adds its own policy check on the same event;
+    // it is satisfied and allows, finishing after WEBCAT rejected the response
+    wrh.addEventListener("headersreceived", async (event) => {
+      using blockingResponse = event.createBlockingResponse();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      blockingResponse.cancel = false;
+    });
+    // No responseHeaders: WEBCAT's header validation fails with HEADERS_MISSING
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "1",
+      tabId: 7,
+      url: "https://example.com/",
+      state: { fqdn: "example.com", isFrame: true, pendingOrigin: {} },
+    });
+    const event = new RequestEvent("headersreceived", details as never);
+    wrh.dispatchEvent(event);
+
+    await expect(event.ready()).resolves.toMatchObject({ cancel: true });
+    errorLog.mockRestore();
   });
 });

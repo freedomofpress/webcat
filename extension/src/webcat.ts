@@ -43,8 +43,9 @@ export default {
     requestHandler.addEventListener(
       "beforeframeload",
       async (event: RequestEvent<BeforeRequestDetails>) => {
-        using _blockingResponse = event.blockingResponse;
+        using blockingResponse = event.createBlockingResponse();
         await updater.retryIfFailed();
+        blockingResponse.cancel = false;
       },
     );
 
