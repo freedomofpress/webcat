@@ -6,6 +6,7 @@ vi.mock("../../src/browser/permissions", () => ({
   },
 }));
 
+import { RequestDetailsBase, RequestEvent } from "../../src/browser/requests";
 import { defaults } from "../../src/config";
 import { WebcatDatabase } from "../../src/webcat/db";
 import { WebcatRequestHandler } from "../../src/webcat/handler";
@@ -30,6 +31,7 @@ const mockGetRegisteredConentScripts = vi.fn().mockResolvedValue([]);
 const mockRegisterContentScripts = vi.fn();
 const mockUnregisterContentScripts = vi.fn();
 const mockRemoveBrowsingData = vi.fn();
+const mockTabsUpdate = vi.fn().mockResolvedValue({});
 
 vi.stubGlobal("browser", {
   storage: {
@@ -81,6 +83,9 @@ vi.stubGlobal("browser", {
   browsingData: {
     remove: mockRemoveBrowsingData,
   },
+  tabs: {
+    update: mockTabsUpdate,
+  },
 });
 
 vi.stubGlobal("window", {
@@ -125,5 +130,53 @@ describe("WebcatRequestHandler", () => {
     expect(
       mockRegisterContentScripts.mock.calls[1][0][0].matches,
     ).toStrictEqual(["http://example.org/*", "https://example.org/*"]);
+  });
+
+  it("should cancel a response whose request state is missing", async () => {
+    const wrh = new WebcatRequestHandler(
+      new WebcatDatabase(defaults),
+      new WebcatUI(defaults),
+      defaults,
+    );
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "1",
+      tabId: 7,
+      url: "https://example.com/",
+    });
+    const event = new RequestEvent("headersreceived", details as never);
+    wrh.dispatchEvent(event);
+
+    await expect(event.blockingResponse.ready()).resolves.toMatchObject({
+      cancel: true,
+    });
+  });
+
+  it("should fail closed with an error page when a listener throws", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const wrh = new WebcatRequestHandler(
+      new WebcatDatabase(defaults),
+      new WebcatUI(defaults),
+      defaults,
+    );
+    // The headersreceived listener throws on state without a pendingOrigin
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "1",
+      tabId: 7,
+      url: "https://example.com/",
+      state: { fqdn: "example.com", isFrame: true },
+    });
+    const event = new RequestEvent("headersreceived", details as never);
+    wrh.dispatchEvent(event);
+
+    await expect(event.blockingResponse.ready()).resolves.toMatchObject({
+      cancel: true,
+    });
+    expect(mockTabsUpdate).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        url: expect.stringContaining("ERR_WEBCAT_INTERNAL_UNEXPECTED"),
+      }),
+    );
+    errorLog.mockRestore();
   });
 });

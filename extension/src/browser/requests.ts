@@ -89,6 +89,7 @@ export class BlockingResponse
   #promise: Promise<BlockingResponse>;
   #resolve: (br: BlockingResponse) => void;
   #pendingScopes: number;
+  #failed = false;
 
   cancel?: boolean | undefined;
   redirectUrl?: string | undefined;
@@ -110,15 +111,23 @@ export class BlockingResponse
    * Implements the {@link Disposable} interface.
    */
   get [Symbol.dispose]() {
+    return this.hold();
+  }
+
+  /**
+   * Keeps {@link ready} pending until the returned function is called.
+   * Calling it more than once has no effect.
+   */
+  hold() {
     this.#pendingScopes++;
-    const disposed = false;
+    let released = false;
     return () => {
-      if (disposed) {
+      if (released) {
         return;
       }
-      this.#pendingScopes--;
-      if (this.#pendingScopes === 0) {
-        this.#resolve(this);
+      released = true;
+      if (--this.#pendingScopes === 0) {
+        this.#settle();
       }
     };
   }
@@ -128,16 +137,36 @@ export class BlockingResponse
    */
   async ready() {
     if (this.#pendingScopes === 0) {
-      this.#resolve(this);
+      this.#settle();
     }
     return await this.#promise;
   }
 
   /**
    * @param value An object whose properties are copied to this BlockingResponse.
+   *   Copying a {@link fail | failed} BlockingResponse fails this one too.
    */
   set(value: browser.webRequest.BlockingResponse) {
     Object.assign(this, value);
+    if (value instanceof BlockingResponse && value.#failed) {
+      this.fail();
+    }
+  }
+
+  /**
+   * Cancels the request irreversibly: whatever is set afterwards,
+   * {@link ready} resolves with `cancel` set to true.
+   */
+  fail() {
+    this.#failed = true;
+    this.cancel = true;
+  }
+
+  #settle() {
+    if (this.#failed) {
+      this.cancel = true;
+    }
+    this.#resolve(this);
   }
 }
 
@@ -177,44 +206,96 @@ export class RequestEvent<T extends RequestDetails> extends Event {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-export interface RequestHandler extends EventTarget {
-  /** @group Methods */
-  addEventListener: EventTarget["addEventListener"] &
-    ((
-      type: "beforerequest",
-      callback: (event: RequestEvent<BeforeRequestDetails>) => void,
-    ) => void) &
-    ((
-      type: "beforeheaders",
-      callback: (event: RequestEvent<BeforeHeadersDetails>) => void,
-    ) => void) &
-    ((
-      type: "headersreceived",
-      callback: (event: RequestEvent<HeadersReceivedDetails>) => void,
-    ) => void) &
-    ((
-      type: "erroroccurred",
-      callback: (event: RequestEvent<ErrorOccurredDetails>) => void,
-    ) => void) &
-    ((
-      type: "completed",
-      callback: (event: RequestEvent<CompletedDetails>) => void,
-    ) => void);
+/**
+ * Maps event types to the {@link RequestEvent} dispatched for them.
+ */
+export interface RequestEventMap {
+  beforerequest: RequestEvent<BeforeRequestDetails>;
+  beforeheaders: RequestEvent<BeforeHeadersDetails>;
+  headersreceived: RequestEvent<HeadersReceivedDetails>;
+  erroroccurred: RequestEvent<ErrorOccurredDetails>;
+  completed: RequestEvent<CompletedDetails>;
 }
 
 /**
  * Handles web requests and responses for specific FQDNs. Manages the entire
  * lifecycle of a request and aggregates details such as request headers and
  * response headers to make them available in later stages.
+ *
+ * Listeners fail closed: an event's {@link BlockingResponse} stays pending
+ * until the listener settles, and a listener that throws or rejects cancels
+ * the request (see {@link failClosed}).
  */
 @permissions.require("webRequest")
 @permissions.require("webRequestBlocking")
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class RequestHandler extends EventTarget {
   readonly #details = new Map<string, RequestDetails>();
+  readonly #wrapped = new WeakMap<object, EventListener>();
 
   #currentListeners: RegisteredListeners = {};
+
+  /** @group Methods */
+  override addEventListener<K extends keyof RequestEventMap>(type: K, callback: (event: RequestEventMap[K]) => unknown, options?: AddEventListenerOptions | boolean): void; // prettier-ignore
+  /** @group Methods */
+  override addEventListener(type: string, callback: EventListenerOrEventListenerObject | null, options?: AddEventListenerOptions | boolean): void; // prettier-ignore
+  override addEventListener(
+    type: string,
+    callback: EventListenerOrEventListenerObject | ((event: never) => unknown) | null, // prettier-ignore
+    options?: AddEventListenerOptions | boolean,
+  ) {
+    if (!callback) {
+      return;
+    }
+    let wrapped = this.#wrapped.get(callback);
+    if (!wrapped) {
+      const listener = (
+        typeof callback === "function"
+          ? callback
+          : callback.handleEvent.bind(callback)
+      ) as (this: RequestHandler, event: Event) => unknown;
+      wrapped = (event) => {
+        if (!(event instanceof RequestEvent)) {
+          listener.call(this, event);
+          return;
+        }
+        // Hold the response until the listener settles, whether it returns a
+        // value, a promise, or throws; cancel the request on any failure.
+        const release = event.blockingResponse.hold();
+        Promise.try(() => listener.call(this, event))
+          .catch((error: unknown) => {
+            event.blockingResponse.fail();
+            this.failClosed(event, error);
+          })
+          .finally(release);
+      };
+      this.#wrapped.set(callback, wrapped);
+    }
+    super.addEventListener(type, wrapped, options);
+  }
+
+  /** @group Methods */
+  override removeEventListener(
+    type: string,
+    callback: EventListenerOrEventListenerObject | null,
+    options?: EventListenerOptions | boolean,
+  ) {
+    const wrapped = callback ? this.#wrapped.get(callback) : undefined;
+    super.removeEventListener(type, wrapped ?? null, options);
+  }
+
+  /**
+   * Called after a listener threw or rejected and the request was cancelled.
+   * Subclasses may override this to report the failure.
+   *
+   * @param event The event whose listener failed.
+   * @param error The thrown value or rejection reason.
+   */
+  protected failClosed(event: RequestEvent<RequestDetails>, error: unknown) {
+    console.error(
+      `[webcat] '${event.type}' listener failed; failing closed`,
+      error,
+    );
+  }
 
   /**
    * Binds the handler to the given list of FQDNs. When called, the handler

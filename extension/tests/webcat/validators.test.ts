@@ -7,7 +7,9 @@ vi.mock("../../src/browser/permissions", () => ({
   },
 }));
 
-import { validateCSP } from "../../src/webcat/validators";
+import { Manifest } from "../../src/webcat/interfaces/bundle";
+import { WebcatErrorCode } from "../../src/webcat/interfaces/errors";
+import { validateCSP, validateManifest } from "../../src/webcat/validators";
 
 // Mocks (unchanged)
 vi.mock("../../src/webcat/logger", () => ({
@@ -388,5 +390,38 @@ describe("validateCSP", () => {
     await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
       "CSP contains a comma",
     );
+  });
+});
+
+describe("validateManifest", () => {
+  const manifest: Manifest = {
+    name: "app",
+    version: "1.0.0",
+    default_csp: "default-src 'self'",
+    extra_csp: {},
+    default_index: "index.html",
+    default_fallback: "/index.html",
+    files: { "/index.html": "oUTcA3p3Jmt-YJG7Ium44fhAOOTHs-WMiJwWQH4_D8g" },
+    wasm: [],
+  };
+
+  it("accepts base64url SHA-256 file hashes", () => {
+    expect(validateManifest(manifest)).toBeNull();
+  });
+
+  it("rejects file hashes that are not base64url SHA-256 digests", () => {
+    for (const hash of [
+      "",
+      "not base64url!",
+      "a".repeat(64),
+      "YQ==",
+      // Non-canonical: the same digest with non-zero padding bits
+      "oUTcA3p3Jmt-YJG7Ium44fhAOOTHs-WMiJwWQH4_D8h",
+    ]) {
+      const files = { ...manifest.files, "/x.js": hash };
+      expect(validateManifest({ ...manifest, files })?.code).toBe(
+        WebcatErrorCode.Manifest.FILES_MALFORMED,
+      );
+    }
   });
 });

@@ -501,9 +501,20 @@ export function validateSigstoreEnrollment(
   return null;
 }
 
+// An unpadded base64url SHA-256 digest, the only format response.ts decodes.
+// The last character carries two padding bits that must be zero, so only the
+// canonical encoding of a digest matches.
+const SHA256_BASE64URL = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
+
 export function validateManifest(manifest: Manifest): WebcatError | null {
   if (!manifest.files || Object.keys(manifest.files).length < 1) {
     return new WebcatError(WebcatErrorCode.Manifest.FILES_MISSING);
+  }
+
+  for (const [path, hash] of Object.entries(manifest.files)) {
+    if (!SHA256_BASE64URL.test(hash)) {
+      return new WebcatError(WebcatErrorCode.Manifest.FILES_MALFORMED, [path]);
+    }
   }
 
   if (!manifest.default_csp) {

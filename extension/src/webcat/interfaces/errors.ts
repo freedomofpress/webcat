@@ -140,6 +140,10 @@ export enum WebcatErrorManifest {
    */
   FILES_MISSING = "ERR_WEBCAT_MANIFEST_FILES_MISSING",
   /**
+   * A file hash is not an unpadded base64url SHA-256 digest.
+   */
+  FILES_MALFORMED = "ERR_WEBCAT_MANIFEST_FILES_MALFORMED",
+  /**
    * No default index is present on the manifest.
    */
   DEFAULT_INDEX_MISSING = "ERR_WEBCAT_MANIFEST_DEFAULT_INDEX_MISSING",
@@ -247,6 +251,17 @@ export enum WebcatErrorFile {
 }
 
 /**
+ * Error codes for unexpected internal failures.
+ */
+export enum WebcatErrorInternal {
+  /**
+   * A request listener threw or rejected. The request was cancelled instead
+   * of being let through unvalidated. This indicates a WEBCAT bug.
+   */
+  UNEXPECTED = "ERR_WEBCAT_INTERNAL_UNEXPECTED",
+}
+
+/**
  * All user-facing error codes.
  */
 export const WebcatErrorCode = {
@@ -266,6 +281,8 @@ export const WebcatErrorCode = {
   URL: { ...WebcatErrorURL },
   /** {@inheritDoc WebcatErrorFile} */
   File: { ...WebcatErrorFile },
+  /** {@inheritDoc WebcatErrorInternal} */
+  Internal: { ...WebcatErrorInternal },
 } as const;
 
 /**
@@ -279,7 +296,8 @@ export type WebcatErrorCodeAny =
   | WebcatErrorCSP
   | WebcatErrorHeaders
   | WebcatErrorURL
-  | WebcatErrorFile;
+  | WebcatErrorFile
+  | WebcatErrorInternal;
 
 /**
  * Error class for user-facing errors.

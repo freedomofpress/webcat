@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/browser/permissions", () => ({
   default: {
@@ -325,5 +325,81 @@ describe("RequestHandler", () => {
       "headersreceived",
       "erroroccurred",
     ]);
+  });
+
+  describe("fails closed", () => {
+    let errorLog: ReturnType<typeof vi.spyOn>;
+    const dispatch = () =>
+      beforeRequest.values().next().value?.({ requestId: "1" }) as unknown;
+
+    beforeEach(() => {
+      handler.bind(["example.com"]);
+      errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      errorLog.mockRestore();
+    });
+
+    it("cancels the request when a listener throws", async () => {
+      handler.addEventListener("beforerequest", () => {
+        throw new Error("boom");
+      });
+      await expect(dispatch()).resolves.toMatchObject({ cancel: true });
+      expect(errorLog).toHaveBeenCalledOnce();
+    });
+
+    it("cancels the request when a listener rejects before holding the response", async () => {
+      handler.addEventListener("beforerequest", async () => {
+        await Promise.reject(new Error("boom"));
+      });
+      await expect(dispatch()).resolves.toMatchObject({ cancel: true });
+    });
+
+    it("cancels the request when a listener rejects while holding the response", async () => {
+      handler.addEventListener("beforerequest", async (event) => {
+        using _ = event.blockingResponse;
+        await Promise.resolve();
+        throw new Error("boom");
+      });
+      await expect(dispatch()).resolves.toMatchObject({ cancel: true });
+    });
+
+    it("stays cancelled when another listener allows the request afterwards", async () => {
+      handler.addEventListener("beforerequest", () => {
+        throw new Error("boom");
+      });
+      handler.addEventListener("beforerequest", async (event) => {
+        using _ = event.blockingResponse;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        event.blockingResponse.set({ cancel: false });
+      });
+      await expect(dispatch()).resolves.toMatchObject({ cancel: true });
+    });
+
+    it("cancels before reporting the failure", async () => {
+      let cancelWhenReported: boolean | undefined;
+      class Reporting extends RequestHandler {
+        protected override failClosed(event: RequestEvent<RequestDetails>) {
+          cancelWhenReported = event.blockingResponse.cancel;
+        }
+      }
+      const reporting = new Reporting();
+      reporting.addEventListener("beforerequest", () => {
+        throw new Error("boom");
+      });
+      const event = new RequestEvent("beforerequest", {} as RequestDetails);
+      reporting.dispatchEvent(event);
+      await event.blockingResponse.ready();
+      expect(cancelWhenReported).toBe(true);
+    });
+
+    it("removes wrapped listeners", async () => {
+      const listener = vi.fn();
+      handler.addEventListener("beforerequest", listener);
+      handler.removeEventListener("beforerequest", listener);
+      await dispatch();
+      expect(listener).not.toHaveBeenCalled();
+    });
   });
 });
