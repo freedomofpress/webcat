@@ -105,7 +105,7 @@ describe("BlockingResponse", () => {
       cancal: false,
     };
     br.set(original);
-    expect(br).toEqual(original);
+    expect(br).toMatchObject(original);
   });
 });
 
@@ -325,5 +325,59 @@ describe("RequestHandler", () => {
       "headersreceived",
       "erroroccurred",
     ]);
+  });
+
+  describe("fails closed", () => {
+    const dispatch = () =>
+      beforeRequest.values().next().value?.({ requestId: "1" }) as unknown;
+
+    beforeEach(() => {
+      handler.bind(["example.com"]);
+    });
+
+    it("cancels when a listener throws after creating its response", async () => {
+      // A throw disposes the response with cancel still at its default.
+      // Dispatched through EventTarget the exception would also be reported
+      // as uncaught, which is fine in the browser but fails the test runner,
+      // so the listener body is run directly here.
+      const event = new RequestEvent("beforerequest", {} as RequestDetails);
+      expect(() => {
+        using _response = event.createBlockingResponse();
+        throw new Error("boom");
+      }).toThrow("boom");
+      await expect(event.ready()).resolves.toMatchObject({ cancel: true });
+    });
+
+    it("cancels when one listener never allows and another allows later", async () => {
+      handler.addEventListener("beforerequest", (event) => {
+        using _response = event.createBlockingResponse();
+      });
+      handler.addEventListener("beforerequest", async (event) => {
+        using blockingResponse = event.createBlockingResponse();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        blockingResponse.cancel = false;
+      });
+      await expect(dispatch()).resolves.toMatchObject({ cancel: true });
+    });
+
+    it("merges the responses when every listener allows", async () => {
+      handler.addEventListener("beforerequest", (event) => {
+        using blockingResponse = event.createBlockingResponse();
+        blockingResponse.redirectUrl = "https://example.com/";
+        blockingResponse.cancel = false;
+      });
+      handler.addEventListener("beforerequest", (event) => {
+        using blockingResponse = event.createBlockingResponse();
+        blockingResponse.cancel = false;
+      });
+      await expect(dispatch()).resolves.toEqual({
+        cancel: false,
+        redirectUrl: "https://example.com/",
+      });
+    });
+
+    it("allows when no listener responds", async () => {
+      await expect(dispatch()).resolves.toMatchObject({ cancel: false });
+    });
   });
 });

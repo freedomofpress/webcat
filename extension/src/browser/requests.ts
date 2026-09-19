@@ -66,21 +66,20 @@ export type RequestDetails =
   | CompletedDetails;
 
 /**
- * The return value for a blocking {@link RequestEvent}. Implements the
- * {@link Disposable} interface. To return a value using a BlockingResponse
- * instance, a synchronous handler may simply assign values to it, or use the
- * {@link set} method. To return a value from an asynchronous handler, include
- * a {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/using using declaration}
- * before the first await expression.
+ * The response of a single listener to a blocking {@link RequestEvent},
+ * created with {@link RequestEvent.createBlockingResponse}. Implements the
+ * {@link Disposable} interface. A new BlockingResponse cancels the request;
+ * a listener signals successful completion by setting {@link cancel} to
+ * false. A synchronous listener may simply assign values to it, or use the
+ * {@link set} method. An asynchronous listener must create it with a
+ * {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/using using declaration}
+ * before its first await expression.
  *
  * @example
  * handler.addEventListener("beforeheaders", async (event) => {
- *  using blockingResponse = event.blockingResponse;
- *  try {
- *    await doSomething(event.details);
- *  } catch {
- *    blockingResponse.cancel = true;
- *  }
+ *  using blockingResponse = event.createBlockingResponse();
+ *  await doSomething(event.details);
+ *  blockingResponse.cancel = false;
  * });
  */
 export class BlockingResponse
@@ -90,7 +89,12 @@ export class BlockingResponse
   #resolve: (br: BlockingResponse) => void;
   #pendingScopes: number;
 
-  cancel?: boolean | undefined;
+  /**
+   * Whether to cancel the request. Defaults to true, so that a listener that
+   * throws, or never completes its checks, cancels the request. Set to false
+   * to signal successful completion.
+   */
+  cancel: boolean | undefined = true;
   redirectUrl?: string | undefined;
   upgradeToSecure?: boolean | undefined;
   requestHeaders?: browser.webRequest.HttpHeaders | undefined;
@@ -164,16 +168,46 @@ export class RequestEvent<T extends RequestDetails> extends Event {
    */
   readonly details: T;
 
-  /**
-   * A {@link BlockingResponse} instance that can be used to respond to this
-   * event.
-   */
-  readonly blockingResponse = new BlockingResponse();
+  readonly #responses: BlockingResponse[] = [];
 
   /** @internal */
   constructor(type: string, details: T) {
     super(type);
     this.details = details;
+  }
+
+  /**
+   * Creates a {@link BlockingResponse} for this event. Each listener creates
+   * its own before its first await expression, so that listeners respond
+   * independently of each other; see {@link ready} for how the responses are
+   * combined.
+   *
+   * @returns A new BlockingResponse that cancels the request until the
+   *   listener sets {@link BlockingResponse.cancel} to false.
+   */
+  createBlockingResponse() {
+    const response = new BlockingResponse();
+    this.#responses.push(response);
+    return response;
+  }
+
+  /**
+   * Awaits all BlockingResponses created for this event and merges them into
+   * a single response. If any of them cancels the request, so does the
+   * result; otherwise, their other properties are combined. With no
+   * BlockingResponses, the request proceeds unchanged.
+   *
+   * @returns A Promise that resolves to the merged response.
+   * @internal
+   */
+  async ready(): Promise<browser.webRequest.BlockingResponse> {
+    const responses = await Promise.all(this.#responses.map((r) => r.ready()));
+    const merged: browser.webRequest.BlockingResponse = Object.assign(
+      {},
+      ...responses,
+    );
+    merged.cancel = responses.some((response) => response.cancel !== false);
+    return merged;
   }
 }
 
@@ -332,7 +366,7 @@ export class RequestHandler extends EventTarget {
     this.#details.set(details.requestId, details);
     const event = new RequestEvent("beforerequest", details);
     this.dispatchEvent(event);
-    return await event.blockingResponse.ready();
+    return await event.ready();
   }
 
   async #beforeHeaders(
@@ -342,7 +376,7 @@ export class RequestHandler extends EventTarget {
     const details = Object.assign(base, d);
     const event = new RequestEvent("beforeheaders", details);
     this.dispatchEvent(event);
-    return await event.blockingResponse.ready();
+    return await event.ready();
   }
 
   async #headersReceived(
@@ -352,7 +386,7 @@ export class RequestHandler extends EventTarget {
     const details = Object.assign(base, d);
     const event = new RequestEvent("headersreceived", details);
     this.dispatchEvent(event);
-    return await event.blockingResponse.ready();
+    return await event.ready();
   }
 
   #errorOccurred(d: browser.webRequest._OnErrorOccurredDetails) {
