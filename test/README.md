@@ -20,6 +20,11 @@ Install Firefox normally. For Tor Browser, install it to `/Applications/Tor Brow
 make test
 ```
 
+`make test` also builds `libext/`, a minimal extension that consumes the
+`npm pack` output of `extension/` with relocated asset paths. Point `--addon`
+at `../dist/webcat-lib-test.zip` to run the suite against the library build
+instead of the bundled extension.
+
 ### Headless mode
 
 Run without a visible browser window:

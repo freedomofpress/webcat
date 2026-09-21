@@ -1,6 +1,7 @@
 DIST := ../dist
 OUT  := $(DIST)/webcat-extension.zip
 OUT_TEST  := $(DIST)/webcat-extension-test.zip
+OUT_LIB_TEST := $(DIST)/webcat-lib-test.tgz
 
 INPUTS := manifest.json dist/bundle.js dist/hooks/content.js icons pages data _locales
 FIXED_MTIME := 198001010000
@@ -32,6 +33,12 @@ package-test: install build-test fetch-data
 	TZ=UTC find $(INPUTS) -type f \
 	  | LC_ALL=C sort \
 	  | zip -X -0 -@ $(OUT_TEST)
+
+# npm package built with the test flag, consumed by ../test/libext
+package-lib-test: install fetch-data
+	rm -f $(DIST)/webcat-*.tgz
+	VITE_TESTING=true npm pack --pack-destination $(DIST)
+	mv $(DIST)/webcat-*.tgz $(OUT_LIB_TEST)
 
 cleanup:
 	rm -rf $(DIST)/* data/

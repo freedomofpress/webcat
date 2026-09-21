@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 import pytest
-from time import sleep
+from time import sleep, monotonic
 from helpers import Browser, TorBrowser, Server, Hook, UpdateServer
 import logging
 import json
@@ -557,6 +557,35 @@ def test_default_fallback(browser: Browser, server: Server, update_server: Updat
     with server.wait_for({"/stale-dir/"}):
         browser.navigate(f"{server.url(dnsnames[0])}/stale-dir/")
     assert "/stale-dir/ verified." in json.dumps(browser.extension_logs())
+
+@pytest.mark.parametrize("browser", ["firefox"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks", [
+    ("cases/testapp", EXPECTED_CSP, {}),
+], indirect=["root"])
+def test_config_paths(browser: Browser, server: Server, update_server: UpdateServer, addon_path):
+    # Every asset path in the running config must resolve inside the addon.
+    # Relevant for extensions built on the library with relocated assets (libext/)
+    browser.install_extension(addon_path)
+    update_server.wait_for_update()
+    browser.attach_extension_console()
+    browser.execute(
+        "var results; (async () => {"
+        "  const c = state.config;"
+        "  const paths = [`${c.localDataPath}/list.json`, `${c.localDataPath}/block.json`, c.staticHookPath,"
+        "    ...['light', 'dark'].flatMap(colorScheme => ["
+        "      c.pagePaths({name: 'error', colorScheme}),"
+        "      ...['webcat', 'webcat-ok', 'webcat-error'].map(name => c.iconPaths({name, colorScheme}))]"
+        "  )];"
+        "  results = await Promise.all(paths.map(async p =>"
+        "    [p, await fetch(browser.runtime.getURL(p)).then(r => r.ok, () => false)]));"
+        "})();",
+        in_extension=True)
+    deadline = monotonic() + 10
+    while not isinstance(results := browser.execute("JSON.stringify(results)", in_extension=True), str):
+        assert monotonic() < deadline, "config paths not resolved within 10s"
+        sleep(0.2)
+    results = json.loads(results)
+    assert [p for p, ok in results if not ok] == []
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [

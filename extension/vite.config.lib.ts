@@ -3,7 +3,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { defineConfig } from "vite";
 
+import base from "./vite.config";
+
 export default defineConfig({
+  // VITE_TESTING=true swaps in the same mocks as the extension test build
+  resolve: base.resolve,
   build: {
     minify: false,
     outDir: "dist/lib",
