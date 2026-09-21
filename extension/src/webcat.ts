@@ -66,6 +66,7 @@ export default {
     if (import.meta.env.VITE_TESTING) {
       Object.defineProperty(globalThis, "state", {
         value: {
+          config: cfg,
           origins: db.origins,
           nonOrigins: db.nonOrigins,
         },

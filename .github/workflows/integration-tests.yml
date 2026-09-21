@@ -25,6 +25,10 @@ jobs:
           - name: Firefox ESR
             firefox-version: latest-esr
             test-filter: firefox
+          - name: Firefox (library)
+            firefox-version: latest
+            test-filter: firefox
+            addon: ../dist/webcat-lib-test.zip
           - name: Tor Browser
             test-filter: tbb and not tbb_safer and not tbb_safest
             tor: true
@@ -103,6 +107,6 @@ jobs:
 
       - name: Run integration tests
         run: |
-          make test TESTARGS="--addon ../dist/webcat-extension-test.zip \
+          make test TESTARGS="--addon ${{ matrix.addon || '../dist/webcat-extension-test.zip' }} \
           --headless --reruns 2 --reruns-delay 5 --rerun-except Fatal -k '${{ matrix.test-filter }}'"
 

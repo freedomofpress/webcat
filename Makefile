@@ -12,6 +12,7 @@ clean:
 	rm -rf dist/*
 
 test: extension
+	$(MAKE) -C $(TEST_DIR)/libext
 	$(MAKE) -C $(TEST_DIR) test
 
 benchmark: extension

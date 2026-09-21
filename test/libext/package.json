@@ -1,0 +1,11 @@
+{
+  "name": "webcat-lib-test",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "webcat": "file:../../dist/webcat-lib-test.tgz"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5"
+  }
+}
