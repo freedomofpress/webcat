@@ -70,10 +70,10 @@ export type RequestDetails =
  * created with {@link RequestEvent.createBlockingResponse}. Implements the
  * {@link Disposable} interface. A new BlockingResponse cancels the request;
  * a listener signals successful completion by setting {@link cancel} to
- * false. A synchronous listener may simply assign values to it, or use the
- * {@link set} method. An asynchronous listener must create it with a
+ * false, either by assigning to it directly or with the {@link set} method.
+ * A listener must create it with a
  * {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/using using declaration}
- * before its first await expression.
+ * before its first await expression; the response is reported on disposal.
  *
  * @example
  * handler.addEventListener("beforeheaders", async (event) => {
@@ -87,7 +87,6 @@ export class BlockingResponse
 {
   #promise: Promise<BlockingResponse>;
   #resolve: (br: BlockingResponse) => void;
-  #pendingScopes: number;
 
   /**
    * Whether to cancel the request. Defaults to true, so that a listener that
@@ -107,34 +106,20 @@ export class BlockingResponse
     const { promise, resolve } = Promise.withResolvers<BlockingResponse>();
     this.#promise = promise;
     this.#resolve = resolve;
-    this.#pendingScopes = 0;
   }
 
   /**
    * Implements the {@link Disposable} interface.
    */
-  get [Symbol.dispose]() {
-    this.#pendingScopes++;
-    const disposed = false;
-    return () => {
-      if (disposed) {
-        return;
-      }
-      this.#pendingScopes--;
-      if (this.#pendingScopes === 0) {
-        this.#resolve(this);
-      }
-    };
+  [Symbol.dispose]() {
+    this.#resolve(this);
   }
 
   /**
    * @returns A Promise that resolves to this BlockingResponse after disposal.
    */
-  async ready() {
-    if (this.#pendingScopes === 0) {
-      this.#resolve(this);
-    }
-    return await this.#promise;
+  ready() {
+    return this.#promise;
   }
 
   /**
@@ -143,20 +128,6 @@ export class BlockingResponse
   set(value: browser.webRequest.BlockingResponse) {
     Object.assign(this, value);
   }
-}
-
-if (!Symbol.dispose) {
-  // Workaround for a bug in TypeScript downleveling
-  const { get } = Object.getOwnPropertyDescriptor(
-    BlockingResponse.prototype,
-    Symbol.dispose,
-  ) as PropertyDescriptor;
-  Object.defineProperty(
-    BlockingResponse.prototype,
-    Symbol.for("Symbol.dispose"),
-    { get },
-  );
-  delete BlockingResponse.prototype[Symbol.dispose];
 }
 
 /**
@@ -182,7 +153,7 @@ export class RequestEvent<T extends RequestDetails> extends Event {
    * independently of each other; see {@link ready} for how the responses are
    * combined.
    *
-   * @returns A new BlockingResponse that cancels the request until the
+   * @returns A new BlockingResponse that cancels the request unless the
    *   listener sets {@link BlockingResponse.cancel} to false.
    */
   createBlockingResponse() {

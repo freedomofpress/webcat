@@ -47,54 +47,26 @@ describe("BlockingResponse", () => {
     br = new BlockingResponse();
   });
 
-  it("should block until disposed in all scopes", async () => {
-    const events = [];
-    {
-      events.push("entering sync scope");
-      using _disposable = br;
-      {
-        events.push("entering nested scope");
-        using _disposable = br;
-        events.push("exiting nested scope");
-      }
-      (async () => {
-        events.push("entering async scope");
-        using _disposable = br;
-        await new Promise((resolve) => {
-          setTimeout(resolve, 100);
-        });
-        (async () => {
-          events.push("entering nested async scope");
-          using _disposable = br;
-          await new Promise((resolve) => {
-            setTimeout(resolve, 100);
-          });
-          events.push("exiting nested async scope");
-        })();
-        events.push("exiting async scope");
-      })();
-      events.push("exiting sync scope");
-    }
-    events.push("calling ready()");
+  it("should block until the using scope exits", async () => {
+    const events: string[] = [];
     br.ready().then(() => events.push("resolved"));
 
-    await expect(br.ready()).resolves.toBe(br);
-    expect(events).toEqual([
-      "entering sync scope",
-      "entering nested scope",
-      "exiting nested scope",
-      "entering async scope",
-      "exiting sync scope",
-      "calling ready()",
-      "entering nested async scope",
-      "exiting async scope",
-      "exiting nested async scope",
-      "resolved",
-    ]);
-  });
+    const { promise: gate, resolve: open } = Promise.withResolvers<void>();
+    const listener = (async () => {
+      using blockingResponse = br;
+      await gate;
+      blockingResponse.cancel = false;
+      events.push("listener done");
+    })();
 
-  it("should not block when not used as a disposable", async () => {
+    await Promise.resolve();
+    expect(events).toEqual([]);
+
+    open();
+    await listener;
     await expect(br.ready()).resolves.toBe(br);
+    expect(events).toEqual(["listener done", "resolved"]);
+    expect(br.cancel).toBe(false);
   });
 
   it("should copy properties from any object passed to set", () => {
