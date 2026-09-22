@@ -3,8 +3,8 @@ OUT  := $(DIST)/webcat-lib-test.zip
 
 all:
 	$(MAKE) -C ../../extension package-lib-test
-	rm -rf node_modules/webcat
-	npm install --no-package-lock
+	npm ci
+	npm install --no-save ../../dist/webcat-lib-test.tgz
 	npx vite build
 	cp manifest.json dist/
 	mkdir -p dist/webcat/hooks
