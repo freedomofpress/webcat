@@ -211,13 +211,10 @@ export class WebcatUI extends BrowserChromeController {
    * Sets the message for the specified warning.
    *
    * @param id The ID of the warning.
-   * @param message The warning message.
-   * @param url An optional URL containing additional info about the warning.
+   * @param args The arguments of the warning. Must be serializable as JSON.
    */
-  async setWarning(id: string, message: string, url?: string) {
-    await this.#warnings.set({
-      [id]: { message, url },
-    });
+  async setWarning(id: string, ...args: unknown[]) {
+    await this.#warnings.set({ [id]: args });
     if (this.#showWarnings === false) {
       // Warnings are not yet being shown, so make sure to show them
       browser.webNavigation.onCommitted.addListener(this.#onNavigation);
@@ -269,16 +266,7 @@ export class WebcatUI extends BrowserChromeController {
   async #onPermissionsChanged() {
     const missing = permissions.getMissing();
     if (missing.size > 0) {
-      await this.setWarning(
-        "permissions",
-        browser.i18n.getMessage(
-          "WEBCAT_missingPermissions",
-          Array.from(missing).join("\n"),
-        ),
-        // TODO: build a help page that tells the user how to resolve a
-        // permission issue; pass its URL to the warning UI here
-        //this.getPageURL("help", { fragment: "permissions" }),
-      );
+      await this.setWarning("permissions", Array.from(missing).sort());
     } else {
       await clearBrowserCaches(await this.#db.listAllFQDNs());
       this.clearWarning("permissions");

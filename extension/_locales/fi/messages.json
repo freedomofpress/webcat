@@ -49,5 +49,8 @@
   },
   "WEBCAT_missingPermissions": {
     "message": "WEBCATilta puuttuu seuraavat käyttöoikeudet:\n\n$1"
+  },
+  "WEBCAT_fix": {
+    "message": "Korjaa"
   }
 }
