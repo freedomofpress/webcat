@@ -97,6 +97,10 @@ def dnsnames():
 def non_enrolled_dnsnames():
     return [
         "nonenrolled.localhost",
+        # same-site with site1.localhost / nonenrolled.localhost, see
+        # test_same_site_frame_isolation
+        "frame.site1.localhost",
+        "frame.nonenrolled.localhost",
     ]
 
 @pytest.fixture(scope="session")

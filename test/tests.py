@@ -558,6 +558,58 @@ def test_default_fallback(browser: Browser, server: Server, update_server: Updat
         browser.navigate(f"{server.url(dnsnames[0])}/stale-dir/")
     assert "/stale-dir/ verified." in json.dumps(browser.extension_logs())
 
+OAC_HOOKS = {
+    # Enrolled page embedding a frame; needs frame-src, so its CSP is pinned per path in webcat.config.json
+    "/oac/parent.html": Hook(open("cases/testapp/oac/parent.html", "rb").read(), type="text/html", headers={
+        "content-security-policy": json.load(open("cases/testapp/webcat.config.json"))["extra_csp"]["/oac/parent.html"],
+    }),
+    # Same-site, non-enrolled frame: tries to merge origins via document.domain and to hand over a compiled module
+    "/oac/frame.html": Hook(b"""<!DOCTYPE html><script>
+const results = {};
+const module = new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]));
+try {
+    document.domain = location.hostname.replace(/^[^.]+\\./, "");
+    parent.oac.moduleHandedOver = module; // direct hand-over, only works once origins are merged
+    results.parentAccess = "ok";
+} catch (e) { results.parentAccess = e.name; }
+parent.postMessage({ module }, "*");
+parent.postMessage({ results }, "*");
+</script>""", type="text/html", headers={"content-security-policy": ""}),
+}
+
+@pytest.mark.parametrize("browser", ["firefox"], indirect=True)
+@pytest.mark.parametrize("root, headers, hooks", [
+    ("cases/testapp", EXPECTED_CSP, OAC_HOOKS),
+], indirect=["root"])
+@pytest.mark.parametrize("parent, isolated", [
+    # The extension origin-keys the enrolled parent, so the same-site frame behaves like a cross-site one
+    pytest.param("site1.localhost", True, id="enrolled_parent"),
+    # Control: stock Firefox lets a same-site frame merge origins, so the case above isn't vacuous
+    pytest.param("nonenrolled.localhost", False, id="non_enrolled_parent"),
+])
+def test_same_site_frame_isolation(browser: Browser, server: Server, update_server: UpdateServer, addon_path, parent, isolated):
+    browser.install_extension(addon_path)
+    update_server.wait_for_update()
+    frame_url = f"{server.url(f'frame.{parent}')}/oac/frame.html"
+    with server.wait_for({"/oac/parent.html", "/oac/frame.html"}):
+        browser.navigate(f"{server.url(parent)}/oac/parent.html?frame={urllib.parse.quote(frame_url, safe='')}")
+    deadline = monotonic() + 10
+    dump = 'JSON.stringify(window.oac, (k, v) => k.startsWith("module") ? String(v) : v)'
+    while "parentAccess" not in (oac := json.loads(browser.execute(dump))):
+        assert monotonic() < deadline, f"frame did not report within 10s: {oac}"
+        sleep(0.2)
+    module = "[object WebAssembly.Module]"
+    assert oac == ({
+        "originAgentCluster": True,
+        "parentAccess": "SecurityError",
+        "messageError": True,  # the posted module is rejected by the receiver
+    } if isolated else {
+        "originAgentCluster": False,
+        "parentAccess": "ok",
+        "moduleReceived": module,
+        "moduleHandedOver": module,
+    })
+
 @pytest.mark.parametrize("browser", ["firefox"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks", [
     ("cases/testapp", EXPECTED_CSP, {}),
