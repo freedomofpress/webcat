@@ -273,6 +273,16 @@ export class ResponseValidator {
               String(value),
             ]);
           }
+        } else if (
+          lowerName === "origin-agent-cluster" &&
+          value.trim() !== "?1"
+        ) {
+          // Opting out of origin keying would let same-site frames merge via
+          // document.domain and share WebAssembly.Module objects with us,
+          // bypassing the WASM allowlist. See withOriginAgentCluster.
+          return new WebcatError(WebcatErrorCode.Headers.FORBIDDEN, [
+            `${lowerName}: ${value}`,
+          ]);
         } else if (forbiddenHeaders.has(lowerName)) {
           return new WebcatError(WebcatErrorCode.Headers.FORBIDDEN, [
             String(lowerName),
@@ -510,4 +520,21 @@ export class ResponseValidator {
     endMarkerInjector.ondata = (event) => endMarkerInjector.write(event.data);
     endMarkerInjector.onstop = () => endMarkerInjector.close();
   }
+}
+
+/**
+ * Returns `headers` with a single `Origin-Agent-Cluster: ?1`, replacing any
+ * server-sent value. Origin keying puts the document in its own agent
+ * cluster, so same-site frames cannot relax document.domain into it nor
+ * postMessage WebAssembly.Module / SharedArrayBuffer objects to it. That keeps
+ * the compiled-Module bypass in the WASM hooks sound: every Module reaching an
+ * enrolled document was compiled under that document's own hooks.
+ */
+export function withOriginAgentCluster(
+  headers: browser.webRequest.HttpHeaders = [],
+): browser.webRequest.HttpHeaders {
+  return [
+    ...headers.filter((h) => h.name.toLowerCase() !== "origin-agent-cluster"),
+    { name: "Origin-Agent-Cluster", value: "?1" },
+  ];
 }

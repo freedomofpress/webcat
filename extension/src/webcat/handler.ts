@@ -18,7 +18,7 @@ import { logger } from "./logger";
 import { BundleFetcherConfig } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
-import { ResponseValidator } from "./response";
+import { ResponseValidator, withOriginAgentCluster } from "./response";
 import { WebcatUI } from "./ui";
 import {
   clearBrowserCaches,
@@ -263,6 +263,14 @@ export class WebcatRequestHandler extends RequestHandler {
       details.state.pendingOrigin,
       details.state.cachePartition,
     );
+
+    // Origin-key every enrolled document so the browser treats same-site
+    // frames like cross-site ones
+    if (details.state.isFrame) {
+      blockingResponse.set({
+        responseHeaders: withOriginAgentCluster(details.responseHeaders),
+      });
+    }
 
     this.#responseValidator.markContent(event.details);
 
