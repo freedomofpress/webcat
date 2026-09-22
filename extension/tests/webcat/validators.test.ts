@@ -150,35 +150,24 @@ describe("validateCSP", () => {
     );
   });
 
-  // Test 8: Missing both child-src and frame-src when default-src is not 'none'
-  it("should throw an error if both child-src and frame-src are missing", async () => {
-    const csp = [
+  // Test 8: frame-src and child-src are not restricted
+  it("does not restrict frame-src or child-src", async () => {
+    const base = [
       "default-src 'self'",
-      "script-src 'self'",
+      "script-src 'self' 'wasm-unsafe-eval'",
       "style-src 'self'",
       "object-src 'none'",
       "worker-src 'self'",
-      // child-src and frame-src missing
-    ].join("; ");
-    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
-      "default-src is not none, and neither frame-src or child-src are defined.",
-    );
-  });
-
-  // Test 9: Invalid frame-src source (unallowed host without enrollment)
-  it("should throw an error for an invalid frame-src source", async () => {
-    const csp = [
-      "default-src 'self'",
-      "script-src 'self'",
-      "style-src 'self'",
-      "object-src 'none'",
-      "child-src 'self'",
-      "frame-src evil.com",
-      "worker-src 'self'",
-    ].join("; ");
-    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
-      "frame-src value evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed.",
-    );
+    ];
+    for (const frames of [
+      [],
+      ["frame-src evil.com"],
+      ["child-src http://evil.com", "frame-src 'self'"],
+      ["child-src 'self'", "frame-src *"],
+    ]) {
+      const csp = [...base, ...frames].join("; ");
+      await expect(validateCSP(csp, valid_sources)).resolves.toBeUndefined();
+    }
   });
 
   // Test 11: Invalid style-src source (non-enrolled and not a valid keyword/hash)
@@ -215,22 +204,6 @@ describe("validateCSP", () => {
   });
   */
 
-  // Test 13: Invalid child-src with an http: scheme
-  it("should throw an error for child-src containing an http: source", async () => {
-    const csp = [
-      "default-src 'self'",
-      "script-src 'self' 'wasm-unsafe-eval'",
-      "style-src 'self' 'sha256-abc'",
-      "object-src 'none'",
-      "child-src http://evil.com",
-      "frame-src 'self'",
-      "worker-src 'self'",
-    ].join("; ");
-    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
-      "child-src value http://evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed.",
-    );
-  });
-
   // Test 14: Valid child-src with a blob: source
   it("should pass for child-src with a blob: source", async () => {
     const csp = [
@@ -243,22 +216,6 @@ describe("validateCSP", () => {
       "worker-src 'self'",
     ].join("; ");
     await expect(validateCSP(csp, valid_sources)).resolves.toBeUndefined();
-  });
-
-  // Test 15: Invalid frame-src with a wildcard "*"
-  it("should throw an error for frame-src containing a wildcard", async () => {
-    const csp = [
-      "default-src 'self'",
-      "script-src 'self' 'wasm-unsafe-eval'",
-      "style-src 'self'",
-      "object-src 'none'",
-      "child-src 'self'",
-      "frame-src *",
-      "worker-src 'self'",
-    ].join("; ");
-    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
-      "frame-src cannot contain * which is unsupported.",
-    );
   });
 
   // Test 16: Invalid script-src containing 'unsafe-inline'
@@ -317,22 +274,6 @@ describe("validateCSP", () => {
       "worker-src 'self'",
     ].join("; ");
     await expect(validateCSP(csp, valid_sources)).resolves.toBeUndefined();
-  });
-
-  // Test 20: Non-enrolled child-src should throw (simulate non-enrollment)
-  it("should throw an error for child-src with a non-enrolled origin", async () => {
-    const csp = [
-      "default-src 'self'",
-      "script-src 'self' 'wasm-unsafe-eval'",
-      "style-src 'self'",
-      "object-src 'none'",
-      "child-src evil.com",
-      "frame-src 'self'",
-      "worker-src 'self'",
-    ].join("; ");
-    await expect(validateCSP(csp, valid_sources)).rejects.toThrow(
-      "child-src value evil.com, parsed as FQDN: evil.com is not enrolled and thus not allowed.",
-    );
   });
 
   // Test 21: Blob in script-src
