@@ -65,6 +65,11 @@ export type RequestDetails =
   | ErrorOccurredDetails
   | CompletedDetails;
 
+// Firefox ESR lacks Symbol.dispose; the downleveled `using` helper then falls
+// back to this registered symbol, so key the method the same way.
+const dispose: typeof Symbol.dispose = (Symbol.dispose ??
+  Symbol.for("Symbol.dispose")) as typeof Symbol.dispose;
+
 /**
  * The response of a single listener to a blocking {@link RequestEvent},
  * created with {@link RequestEvent.createBlockingResponse}. Implements the
@@ -111,7 +116,7 @@ export class BlockingResponse
   /**
    * Implements the {@link Disposable} interface.
    */
-  [Symbol.dispose]() {
+  [dispose]() {
     this.#resolve(this);
   }
 
