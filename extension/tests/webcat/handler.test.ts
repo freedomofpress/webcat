@@ -132,11 +132,9 @@ describe("WebcatRequestHandler", () => {
 
   it("should keep its verdict when an embedder listener allows the request later", async () => {
     const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
-    const wrh = new WebcatRequestHandler(
-      new WebcatDatabase(defaults),
-      new WebcatUI(defaults),
-      defaults,
-    );
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    const wrh = new WebcatRequestHandler(db, ui, defaults);
     // An embedding extension adds its own policy check on the same event;
     // it is satisfied and allows, finishing after WEBCAT rejected the response
     wrh.addEventListener("headersreceived", async (event) => {
