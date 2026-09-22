@@ -264,8 +264,9 @@ export class WebcatRequestHandler extends RequestHandler {
       details.state.cachePartition,
     );
 
-    // Origin-key every enrolled document so the browser treats same-site
-    // frames like cross-site ones
+    // Documents only (subresources ignore it). origin-keyed => same-site
+    // frames can't document.domain-merge into us or postMessage us a
+    // WebAssembly.Module. This is what replaces the old frame-src check.
     if (details.state.isFrame) {
       blockingResponse.set({
         responseHeaders: withOriginAgentCluster(details.responseHeaders),
@@ -290,8 +291,7 @@ export class WebcatRequestHandler extends RequestHandler {
     // - if a sub_frame is enrolled, but the main_frame not, we should only inject in the sub_frame
     // - if a main_frame is enrolled, it could contain frames from other enrolled origins
     //   and those would have different hooks with their own wasm allowlist
-    // - a an enrolled main_frame might contain non enrolled sub_frames, and those should not receive any hooks
-    //   (currently this is forbidden, but might change in the future)
+    // - an enrolled main_frame might contain non enrolled sub_frames, and those should not receive any hooks
 
     if (
       FRAME_TYPES.includes(details.type) &&

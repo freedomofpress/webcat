@@ -282,44 +282,9 @@ export async function validateCSP(
     [source_types.Hash, source_types.EnrolledOrigins],
   );
 
-  // Step 5: validate frame-src and child-src. They should follow the same policy and in theory one overrides the other
-  // but it depends on the CSP level so we'll check everything
-  const child_src = parsedCSP.get(directives.ChildSrc);
-  const frame_src = parsedCSP.get(directives.FrameSrc);
-  if (
-    default_src_is_none == false &&
-    (!child_src || child_src.length < 1) &&
-    (!frame_src || frame_src.length < 1)
-  ) {
-    throw new Error(
-      `${directives.DefaultSrc} is not none, and neither ${directives.FrameSrc} or ${directives.ChildSrc} are defined.`,
-    );
-  } else if (child_src || frame_src) {
-    if (child_src) {
-      for (const src of child_src) {
-        await isSourceAllowed(
-          src,
-          directives.ChildSrc,
-          [source_keywords.None, source_keywords.Self],
-          // You can iframe from a blob, and that will be either HTMl or include authenticated script
-          // Cause the script src is inherited or enforced in all frames, also the hook injection is inherited by allFrames
-          [source_types.Blob, source_types.Data, source_types.EnrolledOrigins],
-        );
-      }
-    }
-
-    if (frame_src) {
-      for (const src of frame_src) {
-        await isSourceAllowed(
-          src,
-          directives.FrameSrc,
-          [source_keywords.None, source_keywords.Self],
-          // Same as for child src
-          [source_types.Blob, source_types.Data, source_types.EnrolledOrigins],
-        );
-      }
-    }
-  }
+  // Step 5: frame-src / child-src are unrestricted. Enrolled documents are
+  // origin-keyed (withOriginAgentCluster) => any frame, same-site or not, is
+  // isolated from them. Enrolled frames verify under their own manifest.
 
   const worker_src = parsedCSP.get(directives.WorkerSrc);
   if (default_src_is_none == false && (!worker_src || worker_src.length < 1)) {
