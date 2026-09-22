@@ -8,19 +8,9 @@
   padding: 0.5em 0.8em;
 }
 
-.warning a {
+.warning button {
   float: right;
   color: #721c24;
-  text-decoration: none;
   margin-left: 2em;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 1.5em;
-  height: 1.5em;
-  padding-bottom: 0.2em;
-  border: 0.125em solid currentColor;
-  border-radius: 50%;
-  vertical-align: middle;
+  min-width: 0;
 }

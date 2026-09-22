@@ -25,5 +25,8 @@
   },
   "WEBCAT_missingPermissions": {
     "message": "WEBCAT is missing the following permissions:\n\n$1"
+  },
+  "WEBCAT_fix": {
+    "message": "Fix"
   }
 }
