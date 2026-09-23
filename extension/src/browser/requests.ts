@@ -92,6 +92,7 @@ export class BlockingResponse
 {
   #promise: Promise<BlockingResponse>;
   #resolve: (br: BlockingResponse) => void;
+  readonly #details?: RequestDetails;
 
   /**
    * Whether to cancel the request. Defaults to true, so that a listener that
@@ -107,10 +108,11 @@ export class BlockingResponse
     | browser.webRequest._BlockingResponseAuthCredentials
     | undefined;
 
-  constructor() {
+  constructor(details?: RequestDetails) {
     const { promise, resolve } = Promise.withResolvers<BlockingResponse>();
     this.#promise = promise;
     this.#resolve = resolve;
+    this.#details = details;
   }
 
   /**
@@ -132,6 +134,25 @@ export class BlockingResponse
    */
   set(value: browser.webRequest.BlockingResponse) {
     Object.assign(this, value);
+  }
+
+  /**
+   * Sets the response header `name` to `value`, replacing any existing
+   * occurrences. Starts from the response's original headers, so the rest
+   * pass through unchanged.
+   */
+  setHeader(name: string, value: string) {
+    const lower = name.toLowerCase();
+    const original =
+      this.#details && "responseHeaders" in this.#details
+        ? this.#details.responseHeaders
+        : undefined;
+    this.responseHeaders = [
+      ...(this.responseHeaders ?? original ?? []).filter(
+        (h) => h.name.toLowerCase() !== lower,
+      ),
+      { name, value },
+    ];
   }
 }
 
@@ -162,7 +183,7 @@ export class RequestEvent<T extends RequestDetails> extends Event {
    *   listener sets {@link BlockingResponse.cancel} to false.
    */
   createBlockingResponse() {
-    const response = new BlockingResponse();
+    const response = new BlockingResponse(this.details);
     this.#responses.push(response);
     return response;
   }
