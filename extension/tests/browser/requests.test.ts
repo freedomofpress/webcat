@@ -8,6 +8,7 @@ vi.mock("../../src/browser/permissions", () => ({
 
 import {
   BlockingResponse,
+  HeadersReceivedDetails,
   RequestDetails,
   RequestEvent,
   RequestHandler,
@@ -78,6 +79,27 @@ describe("BlockingResponse", () => {
     };
     br.set(original);
     expect(br).toMatchObject(original);
+  });
+
+  it("should replace a response header, keeping the others", () => {
+    const details = {
+      responseHeaders: [
+        { name: "origin-agent-cluster", value: "?0" },
+        { name: "Origin-Agent-Cluster", value: "?1" },
+        { name: "Content-Type", value: "text/html" },
+      ],
+    } as HeadersReceivedDetails;
+    br = new BlockingResponse(details);
+    br.setHeader("Origin-Agent-Cluster", "?1");
+    expect(br.responseHeaders).toStrictEqual([
+      { name: "Content-Type", value: "text/html" },
+      { name: "Origin-Agent-Cluster", value: "?1" },
+    ]);
+    br.setHeader("X-Test", "1");
+    expect(br.responseHeaders).toHaveLength(3);
+    br = new BlockingResponse();
+    br.setHeader("X-Test", "1");
+    expect(br.responseHeaders).toStrictEqual([{ name: "X-Test", value: "1" }]);
   });
 });
 

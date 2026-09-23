@@ -283,7 +283,7 @@ export async function validateCSP(
   );
 
   // Step 5: frame-src / child-src are unrestricted. Enrolled documents are
-  // origin-keyed (withOriginAgentCluster) => any frame, same-site or not, is
+  // origin-keyed (Origin-Agent-Cluster: ?1) => any frame, same-site or not, is
   // isolated from them. Enrolled frames verify under their own manifest.
 
   const worker_src = parsedCSP.get(directives.WorkerSrc);

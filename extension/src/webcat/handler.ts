@@ -18,7 +18,7 @@ import { logger } from "./logger";
 import { BundleFetcherConfig } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
-import { ResponseValidator, withOriginAgentCluster } from "./response";
+import { ResponseValidator } from "./response";
 import { WebcatUI } from "./ui";
 import {
   clearBrowserCaches,
@@ -264,13 +264,11 @@ export class WebcatRequestHandler extends RequestHandler {
       details.state.cachePartition,
     );
 
-    // Documents only (subresources ignore it). origin-keyed => same-site
-    // frames can't document.domain-merge into us or postMessage us a
-    // WebAssembly.Module. This is what replaces the old frame-src check.
+    // Frame navigations only. Isolates same-site frames like cross-site ones
+    // under most circumstances. Added when frames were allowed globally, see
+    // https://github.com/freedomofpress/webcat/issues/237
     if (details.state.isFrame) {
-      blockingResponse.set({
-        responseHeaders: withOriginAgentCluster(details.responseHeaders),
-      });
+      blockingResponse.setHeader("Origin-Agent-Cluster", "?1");
     }
 
     this.#responseValidator.markContent(event.details);

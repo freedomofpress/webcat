@@ -28,10 +28,7 @@ import {
 } from "../../src/webcat/interfaces/errors";
 import { Stateful } from "../../src/webcat/interfaces/requeststate";
 import { BundleFetcher, OriginState } from "../../src/webcat/originstate";
-import {
-  ResponseValidator,
-  withOriginAgentCluster,
-} from "../../src/webcat/response";
+import { ResponseValidator } from "../../src/webcat/response";
 import { isSameOriginURL, SHA256 } from "../../src/webcat/utils";
 
 function makeDummyFetcher(): BundleFetcher {
@@ -733,22 +730,6 @@ describe("ResponseValidator.extractAndValidateHeaders", () => {
     expect((result as { code: string }).code).toBe(
       WebcatErrorCode.Headers.FORBIDDEN,
     );
-  });
-
-  it("forces a single Origin-Agent-Cluster: ?1", () => {
-    expect(
-      withOriginAgentCluster([
-        { name: "origin-agent-cluster", value: "?0" },
-        { name: "Origin-Agent-Cluster", value: "?1" },
-        { name: "Content-Type", value: "text/html" },
-      ]),
-    ).toStrictEqual([
-      { name: "Content-Type", value: "text/html" },
-      { name: "Origin-Agent-Cluster", value: "?1" },
-    ]);
-    expect(withOriginAgentCluster(undefined)).toStrictEqual([
-      { name: "Origin-Agent-Cluster", value: "?1" },
-    ]);
   });
 
   it("allows missing CSP for fully cached responses", () => {

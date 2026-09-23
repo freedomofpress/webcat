@@ -278,6 +278,7 @@ export class ResponseValidator {
           value.trim() !== "?1"
         ) {
           // ?0 = opt out of origin keying = same-site frames may reach us.
+          // The handler forces ?1 on documents; see WebcatRequestHandler.
           return new WebcatError(WebcatErrorCode.Headers.FORBIDDEN, [
             `${lowerName}: ${value}`,
           ]);
@@ -518,20 +519,4 @@ export class ResponseValidator {
     endMarkerInjector.ondata = (event) => endMarkerInjector.write(event.data);
     endMarkerInjector.onstop = () => endMarkerInjector.close();
   }
-}
-
-/**
- * headers - any Origin-Agent-Cluster + `Origin-Agent-Cluster: ?1`.
- * Replace, don't append: duplicates parse as invalid => site-keyed.
- * origin-keyed => same-site frames are a separate agent cluster => no
- * document.domain merge, no WebAssembly.Module via postMessage. Keeps the
- * compiled-Module bypass in the WASM hooks sound.
- */
-export function withOriginAgentCluster(
-  headers: browser.webRequest.HttpHeaders = [],
-): browser.webRequest.HttpHeaders {
-  return [
-    ...headers.filter((h) => h.name.toLowerCase() !== "origin-agent-cluster"),
-    { name: "Origin-Agent-Cluster", value: "?1" },
-  ];
 }
