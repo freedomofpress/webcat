@@ -30,16 +30,25 @@ function bindEventListenerArgs<T extends EventTarget>(
   args: EventListenerArgs,
 ) {
   const callback = unwrap(args[1]);
-  args = Array.from(args) as EventListenerArgs;
+  const options = unwrap(args[2] || {});
+  const once = typeof options === "object" && options.once;
+  const bound = Array.from(args) as EventListenerArgs;
   if (typeof callback === "function") {
-    args[1] = callback.bind(thisArg);
+    bound[1] = exportFunc((...e) => {
+      if (once) {
+        thisArg.removeEventListener(...args);
+      }
+      return callback.call(thisArg, ...e);
+    });
   } else {
-    args[1] = exportFunc(
-      (...args: [event: Event]) => callback.handleEvent?.call(thisArg, ...args),
-      global,
-    ) as EventListener;
+    bound[1] = exportFunc((...e) => {
+      if (once) {
+        thisArg.removeEventListener(...args);
+      }
+      return callback.handleEvent?.call(thisArg, ...e);
+    });
   }
-  return args;
+  return bound;
 }
 
 /**
@@ -73,8 +82,8 @@ export function hookEventProperty<T extends object, I extends Internal<T>>(
     }
   }
   Object.defineProperty(prototype, prop, {
-    get: exportFunc(hookedGetProp, global) as () => unknown,
-    set: exportFunc(hookedSetProp, global) as (v: unknown) => void,
+    get: exportFunc(hookedGetProp) as () => unknown,
+    set: exportFunc(hookedSetProp) as (v: unknown) => void,
   });
 }
 
@@ -123,11 +132,15 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
         {} as EventListenerArgsByKind,
       );
       const useCapture =
-        options instanceof window.Object
+        typeof options === "object"
           ? !!unwrap(options).capture
           : !!unwrap(options);
       const kind = useCapture ? "capturingArgs" : "nonCapturingArgs";
-      if (!listeners[kind]) {
+      const oldArgs = listeners[kind];
+      const oldOptions = oldArgs?.[2];
+      const signal =
+        typeof oldOptions === "object" ? unwrap(oldOptions).signal : undefined;
+      if (!oldArgs || signal?.aborted) {
         // Listener doesn't exist; bind args and memorize
         const boundArgs = bindEventListenerArgs(unwrap(this), args);
         listeners[kind] = boundArgs;
@@ -144,7 +157,7 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
     unwrap(global.EventTarget.prototype),
     "addEventListener",
     {
-      value: exportFunc(hookedAddEventListener, global),
+      value: exportFunc(hookedAddEventListener),
     },
   );
 
@@ -188,7 +201,7 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
     unwrap(global.EventTarget.prototype),
     "removeEventListener",
     {
-      value: exportFunc(hookedRemoveEventListener, global),
+      value: exportFunc(hookedRemoveEventListener),
     },
   );
 
@@ -211,7 +224,7 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
     return originalDispatchEvent.call(this, ...args);
   }
   Object.defineProperty(unwrap(global.EventTarget.prototype), "dispatchEvent", {
-    value: exportFunc(hookedDispatchEvent, global),
+    value: exportFunc(hookedDispatchEvent),
   });
 });
 
@@ -219,6 +232,7 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
  * Hooks the Event prototype to return hooked targets
  */
 export const eventHook = updatableHook("Event", function () {
+  // Hook Event target getters
   for (const prop of [
     "target",
     "currentTarget",
@@ -226,16 +240,34 @@ export const eventHook = updatableHook("Event", function () {
     "explicitOriginalTarget",
     "srcElement",
   ]) {
-    const { get: originalGet } = Object.getOwnPropertyDescriptor(
-      unwrap(global.Event.prototype),
-      prop,
-    ) as PropertyDescriptor;
+    const { get: originalGet } =
+      Object.getOwnPropertyDescriptor(unwrap(global.Event.prototype), prop) ??
+      {};
+    if (!originalGet) {
+      continue;
+    }
     function hookedGet(this: Event) {
       const val = unwrap(originalGet?.call(this));
-      return val?.[hooked] || val;
+      return val?.[hooked] ?? val;
     }
     Object.defineProperty(unwrap(global.Event.prototype), prop, {
-      get: exportFunc(hookedGet, global) as () => unknown,
+      get: exportFunc(hookedGet) as () => unknown,
     });
   }
+
+  // Hook Event.composedPath
+  const { value: originalComposedPath } = Object.getOwnPropertyDescriptor(
+    unwrap(global.Event.prototype),
+    "composedPath",
+  ) as PropertyDescriptor;
+  function hookedComposedPath(this: Event) {
+    const path = unwrap(originalComposedPath.call(this));
+    for (const [i, val] of path.entries()) {
+      path[i] = val?.[hooked] ?? val;
+    }
+    return path;
+  }
+  Object.defineProperty(unwrap(global.Event.prototype), "composedPath", {
+    value: exportFunc(hookedComposedPath),
+  });
 });
