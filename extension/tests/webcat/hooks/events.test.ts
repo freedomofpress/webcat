@@ -84,6 +84,53 @@ describe("eventHook", () => {
     });
     target.dispatchEvent(event);
   });
+
+  it("does not expose raw paths through page-controlled native helpers", () => {
+    const composedPath = Event.prototype.composedPath;
+    const getTarget = Object.getOwnPropertyDescriptor(
+      Event.prototype,
+      "target",
+    )?.get;
+    eventHook({}, {});
+    const wrapper = new EventTarget();
+    const target = Object.assign(new EventTarget(), { [hooked]: wrapper });
+    let leaked = false;
+    let nativeCalls = 0;
+    let path: EventTarget[] = [];
+    let eventTarget: EventTarget | null = null;
+
+    target.addEventListener("bonk", (event) => {
+      const call = Function.prototype.call;
+      const entries = Array.prototype.entries;
+      const iterator = Array.prototype[Symbol.iterator];
+      Function.prototype.call = function (this: unknown, ...args: unknown[]) {
+        if (this === composedPath || this === getTarget) nativeCalls++;
+        return Reflect.apply(call, this, args);
+      };
+      Array.prototype.entries = function () {
+        if (this[0] === target) leaked = true;
+        return Reflect.apply(entries, this, []);
+      };
+      Array.prototype[Symbol.iterator] = function () {
+        if (this[0] === target) leaked = true;
+        return Reflect.apply(iterator, this, []);
+      };
+      try {
+        path = event.composedPath();
+        eventTarget = event.target;
+      } finally {
+        Function.prototype.call = call;
+        Array.prototype.entries = entries;
+        Array.prototype[Symbol.iterator] = iterator;
+      }
+    });
+
+    target.dispatchEvent(new Event("bonk"));
+    expect(path).toEqual([wrapper]);
+    expect(eventTarget).toBe(wrapper);
+    expect(leaked).toBe(false);
+    expect(nativeCalls).toBe(0);
+  });
 });
 
 describe("eventTargetHook", () => {
