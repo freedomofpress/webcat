@@ -263,65 +263,65 @@ describe("eventTargetHook", () => {
     target.dispatchEvent(new Event("bonk"));
     expect(listener).toHaveBeenCalledOnce();
   });
-});
 
-it("correctly tracks listeners with the once option", () => {
-  eventTargetHook({}, {});
-  const target = new (class extends EventTarget {
-    [internal] = makeInternal({
-      instance: new EventTarget(),
-    });
-  })();
-  const onbonk = vi.fn();
-  const bonkHandler = { handleEvent: vi.fn() };
-  target.addEventListener("bonk", onbonk, { once: true });
-  target.addEventListener("bonk", bonkHandler, { once: true });
+  it("correctly tracks listeners with the once option", () => {
+    eventTargetHook({}, {});
+    const target = new (class extends EventTarget {
+      [internal] = makeInternal({
+        instance: new EventTarget(),
+      });
+    })();
+    const onbonk = vi.fn();
+    const bonkHandler = { handleEvent: vi.fn() };
+    target.addEventListener("bonk", onbonk, { once: true });
+    target.addEventListener("bonk", bonkHandler, { once: true });
 
-  // Dispatching an event twice should only result in one listener call
-  target.dispatchEvent(new Event("bonk"));
-  target.dispatchEvent(new Event("bonk"));
-  expect(onbonk).toHaveBeenCalledOnce();
-  expect(bonkHandler.handleEvent).toHaveBeenCalledOnce();
+    // Dispatching an event twice should only result in one listener call
+    target.dispatchEvent(new Event("bonk"));
+    target.dispatchEvent(new Event("bonk"));
+    expect(onbonk).toHaveBeenCalledOnce();
+    expect(bonkHandler.handleEvent).toHaveBeenCalledOnce();
 
-  // Re-adding the listener and dispatching should trigger another call
-  target.addEventListener("bonk", onbonk);
-  target.addEventListener("bonk", bonkHandler);
-  target.dispatchEvent(new Event("bonk"));
-  expect(onbonk.mock.calls.length).toBe(2);
-  expect(bonkHandler.handleEvent.mock.calls.length).toBe(2);
-});
+    // Re-adding the listener and dispatching should trigger another call
+    target.addEventListener("bonk", onbonk);
+    target.addEventListener("bonk", bonkHandler);
+    target.dispatchEvent(new Event("bonk"));
+    expect(onbonk.mock.calls.length).toBe(2);
+    expect(bonkHandler.handleEvent.mock.calls.length).toBe(2);
+  });
 
-it("correctly tracks listeners with the signal option", () => {
-  eventTargetHook({}, {});
-  const target = new (class extends EventTarget {
-    [internal] = makeInternal({
-      instance: new EventTarget(),
-    });
-  })();
-  const onbonk = vi.fn();
-  const bonkHandler = { handleEvent: vi.fn() };
-  const controller = new AbortController();
-  target.addEventListener("bonk", onbonk, { signal: controller.signal });
-  target.addEventListener("bonk", bonkHandler, { signal: controller.signal });
+  it("correctly tracks listeners with the signal option", () => {
+    eventTargetHook({}, {});
+    const target = new (class extends EventTarget {
+      [internal] = makeInternal({
+        instance: new EventTarget(),
+      });
+    })();
+    const onbonk = vi.fn();
+    const bonkHandler = { handleEvent: vi.fn() };
+    const controller = new AbortController();
+    target.addEventListener("bonk", onbonk, { signal: controller.signal });
+    target.addEventListener("bonk", bonkHandler, { signal: controller.signal });
 
-  // Dispatching an event twice should only result in two listener calls
-  target.dispatchEvent(new Event("bonk"));
-  target.dispatchEvent(new Event("bonk"));
-  expect(onbonk.mock.calls.length).toBe(2);
-  expect(bonkHandler.handleEvent.mock.calls.length).toBe(2);
+    // Dispatching an event twice should only result in two listener calls
+    target.dispatchEvent(new Event("bonk"));
+    target.dispatchEvent(new Event("bonk"));
+    expect(onbonk.mock.calls.length).toBe(2);
+    expect(bonkHandler.handleEvent.mock.calls.length).toBe(2);
 
-  // Dispatching after abort should result in no additional calls
-  controller.abort();
-  target.dispatchEvent(new Event("bonk"));
-  expect(onbonk.mock.calls.length).toBe(2);
-  expect(bonkHandler.handleEvent.mock.calls.length).toBe(2);
+    // Dispatching after abort should result in no additional calls
+    controller.abort();
+    target.dispatchEvent(new Event("bonk"));
+    expect(onbonk.mock.calls.length).toBe(2);
+    expect(bonkHandler.handleEvent.mock.calls.length).toBe(2);
 
-  // Re-adding the listener and dispatching should trigger another call
-  target.addEventListener("bonk", onbonk);
-  target.addEventListener("bonk", bonkHandler);
-  target.dispatchEvent(new Event("bonk"));
-  expect(onbonk.mock.calls.length).toBe(3);
-  expect(bonkHandler.handleEvent.mock.calls.length).toBe(3);
+    // Re-adding the listener and dispatching should trigger another call
+    target.addEventListener("bonk", onbonk);
+    target.addEventListener("bonk", bonkHandler);
+    target.dispatchEvent(new Event("bonk"));
+    expect(onbonk.mock.calls.length).toBe(3);
+    expect(bonkHandler.handleEvent.mock.calls.length).toBe(3);
+  });
 });
 
 describe("hookEventProperty", () => {
