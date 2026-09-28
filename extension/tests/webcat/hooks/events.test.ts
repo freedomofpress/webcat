@@ -13,12 +13,9 @@ import {
   hookEventProperty,
 } from "../../../src/webcat/hooks/events";
 
-vi.stubGlobal("window", globalThis);
-
 afterEach(() => {
   vi.resetAllMocks();
   vi.unstubAllGlobals();
-  vi.stubGlobal("window", globalThis);
 });
 
 describe("eventHook", () => {
@@ -189,13 +186,12 @@ describe("eventTargetHook", () => {
       const l = target[internal].listeners;
       const bl = l.get("bonk");
       expect(l.size).toBe(1);
-      expect(bl?.size).toBe(3);
+      expect(bl?.size).toBe(2);
       expect(bl?.get(onbonk)?.capturingArgs?.length).toBe(3);
       expect(bl?.get(onbonk)?.nonCapturingArgs?.length).toBe(2);
       expect(bl?.get(bonkHandler)?.capturingArgs).toBe(undefined);
       expect(bl?.get(bonkHandler)?.nonCapturingArgs?.length).toBe(3);
-      expect(bl?.get(never)?.capturingArgs).toBeUndefined();
-      expect(bl?.get(never)?.nonCapturingArgs).toBeUndefined();
+      expect(bl?.has(never)).toBe(false);
     }
   });
 
@@ -262,6 +258,38 @@ describe("eventTargetHook", () => {
     target[internal].instance = undefined as unknown as EventTarget;
     target.dispatchEvent(new Event("bonk"));
     expect(listener).toHaveBeenCalledOnce();
+  });
+
+  it("accepts null as options", () => {
+    eventTargetHook({}, {});
+    const target = new (class extends EventTarget {
+      [internal] = makeInternal({ instance: new EventTarget() });
+    })();
+    const onbonk = vi.fn();
+    target.addEventListener("bonk", onbonk, null as unknown as boolean);
+    target.dispatchEvent(new Event("bonk"));
+    target.removeEventListener("bonk", onbonk, null as unknown as boolean);
+    target.dispatchEvent(new Event("bonk"));
+    expect(onbonk).toHaveBeenCalledOnce();
+  });
+
+  it("accepts callable options dictionaries for addition and removal", () => {
+    eventTargetHook({}, {});
+    const target = new (class extends EventTarget {
+      [internal] = makeInternal({ instance: new EventTarget() });
+    })();
+    const listener = vi.fn();
+    const options = Object.assign(() => {}, { capture: false, once: true });
+    target.addEventListener("bonk", listener, options);
+    target.dispatchEvent(new Event("bonk"));
+    target.addEventListener("bonk", listener, options);
+    target.dispatchEvent(new Event("bonk"));
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    target.addEventListener("bonk", listener, false);
+    target.removeEventListener("bonk", listener, options);
+    target.dispatchEvent(new Event("bonk"));
+    expect(listener).toHaveBeenCalledTimes(2);
   });
 
   it("correctly tracks listeners with the once option", () => {

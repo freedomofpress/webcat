@@ -25,13 +25,22 @@ function getOrInsert<M extends Map<K, V>, K, V>(
   return defaultValue;
 }
 
+// Normalize the third argument of add/removeEventListener. Per WebIDL it may
+// be a dictionary (any object, including a callable), a boolean, null or
+// undefined.
+function optionsOf(options?: EventListenerArgs[2]): AddEventListenerOptions {
+  const o = unwrap(options);
+  return o && (typeof o === "object" || typeof o === "function")
+    ? o
+    : { capture: !!o };
+}
+
 function bindEventListenerArgs<T extends EventTarget>(
   thisArg: Hooked<T, Internal<T>>,
   args: EventListenerArgs,
 ) {
   const callback = unwrap(args[1]);
-  const options = unwrap(args[2] || {});
-  const once = typeof options === "object" && options.once;
+  const { once } = optionsOf(args[2]);
   const bound = Array.from(args) as EventListenerArgs;
   if (typeof callback === "function") {
     bound[1] = exportFunc((...e) => {
@@ -131,16 +140,11 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
         callback,
         {} as EventListenerArgsByKind,
       );
-      const useCapture =
-        typeof options === "object"
-          ? !!unwrap(options).capture
-          : !!unwrap(options);
-      const kind = useCapture ? "capturingArgs" : "nonCapturingArgs";
+      const kind = optionsOf(options).capture
+        ? "capturingArgs"
+        : "nonCapturingArgs";
       const oldArgs = listeners[kind];
-      const oldOptions = oldArgs?.[2];
-      const signal =
-        typeof oldOptions === "object" ? unwrap(oldOptions).signal : undefined;
-      if (!oldArgs || signal?.aborted) {
+      if (!oldArgs || optionsOf(oldArgs[2]).signal?.aborted) {
         // Listener doesn't exist; bind args and memorize
         const boundArgs = bindEventListenerArgs(unwrap(this), args);
         listeners[kind] = boundArgs;
@@ -173,17 +177,13 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
   ) {
     const [type, callback, options] = args;
     if (this && internal in unwrap(this)) {
-      const listeners = getOrInsert(
-        getOrInsert(unwrap(this)[internal].listeners, type, new Map()),
-        callback,
-        {} as EventListenerArgsByKind,
-      );
-      const useCapture =
-        options instanceof window.Object
-          ? !!unwrap(options).capture
-          : !!unwrap(options);
-      const kind = useCapture ? "capturingArgs" : "nonCapturingArgs";
-      if (listeners[kind]) {
+      const listeners = unwrap(this)
+        [internal].listeners.get(type)
+        ?.get(callback);
+      const kind = optionsOf(options).capture
+        ? "capturingArgs"
+        : "nonCapturingArgs";
+      if (listeners?.[kind]) {
         // Listener exists; remove
         if (unwrap(this)[internal].instance) {
           // Instance exists, remove for real
