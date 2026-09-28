@@ -1,4 +1,5 @@
 import {
+  apply,
   EventListenerArgs,
   EventListenerArgsByKind,
   exportFunc,
@@ -35,28 +36,28 @@ function optionsOf(options?: EventListenerArgs[2]): AddEventListenerOptions {
     : { capture: !!o };
 }
 
+// Bind fn to target without going through the page's Function.prototype.bind
+function bindTo(fn: (...args: unknown[]) => unknown, target: object) {
+  return exportFunc((...e: unknown[]) => apply(fn, target, e));
+}
+
 function bindEventListenerArgs<T extends EventTarget>(
   thisArg: Hooked<T, Internal<T>>,
   args: EventListenerArgs,
 ) {
   const callback = unwrap(args[1]);
   const { once } = optionsOf(args[2]);
+  const fn =
+    typeof callback === "function"
+      ? callback
+      : (...e: [Event]) => callback?.handleEvent?.(...e);
   const bound = Array.from(args) as EventListenerArgs;
-  if (typeof callback === "function") {
-    bound[1] = exportFunc((...e) => {
-      if (once) {
-        thisArg.removeEventListener(...args);
-      }
-      return callback.call(thisArg, ...e);
-    });
-  } else {
-    bound[1] = exportFunc((...e) => {
-      if (once) {
-        thisArg.removeEventListener(...args);
-      }
-      return callback.handleEvent?.call(thisArg, ...e);
-    });
-  }
+  bound[1] = exportFunc((...e: [Event]) => {
+    if (once) {
+      thisArg.removeEventListener(...args);
+    }
+    return apply(fn, thisArg, e);
+  }) as EventListener;
   return bound;
 }
 
@@ -84,7 +85,7 @@ export function hookEventProperty<T extends object, I extends Internal<T>>(
       (unwrap(this)[internal] as { [prop]: unknown })[prop] = v;
       if (unwrap(this)[internal].instance) {
         (unwrap(this)[internal].instance as { [prop]: unknown })[prop] =
-          v?.bind(unwrap(this)) || null;
+          typeof v === "function" ? bindTo(v, unwrap(this)) : null;
       }
     } else {
       originalSetProp?.call(this, v);
@@ -104,9 +105,10 @@ export function connectEventListeners<T extends EventTarget>(
 ) {
   const props = Object.keys(target[internal]).filter((k) => k.startsWith("on"));
   for (const prop of props) {
-    type P = { [prop]: (...args: unknown[]) => unknown | null };
+    type P = { [prop]: ((...args: unknown[]) => unknown) | null };
+    const fn = (target[internal] as Internal<T> & P)[prop];
     (target[internal].instance as unknown as P)[prop] =
-      (target[internal] as Internal<T> & P)[prop]?.bind(target) || null;
+      typeof fn === "function" ? bindTo(fn, target) : null;
   }
   for (const listeners of target[internal].listeners.values()) {
     for (const { nonCapturingArgs, capturingArgs } of listeners.values()) {

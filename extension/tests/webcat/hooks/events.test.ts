@@ -387,6 +387,10 @@ describe("hookEventProperty", () => {
     target.onbonk = onbonk;
     expect(target[internal].onbonk).toBe(onbonk);
     expect(target[internal].instance.onbonk).toBeInstanceOf(Function);
+
+    // Non-function values are coerced to null on the instance, like native
+    target.onbonk = {};
+    expect(target[internal].instance.onbonk).toBeNull();
   });
 
   it("does not interfere with unhooked objects", () => {

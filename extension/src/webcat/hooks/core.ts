@@ -34,6 +34,9 @@ export type Internal<T> = {
 export const internal = Symbol("WEBCAT internal");
 export const hooked = Symbol("WEBCAT hooked");
 export const global = globalThis.self || globalThis;
+// Captured before any page code runs; invokes natives without a lookup of
+// .call/.apply on page-controlled prototypes
+export const apply = Reflect.apply;
 const isolated = typeof globalThis.exportFunction === "function";
 
 export function unwrap<T>(object: T) {
