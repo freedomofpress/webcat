@@ -75,7 +75,7 @@ export function hookEventProperty<T extends object, I extends Internal<T>>(
     if (internal in unwrap(this)) {
       return (unwrap(this)[internal] as { [prop]: unknown })[prop];
     }
-    return originalGetProp?.call(this);
+    return originalGetProp && apply(originalGetProp, this, []);
   }
   function hookedSetProp(
     this: Hooked<T, I>,
@@ -88,7 +88,9 @@ export function hookEventProperty<T extends object, I extends Internal<T>>(
           typeof v === "function" ? bindTo(v, unwrap(this)) : null;
       }
     } else {
-      originalSetProp?.call(this, v);
+      if (originalSetProp) {
+        apply(originalSetProp, this, [v]);
+      }
     }
   }
   Object.defineProperty(prototype, prop, {
@@ -156,7 +158,7 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
         }
       }
     } else {
-      originalAddEventListener.call(this, ...args);
+      apply(originalAddEventListener, this, args);
     }
   }
   Object.defineProperty(
@@ -196,7 +198,7 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
         delete listeners[kind];
       }
     } else {
-      originalRemoveEventListener.call(this, ...args);
+      apply(originalRemoveEventListener, this, args);
     }
   }
   Object.defineProperty(
@@ -223,7 +225,7 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
       // TODO: handle synchronous case
       return true;
     }
-    return originalDispatchEvent.call(this, ...args);
+    return apply(originalDispatchEvent, this, args);
   }
   Object.defineProperty(unwrap(global.EventTarget.prototype), "dispatchEvent", {
     value: exportFunc(hookedDispatchEvent),
@@ -249,7 +251,7 @@ export const eventHook = updatableHook("Event", function () {
       continue;
     }
     function hookedGet(this: Event) {
-      const val = unwrap(originalGet?.call(this));
+      const val = unwrap(apply(originalGet, this, []));
       return val?.[hooked] ?? val;
     }
     Object.defineProperty(unwrap(global.Event.prototype), prop, {
@@ -261,10 +263,13 @@ export const eventHook = updatableHook("Event", function () {
   const { value: originalComposedPath } = Object.getOwnPropertyDescriptor(
     unwrap(global.Event.prototype),
     "composedPath",
-  ) as PropertyDescriptor;
+  ) as { value: Event["composedPath"] };
   function hookedComposedPath(this: Event) {
-    const path = unwrap(originalComposedPath.call(this));
-    for (const [i, val] of path.entries()) {
+    const path = unwrap(apply(originalComposedPath, this, []));
+    // Index access only: iterator and entries() resolve on the page's
+    // Array.prototype and would expose the raw path before it's rewritten
+    for (let i = 0; i < path.length; i++) {
+      const val = path[i];
       path[i] = val?.[hooked] ?? val;
     }
     return path;
