@@ -49,17 +49,18 @@ function bindEventListenerArgs<T extends EventTarget>(
 ) {
   const callback = unwrap(args[1]);
   const { once } = optionsOf(args[2]);
-  const fn =
-    typeof callback === "function"
-      ? callback
-      : (...e: [Event]) => callback?.handleEvent?.(...e);
   args[1] = exportFunc((...e: [Event]) => {
     // The native dispatcher already removed the once listener. Only retire
     // this registration's bookkeeping, before invoking user code.
     if (once && listeners[kind] === args) {
       delete listeners[kind];
     }
-    return apply(fn, thisArg, e);
+    // handleEvent is resolved at dispatch time and, like function callbacks,
+    // invoked with the hooked target as this (the integration tests rely on
+    // event.target === this for both forms)
+    const fn =
+      typeof callback === "function" ? callback : callback?.handleEvent;
+    return fn && apply(fn, thisArg, e);
   }) as EventListener;
   return args;
 }
