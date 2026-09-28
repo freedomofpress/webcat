@@ -8,6 +8,7 @@ import {
   makeInternal,
 } from "../../../src/webcat/hooks/core";
 import {
+  connectEventListeners,
   eventHook,
   eventTargetHook,
   hookEventProperty,
@@ -219,7 +220,9 @@ describe("eventTargetHook", () => {
       expect(bl?.get(onbonk)?.nonCapturingArgs?.length).toBe(3);
       expect(bl?.get(bonkHandler)?.capturingArgs?.length).toBe(3);
       expect(bl?.get(bonkHandler)?.nonCapturingArgs?.length).toBe(3);
-      expect(bl?.get(bonkHandler)?.capturingArgs?.[2]).toBe(true);
+      expect(bl?.get(bonkHandler)?.capturingArgs?.[2]).toMatchObject({
+        capture: true,
+      });
     }
 
     target.removeEventListener("bonk", onbonk);
@@ -235,7 +238,7 @@ describe("eventTargetHook", () => {
       expect(l.size).toBe(1);
       expect(bl?.size).toBe(2);
       expect(bl?.get(onbonk)?.capturingArgs?.length).toBe(3);
-      expect(bl?.get(onbonk)?.nonCapturingArgs?.length).toBe(2);
+      expect(bl?.get(onbonk)?.nonCapturingArgs?.length).toBe(3);
       expect(bl?.get(bonkHandler)?.capturingArgs).toBe(undefined);
       expect(bl?.get(bonkHandler)?.nonCapturingArgs?.length).toBe(3);
       expect(bl?.has(never)).toBe(false);
@@ -320,25 +323,6 @@ describe("eventTargetHook", () => {
     expect(onbonk).toHaveBeenCalledOnce();
   });
 
-  it("accepts callable options dictionaries for addition and removal", () => {
-    eventTargetHook({}, {});
-    const target = new (class extends EventTarget {
-      [internal] = makeInternal({ instance: new EventTarget() });
-    })();
-    const listener = vi.fn();
-    const options = Object.assign(() => {}, { capture: false, once: true });
-    target.addEventListener("bonk", listener, options);
-    target.dispatchEvent(new Event("bonk"));
-    target.addEventListener("bonk", listener, options);
-    target.dispatchEvent(new Event("bonk"));
-    expect(listener).toHaveBeenCalledTimes(2);
-
-    target.addEventListener("bonk", listener, false);
-    target.removeEventListener("bonk", listener, options);
-    target.dispatchEvent(new Event("bonk"));
-    expect(listener).toHaveBeenCalledTimes(2);
-  });
-
   it("correctly tracks listeners with the once option", () => {
     eventTargetHook({}, {});
     const target = new (class extends EventTarget {
@@ -396,6 +380,88 @@ describe("eventTargetHook", () => {
     target.dispatchEvent(new Event("bonk"));
     expect(onbonk.mock.calls.length).toBe(3);
     expect(bonkHandler.handleEvent.mock.calls.length).toBe(3);
+  });
+
+  it("retires once bookkeeping before callbacks without public removal", () => {
+    eventTargetHook({}, {});
+    const target = new (class extends EventTarget {
+      [internal] = makeInternal({ instance: new EventTarget() });
+    })();
+    target.removeEventListener = vi.fn(() => {
+      throw new Error("Public removal must not run during once cleanup");
+    });
+    let calls = 0;
+    const listener = () => {
+      if (++calls === 1) {
+        target.addEventListener("bonk", listener);
+        target.dispatchEvent(new Event("bonk"));
+      }
+    };
+    target.addEventListener("bonk", listener, { once: true });
+    target.dispatchEvent(new Event("bonk"));
+    expect(calls).toBe(2);
+    target.dispatchEvent(new Event("bonk"));
+    expect(calls).toBe(3);
+    expect(target.removeEventListener).not.toHaveBeenCalled();
+  });
+
+  it("accepts callable options dictionaries for addition and removal", () => {
+    eventTargetHook({}, {});
+    const target = new (class extends EventTarget {
+      [internal] = makeInternal({ instance: new EventTarget() });
+    })();
+    const listener = vi.fn();
+    const options = Object.assign(() => {}, { capture: false, once: true });
+    target.addEventListener("bonk", listener, options);
+    target.dispatchEvent(new Event("bonk"));
+    target.addEventListener("bonk", listener, options);
+    target.dispatchEvent(new Event("bonk"));
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    target.addEventListener("bonk", listener, false);
+    target.removeEventListener("bonk", listener, options);
+    target.dispatchEvent(new Event("bonk"));
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("snapshots options at registration, before the instance exists", () => {
+    eventTargetHook({}, {});
+    const target = new (class extends EventTarget {
+      [internal] = makeInternal<EventTarget, object>({});
+    })();
+    const listener = vi.fn();
+    const controller = new AbortController();
+    const read = {
+      capture: vi.fn(() => true),
+      once: vi.fn(() => false),
+      passive: vi.fn(() => false),
+      signal: vi.fn(() => controller.signal),
+    };
+    const options = Object.defineProperties(
+      {},
+      Object.fromEntries(Object.entries(read).map(([k, get]) => [k, { get }])),
+    );
+    target.addEventListener("bonk", listener, options);
+
+    // Mutations after registration must not affect it
+    read.capture.mockReturnValue(false);
+    read.once.mockReturnValue(true);
+    read.signal.mockReturnValue(AbortSignal.abort());
+    target[internal].instance = new EventTarget();
+    connectEventListeners(target);
+
+    target.dispatchEvent(new Event("bonk"));
+    target.dispatchEvent(new Event("bonk"));
+    expect(listener).toHaveBeenCalledTimes(2); // neither once nor aborted
+    expect(
+      target[internal].listeners.get("bonk")?.get(listener)?.capturingArgs,
+    ).toBeDefined();
+    controller.abort();
+    target.dispatchEvent(new Event("bonk"));
+    expect(listener).toHaveBeenCalledTimes(2); // original signal honored
+    for (const get of Object.values(read)) {
+      expect(get).toHaveBeenCalledOnce();
+    }
   });
 });
 

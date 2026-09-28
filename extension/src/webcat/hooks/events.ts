@@ -44,6 +44,8 @@ function bindTo(fn: (...args: unknown[]) => unknown, target: object) {
 function bindEventListenerArgs<T extends EventTarget>(
   thisArg: Hooked<T, Internal<T>>,
   args: EventListenerArgs,
+  listeners: EventListenerArgsByKind,
+  kind: keyof EventListenerArgsByKind,
 ) {
   const callback = unwrap(args[1]);
   const { once } = optionsOf(args[2]);
@@ -51,14 +53,15 @@ function bindEventListenerArgs<T extends EventTarget>(
     typeof callback === "function"
       ? callback
       : (...e: [Event]) => callback?.handleEvent?.(...e);
-  const bound = Array.from(args) as EventListenerArgs;
-  bound[1] = exportFunc((...e: [Event]) => {
-    if (once) {
-      thisArg.removeEventListener(...args);
+  args[1] = exportFunc((...e: [Event]) => {
+    // The native dispatcher already removed the once listener. Only retire
+    // this registration's bookkeeping, before invoking user code.
+    if (once && listeners[kind] === args) {
+      delete listeners[kind];
     }
     return apply(fn, thisArg, e);
   }) as EventListener;
-  return bound;
+  return args;
 }
 
 /**
@@ -139,18 +142,32 @@ export const eventTargetHook = updatableHook("EventTarget", function () {
   ) {
     const [type, callback, options] = args;
     if (this && internal in unwrap(this)) {
+      // WebIDL reads dictionary members once, at registration time. Keep
+      // that snapshot even when connecting the backing instance later.
+      const { capture, once, passive, signal } = optionsOf(options);
+      // Native calls through exported hooks need a page-realm dictionary.
+      const normalizedOptions = unwrap(
+        new global.Object(),
+      ) as AddEventListenerOptions;
+      normalizedOptions.capture = !!capture;
+      normalizedOptions.once = !!once;
+      normalizedOptions.passive = passive === undefined ? undefined : !!passive;
+      normalizedOptions.signal = signal;
       const listeners = getOrInsert(
         getOrInsert(unwrap(this)[internal].listeners, type, new Map()),
         callback,
         {} as EventListenerArgsByKind,
       );
-      const kind = optionsOf(options).capture
-        ? "capturingArgs"
-        : "nonCapturingArgs";
+      const kind = capture ? "capturingArgs" : "nonCapturingArgs";
       const oldArgs = listeners[kind];
       if (!oldArgs || optionsOf(oldArgs[2]).signal?.aborted) {
         // Listener doesn't exist; bind args and memorize
-        const boundArgs = bindEventListenerArgs(unwrap(this), args);
+        const boundArgs = bindEventListenerArgs(
+          unwrap(this),
+          [type, callback, normalizedOptions],
+          listeners,
+          kind,
+        );
         listeners[kind] = boundArgs;
         if (unwrap(this)[internal].instance) {
           // Instance exists, add the listener for real
