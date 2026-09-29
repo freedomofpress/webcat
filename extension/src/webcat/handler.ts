@@ -107,7 +107,7 @@ export class WebcatRequestHandler extends RequestHandler {
   protected override getListenerOptions(fqdns: string[], type: "erroroccurred" | "completed"): [browser.webRequest.RequestFilter]; // prettier-ignore
   protected override getListenerOptions(fqdns: string[], type: string) {
     let all = false;
-    for (let i: number; (i = fqdns.indexOf("<all_urls>")) !== -1; ) {
+    for (let i: number; (i = fqdns.indexOf("<all_urls>")) !== -1;) {
       // If fqdns contains <all_urls>, remove it before continuing
       fqdns = [...fqdns.slice(0, i), ...fqdns.slice(i + 1)];
       all = true;

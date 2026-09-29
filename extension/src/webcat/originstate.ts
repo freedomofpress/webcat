@@ -110,10 +110,7 @@ export class BundleFetcher {
 // The OriginState class caches origins and assumes safe defaults. We assume we are enrolled and nothing is verified.
 export class OriginState implements IOriginState {
   status:
-    | "request_sent"
-    | "verified_enrollment"
-    | "verified_manifest"
-    | "failed";
+    "request_sent" | "verified_enrollment" | "verified_manifest" | "failed";
 
   readonly #db: Database;
   readonly #cachePartition: CachePartition;
