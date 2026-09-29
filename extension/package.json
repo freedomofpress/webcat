@@ -1,7 +1,7 @@
 {
   "name": "webcat",
   "type": "module",
-  "version": "2.7.1",
+  "version": "3.0.0",
   "description": "",
   "files": [
     "dist/lib",
