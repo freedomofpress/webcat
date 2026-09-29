@@ -105,8 +105,7 @@ export class BlockingResponse
   requestHeaders?: browser.webRequest.HttpHeaders | undefined;
   responseHeaders?: browser.webRequest.HttpHeaders | undefined;
   authCredentials?:
-    | browser.webRequest._BlockingResponseAuthCredentials
-    | undefined;
+    browser.webRequest._BlockingResponseAuthCredentials | undefined;
 
   constructor(details?: RequestDetails) {
     const { promise, resolve } = Promise.withResolvers<BlockingResponse>();
