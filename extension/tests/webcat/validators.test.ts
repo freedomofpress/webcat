@@ -257,6 +257,33 @@ describe("validateCSP", () => {
   });
 
   // See https://github.com/freedomofpress/webcat/issues/101
+  it("should throw for script-src-attr 'unsafe-inline'", () => {
+    const csp =
+      "default-src 'none'; script-src 'self'; style-src 'self'; script-src-attr 'unsafe-inline'";
+    expect(() => validateCSP(csp)).toThrow(
+      "script-src-attr cannot contain 'unsafe-inline' which is unsupported.",
+    );
+  });
+
+  it("should pass for script-src-attr 'none'", () => {
+    const csp =
+      "default-src 'none'; script-src 'self'; style-src 'self'; script-src-attr 'none'";
+    expect(validateCSP(csp)).toBeUndefined();
+  });
+
+  it("should require worker-src when child-src is set, even with default-src 'none'", () => {
+    const csp = "default-src 'none'; script-src 'self'; child-src blob:";
+    expect(() => validateCSP(csp)).toThrow(
+      "default-src is not none, and worker-src is not defined.",
+    );
+  });
+
+  it("should pass with child-src and an explicit worker-src", () => {
+    const csp =
+      "default-src 'none'; script-src 'self'; child-src blob:; worker-src 'self'";
+    expect(validateCSP(csp)).toBeUndefined();
+  });
+
   it("should throw when CSP contains a comma (multiple policies)", () => {
     const csp = "script-src 'unsafe-eval', script-src 'self'";
 
