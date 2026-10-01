@@ -69,11 +69,18 @@ export function validateCSP(csp: string) {
     StrictDynamic = "'strict-dynamic'",
   }
 
-  enum source_types {
-    Hash = "'sha",
-    Blob = "blob:",
-    Data = "data:",
-  }
+  const script_keywords = [
+    source_keywords.None,
+    source_keywords.Self,
+    source_keywords.WasmUnsafeEval,
+  ];
+  // TODO eventually 'unsafe-inline' and 'unsafe-hashes' should disappear
+  const style_keywords = [
+    source_keywords.None,
+    source_keywords.Self,
+    source_keywords.UnsafeInline,
+    source_keywords.UnsafeHashes,
+  ];
 
   // See https://github.com/freedomofpress/webcat/issues/101
   if (csp.includes(",")) {
@@ -83,174 +90,76 @@ export function validateCSP(csp: string) {
   // The spec (and thus the parsing function) has to lowercase the directive names
   const parsedCSP = parseContentSecurityPolicy(csp);
 
-  let default_src_is_none = false;
-  const default_src = parsedCSP.get(directives.DefaultSrc);
+  // Step 1: default-src is 'none' and/or 'self'. A lone 'none' makes every
+  // other directive optional. See https://github.com/freedomofpress/webcat/issues/99
+  const default_src = parsedCSP.get(directives.DefaultSrc) ?? [];
+  for (const src of default_src) {
+    if (src !== source_keywords.None && src !== source_keywords.Self) {
+      throw new Error(
+        `Unexpected or non-allowed default-src directive: ${src}`,
+      );
+    }
+  }
+  const default_src_is_none =
+    default_src.length === 1 && default_src[0] === source_keywords.None;
 
-  // Step 1: check default src, which is the default for almost everything.
-  // 'self' and 'none' are allowed, but they have different implications and we should tag them
-  if (default_src) {
-    for (const src of default_src) {
-      // See https://github.com/freedomofpress/webcat/issues/99
-      if (src === source_keywords.None && default_src.length === 1) {
-        default_src_is_none = true;
-        break;
-        // TODO: we can probably be less restrictive here
-      } else if (src === source_keywords.Self || src === source_keywords.None) {
-        // Explicitly allowed for readability
-        continue;
-      } else {
+  // The directive is required unless `optional`. Each source must be an
+  // allowed keyword or, with `hashes`, a 'sha...' hash.
+  function validateDirective(
+    directive: directives,
+    allowed_keywords: source_keywords[],
+    hashes = false,
+    optional = default_src_is_none,
+  ) {
+    const list = parsedCSP.get(directive);
+    if (!list?.length && !optional) {
+      throw new Error(
+        `${directives.DefaultSrc} is not none, and ${directive} is not defined.`,
+      );
+    }
+    for (const src of list ?? []) {
+      const lower = src.toLowerCase();
+      if (
+        !(allowed_keywords as string[]).includes(lower) &&
+        !(hashes && lower.startsWith("'sha"))
+      ) {
         throw new Error(
-          `Unexpected or non-allowed default-src directive: ${src}`,
+          `${directive} cannot contain ${src} which is unsupported.`,
         );
       }
     }
   }
 
-  // Step 2: enforce object-src 'none' if default-src is not 'none'
-  const object_src = parsedCSP.get(directives.ObjectSrc);
-  if (default_src_is_none == false && (!object_src || object_src.length < 1)) {
-    throw new Error(
-      `${directives.DefaultSrc} is not none, and ${directives.ObjectSrc} is not defined.`,
-    );
-  } else if (object_src) {
-    for (const src of object_src) {
-      if (src !== source_keywords.None) {
-        throw new Error(`Non-allowed ${directives.ObjectSrc} directive ${src}`);
-      }
-    }
-  }
+  // Step 2: object-src must be 'none'
+  validateDirective(directives.ObjectSrc, [source_keywords.None]);
 
-  function isSourceAllowed(
-    src: string,
-    directive: string,
-    allowed_keywords: string[],
-    allowed_source_types: source_types[],
-  ): boolean {
-    const lower_src = src.toLowerCase();
-    if (allowed_keywords.includes(lower_src)) {
-      return true;
-
-      // Onion services might do this, we enforce at a higher level
-      //} else if (src.includes("http:")) {
-      //  throw new Error(`${directive} cannot contain http: sources. `);
-    } else if (
-      allowed_source_types.includes(source_types.Hash) &&
-      src.startsWith(source_types.Hash)
-    ) {
-      return true;
-    } else if (
-      allowed_source_types.includes(source_types.Blob) &&
-      src.startsWith(source_types.Blob)
-    ) {
-      return true;
-    } else if (
-      allowed_source_types.includes(source_types.Data) &&
-      src.startsWith(source_types.Data)
-    ) {
-      return true;
-    } else {
-      throw new Error(
-        `${directive} cannot contain ${src} which is unsupported.`,
-      );
-    }
-  }
-
-  function validateDirectiveList(
-    directive: string,
-    list: string[] | undefined,
-    default_src_is_none: boolean,
-    allowed_keywords: string[],
-    allowed_source_types: source_types[],
-  ) {
-    if (default_src_is_none == false && (!list || list.length < 1)) {
-      throw new Error(
-        `${directives.DefaultSrc} is not none, and ${directive} is not defined.`,
-      );
-    }
-
-    if (list) {
-      for (const src of list) {
-        isSourceAllowed(src, directive, allowed_keywords, allowed_source_types);
-      }
-    }
-  }
-
-  // Step 3: think about scripts
-  // We can now allow inline verified scripts via sha-, see https://github.com/freedomofpress/webcat/pull/111
-
-  validateDirectiveList(
-    directives.ScriptSrc,
-    parsedCSP.get(directives.ScriptSrc),
-    default_src_is_none,
-    [
-      source_keywords.None,
-      source_keywords.Self,
-      source_keywords.WasmUnsafeEval,
-    ],
-    [source_types.Hash],
-  );
-
-  validateDirectiveList(
+  // Step 3: scripts. Hashes allow inline scripts, see
+  // https://github.com/freedomofpress/webcat/pull/111
+  validateDirective(directives.ScriptSrc, script_keywords, true);
+  validateDirective(
     directives.ScriptSrcElem,
-    parsedCSP.get(directives.ScriptSrcElem),
+    script_keywords,
+    true,
     default_src_is_none || parsedCSP.has(directives.ScriptSrc),
-    [
-      source_keywords.None,
-      source_keywords.Self,
-      source_keywords.WasmUnsafeEval,
-    ],
-    [source_types.Hash],
   );
 
-  // Step 4: validate style-src
-  // TODO credit for -elem tags
-  validateDirectiveList(
-    directives.StyleSrc,
-    parsedCSP.get(directives.StyleSrc),
-    default_src_is_none,
-    [
-      source_keywords.None,
-      source_keywords.Self,
-      // TODO eventually these 2 should disappear
-      source_keywords.UnsafeInline,
-      source_keywords.UnsafeHashes,
-    ],
-    [source_types.Hash],
-  );
-
-  validateDirectiveList(
+  // Step 4: styles
+  validateDirective(directives.StyleSrc, style_keywords, true);
+  validateDirective(
     directives.StyleSrcElem,
-    parsedCSP.get(directives.StyleSrcElem),
+    style_keywords,
+    true,
     default_src_is_none || parsedCSP.has(directives.StyleSrc),
-    [
-      source_keywords.None,
-      source_keywords.Self,
-      // TODO eventually these 2 should disappear
-      source_keywords.UnsafeInline,
-      source_keywords.UnsafeHashes,
-    ],
-    [source_types.Hash],
   );
 
   // Step 5: frame-src / child-src are unrestricted. Enrolled documents are
   // origin-keyed (Origin-Agent-Cluster: ?1) => any frame, same-site or not, is
   // isolated from them. Enrolled frames verify under their own manifest.
 
-  const worker_src = parsedCSP.get(directives.WorkerSrc);
-  if (default_src_is_none == false && (!worker_src || worker_src.length < 1)) {
-    throw new Error(
-      `${directives.DefaultSrc} is not none, and ${directives.WorkerSrc} is not defined.`,
-    );
-  } else if (worker_src) {
-    for (const src of worker_src) {
-      isSourceAllowed(
-        src,
-        directives.WorkerSrc,
-        [source_keywords.None, source_keywords.Self],
-        [],
-      );
-    }
-  }
+  validateDirective(directives.WorkerSrc, [
+    source_keywords.None,
+    source_keywords.Self,
+  ]);
 }
 
 export async function witnessTimestampsFromCosignedTreeHead(
