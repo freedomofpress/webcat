@@ -8,8 +8,8 @@ all:
 	npx vite build
 	cp manifest.json dist/
 	mkdir -p dist/webcat/hooks
-	cp -r node_modules/webcat/data node_modules/webcat/icons node_modules/webcat/pages dist/webcat/
-	cp node_modules/webcat/dist/hooks/content.js dist/webcat/hooks/
+	cp -r node_modules/@freedomofpress/webcat/data node_modules/@freedomofpress/webcat/icons node_modules/@freedomofpress/webcat/pages dist/webcat/
+	cp node_modules/@freedomofpress/webcat/dist/hooks/content.js dist/webcat/hooks/
 	rm -f $(OUT) && cd dist && zip -qr $(abspath $(OUT)) .
 
 clean:

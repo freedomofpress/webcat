@@ -36,9 +36,9 @@ package-test: install build-test fetch-data
 
 # npm package built with the test flag, consumed by ../test/libext
 package-lib-test: install fetch-data
-	rm -f $(DIST)/webcat-*.tgz
+	rm -f $(DIST)/freedomofpress-webcat-*.tgz
 	VITE_TESTING=true npm pack --pack-destination $(DIST)
-	mv $(DIST)/webcat-*.tgz $(OUT_LIB_TEST)
+	mv $(DIST)/freedomofpress-webcat-*.tgz $(OUT_LIB_TEST)
 
 cleanup:
 	rm -rf $(DIST)/* data/

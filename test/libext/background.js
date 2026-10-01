@@ -1,6 +1,6 @@
 // Minimal consumer of the webcat npm package: all bundled assets live under
 // webcat/ instead of the extension's default root-level paths
-import webcat from "webcat";
+import webcat from "@freedomofpress/webcat";
 
 webcat.start({
   endpoint: "http://localhost:1234/",
