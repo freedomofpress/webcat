@@ -27,6 +27,7 @@ export class RequestDetailsBase {
 
   constructor() {
     const { promise, resolve, reject } = Promise.withResolvers<void>();
+    promise.catch(() => {});
     this.completed = promise;
     this.#resolve = resolve;
     this.#reject = reject;
