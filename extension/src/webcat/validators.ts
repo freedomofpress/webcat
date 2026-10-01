@@ -51,8 +51,10 @@ export function validateCSP(csp: string) {
     DefaultSrc = "default-src",
     ScriptSrc = "script-src",
     ScriptSrcElem = "script-src-elem",
+    ScriptSrcAttr = "script-src-attr",
     StyleSrc = "style-src",
     StyleSrcElem = "style-src-elem",
+    StyleSrcAttr = "style-src-attr",
     ObjectSrc = "object-src",
     ChildSrc = "child-src",
     FrameSrc = "frame-src",
@@ -136,6 +138,14 @@ export function validateCSP(csp: string) {
   // Step 3: scripts. Hashes allow inline scripts, see
   // https://github.com/freedomofpress/webcat/pull/111
   validateDirective(directives.ScriptSrc, script_keywords, true);
+  // script-src-attr covers inline event handlers and javascript: URLs.
+  // Optional (falls back to script-src); if present it must be 'none'.
+  validateDirective(
+    directives.ScriptSrcAttr,
+    [source_keywords.None],
+    false,
+    true,
+  );
   validateDirective(
     directives.ScriptSrcElem,
     script_keywords,
@@ -151,15 +161,20 @@ export function validateCSP(csp: string) {
     true,
     default_src_is_none || parsedCSP.has(directives.StyleSrc),
   );
+  validateDirective(directives.StyleSrcAttr, style_keywords, true, true);
 
   // Step 5: frame-src / child-src are unrestricted. Enrolled documents are
   // origin-keyed (Origin-Agent-Cluster: ?1) => any frame, same-site or not, is
   // isolated from them. Enrolled frames verify under their own manifest.
 
-  validateDirective(directives.WorkerSrc, [
-    source_keywords.None,
-    source_keywords.Self,
-  ]);
+  // Workers fall back to child-src, which is unrestricted. Require worker-src
+  // when child-src is set.
+  validateDirective(
+    directives.WorkerSrc,
+    [source_keywords.None, source_keywords.Self],
+    false,
+    default_src_is_none && !parsedCSP.has(directives.ChildSrc),
+  );
 }
 
 export async function witnessTimestampsFromCosignedTreeHead(
