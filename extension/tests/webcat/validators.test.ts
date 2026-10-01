@@ -63,7 +63,7 @@ describe("validateCSP", () => {
       "worker-src 'self'",
     ].join("; ");
     expect(() => validateCSP(csp)).toThrow(
-      "Non-allowed object-src directive 'self'",
+      "object-src cannot contain 'self' which is unsupported.",
     );
   });
 
