@@ -137,9 +137,10 @@ const TOKENS = [
 ];
 const DEFAULT_SRC = ["", "'none'", "'self'", "'none' 'self'"];
 
-type Result = { accepted: string[]; failures: string[] };
+type Result = { generated: number; accepted: string[]; failures: string[] };
 
 function record(csp: string, r: Result) {
+  r.generated++;
   if (!accepts(csp)) return;
   r.accepted.push(csp);
   const problems = check(csp);
@@ -151,7 +152,7 @@ function record(csp: string, r: Result) {
 // `filler` supplies valid values for the directives outside the group.
 function enumerate(group: string[], filler: string): Result {
   const options = ["", ...TOKENS];
-  const r: Result = { accepted: [], failures: [] };
+  const r: Result = { generated: 0, accepted: [], failures: [] };
   const idx = new Array(group.length).fill(0);
   for (const def of DEFAULT_SRC) {
     idx.fill(0);
@@ -222,7 +223,7 @@ function mutate(csp: string, rand: () => number): string {
 
 function fuzz(seeds: string[], n: number, seed: number): Result {
   const rand = rng(seed);
-  const r: Result = { accepted: [], failures: [] };
+  const r: Result = { generated: 0, accepted: [], failures: [] };
   for (let k = 0; k < n; k++) {
     let csp = pick(rand, seeds);
     const rounds = 1 + Math.floor(rand() * 3);
@@ -262,6 +263,10 @@ describe("validateCSP against a CSP3 model", () => {
   for (const [name, group, filler] of GROUPS) {
     it(`${name} group: exhaustive single-token, then mutated`, () => {
       const pass1 = enumerate(group, filler);
+      // Exhaustive: default-src variants x (absent | one token) per directive.
+      expect(pass1.generated).toBe(
+        DEFAULT_SRC.length * (TOKENS.length + 1) ** group.length,
+      );
       expect(pass1.accepted.length).toBeGreaterThan(1);
       expect(pass1.failures, pass1.failures.join("\n\n")).toEqual([]);
 
