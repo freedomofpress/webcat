@@ -346,19 +346,9 @@ export class OriginState implements IOriginState {
       return this.#fail(format_error);
     }
 
-    // ValidateCSP will populate this based on hosts presents in both
-    // the CSP policies specified AND the enrollment list
-    // If an enrolled CSP policy has non-enrolled hosts, then it will throw
-    const valid_sources: Set<string> = new Set();
-
     // Validate the default CSP
     try {
-      await validateCSP(
-        manifest.default_csp,
-        valid_sources,
-        this.#db,
-        this.#cachePartition,
-      );
+      validateCSP(manifest.default_csp);
     } catch (e) {
       //return new OriginStateFailed(this, `failed parsing default_csp: ${e}`);
       return this.#fail(
@@ -368,12 +358,12 @@ export class OriginState implements IOriginState {
       );
     }
 
-    // Validate all extra CSP, it should also fill all the sources
+    // Validate all extra CSP
     for (const path in manifest.extra_csp) {
       if (manifest.extra_csp.hasOwnProperty(path)) {
         const csp = manifest.extra_csp[path];
         try {
-          await validateCSP(csp, valid_sources, this.#db, this.#cachePartition);
+          validateCSP(csp);
         } catch (e) {
           return this.#fail(
             new WebcatError(WebcatErrorCode.Manifest.EXTRA_CSP_INVALID, [
