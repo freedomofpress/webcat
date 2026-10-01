@@ -102,11 +102,18 @@ export function validateCSP(csp: string) {
       );
     }
   }
-  const default_src_is_none =
-    default_src.length === 1 && default_src[0] === source_keywords.None;
+  const default_src_is_none = default_src.includes(source_keywords.None);
+  if (default_src_is_none && default_src.length !== 1) {
+    throw new Error(
+      `default-src 'none' must be the only value: ${default_src.join(" ")}`,
+    );
+  }
+
+  // https://w3c.github.io/webappsec-csp/#grammardef-hash-source
+  const hash_source = /^'sha(256|384|512)-[A-Za-z0-9+/_-]+={0,2}'$/i;
 
   // The directive is required unless `optional`. Each source must be an
-  // allowed keyword or, with `hashes`, a 'sha...' hash.
+  // allowed keyword or, with `hashes`, a hash-source.
   function validateDirective(
     directive: directives,
     allowed_keywords: source_keywords[],
@@ -123,7 +130,7 @@ export function validateCSP(csp: string) {
       const lower = src.toLowerCase();
       if (
         !(allowed_keywords as string[]).includes(lower) &&
-        !(hashes && lower.startsWith("'sha"))
+        !(hashes && hash_source.test(src))
       ) {
         throw new Error(
           `${directive} cannot contain ${src} which is unsupported.`,

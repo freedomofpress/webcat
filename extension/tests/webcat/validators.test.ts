@@ -240,7 +240,7 @@ describe("validateCSP", () => {
   });
 
   // See https://github.com/freedomofpress/webcat/issues/99
-  it("should throw when default-src contains 'none' and 'self' and object-src is missing", () => {
+  it("should throw when default-src contains 'none' and 'self'", () => {
     const csp = [
       "default-src 'none' 'self'",
       "script-src 'self'",
@@ -252,7 +252,7 @@ describe("validateCSP", () => {
     ].join("; ");
 
     expect(() => validateCSP(csp)).toThrow(
-      "default-src is not none, and object-src is not defined.",
+      "default-src 'none' must be the only value",
     );
   });
 
@@ -281,6 +281,35 @@ describe("validateCSP", () => {
   it("should pass with child-src and an explicit worker-src", () => {
     const csp =
       "default-src 'none'; script-src 'self'; child-src blob:; worker-src 'self'";
+    expect(validateCSP(csp)).toBeUndefined();
+  });
+
+  it("should throw when default-src 'none' has company", () => {
+    const csp =
+      "default-src 'none' 'self'; script-src 'self'; style-src 'self'; object-src 'none'; worker-src 'self'";
+    expect(() => validateCSP(csp)).toThrow(
+      "default-src 'none' must be the only value",
+    );
+  });
+
+  it("should throw for malformed hash sources", () => {
+    for (const hash of [
+      "'sha'",
+      "'sha1-AAAA'",
+      "'sha256-'",
+      "'sha256-not*base64'",
+      "'shady'",
+    ]) {
+      const csp = `default-src 'none'; script-src 'self' ${hash}`;
+      expect(() => validateCSP(csp)).toThrow(
+        `script-src cannot contain ${hash} which is unsupported.`,
+      );
+    }
+  });
+
+  it("should pass for well-formed hash sources", () => {
+    const csp =
+      "default-src 'none'; script-src 'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' 'SHA384-AAAA' 'sha512-AA_-'";
     expect(validateCSP(csp)).toBeUndefined();
   });
 
