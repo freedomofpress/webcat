@@ -18,11 +18,13 @@ import { validateCSP } from "../../src/webcat/validators";
 // up here.
 
 // https://w3c.github.io/webappsec-csp/#parse-serialized-policy
+// ASCII whitespace only; tokens with non-ASCII code points are skipped.
+const ASCII_WS = /^[\t\n\f\r ]+|[\t\n\f\r ]+$/g;
 function parse(policy: string): Map<string, string[]> {
   const out = new Map<string, string[]>();
   for (const raw of policy.split(";")) {
-    const token = raw.trim();
-    if (!token) continue;
+    const token = raw.replace(ASCII_WS, "");
+    if (!token || !/^[\x00-\x7f]*$/.test(token)) continue;
     const [name, ...value] = token.split(/[\t\n\f\r ]+/);
     const lower = name.toLowerCase();
     if (out.has(lower)) continue; // first directive wins
@@ -53,8 +55,9 @@ function effective(parsed: Map<string, string[]>, vector: string): string[] {
   return ["*"];
 }
 
-// WEBCAT allow-list per vector. Browsers ignore 'none' next to other sources
-// and invalid tokens; only tokens outside the set matter.
+// WEBCAT allow-list per vector, applied to the effective list. Browsers
+// ignore 'none' next to other sources and invalid tokens; only tokens outside
+// the set matter.
 //
 // Known exception, not modelled: a CSP3 hash source also matches an external
 // <script src> or stylesheet whose integrity attribute carries the same
@@ -78,6 +81,15 @@ const ALLOWED: Record<string, Set<string>> = {
   "worker-src": new Set(["'none'", "'self'", "'wasm-unsafe-eval'", HASH]),
 };
 
+// Stricter sets for directives written out explicitly, matching the
+// validator exactly so that relaxing it fails here. Inherited values are
+// covered by ALLOWED.
+const DIRECT: Record<string, Set<string>> = {
+  "script-src-attr": new Set(["'none'"]),
+  "worker-src": new Set(["'none'", "'self'"]),
+  "object-src": new Set(["'none'"]),
+};
+
 function check(csp: string): string[] {
   const parsed = parse(csp);
   const problems: string[] = [];
@@ -86,6 +98,12 @@ function check(csp: string): string[] {
       (t) => !ALLOWED[vector].has(t),
     );
     if (bad.length) problems.push(`${vector} -> ${bad.join(" ")}`);
+  }
+  for (const directive in DIRECT) {
+    const own = parsed.get(directive) ?? [];
+    const bad = own.filter((t) => !DIRECT[directive].has(t.toLowerCase()));
+    if (bad.length)
+      problems.push(`${directive} (explicit) -> ${bad.join(" ")}`);
   }
   return problems;
 }
@@ -264,6 +282,12 @@ describe("validateCSP against a CSP3 model", () => {
     ).not.toEqual([]);
     expect(check("default-src 'self'; script-src 'self'")).not.toEqual([]); // object-src falls to 'self'
     expect(check("script-src blob:; script-src 'self'")).not.toEqual([]); // first wins
+    expect(
+      check("default-src 'none'; script-src 'self'; script-src-attr 'self'"),
+    ).not.toEqual([]); // explicit attr must be 'none'
+    expect(
+      check("default-src 'none'; script-src 'self'; worker-src 'sha256-AAAA'"),
+    ).not.toEqual([]); // explicit worker-src
     expect(
       check(
         "SCRIPT-SRC 'SELF'; object-src 'none'; style-src 'self'; worker-src 'self'",
