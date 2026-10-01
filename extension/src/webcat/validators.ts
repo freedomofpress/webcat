@@ -8,14 +8,14 @@ import {
 } from "@freedomofpress/sigstore-browser";
 import { verifyMessageWithCompiledPolicy } from "@freedomofpress/sigsum";
 import {
-  verifyCosignedTreeHead,
-  verifySignedTreeHead,
-} from "@freedomofpress/sigsum/dist//crypto";
-import {
   evalQuorumBytecode,
   importAndHashAll,
   parseCompiledPolicy,
 } from "@freedomofpress/sigsum/dist/compiledPolicy";
+import {
+  verifyCosignedTreeHead,
+  verifySignedTreeHead,
+} from "@freedomofpress/sigsum/dist/crypto";
 import { parseCosignedTreeHead } from "@freedomofpress/sigsum/dist/proof";
 import {
   Base64KeyHash,
@@ -33,28 +33,17 @@ import {
   SigsumEnrollment,
   SigsumSignatures,
 } from "./interfaces/bundle";
-import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
-import { CachePartition } from "./interfaces/originstate";
 import { parseContentSecurityPolicy } from "./parsers";
-import { getFQDNSafe } from "./utils";
 
 /**
  * Validates a Content Security Policy. Enforces the restrictions outlined in
- * {@link https://docs.webcat.tech/webapp-developers/CSP.html | the CSP docs}. If
- * db and cachePartition are provided, populates valid_sources from db.
+ * {@link https://docs.webcat.tech/webapp-developers/CSP.html | the CSP docs}.
+ * Host sources are never allowed, so no enrollment lookup is needed.
  *
  * @param csp The policy string to validate.
- * @param valid_sources A set of fully-qualified domain names allowed as sources.
- * @param db
- * @param cachePartition
  */
-export async function validateCSP(
-  csp: string,
-  valid_sources: Set<string>,
-  db?: Database,
-  cachePartition?: CachePartition,
-) {
+export function validateCSP(csp: string) {
   // See https://github.com/freedomofpress/webcat/issues/9
   // https://github.com/freedomofpress/webcat/issues/3
 
@@ -84,7 +73,6 @@ export async function validateCSP(
     Hash = "'sha",
     Blob = "blob:",
     Data = "data:",
-    EnrolledOrigins = 1,
   }
 
   // See https://github.com/freedomofpress/webcat/issues/101
@@ -132,12 +120,12 @@ export async function validateCSP(
     }
   }
 
-  async function isSourceAllowed(
+  function isSourceAllowed(
     src: string,
     directive: string,
     allowed_keywords: string[],
     allowed_source_types: source_types[],
-  ): Promise<boolean> {
+  ): boolean {
     const lower_src = src.toLowerCase();
     if (allowed_keywords.includes(lower_src)) {
       return true;
@@ -160,39 +148,6 @@ export async function validateCSP(
       src.startsWith(source_types.Data)
     ) {
       return true;
-    } else if (
-      allowed_source_types.includes(source_types.EnrolledOrigins) &&
-      src.includes(".")
-    ) {
-      let fqdn: string;
-      try {
-        if (src.includes("://")) {
-          const url = new URL(src);
-          fqdn = url.hostname;
-        } else {
-          // Host-only source (no scheme)
-          fqdn = getFQDNSafe(src);
-        }
-      } catch (e) {
-        throw new Error(
-          `${directive} value ${src} was parsed as a url but it is not valid: ${e}`,
-        );
-      }
-
-      if (valid_sources.has(fqdn)) {
-        return true;
-      } else if (
-        db &&
-        cachePartition &&
-        (await db.getFQDNEnrollment(fqdn, cachePartition)).length !== 0
-      ) {
-        valid_sources.add(fqdn);
-        return true;
-      } else {
-        throw new Error(
-          `${directive} value ${src}, parsed as FQDN: ${fqdn} is not enrolled and thus not allowed.`,
-        );
-      }
     } else {
       throw new Error(
         `${directive} cannot contain ${src} which is unsupported.`,
@@ -200,7 +155,7 @@ export async function validateCSP(
     }
   }
 
-  async function validateDirectiveList(
+  function validateDirectiveList(
     directive: string,
     list: string[] | undefined,
     default_src_is_none: boolean,
@@ -215,12 +170,7 @@ export async function validateCSP(
 
     if (list) {
       for (const src of list) {
-        await isSourceAllowed(
-          src,
-          directive,
-          allowed_keywords,
-          allowed_source_types,
-        );
+        isSourceAllowed(src, directive, allowed_keywords, allowed_source_types);
       }
     }
   }
@@ -228,7 +178,7 @@ export async function validateCSP(
   // Step 3: think about scripts
   // We can now allow inline verified scripts via sha-, see https://github.com/freedomofpress/webcat/pull/111
 
-  await validateDirectiveList(
+  validateDirectiveList(
     directives.ScriptSrc,
     parsedCSP.get(directives.ScriptSrc),
     default_src_is_none,
@@ -240,7 +190,7 @@ export async function validateCSP(
     [source_types.Hash],
   );
 
-  await validateDirectiveList(
+  validateDirectiveList(
     directives.ScriptSrcElem,
     parsedCSP.get(directives.ScriptSrcElem),
     default_src_is_none || parsedCSP.has(directives.ScriptSrc),
@@ -254,7 +204,7 @@ export async function validateCSP(
 
   // Step 4: validate style-src
   // TODO credit for -elem tags
-  await validateDirectiveList(
+  validateDirectiveList(
     directives.StyleSrc,
     parsedCSP.get(directives.StyleSrc),
     default_src_is_none,
@@ -265,10 +215,10 @@ export async function validateCSP(
       source_keywords.UnsafeInline,
       source_keywords.UnsafeHashes,
     ],
-    [source_types.Hash, source_types.EnrolledOrigins],
+    [source_types.Hash],
   );
 
-  await validateDirectiveList(
+  validateDirectiveList(
     directives.StyleSrcElem,
     parsedCSP.get(directives.StyleSrcElem),
     default_src_is_none || parsedCSP.has(directives.StyleSrc),
@@ -279,7 +229,7 @@ export async function validateCSP(
       source_keywords.UnsafeInline,
       source_keywords.UnsafeHashes,
     ],
-    [source_types.Hash, source_types.EnrolledOrigins],
+    [source_types.Hash],
   );
 
   // Step 5: frame-src / child-src are unrestricted. Enrolled documents are
@@ -293,7 +243,7 @@ export async function validateCSP(
     );
   } else if (worker_src) {
     for (const src of worker_src) {
-      await isSourceAllowed(
+      isSourceAllowed(
         src,
         directives.WorkerSrc,
         [source_keywords.None, source_keywords.Self],
