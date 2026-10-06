@@ -1,6 +1,8 @@
-## Webcat Browser Extension
+## WEBCAT Browser Extension
 
-The extension is written mostly in TypeScript, using the Manifest V2 API. It is very unlikely that a port to Manifest V3 would be possible, as it relies heavily on intercepting and modifying network requests and responses. There are no runtime dependencies, and it uses only the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API) including the TUF, Sigstore and Sigsum clients. The only exception are the WebAssembly hooks where a synchronous SHA256 function is needed in order to hook synchronous WebAssembly methods.
+The extension is written in TypeScript, using the Manifest V3 API. Chromium is not supported, as it relies heavily on intercepting and modifying network requests and responses, which Chromium does not allow in Manifest V3. There are no external runtime dependencies: the Sigsum, Sigstore and CometBFT clients are maintained by the Freedom of the Press Foundation and, like the rest of the extension, use only the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API). The only exception are the WebAssembly hooks, where a synchronous SHA256 function is needed in order to hook synchronous WebAssembly methods and Worklets, where `crypto` is not available.
+
+The latest tagged release is generally published on the [Mozilla Add-ons store](https://addons.mozilla.org/en-US/firefox/addon/webcat/).
 
 ### Build
 
@@ -8,31 +10,29 @@ Install build dependencies:
 
 `npm install`
 
-Compile the TypeScript and package it into a single file using [Vite](https://vite.dev):
+Compile the TypeScript and bundle it with [Vite](https://vite.dev):
 
 `npm run build`
 
-The output will be in `./bundle/bundle.js`. Everything else in the extension folder does not need any action. The extension can be loaded in debug mode by loading the `manifest.json` after the build command.
+The output will be in `./dist/bundle.js` and `./dist/hooks/`. Everything else in the extension folder does not need any action.
 
-Alternatively, `make build` will build, package, and clean the extension, saving the archive as `../dist/webcat-extension.zip`.
+Alternatively, `make package` will install, build, fetch the current enrollment list and package the extension, saving the archive as `../dist/webcat-extension.zip`. The archive can then be loaded in `about:debugging` as a temporary add-on. `make package-test` builds with `VITE_TESTING=true`, which disables minification and mocks the light client, and is what the integration tests use.
+
+The extension can also be built as an npm library with `npm run build:lib`. API docs are generated with [Typedoc](https://typedoc.org).
 
 ### Tests
 
-There is currently a very limited test suite supported, mostly to showcase the structure and scaffholding. Tests use [vitest](https://vitest.dev/) and can be run both natively, or in [playwright](https://playwright.dev/). In the future, while some test will keep running in both modes, some others will explicitly require the full browser environment.
+Unit tests use [vitest](https://vitest.dev/) and run natively, with the browser APIs mocked:
 
 `npm run test`
 
-Or, for playwright:
+Tests in `tests/webcat/` cover the verification logic, tests in `tests/browser/` the wrappers around the WebExtension APIs. `npm run coverage` also prints a coverage report.
 
-```
-npm install @vitest/browser playwright
-npx playwright install
-npm run test:playwright
-```
+Integration tests are in [`../test/`](../test/README.md). They use pytest to run Firefox and Tor Browser with the `package-test` archive (or the library build) installed, and check the test apps. CI runs them on Firefox, Firefox ESR and Tor Browser at the Standard, Safer and Safest security levels.
 
 ### Linting
 
-The project uses [eslint](eslint.config.mjs) for linting and [prettier](https://prettier.io/) for sorting imports and style consistency. Both are run together with:
+The project uses [dpdm](https://github.com/acrazing/dpdm) to catch circular imports, [eslint](eslint.config.mjs) for linting and [prettier](https://prettier.io/) for sorting imports and style consistency. All three are run together with:
 
 `npm run lint`
 
@@ -40,79 +40,6 @@ To check for issues without auto-fixing (this is what CI runs):
 
 `npm run lint:check`
 
-### Decision tree
+### How it works
 
-```mermaid
-flowchart TD
-    A[User types example.com] --> B[Extension intercepts request]
-    B --> C{Is example.com enrolled?}
-    C -- No --> D[Allow request to proceed]
-    C -- Yes --> E[Fetch policy hash]
-    E --> F[Fetch manifest.json]
-    F --> G{Headers valid?}
-    G -- No --> H[Abort page load]
-    G -- Yes --> I[Wait for manifest download]
-    I --> J{Manifest downloaded successfully?}
-    J -- No --> H
-    J -- Yes --> K[Verify manifest signatures SigStore]
-    K --> K2[Match manifest signers with policy hash]
-    K2 --> L{Signatures valid?}
-    L -- No --> H
-    L -- Yes --> M[Download main page content]
-    M --> N[Check main page hash]
-    N --> O{Main page hash valid?}
-    O -- No --> H
-    O -- Yes --> P[Verify subresources CSP and hashes]
-    P --> Q{Subresources valid?}
-    Q -- No --> H
-    Q -- Yes --> R[Allow page to load]
-```
-
-### Sequence diagram
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Browser
-    participant Extension
-    participant Server
-
-    User ->> Browser: Types www.example.com
-    Browser ->> Extension: Sends request to load the page
-    Extension ->> Extension: Checks if www.example.com is in the internal list
-    alt Not Enrolled
-        Extension ->> Browser: Allow request to proceed
-    else Enrolled
-        Extension ->> Server: Fetch policy hash
-        Extension ->> Server: Fire async request to www.example.com/manifest.json
-        Server -->> Extension: Returns headers
-        Extension ->> Extension: Check header conformity
-        alt Header Invalid
-            Extension ->> Browser: Abort page load
-        else Header Valid
-            Extension ->> Extension: Wait for manifest to download
-            alt Manifest Download Fails
-                Extension ->> Browser: Abort page load
-            else Manifest Downloaded
-                Extension ->> Extension: Verify manifest signatures
-                alt Signature Invalid
-                    Extension ->> Browser: Abort page load
-                else Signature Valid
-                    Extension ->> Server: Download main page
-                    Server -->> Extension: Returns main page content
-                    Extension ->> Extension: Check main page hash
-                    alt Main Page Hash Invalid
-                        Extension ->> Browser: Abort page load
-                    else Main Page Hash Valid
-                        Extension ->> Extension: Verify subresources (CSP and hashes)
-                        alt Subresource Verification Fails
-                            Extension ->> Browser: Abort page load
-                        else All Subresources Verified
-                            Extension ->> Browser: Allow page to load
-                        end
-                    end
-                end
-            end
-        end
-    end
-```
+For an overview of the verification flow and the response validation logic, see [Towards auditable web application runtimes](https://securedrop.org/news/webcat-towards-auditable-web-application-runtimes/) and the [specifications](https://github.com/freedomofpress/webcat-spec).

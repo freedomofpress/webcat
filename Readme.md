@@ -23,7 +23,7 @@ The project has been originally written as a master's thesis for the [Master Com
 WEBCAT is:
  1. [An enrollment consensus system](https://github.com/freedomofpress/webcat-infra-chain)
  2. [A set of specifications](https://github.com/freedomofpress/webcat-spec)
- 3. [A Firefox (MV2) extension](./extension/)
+ 3. [A Firefox (MV3) extension](./extension/)
  4. [A CLI for developers and hosters](https://github.com/freedomofpress/webcat-cli)
  5. Some dependencies, such as [sigsum-ts](https://github.com/freedomofpress/sigsum-ts), [cometbft-ts](https://github.com/freedomofpress/cometbft-ts) and [sigstore-browser](https://github.com/freedomofpress/sigstore-browser).
 
