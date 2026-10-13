@@ -240,7 +240,7 @@ describe("validateCSP", () => {
   });
 
   // See https://github.com/freedomofpress/webcat/issues/99
-  it("should throw when default-src contains 'none' and 'self'", () => {
+  it("should treat default-src 'none' 'self' as 'self'", () => {
     const csp = [
       "default-src 'none' 'self'",
       "script-src 'self'",
@@ -252,7 +252,7 @@ describe("validateCSP", () => {
     ].join("; ");
 
     expect(() => validateCSP(csp)).toThrow(
-      "default-src 'none' must be the only value",
+      "default-src is not none, and object-src is not defined.",
     );
   });
 
@@ -284,12 +284,10 @@ describe("validateCSP", () => {
     expect(validateCSP(csp)).toBeUndefined();
   });
 
-  it("should throw when default-src 'none' has company", () => {
+  it("should pass when default-src 'none' 'self' has every directive", () => {
     const csp =
       "default-src 'none' 'self'; script-src 'self'; style-src 'self'; object-src 'none'; worker-src 'self'";
-    expect(() => validateCSP(csp)).toThrow(
-      "default-src 'none' must be the only value",
-    );
+    expect(validateCSP(csp)).toBeUndefined();
   });
 
   it("should throw for malformed hash sources", () => {

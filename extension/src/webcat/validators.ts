@@ -102,12 +102,8 @@ export function validateCSP(csp: string) {
       );
     }
   }
-  const default_src_is_none = default_src.includes(source_keywords.None);
-  if (default_src_is_none && default_src.length !== 1) {
-    throw new Error(
-      `default-src 'none' must be the only value: ${default_src.join(" ")}`,
-    );
-  }
+  const default_src_is_none =
+    default_src.length === 1 && default_src[0] === source_keywords.None;
 
   // https://w3c.github.io/webappsec-csp/#grammardef-hash-source
   const hash_source = /^'sha(256|384|512)-[A-Za-z0-9+/_-]+={0,2}'$/i;
