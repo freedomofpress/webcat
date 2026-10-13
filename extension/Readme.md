@@ -1,6 +1,6 @@
 ## WEBCAT Browser Extension
 
-The extension is written in TypeScript, using the Manifest V3 API. Chromium is not supported, as it relies heavily on intercepting and modifying network requests and responses, which Chromium does not allow in Manifest V3. There are no external runtime dependencies: the Sigsum, Sigstore and CometBFT clients are maintained by the Freedom of the Press Foundation and, like the rest of the extension, use only the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API). The only exception are the WebAssembly hooks, where a synchronous SHA256 function is needed in order to hook synchronous WebAssembly methods and Worklets, where `crypto` is not available.
+The extension is written in TypeScript, using the Manifest V3 API. Chromium is not supported, as the extension relies heavily on intercepting and modifying network requests and responses, which Chromium does not allow in Manifest V3. There are no external runtime dependencies: the Sigsum, Sigstore and CometBFT clients are maintained by the Freedom of the Press Foundation and, like the rest of the extension, use only the [Web Crypto API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API). The only exception is in the WebAssembly hooks, where a synchronous SHA256 function is needed in order to hook synchronous WebAssembly methods and Worklets, where `crypto` is not available.
 
 The latest tagged release is generally published on the [Mozilla Add-ons store](https://addons.mozilla.org/en-US/firefox/addon/webcat/).
 
