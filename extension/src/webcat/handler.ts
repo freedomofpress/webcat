@@ -62,7 +62,7 @@ export class WebcatRequestHandler extends RequestHandler {
     this.#db = db;
     this.#ui = ui;
     this.#config = config;
-    this.#hooks = new HookBuilder(db.namespace("hooks"), config);
+    this.#hooks = new HookBuilder(db.namespace("hooks"), ui, config);
     this.#contentScript = new ContentScript(this.#hooks.getStaticHookPath());
     this.#responseValidator = new ResponseValidator(
       this.#db,

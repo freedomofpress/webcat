@@ -51,6 +51,8 @@ export const defaults = {
 
   /** {@inheritDoc WebcatConfig.staticHookPath} */
   staticHookPath: "dist/hooks/content.js",
+  /** {@inheritDoc WebcatConfig.connectionName} */
+  connectionName: "WEBCAT",
   /** {@inheritDoc WebcatConfig.iconPaths} */
   iconPaths: (p: PathTemplateProperties) =>
     `icons/${p.colorScheme}/${p.name}.SVG`,

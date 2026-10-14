@@ -581,18 +581,27 @@ parent.postMessage({ results }, "*");
 @pytest.mark.parametrize("root, headers, hooks", [
     ("cases/testapp", EXPECTED_CSP, OAC_HOOKS),
 ], indirect=["root"])
-@pytest.mark.parametrize("parent, isolated", [
+@pytest.mark.parametrize("parent, isolated, historical_cluster", [
     # The extension origin-keys the enrolled parent, so the same-site frame behaves like a cross-site one
-    pytest.param("site1.localhost", True, id="enrolled_parent"),
+    pytest.param("site1.localhost", True, False, id="enrolled_parent"),
+    # When a historical agent cluster prevents origin-keying, the extension blocks
+    pytest.param("site1.localhost", True, True, id="historical_cluster"),
     # Control: stock Firefox lets a same-site frame merge origins, so the case above isn't vacuous
-    pytest.param("nonenrolled.localhost", False, id="non_enrolled_parent"),
+    pytest.param("nonenrolled.localhost", False, False, id="non_enrolled_parent"),
 ])
-def test_same_site_frame_isolation(browser: Browser, server: Server, update_server: UpdateServer, addon_path, parent, isolated):
+def test_same_site_frame_isolation(browser: Browser, server: Server, update_server: UpdateServer, addon_path, parent, isolated, historical_cluster):
+    frame_url = f"{server.url(f'frame.{parent}')}/oac/frame.html"
+    if historical_cluster:
+        with server.wait_for({"/oac/parent.html", "/oac/frame.html"}):
+            browser.navigate(f"{server.url(parent)}/oac/parent.html?frame={urllib.parse.quote(frame_url, safe='')}")
     browser.install_extension(addon_path)
     update_server.wait_for_update()
-    frame_url = f"{server.url(f'frame.{parent}')}/oac/frame.html"
-    with server.wait_for({"/oac/parent.html", "/oac/frame.html"}):
+    with server.wait_for({"/oac/parent.html", "/oac/frame.html"} if not historical_cluster else {"/oac/parent.html"}):
         browser.navigate(f"{server.url(parent)}/oac/parent.html?frame={urllib.parse.quote(frame_url, safe='')}")
+    if historical_cluster:
+        res = browser.execute("document.body.textContent")
+        assert "ERR_WEBCAT_FRAME_ISOLATION_OAC_UNAVAILABLE" in res
+        return
     deadline = monotonic() + 10
     dump = 'JSON.stringify(window.oac, (k, v) => k.startsWith("module") ? String(v) : v)'
     while "parentAccess" not in (oac := json.loads(browser.execute(dump))):

@@ -17,6 +17,7 @@ const mockStorageGet = vi.fn().mockResolvedValue({});
 const mockStorageSet = vi.fn();
 const mockAddOnCommitted = vi.fn();
 const mockGetURL = vi.fn();
+const mockAddOnConnect = vi.fn();
 const mockAddOnRemoved = vi.fn();
 const mockAddOnBeforeRequest = vi.fn();
 const mockRemoveOnBeforeRequest = vi.fn();
@@ -47,6 +48,9 @@ vi.stubGlobal("browser", {
   },
   runtime: {
     getURL: mockGetURL,
+    onConnect: {
+      addListener: mockAddOnConnect,
+    },
   },
   windows: {
     onRemoved: {
