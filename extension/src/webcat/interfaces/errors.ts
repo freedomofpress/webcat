@@ -251,6 +251,14 @@ export enum WebcatErrorFile {
   MISMATCH = "ERR_WEBCAT_FILE_MISMATCH",
 }
 
+export enum WebcatErrorFrameIsolation {
+  /**
+   * The frame is not a member of an origin-keyed agent cluster.
+   * See https://developer.mozilla.org/en-US/docs/Web/API/Window/originAgentCluster
+   */
+  OAC_UNAVAILABLE = "ERR_WEBCAT_FRAME_ISOLATION_OAC_UNAVAILABLE",
+}
+
 /**
  * All user-facing error codes.
  */
@@ -271,6 +279,8 @@ export const WebcatErrorCode = {
   URL: { ...WebcatErrorURL },
   /** {@inheritDoc WebcatErrorFile} */
   File: { ...WebcatErrorFile },
+  /** {@inheritDoc WebcatErrorFrameIsolation} */
+  FrameIsolation: { ...WebcatErrorFrameIsolation },
 } as const;
 
 /**
@@ -284,7 +294,8 @@ export type WebcatErrorCodeAny =
   | WebcatErrorCSP
   | WebcatErrorHeaders
   | WebcatErrorURL
-  | WebcatErrorFile;
+  | WebcatErrorFile
+  | WebcatErrorFrameIsolation;
 
 /**
  * Error class for user-facing errors.

@@ -1,5 +1,10 @@
 import { KVStore } from "../browser/kvstore";
+import { RequestDetails } from "../browser/requests";
 import pageHooks from "./../../dist/hooks/page.js?raw";
+import { WebcatError, WebcatErrorCodeAny } from "./interfaces/errors";
+import { Stateful } from "./interfaces/requeststate";
+import { WebcatUI } from "./ui";
+import { getFQDN } from "./utils";
 
 const hooks = {
   content_script: '"__DATA_PLACEHOLDER__"',
@@ -13,6 +18,11 @@ export type HookBuilderConfig = {
    * extension root directory.
    */
   staticHookPath: string;
+  /**
+   * The name of the connection that content script hooks use to communicate
+   * with the rest of the extension.
+   */
+  connectionName: string;
 };
 
 /**
@@ -20,6 +30,7 @@ export type HookBuilderConfig = {
  */
 export class HookBuilder {
   readonly #staticHookPath: string;
+  readonly #connectionName: string;
 
   #firstPartyKey: Promise<CryptoKey>;
   #firstPartySalt: Promise<Uint8Array<ArrayBuffer>>;
@@ -28,8 +39,9 @@ export class HookBuilder {
    * @param store A key-value store for persisting the builder's cryptographic
    *   key and salt.
    */
-  constructor(store: KVStore, config: HookBuilderConfig) {
+  constructor(store: KVStore, ui: WebcatUI, config: HookBuilderConfig) {
     this.#staticHookPath = config.staticHookPath;
+    this.#connectionName = config.connectionName;
     this.#firstPartyKey = store
       .get("firstPartyKey", "session")
       .then(async (raw: ArrayBuffer) => {
@@ -72,6 +84,23 @@ export class HookBuilder {
         }
         return salt;
       });
+    browser.runtime.onConnect.addListener((port: browser.runtime.Port) => {
+      if (port.name !== this.#connectionName) {
+        return;
+      }
+      port.onMessage.addListener((message) => {
+        const error = message as {
+          code: WebcatErrorCodeAny;
+        };
+        ui.showErrorPage(
+          {
+            tabId: port.sender?.tab?.id,
+            state: { fqdn: getFQDN(port.sender?.url as string) },
+          } as Stateful<RequestDetails>,
+          new WebcatError(error.code),
+        );
+      });
+    });
   }
 
   /**
@@ -195,6 +224,7 @@ export class HookBuilder {
         hashes: wasm,
         firstParty: efpoBase64,
         sameOriginWithFirstParty: sameOrigin,
+        connectionName: this.#connectionName,
       }),
     );
   }

@@ -3,6 +3,7 @@
 // by response.ts
 
 import { eventHook, eventTargetHook } from "./events";
+import { oacHook } from "./oac";
 import { wasmHook } from "./wasm";
 import { serviceWorkerHook, sharedWorkerHook, workerHook } from "./workers";
 
@@ -39,3 +40,4 @@ serviceWorkerHook(window, data);
 workerHook(window, data);
 eventTargetHook(window, data);
 eventHook(window, data);
+oacHook(window, data);

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { HookBuilder } from "../../src/webcat/hookbuilder";
+import { WebcatUI } from "../../src/webcat/ui";
 
 vi.mock("../../dist/hooks/content.js?raw", () => ({
   default: `content {{ "__DATA_PLACEHOLDER__" }}`,
@@ -40,6 +41,20 @@ vi.spyOn(crypto, "getRandomValues").mockImplementation(
   },
 );
 
+vi.mock("../../src/browser/permissions", () => ({
+  default: {
+    require: vi.fn().mockReturnValue(vi.fn()),
+  },
+}));
+
+vi.stubGlobal("browser", {
+  runtime: {
+    onConnect: {
+      addListener: vi.fn(),
+    },
+  },
+});
+
 class MockKVStore {
   get = vi.fn().mockImplementation(async () => {});
   set = vi.fn();
@@ -54,14 +69,17 @@ describe("HookBuilder", () => {
 
   beforeEach(() => {
     store = new MockKVStore();
-    hb = new HookBuilder(store, { staticHookPath: "hooks.js" });
+    hb = new HookBuilder(store, {} as WebcatUI, {
+      staticHookPath: "hooks.js",
+      connectionName: "conn",
+    });
   });
 
   it("should embed inputs into page hooks", async () => {
     await expect(
       hb.getPageHooks([], "https://example.com", false),
     ).resolves.toBe(
-      `page {{ {"hashes":[],"firstParty":"egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM=","sameOriginWithFirstParty":false} }}`,
+      `page {{ {"hashes":[],"firstParty":"egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM=","sameOriginWithFirstParty":false,"connectionName":"conn"} }}`,
     );
     expect(store.set).toHaveBeenCalledWith(
       { firstPartySalt: new Uint8Array(256 / 8).fill(0) },
@@ -79,7 +97,7 @@ describe("HookBuilder", () => {
     ).resolves.toStrictEqual([
       expect.any(Function),
       [
-        '{"hashes":[],"firstParty":"egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM=","sameOriginWithFirstParty":false}',
+        '{"hashes":[],"firstParty":"egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM=","sameOriginWithFirstParty":false,"connectionName":"conn"}',
       ],
     ]);
     expect(store.set).toHaveBeenCalledWith(
@@ -121,11 +139,14 @@ describe("HookBuilder", () => {
         return value;
       }
     });
-    const hb = new HookBuilder(store, { staticHookPath: "hooks.js" });
+    const hb = new HookBuilder(store, {} as WebcatUI, {
+      staticHookPath: "hooks.js",
+      connectionName: "conn",
+    });
     await expect(
       hb.getPageHooks([], "https://example.com", false),
     ).resolves.toBe(
-      `page {{ {"hashes":[],"firstParty":"iUVA3nR8tTZvSXRqV_fxC0266M2ZQFFQkrup04pLjVLLm3WdeuUeCXmJXIv3uVc=","sameOriginWithFirstParty":false} }}`,
+      `page {{ {"hashes":[],"firstParty":"iUVA3nR8tTZvSXRqV_fxC0266M2ZQFFQkrup04pLjVLLm3WdeuUeCXmJXIv3uVc=","sameOriginWithFirstParty":false,"connectionName":"conn"} }}`,
     );
     expect(store.set).not.toHaveBeenCalled();
   });
