@@ -98,6 +98,7 @@ export class HookBuilder {
             state: { fqdn: getFQDN(port.sender?.url as string) },
           } as Stateful<RequestDetails>,
           new WebcatError(error.code),
+          true,
         );
       });
     });
