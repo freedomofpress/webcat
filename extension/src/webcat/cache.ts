@@ -13,7 +13,7 @@ export type CacheKey<T> = string & { [CacheKeySymbol]: T | undefined };
  */
 export function CacheKey<T extends { [index: string]: { toString(): string } }>(
   key: string,
-  attrs: T,
+  attrs?: T,
 ): CacheKey<T> {
   return (encodeURIComponent(key) +
     (attrs
@@ -46,7 +46,7 @@ export function isInPartition<
     const attrs = {} as Record<string, string>;
     q.split(",").forEach((attr) => {
       const [name, value] = attr.split("=");
-      attrs[name] = value;
+      attrs[decodeURIComponent(name)] = decodeURIComponent(value);
     });
     return Object.keys(partition).every(
       (name) => partition[name].toString() === attrs[name],
@@ -75,6 +75,9 @@ export class LRUCache<K, V> {
   /** @internal */
   constructor(limit: number, mutex: Mutex);
   constructor(limit: number, mutex?: Mutex) {
+    if (limit <= 0) {
+      throw new TypeError("limit must be greater than zero");
+    }
     this.mutex = mutex || new Mutex();
     this.#limit = limit;
     this.#cache = new Map<K, V>();
@@ -114,10 +117,8 @@ export class LRUCache<K, V> {
       await this.delete(key, lock);
     } else if (this.#cache.size >= this.#limit) {
       // Remove the least recently used key (first key in the Map)
-      const oldestKey = this.#cache.keys().next().value;
-      if (oldestKey !== undefined) {
-        await this.delete(oldestKey, lock);
-      }
+      const oldestKey = this.#cache.keys().next().value as K;
+      await this.delete(oldestKey, lock);
     }
     this.#cache.set(key, value);
   }
@@ -341,10 +342,8 @@ export class LRUSet<T> {
       this.#cache.delete(value);
     } else if (this.#cache.size >= this.#limit) {
       // Remove the least recently used value (first item in the Set)
-      const oldestValue = this.#cache.values().next().value;
-      if (oldestValue !== undefined) {
-        this.#cache.delete(oldestValue);
-      }
+      const oldestValue = this.#cache.values().next().value as T;
+      this.#cache.delete(oldestValue);
     }
     this.#cache.add(value);
   }

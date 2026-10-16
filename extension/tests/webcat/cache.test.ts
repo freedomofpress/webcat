@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LRUCache, LRUSet, PersistentLRUCache } from "./../../src/webcat/cache";
+import {
+  CacheKey,
+  isInPartition,
+  LRUCache,
+  LRUSet,
+  PersistentLRUCache,
+} from "./../../src/webcat/cache";
 
 class MockKVStore {
   data = new Map<string, unknown>();
@@ -26,6 +32,77 @@ class MockKVStore {
   });
 }
 
+describe("CacheKey", () => {
+  it("should URL-encode the key", () => {
+    const key = CacheKey("https://example.com/");
+    expect(key).toBe("https%3A%2F%2Fexample.com%2F");
+  });
+
+  it("should include ordered attributes", () => {
+    const key = CacheKey("key", {
+      foo: 123,
+      bar: true,
+      baz: "a longer value with spaces, a comma & an ampersand",
+    });
+    expect(key).toBe(
+      "key?bar=true,baz=a%20longer%20value%20with%20spaces%2C%20a%20comma%20%26%20an%20ampersand,foo=123",
+    );
+  });
+});
+
+describe("isInPartition", () => {
+  it("should return true for keys in a partition", () => {
+    const key = CacheKey("key", {
+      foo: 123,
+      bar: true,
+      baz: "a longer value with spaces, a comma & an ampersand",
+    });
+    expect(isInPartition(key, { foo: 123 })).toBe(true);
+    expect(isInPartition(key, { bar: true })).toBe(true);
+    expect(
+      isInPartition(key, {
+        baz: "a longer value with spaces, a comma & an ampersand",
+      }),
+    ).toBe(true);
+    expect(isInPartition(key, { foo: 123, bar: true })).toBe(true);
+    expect(
+      isInPartition(key, {
+        foo: 123,
+        bar: true,
+        baz: "a longer value with spaces, a comma & an ampersand",
+      }),
+    ).toBe(true);
+  });
+
+  it("should return true for a key with no attributes", () => {
+    const key = CacheKey("some key");
+    expect(isInPartition(key, {})).toBe(true);
+  });
+
+  it("should return false for keys not in a partition", () => {
+    const key = CacheKey("key", {
+      foo: 123,
+      bar: true,
+      baz: "a longer value with spaces, a comma & an ampersand",
+    });
+    expect(isInPartition(key, { foo: 124 })).toBe(false);
+    expect(isInPartition(key, { bar: false })).toBe(false);
+    expect(
+      isInPartition(key, {
+        baz: "a wrong value with spaces, a comma & an ampersand",
+      }),
+    ).toBe(false);
+    expect(isInPartition(key, { foo: 123, bar: false })).toBe(false);
+    expect(
+      isInPartition(key, {
+        foo: 123,
+        bar: true,
+        baz: "a wrong value with spaces, a comma & an ampersand",
+      }),
+    ).toBe(false);
+  });
+});
+
 describe.each([
   ["LRUCache", (n: number) => new LRUCache<string, number>(n)],
   [
@@ -34,6 +111,10 @@ describe.each([
       new PersistentLRUCache<string, number>(n, new MockKVStore(), "session"),
   ],
 ])("%s", (_, createLRUCache) => {
+  it("should throw when limit is zero", () => {
+    expect(() => createLRUCache(0)).toThrow("limit must be greater than zero");
+  });
+
   it("should return undefined for missing keys", async () => {
     const cache = createLRUCache(3);
     await expect(cache.get("missing")).resolves.toBeUndefined();
@@ -42,6 +123,7 @@ describe.each([
   it("should store and retrieve values", async () => {
     const cache = createLRUCache(3);
     await cache.set("a", 1);
+    await expect(cache.has("a")).resolves.toBe(true);
     await expect(cache.get("a")).resolves.toBe(1);
   });
 
@@ -76,6 +158,18 @@ describe.each([
     await expect(cache.keys()).resolves.toStrictEqual(
       expect.objectContaining({ length: 1 }),
     );
+  });
+
+  it("should clear all values when requested", async () => {
+    const cache = createLRUCache(3);
+    await cache.set("a", 1);
+    await cache.set("b", 2);
+    await cache.set("c", 3);
+    await cache.clear();
+    await expect(cache.has("a")).resolves.toBe(false);
+    await expect(cache.has("b")).resolves.toBe(false);
+    await expect(cache.has("c")).resolves.toBe(false);
+    await expect(cache.keys()).resolves.toStrictEqual([]);
   });
 });
 
@@ -251,8 +345,20 @@ describe("LRUSet", () => {
     cache.add(2);
     cache.add(3);
     cache.has(1); // Access "1", making it recently used
-    cache.add(4); // "2" should be evicted
-    await expect(cache.has(2)).resolves.toBe(false);
-    await expect(cache.values()).resolves.toEqual([3, 1, 4]);
+    cache.add(2); // Access "2", making it recently used
+    cache.add(4); // "3" should be evicted
+    await expect(cache.has(3)).resolves.toBe(false);
+    await expect(cache.values()).resolves.toEqual([1, 2, 4]);
+  });
+
+  it("should delete items as requested", async () => {
+    const cache = new LRUSet<number>(3);
+    cache.add(1);
+    cache.add(2);
+    cache.add(3);
+    cache.delete(2);
+    await expect(cache.values()).resolves.toStrictEqual([1, 3]);
+    cache.clear();
+    await expect(cache.values()).resolves.toStrictEqual([]);
   });
 });
