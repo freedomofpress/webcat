@@ -465,6 +465,13 @@ export async function verifySigsumManifest(
     ]);
   }
 
+  // A policy without a witness quorum yields no cosignature timestamps.
+  if (timestamps.length === 0) {
+    return new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_VERIFY_FAILED, [
+      "no witness timestamps",
+    ]);
+  }
+
   // Median timestamp
   const timestamp = timestamps.sort((a, b) => a - b)[
     Math.floor(timestamps.length / 2)
