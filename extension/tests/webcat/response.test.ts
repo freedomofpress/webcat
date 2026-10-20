@@ -429,7 +429,7 @@ describe("OriginState.verifyManifest", () => {
     await state.verifyEnrollment(enrollment);
 
     manifest = {
-      name: "test-app",
+      app: "test-app",
       version: "1.0.0",
       default_csp: defaultCSP,
       extra_csp: {},
@@ -565,7 +565,7 @@ describe("OriginState.verifyManifest (sigstore)", () => {
     await state.verifyEnrollment(enrollment);
 
     manifest = {
-      name: "test-app",
+      app: "test-app",
       version: "1.0.0",
       default_csp: defaultCSP,
       extra_csp: {},
@@ -651,7 +651,7 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
     await state.verifyEnrollment(enrollment);
 
     const manifest: Manifest = {
-      name: "test-app",
+      app: "test-app",
       version: "1.0.0",
       default_csp: defaultCSP,
       extra_csp: {

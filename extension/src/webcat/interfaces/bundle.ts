@@ -27,7 +27,7 @@ export interface SigstoreEnrollment extends BaseEnrollment {
 export type Enrollment = SigsumEnrollment | SigstoreEnrollment;
 
 export interface Manifest {
-  name: string;
+  app: string;
   version: string;
   default_csp: string;
   extra_csp: {

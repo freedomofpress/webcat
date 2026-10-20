@@ -333,7 +333,7 @@ describe("validateCSP", () => {
 
 describe("validateManifest", () => {
   const manifest: Manifest = {
-    name: "app",
+    app: "app",
     version: "1.0.0",
     default_csp: "default-src 'self'",
     extra_csp: {},
