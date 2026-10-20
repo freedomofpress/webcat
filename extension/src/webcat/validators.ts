@@ -660,10 +660,11 @@ export async function verifySigstoreManifest(
   const canonicalized = stringToUint8Array(canonical);
 
   let verified = false;
+  const errors: string[] = [];
 
   // Does it make sense for this to be an array? Is there cases where the same manifest
   // Could have information of multile bundles, and we care just about one?
-  for (const bundle of signatures) {
+  for (const [index, bundle] of signatures.entries()) {
     try {
       verified = await verifier.verifyArtifactPolicy(
         policy,
@@ -673,15 +674,18 @@ export async function verifySigstoreManifest(
       if (verified) {
         break;
       }
+      errors.push(`bundle ${index}: verification failed`);
     } catch (e) {
-      console.log(e);
+      errors.push(
+        `bundle ${index}: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   }
 
   if (!verified) {
     return (
       freshnessPolicy.expired ??
-      new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED)
+      new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED, errors)
     );
   }
 
