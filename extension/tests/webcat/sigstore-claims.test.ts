@@ -158,6 +158,35 @@ describe("verifySigstoreManifest claim matching", () => {
     expect((result as WebcatError).code).toBe(WebcatErrorCode.Manifest.EXPIRED);
   });
 
+  it("reports why each bundle was rejected instead of logging it", async () => {
+    const enrollment = baseEnrollment({
+      "2.5.29.17": "https://github.com/example/repo",
+    });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    const signatures = [
+      { cert: createSanCert("https://github.com/other/repo") },
+      { cert: createSanCert("https://github.com/another/repo") },
+    ] as unknown as SigstoreSignatures;
+
+    const result = await verifySigstoreManifest(
+      enrollment,
+      manifest,
+      signatures,
+    );
+
+    expect(result).toBeInstanceOf(WebcatError);
+    expect((result as WebcatError).code).toBe(
+      WebcatErrorCode.Manifest.VERIFY_FAILED,
+    );
+    expect((result as WebcatError).details).toEqual([
+      expect.stringMatching(/^bundle 0: SAN mismatch/),
+      expect.stringMatching(/^bundle 1: SAN mismatch/),
+    ]);
+    expect(log).not.toHaveBeenCalled();
+    log.mockRestore();
+  });
+
   it("keeps exact matching when claim is not wrapped", async () => {
     const enrollment = baseEnrollment({
       "2.5.29.17": "https://github.com/example",
