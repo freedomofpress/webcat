@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 // global so tooling (e.g. webcat-cli) can import them.
 import { Manifest } from "../../src/webcat/interfaces/bundle";
 import { WebcatErrorCode } from "../../src/webcat/interfaces/errors";
-import { validateCSP, validateManifest } from "../../src/webcat/validators";
+import {
+  cspErrors,
+  validateCSP,
+  validateManifest,
+} from "../../src/webcat/validators";
 
 // Mocks (unchanged)
 vi.mock("../../src/webcat/logger", () => ({
@@ -13,6 +17,20 @@ vi.mock("../../src/webcat/logger", () => ({
     addLog: vi.fn(),
   },
 }));
+
+describe("cspErrors", () => {
+  it("reports every problem, not just the first", () => {
+    expect(
+      cspErrors("default-src 'none' 'self'; script-src https://cdn.example"),
+    ).toEqual([
+      "default-src is not none, and object-src is not defined.",
+      "script-src cannot contain https://cdn.example which is unsupported.",
+      "default-src is not none, and style-src is not defined.",
+      "default-src is not none, and worker-src is not defined.",
+    ]);
+    expect(cspErrors("default-src 'none'")).toEqual([]);
+  });
+});
 
 describe("validateCSP", () => {
   // Test 1: Pass when default-src is 'none' (other directives are not required)
