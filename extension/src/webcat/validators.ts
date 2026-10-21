@@ -37,13 +37,14 @@ import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { parseContentSecurityPolicy } from "./parsers";
 
 /**
- * Validates a Content Security Policy. Enforces the restrictions outlined in
- * {@link https://docs.webcat.tech/webapp-developers/CSP.html | the CSP docs}.
- * Host sources are never allowed, so no enrollment lookup is needed.
+ * Every way a Content Security Policy breaks the restrictions outlined in
+ * {@link https://docs.webcat.tech/webapp-developers/CSP.html | the CSP docs},
+ * in check order; empty when the policy is valid.
  *
  * @param csp The policy string to validate.
  */
-export function validateCSP(csp: string) {
+export function cspErrors(csp: string): string[] {
+  const errors: string[] = [];
   // See https://github.com/freedomofpress/webcat/issues/9
   // https://github.com/freedomofpress/webcat/issues/3
 
@@ -86,7 +87,7 @@ export function validateCSP(csp: string) {
 
   // See https://github.com/freedomofpress/webcat/issues/101
   if (csp.includes(",")) {
-    throw new Error(`CSP contains a comma: ${csp}`);
+    return [`CSP contains a comma: ${csp}`];
   }
 
   // The spec (and thus the parsing function) has to lowercase the directive names
@@ -97,9 +98,7 @@ export function validateCSP(csp: string) {
   const default_src = parsedCSP.get(directives.DefaultSrc) ?? [];
   for (const src of default_src) {
     if (src !== source_keywords.None && src !== source_keywords.Self) {
-      throw new Error(
-        `Unexpected or non-allowed default-src directive: ${src}`,
-      );
+      errors.push(`Unexpected or non-allowed default-src directive: ${src}`);
     }
   }
   const default_src_is_none =
@@ -118,7 +117,7 @@ export function validateCSP(csp: string) {
   ) {
     const list = parsedCSP.get(directive);
     if (!list?.length && !optional) {
-      throw new Error(
+      errors.push(
         `${directives.DefaultSrc} is not none, and ${directive} is not defined.`,
       );
     }
@@ -128,9 +127,7 @@ export function validateCSP(csp: string) {
         !(allowed_keywords as string[]).includes(lower) &&
         !(hashes && hash_source.test(src))
       ) {
-        throw new Error(
-          `${directive} cannot contain ${src} which is unsupported.`,
-        );
+        errors.push(`${directive} cannot contain ${src} which is unsupported.`);
       }
     }
   }
@@ -149,21 +146,12 @@ export function validateCSP(csp: string) {
     false,
     true,
   );
-  validateDirective(
-    directives.ScriptSrcElem,
-    script_keywords,
-    true,
-    default_src_is_none || parsedCSP.has(directives.ScriptSrc),
-  );
+  // An -elem directive is only required when its base directive is missing, already an error.
+  validateDirective(directives.ScriptSrcElem, script_keywords, true, true);
 
   // Step 4: styles
   validateDirective(directives.StyleSrc, style_keywords, true);
-  validateDirective(
-    directives.StyleSrcElem,
-    style_keywords,
-    true,
-    default_src_is_none || parsedCSP.has(directives.StyleSrc),
-  );
+  validateDirective(directives.StyleSrcElem, style_keywords, true, true);
   validateDirective(directives.StyleSrcAttr, style_keywords, true, true);
 
   // Step 5: frame-src / child-src are unrestricted. Enrolled documents are
@@ -178,6 +166,18 @@ export function validateCSP(csp: string) {
     false,
     default_src_is_none && !parsedCSP.has(directives.ChildSrc),
   );
+
+  return errors;
+}
+
+/**
+ * Validates a Content Security Policy, throwing the first of {@link cspErrors}.
+ *
+ * @param csp The policy string to validate.
+ */
+export function validateCSP(csp: string) {
+  const [error] = cspErrors(csp);
+  if (error) throw new Error(error);
 }
 
 export async function witnessTimestampsFromCosignedTreeHead(
