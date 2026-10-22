@@ -36,6 +36,35 @@ import {
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { parseContentSecurityPolicy } from "./parsers";
 
+enum directives {
+  DefaultSrc = "default-src",
+  ScriptSrc = "script-src",
+  ScriptSrcElem = "script-src-elem",
+  ScriptSrcAttr = "script-src-attr",
+  StyleSrc = "style-src",
+  StyleSrcElem = "style-src-elem",
+  StyleSrcAttr = "style-src-attr",
+  ObjectSrc = "object-src",
+  ChildSrc = "child-src",
+  FrameSrc = "frame-src",
+  WorkerSrc = "worker-src",
+}
+
+/**
+ * The directives {@link cspErrors} checks; any other directive is left to the site.
+ */
+export const RESTRICTED_DIRECTIVES: string[] = [
+  directives.DefaultSrc,
+  directives.ScriptSrc,
+  directives.ScriptSrcElem,
+  directives.ScriptSrcAttr,
+  directives.StyleSrc,
+  directives.StyleSrcElem,
+  directives.StyleSrcAttr,
+  directives.ObjectSrc,
+  directives.WorkerSrc,
+];
+
 export interface CspError {
   directive?: string; // absent: the header holds several policies (a comma)
   source?: string; // absent: the directive is required but missing
@@ -53,20 +82,6 @@ export function cspErrors(csp: string): CspError[] {
   const errors: CspError[] = [];
   // See https://github.com/freedomofpress/webcat/issues/9
   // https://github.com/freedomofpress/webcat/issues/3
-
-  enum directives {
-    DefaultSrc = "default-src",
-    ScriptSrc = "script-src",
-    ScriptSrcElem = "script-src-elem",
-    ScriptSrcAttr = "script-src-attr",
-    StyleSrc = "style-src",
-    StyleSrcElem = "style-src-elem",
-    StyleSrcAttr = "style-src-attr",
-    ObjectSrc = "object-src",
-    ChildSrc = "child-src",
-    FrameSrc = "frame-src",
-    WorkerSrc = "worker-src",
-  }
 
   enum source_keywords {
     None = "'none'",
