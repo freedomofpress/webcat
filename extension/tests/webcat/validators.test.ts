@@ -44,12 +44,31 @@ describe("cspErrors", () => {
     expect(
       cspErrors("default-src 'none' 'self'; script-src https://cdn.example"),
     ).toEqual([
-      "default-src is not none, and object-src is not defined.",
-      "script-src cannot contain https://cdn.example which is unsupported.",
-      "default-src is not none, and style-src is not defined.",
-      "default-src is not none, and worker-src is not defined.",
+      {
+        directive: "object-src",
+        message: "default-src is not none, and object-src is not defined.",
+      },
+      {
+        directive: "script-src",
+        source: "https://cdn.example",
+        message:
+          "script-src cannot contain https://cdn.example which is unsupported.",
+      },
+      {
+        directive: "style-src",
+        message: "default-src is not none, and style-src is not defined.",
+      },
+      {
+        directive: "worker-src",
+        message: "default-src is not none, and worker-src is not defined.",
+      },
     ]);
     expect(cspErrors("default-src 'none'")).toEqual([]);
+    expect(cspErrors("default-src 'none', default-src 'self'")).toEqual([
+      {
+        message: "CSP contains a comma: default-src 'none', default-src 'self'",
+      },
+    ]);
   });
 });
 

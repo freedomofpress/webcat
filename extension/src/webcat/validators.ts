@@ -36,6 +36,12 @@ import {
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { parseContentSecurityPolicy } from "./parsers";
 
+export interface CspError {
+  directive?: string; // absent: the header holds several policies (a comma)
+  source?: string; // absent: the directive is required but missing
+  message: string;
+}
+
 /**
  * Every way a Content Security Policy breaks the restrictions outlined in
  * {@link https://docs.webcat.tech/webapp-developers/CSP.html | the CSP docs},
@@ -43,8 +49,8 @@ import { parseContentSecurityPolicy } from "./parsers";
  *
  * @param csp The policy string to validate.
  */
-export function cspErrors(csp: string): string[] {
-  const errors: string[] = [];
+export function cspErrors(csp: string): CspError[] {
+  const errors: CspError[] = [];
   // See https://github.com/freedomofpress/webcat/issues/9
   // https://github.com/freedomofpress/webcat/issues/3
 
@@ -87,7 +93,7 @@ export function cspErrors(csp: string): string[] {
 
   // See https://github.com/freedomofpress/webcat/issues/101
   if (csp.includes(",")) {
-    return [`CSP contains a comma: ${csp}`];
+    return [{ message: `CSP contains a comma: ${csp}` }];
   }
 
   // The spec (and thus the parsing function) has to lowercase the directive names
@@ -98,7 +104,11 @@ export function cspErrors(csp: string): string[] {
   const default_src = parsedCSP.get(directives.DefaultSrc) ?? [];
   for (const src of default_src) {
     if (src !== source_keywords.None && src !== source_keywords.Self) {
-      errors.push(`Unexpected or non-allowed default-src directive: ${src}`);
+      errors.push({
+        directive: directives.DefaultSrc,
+        source: src,
+        message: `Unexpected or non-allowed default-src directive: ${src}`,
+      });
     }
   }
   const default_src_is_none =
@@ -117,9 +127,10 @@ export function cspErrors(csp: string): string[] {
   ) {
     const list = parsedCSP.get(directive);
     if (!list?.length && !optional) {
-      errors.push(
-        `${directives.DefaultSrc} is not none, and ${directive} is not defined.`,
-      );
+      errors.push({
+        directive,
+        message: `${directives.DefaultSrc} is not none, and ${directive} is not defined.`,
+      });
     }
     for (const src of list ?? []) {
       const lower = src.toLowerCase();
@@ -127,7 +138,11 @@ export function cspErrors(csp: string): string[] {
         !(allowed_keywords as string[]).includes(lower) &&
         !(hashes && hash_source.test(src))
       ) {
-        errors.push(`${directive} cannot contain ${src} which is unsupported.`);
+        errors.push({
+          directive,
+          source: src,
+          message: `${directive} cannot contain ${src} which is unsupported.`,
+        });
       }
     }
   }
@@ -177,7 +192,7 @@ export function cspErrors(csp: string): string[] {
  */
 export function validateCSP(csp: string) {
   const [error] = cspErrors(csp);
-  if (error) throw new Error(error);
+  if (error) throw new Error(error.message);
 }
 
 export async function witnessTimestampsFromCosignedTreeHead(
