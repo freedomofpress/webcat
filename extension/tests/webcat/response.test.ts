@@ -124,7 +124,7 @@ vi.mock("../../src/webcat/validators", async () => {
         );
 
         const timestamp = timestamps.sort((a, b) => a - b)[
-          Math.floor(timestamps.length / 2)
+          Math.floor((timestamps.length - 1) / 2)
         ];
         const now = Math.floor(Date.now() / 1000);
 

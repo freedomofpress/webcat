@@ -1,17 +1,38 @@
 // validateCSP.test.ts
-import { describe, expect, it, vi } from "vitest";
-
 // No browser/permissions mock: validators must load without a `browser`
 // global so tooling (e.g. webcat-cli) can import them.
-import { Manifest } from "../../src/webcat/interfaces/bundle";
+import { hashKey, importKey } from "@freedomofpress/sigsum/dist/crypto";
+import { compilePolicy } from "@freedomofpress/sigsum/dist/policyCompiler";
+import { RawPublicKey } from "@freedomofpress/sigsum/dist/types";
+import { describe, expect, it, vi } from "vitest";
+
+import {
+  Uint8ArrayToBase64Url,
+  Uint8ArrayToHex,
+} from "../../src/webcat/encoding";
+import { EnrollmentTypes, Manifest } from "../../src/webcat/interfaces/bundle";
 import { WebcatErrorCode } from "../../src/webcat/interfaces/errors";
 import {
   cspErrors,
   validateCSP,
   validateManifest,
+  verifySigsumManifest,
 } from "../../src/webcat/validators";
 
 // Mocks (unchanged)
+// Signature checks are mocked; policy compilation, tree head parsing and quorum
+// evaluation run for real.
+vi.mock("@freedomofpress/sigsum", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@freedomofpress/sigsum")>()),
+  verifyMessageWithCompiledPolicy: vi.fn(async () => true),
+}));
+vi.mock("@freedomofpress/sigsum/dist/crypto", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@freedomofpress/sigsum/dist/crypto")
+  >()),
+  verifySignedTreeHead: vi.fn(async () => true),
+  verifyCosignedTreeHead: vi.fn(async () => true),
+}));
 vi.mock("../../src/webcat/logger", () => ({
   logger: {
     addLog: vi.fn(),
@@ -379,5 +400,96 @@ describe("validateManifest", () => {
         WebcatErrorCode.Manifest.FILES_MALFORMED,
       );
     }
+  });
+});
+
+describe("verifySigsumManifest", () => {
+  const rawKey = async () => {
+    const kp = (await crypto.subtle.generateKey("Ed25519", true, [
+      "sign",
+      "verify",
+    ])) as CryptoKeyPair;
+    return new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey));
+  };
+  const keyHashHex = async (raw: Uint8Array) =>
+    Uint8ArrayToHex(
+      (await hashKey(await importKey(new RawPublicKey(raw)))).bytes,
+    );
+
+  // Builds a policy with one witness per offset (quorum "any", or "none" when
+  // there are no witnesses) and a cosigned tree head whose cosignature
+  // timestamps are now + offset. Verifies a manifest carrying that tree head.
+  const verify = async (offsets: number[], withTimestamp = true) => {
+    const log = await rawKey();
+    const witnesses = await Promise.all(offsets.map(rawKey));
+    const names = witnesses.map((_, i) => `w${i}`);
+    const policy = await compilePolicy(
+      `log ${Uint8ArrayToHex(log)}\n` +
+        witnesses
+          .map((w, i) => `witness ${names[i]} ${Uint8ArrayToHex(w)}\n`)
+          .join("") +
+        (witnesses.length
+          ? `group g any ${names.join(" ")}\nquorum g\n`
+          : "quorum none\n"),
+    );
+
+    const now = Math.floor(Date.now() / 1000);
+    const sig = "00".repeat(64);
+    const treeHead = [
+      "tree_size=1",
+      `root_hash=${"00".repeat(32)}`,
+      `signature=${sig}`,
+      ...(await Promise.all(
+        witnesses.map(
+          async (w, i) =>
+            `cosignature=${await keyHashHex(w)} ${now + offsets[i]} ${sig}`,
+        ),
+      )),
+    ].join("\n");
+
+    const signer = Uint8ArrayToBase64Url(await rawKey());
+    const result = await verifySigsumManifest(
+      {
+        type: EnrollmentTypes.Sigsum,
+        signers: [signer],
+        threshold: 1,
+        policy: Uint8ArrayToBase64Url(policy),
+        max_age: 3600,
+        cas_url: "",
+        logs: {},
+      },
+      (withTimestamp ? { timestamp: treeHead } : {}) as Manifest,
+      { [signer]: "proof" },
+    );
+    return { result, now };
+  };
+
+  const chosenOffset = async (offsets: number[]) => {
+    const { result, now } = await verify(offsets);
+    expect(typeof result).toBe("number");
+    return (result as number) - 3600 - now;
+  };
+
+  it("with two cosignatures the older one wins, so one witness cannot extend validity", async () => {
+    expect(await chosenOffset([-10, 100000])).toBe(-10);
+  });
+
+  it("with three cosignatures one witness can move the time in neither direction", async () => {
+    expect(await chosenOffset([-100000, -10, 100000])).toBe(-10);
+  });
+
+  it("rejects a tree head with no cosignatures even when the policy needs none", async () => {
+    const { result } = await verify([]);
+    expect(result).toMatchObject({
+      code: WebcatErrorCode.Manifest.TIMESTAMP_VERIFY_FAILED,
+      details: ["no witness timestamps"],
+    });
+  });
+
+  it("rejects a manifest without a timestamp", async () => {
+    const { result } = await verify([-10], false);
+    expect(result).toMatchObject({
+      code: WebcatErrorCode.Manifest.TIMESTAMP_MISSING,
+    });
   });
 });
