@@ -472,9 +472,10 @@ export async function verifySigsumManifest(
     ]);
   }
 
-  // Median timestamp
+  // Lower median: moving it in either direction takes at least half the witnesses,
+  // and with two cosignatures the older one wins.
   const timestamp = timestamps.sort((a, b) => a - b)[
-    Math.floor(timestamps.length / 2)
+    Math.floor((timestamps.length - 1) / 2)
   ];
 
   const now = Math.floor(Date.now() / 1000);
