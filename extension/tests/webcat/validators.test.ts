@@ -14,6 +14,7 @@ import { EnrollmentTypes, Manifest } from "../../src/webcat/interfaces/bundle";
 import { WebcatErrorCode } from "../../src/webcat/interfaces/errors";
 import {
   cspErrors,
+  RESTRICTED_DIRECTIVES,
   validateCSP,
   validateManifest,
   verifySigsumManifest,
@@ -44,12 +45,66 @@ describe("cspErrors", () => {
     expect(
       cspErrors("default-src 'none' 'self'; script-src https://cdn.example"),
     ).toEqual([
-      "default-src is not none, and object-src is not defined.",
-      "script-src cannot contain https://cdn.example which is unsupported.",
-      "default-src is not none, and style-src is not defined.",
-      "default-src is not none, and worker-src is not defined.",
+      {
+        directive: "object-src",
+        message: "default-src is not none, and object-src is not defined.",
+      },
+      {
+        directive: "script-src",
+        source: "https://cdn.example",
+        message:
+          "script-src cannot contain https://cdn.example which is unsupported.",
+      },
+      {
+        directive: "style-src",
+        message: "default-src is not none, and style-src is not defined.",
+      },
+      {
+        directive: "worker-src",
+        message: "default-src is not none, and worker-src is not defined.",
+      },
     ]);
     expect(cspErrors("default-src 'none'")).toEqual([]);
+    expect(cspErrors("default-src 'none', default-src 'self'")).toEqual([
+      {
+        message: "CSP contains a comma: default-src 'none', default-src 'self'",
+      },
+    ]);
+  });
+});
+
+describe("RESTRICTED_DIRECTIVES", () => {
+  it("lists exactly the directives where cspErrors rejects another origin", () => {
+    const rejects = (dir: string) =>
+      cspErrors(
+        dir === "default-src"
+          ? "default-src https://x.example"
+          : `default-src 'none'; ${dir} https://x.example`,
+      ).some((e) => e.directive === dir && e.source);
+    // The CSP directives that take a source list.
+    const all = [
+      "default-src",
+      "script-src",
+      "script-src-elem",
+      "script-src-attr",
+      "style-src",
+      "style-src-elem",
+      "style-src-attr",
+      "object-src",
+      "worker-src",
+      "child-src",
+      "frame-src",
+      "img-src",
+      "font-src",
+      "connect-src",
+      "media-src",
+      "manifest-src",
+      "fenced-frame-src",
+      "base-uri",
+      "form-action",
+      "frame-ancestors",
+    ];
+    expect(all.filter(rejects)).toEqual(RESTRICTED_DIRECTIVES);
   });
 });
 
