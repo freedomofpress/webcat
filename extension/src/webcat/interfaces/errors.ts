@@ -145,21 +145,9 @@ export enum WebcatErrorManifest {
    */
   FILES_MALFORMED = "ERR_WEBCAT_MANIFEST_FILES_MALFORMED",
   /**
-   * No default index is present on the manifest.
+   * fallback_hashes is not a list of hashes in the same format as files.
    */
-  DEFAULT_INDEX_MISSING = "ERR_WEBCAT_MANIFEST_DEFAULT_INDEX_MISSING",
-  /**
-   * The default index does not match any file in the file list.
-   */
-  DEFAULT_INDEX_MISSING_FILE = "ERR_WEBCAT_MANIFEST_DEFAULT_INDEX_MISSING_FILE",
-  /**
-   * No default fallback is present on the manifest.
-   */
-  DEFAULT_FALLBACK_MISSING = "ERR_WEBCAT_MANIFEST_DEFAULT_FALLBACK_MISSING",
-  /**
-   * The default fallback does not match any file in the file list.
-   */
-  DEFAULT_FALLBACK_MISSING_FILE = "ERR_WEBCAT_MANIFEST_DEFAULT_FALLBACK_MISSING_FILE",
+  FALLBACK_HASHES_MALFORMED = "ERR_WEBCAT_MANIFEST_FALLBACK_HASHES_MALFORMED",
   /**
    * No default CSP is present on the manifest.
    */

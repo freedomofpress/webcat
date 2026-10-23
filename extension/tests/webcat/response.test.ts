@@ -433,8 +433,6 @@ describe("OriginState.verifyManifest", () => {
       version: "1.0.0",
       default_csp: defaultCSP,
       extra_csp: {},
-      default_index: "index.html",
-      default_fallback: "/index.html",
       timestamp: new Date().toISOString(),
       files: {
         "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -486,15 +484,38 @@ describe("OriginState.verifyManifest", () => {
     );
   });
 
-  it("fails when default_index file is missing", async () => {
-    const badManifest = { ...manifest, default_index: "/missing.html" };
+  it("fails when fallback_hashes is malformed", async () => {
+    const badManifest = { ...manifest, fallback_hashes: ["/missing.html"] };
 
     await state.verifyManifest(badManifest, signatures);
 
     expect(state.isFailed()).toBe(true);
     expect(state.error?.code).toBe(
-      WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING_FILE,
+      WebcatErrorCode.Manifest.FALLBACK_HASHES_MALFORMED,
     );
+  });
+
+  it("rewrites legacy default_index and default_fallback", async () => {
+    const legacy = {
+      ...manifest,
+      fallback_hashes: undefined,
+      default_index: "index.html",
+      default_fallback: "/404.html",
+      files: {
+        "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "/docs/index.html": "hash2_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "/404.html": "hash3_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      },
+    };
+
+    await state.verifyManifest(legacy, signatures);
+
+    expect(state.isManifestVerified()).toBe(true);
+    expect(state.manifest.files["/"]).toBe(legacy.files["/index.html"]);
+    expect(state.manifest.files["/docs/"]).toBe(
+      legacy.files["/docs/index.html"],
+    );
+    expect(state.manifest.fallback_hashes).toEqual([legacy.files["/404.html"]]);
   });
 
   it("fails when wasm missing", async () => {
@@ -569,8 +590,6 @@ describe("OriginState.verifyManifest (sigstore)", () => {
       version: "1.0.0",
       default_csp: defaultCSP,
       extra_csp: {},
-      default_index: "index.html",
-      default_fallback: "/index.html",
       files: {
         "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
         "/index.html.br": "hash2_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
@@ -657,8 +676,7 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
       extra_csp: {
         "/admin": "default-src 'none'; script-src 'self' 'unsafe-inline';",
       },
-      default_index: "index.html",
-      default_fallback: "/index.html",
+      fallback_hashes: ["hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
       timestamp: new Date().toISOString(),
       files: {
         "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",

@@ -33,8 +33,14 @@ export interface Manifest {
   extra_csp: {
     [matchPrefix: string]: string;
   };
-  default_index: string;
-  default_fallback: string;
+  // Hashes accepted at any path on top-level navigation only: error pages,
+  // SPA catch-alls, but not for subresources. For auditing, each is also
+  // served at /.well-known/webcat/<hash>; browsers do not check that.
+  fallback_hashes?: string[];
+  /** @deprecated Rewritten into files and fallback_hashes on load. */
+  default_index?: string;
+  /** @deprecated Rewritten into fallback_hashes on load. */
+  default_fallback?: string;
   timestamp?: string; // Used only for sigsum
   files: {
     [filePath: string]: string;
