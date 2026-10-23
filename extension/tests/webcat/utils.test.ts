@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/browser/permissions", () => ({
   default: {
@@ -8,13 +8,23 @@ vi.mock("../../src/browser/permissions", () => ({
 
 import {
   arraysEqual,
+  clearBrowserCaches,
   getFQDN,
   getFQDNSafe,
   isExtensionRequest,
+  isNewerSemver,
+  isSameOriginURL,
   SHA256,
 } from "./../../src/webcat/utils";
 
-export function arrayBufferToHex(buffer: Uint8Array | ArrayBuffer) {
+const mockRemove = vi.fn();
+vi.stubGlobal("browser", {
+  browsingData: {
+    remove: mockRemove,
+  },
+});
+
+function arrayBufferToHex(buffer: Uint8Array | ArrayBuffer) {
   const array = Array.from(new Uint8Array(buffer));
   return array.map((b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -68,6 +78,138 @@ describe("getFQDNSafe", () => {
   });
 });
 
+describe("isSameOriginURL", () => {
+  it("allows absolute-path relative locations", () => {
+    expect(isSameOriginURL("/", "https://example.com/path/?q=1")).toBe(true);
+    expect(isSameOriginURL("/login", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+    expect(isSameOriginURL("/a/b/c", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+  });
+
+  it("allows parent-relative paths", () => {
+    expect(isSameOriginURL("../login", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+    expect(isSameOriginURL("../a/b", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+  });
+
+  it("allows same-relative paths", () => {
+    expect(isSameOriginURL("./login", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+  });
+
+  it("allows whitespace", () => {
+    expect(isSameOriginURL(" /login ", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+    expect(isSameOriginURL("  ../login", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+  });
+
+  it("rejects cross-origin protocol-relative URLs", () => {
+    expect(isSameOriginURL("//evil.com", "https://example.com/path/?q=1")).toBe(
+      false,
+    );
+    expect(
+      isSameOriginURL("///evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+  });
+
+  it("allows same-origin protocol-relative URLs", () => {
+    expect(
+      isSameOriginURL("//example.com", "https://example.com/path/?q=1"),
+    ).toBe(true);
+    expect(
+      isSameOriginURL("///example.com", "https://example.com/path/?q=1"),
+    ).toBe(true);
+  });
+
+  it("rejects cross-origin URLs with schemes", () => {
+    expect(
+      isSameOriginURL("https://evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(
+      isSameOriginURL("http://evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(
+      isSameOriginURL("ftp://evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(
+      isSameOriginURL("javascript:alert(1)", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(isSameOriginURL("blob:abcd", "https://example.com/path/?q=1")).toBe(
+      false,
+    );
+    expect(
+      isSameOriginURL("data:text/plain,hi", "https://example.com/path/?q=1"),
+    ).toBe(false);
+  });
+
+  it("allows same-origin URLs with schemes", () => {
+    expect(
+      isSameOriginURL("https://example.com", "https://example.com/path/?q=1"),
+    ).toBe(true);
+    expect(
+      isSameOriginURL(
+        "https://example.com/index.html",
+        "https://example.com/path/?q=1",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects backslash-based paths", () => {
+    expect(
+      isSameOriginURL("\\/evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(
+      isSameOriginURL("/\\evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+    expect(
+      isSameOriginURL("\\\\evil.com", "https://example.com/path/?q=1"),
+    ).toBe(false);
+  });
+
+  it("allows bare relative paths", () => {
+    expect(isSameOriginURL("login", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+  });
+
+  it("allows encoded slashes (no decoding is performed)", () => {
+    expect(
+      isSameOriginURL("/%2f%2fevil.com", "https://example.com/path/?q=1"),
+    ).toBe(true);
+    expect(
+      isSameOriginURL("%2f%2fevil.com", "https://example.com/path/?q=1"),
+    ).toBe(true);
+  });
+
+  it("allows control characters (current behavior)", () => {
+    expect(isSameOriginURL("/foo\nbar", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+    expect(isSameOriginURL("/foo\rbar", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+    expect(isSameOriginURL("/foo\tbar", "https://example.com/path/?q=1")).toBe(
+      true,
+    );
+  });
+
+  it("rejects invalid URLs", () => {
+    expect(isSameOriginURL("https://", "https://example.com/path?q=1")).toBe(
+      false,
+    );
+  });
+});
+
 describe("isExtensionRequest", () => {
   it("should return true for valid extension requests", () => {
     const details = {
@@ -117,6 +259,15 @@ describe("SHA256", () => {
       "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
     );
   });
+
+  it("should correctly hash an ArrayBuffer input", async () => {
+    const input = new TextEncoder().encode("test").buffer;
+    const hashBuffer = await SHA256(input);
+    const hashHex = arrayBufferToHex(hashBuffer);
+    expect(hashHex).toBe(
+      "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    );
+  });
 });
 
 describe("arrayBufferToHex", () => {
@@ -143,5 +294,71 @@ describe("arraysEqual", () => {
     const a = new Uint8Array([1, 2, 3]);
     const b = new Uint8Array([3, 2, 1]);
     expect(arraysEqual(a, b)).toBe(false);
+  });
+});
+
+describe("isNewerSemver", () => {
+  it("should return true for newer patch versions", () => {
+    expect(isNewerSemver("1.2.4", "1.2.3")).toBe(true);
+    expect(isNewerSemver("1.2.4", "1.2")).toBe(true);
+  });
+
+  it("should return true for newer minor versions", () => {
+    expect(isNewerSemver("1.3.3", "1.2.3")).toBe(true);
+    expect(isNewerSemver("1.3.3", "1.2")).toBe(true);
+    expect(isNewerSemver("1.3", "1.2.3")).toBe(true);
+    expect(isNewerSemver("1.3.3", "1")).toBe(true);
+  });
+
+  it("should return true for newer major versions", () => {
+    expect(isNewerSemver("2.2.3", "1.2.3")).toBe(true);
+    expect(isNewerSemver("2", "1.2.3")).toBe(true);
+    expect(isNewerSemver("2.2.3", "1")).toBe(true);
+  });
+
+  it("should return false for the same version", () => {
+    expect(isNewerSemver("1.2.3", "1.2.3")).toBe(false);
+    expect(isNewerSemver("1.0.0", "1")).toBe(false);
+    expect(isNewerSemver("1", "1.0.0")).toBe(false);
+  });
+
+  it("should return false for older major versions", () => {
+    expect(isNewerSemver("1.2.3", "2.2.3")).toBe(false);
+    expect(isNewerSemver("1.3.3", "2.2.3")).toBe(false);
+    expect(isNewerSemver("1.2.4", "2.2.3")).toBe(false);
+    expect(isNewerSemver("1.3.4", "2.2.3")).toBe(false);
+    expect(isNewerSemver("1.3.4", "2.2.3")).toBe(false);
+  });
+
+  it("should return false for older minor versions", () => {
+    expect(isNewerSemver("1.2.3", "1.3.3")).toBe(false);
+    expect(isNewerSemver("1.2.4", "1.3.3")).toBe(false);
+  });
+
+  it("should return false for an older patch version", () => {
+    expect(isNewerSemver("1.2.3", "1.2.4")).toBe(false);
+    expect(isNewerSemver("1.2", "1.2.4")).toBe(false);
+  });
+});
+
+describe("clearBrowserCaches", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("should remove workers and all caches", async () => {
+    await clearBrowserCaches(["example.com", "example.org"]);
+    expect(mockRemove).toHaveBeenCalledTimes(2);
+    expect(mockRemove).toHaveBeenNthCalledWith(
+      1,
+      { hostnames: ["example.com", "example.org"] },
+      { serviceWorkers: true },
+    );
+    expect(mockRemove).toHaveBeenNthCalledWith(2, {}, { cache: true });
+  });
+
+  it("should do nothing when no FQDNs are given", async () => {
+    await clearBrowserCaches([]);
+    expect(mockRemove).not.toHaveBeenCalled();
   });
 });
