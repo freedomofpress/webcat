@@ -431,14 +431,35 @@ describe("validateManifest", () => {
     version: "1.0.0",
     default_csp: "default-src 'self'",
     extra_csp: {},
-    default_index: "index.html",
-    default_fallback: "/index.html",
     files: { "/index.html": "oUTcA3p3Jmt-YJG7Ium44fhAOOTHs-WMiJwWQH4_D8g" },
     wasm: [],
   };
 
   it("accepts base64url SHA-256 file hashes", () => {
     expect(validateManifest(manifest)).toBeNull();
+  });
+
+  it("accepts absent, empty and well-formed fallback_hashes", () => {
+    for (const fallback_hashes of [
+      undefined,
+      [],
+      ["oUTcA3p3Jmt-YJG7Ium44fhAOOTHs-WMiJwWQH4_D8g"],
+    ]) {
+      expect(validateManifest({ ...manifest, fallback_hashes })).toBeNull();
+    }
+  });
+
+  it("rejects fallback_hashes that are not hashes of listed files", () => {
+    for (const fallback_hashes of [
+      "oUTcA3p3Jmt-YJG7Ium44fhAOOTHs-WMiJwWQH4_D8g",
+      [""],
+      ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
+      [null],
+    ] as unknown as string[][]) {
+      expect(validateManifest({ ...manifest, fallback_hashes })?.code).toBe(
+        WebcatErrorCode.Manifest.FALLBACK_HASHES_UNKNOWN_FILE,
+      );
+    }
   });
 
   it("rejects file hashes that are not base64url SHA-256 digests", () => {

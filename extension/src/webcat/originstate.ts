@@ -341,6 +341,22 @@ export class OriginState implements IOriginState {
       return this.#fail(verify_result);
     }
 
+    // TODO: drop a few months after release, with the two deprecated Manifest
+    // fields. Legacy default_index/default_fallback manifests, rewritten to
+    // directory keys and fallback_hashes (#263)
+    if (manifest.default_index) {
+      const suffix = "/" + manifest.default_index;
+      for (const path of Object.keys(manifest.files)) {
+        if (path.endsWith(suffix)) {
+          manifest.files[path.slice(0, 1 - suffix.length)] ??=
+            manifest.files[path];
+        }
+      }
+    }
+    if (manifest.default_fallback && !manifest.fallback_hashes) {
+      manifest.fallback_hashes = [manifest.files[manifest.default_fallback]];
+    }
+
     const format_error = validateManifest(manifest);
     if (format_error) {
       return this.#fail(format_error);
@@ -393,12 +409,9 @@ export class OriginState implements IOriginState {
     const extraCSP = this.manifest.extra_csp || {};
     const defaultCSP = this.manifest.default_csp;
 
-    const effectivePath =
-      pathname === "/" ? this.manifest.default_index : pathname;
-
     // Try direct match first (exact path used in extra_csp)
-    if (extraCSP[effectivePath]) {
-      return csp === extraCSP[effectivePath];
+    if (extraCSP[pathname]) {
+      return csp === extraCSP[pathname];
     }
 
     // Otherwise, try longest-prefix match
@@ -406,7 +419,7 @@ export class OriginState implements IOriginState {
     let bestMatchLength = 0;
 
     for (const prefix in extraCSP) {
-      if (effectivePath.startsWith(prefix) && prefix.length > bestMatchLength) {
+      if (pathname.startsWith(prefix) && prefix.length > bestMatchLength) {
         bestMatch = prefix;
         bestMatchLength = prefix.length;
       }

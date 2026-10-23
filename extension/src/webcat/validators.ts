@@ -394,21 +394,17 @@ export function validateManifest(manifest: Manifest): WebcatError | null {
     return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_CSP_MISSING);
   }
 
-  if (!manifest.default_index) {
-    return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING);
-  }
-
-  if (!manifest.default_fallback) {
-    return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING);
-  }
-
-  if (!manifest.files["/" + manifest.default_index]) {
-    return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_INDEX_MISSING_FILE);
-  }
-
-  if (!manifest.files[manifest.default_fallback]) {
+  // A fallback must be a listed file, so auditors can locate it.
+  const known = new Set(Object.values(manifest.files));
+  if (
+    manifest.fallback_hashes !== undefined &&
+    !(
+      Array.isArray(manifest.fallback_hashes) &&
+      manifest.fallback_hashes.every((h) => known.has(h))
+    )
+  ) {
     return new WebcatError(
-      WebcatErrorCode.Manifest.DEFAULT_FALLBACK_MISSING_FILE,
+      WebcatErrorCode.Manifest.FALLBACK_HASHES_UNKNOWN_FILE,
     );
   }
 
