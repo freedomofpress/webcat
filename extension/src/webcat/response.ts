@@ -346,14 +346,7 @@ export class ResponseValidator {
       manifest = originState.manifest;
       // If a pass-through media type isn't in the manifest, bail before receiving
       // any data so large files don't get buffered into the extension for nothing.
-      if (
-        !manifest.files[pathname] &&
-        !(
-          pathname.endsWith("/") &&
-          manifest.files[pathname + manifest.default_index]
-        ) &&
-        PASS_THROUGH_TYPES.has(details.type)
-      ) {
+      if (!manifest.files[pathname] && PASS_THROUGH_TYPES.has(details.type)) {
         filter.disconnect();
       }
       // Inject hooks to worker scripts
@@ -426,24 +419,19 @@ export class ResponseValidator {
       }
       const blob = await new Blob(await Promise.all(source)).arrayBuffer();
 
-      // Following order of priority:
-      // - If there's an exact match, that should be the hash
-      // - If the paths ends in /, and there was no exact match, then use default_index
-      // - On main_frame navigations only (stale URLs), use default_fallback if
-      //   nothing matched; subresources must fail instead, or the server could
-      //   choose which resources to serve. See issues #195 and #229
-      let manifest_hash: string | undefined;
+      const content_hash = Uint8ArrayToBase64Url(
+        new Uint8Array(await SHA256(blob)),
+      );
 
-      if (manifest.files[pathname]) {
-        manifest_hash = manifest.files[pathname];
-      } else if (pathname.endsWith("/")) {
-        manifest_hash = manifest.files[pathname + manifest.default_index];
-      }
-      if (!manifest_hash && details.type === "main_frame") {
-        manifest_hash = manifest.files[manifest.default_fallback];
-      }
+      // A main_frame navigation passes if the content is the file keyed at
+      // this path, or any fallback document: error and maintenance pages at
+      // stale or keyed URLs alike (a 503 on the homepage), as in WAICT.
+      // See issues #195, #229 and #263
+      const expected: string | undefined = manifest.files[pathname];
+      const fallback =
+        details.type === "main_frame" ? (manifest.fallback_hashes ?? []) : [];
 
-      if (!manifest_hash) {
+      if (!expected && fallback.length === 0) {
         deny(filter);
         filter.close();
         this.#ui.showErrorPage(
@@ -454,23 +442,18 @@ export class ResponseValidator {
         return;
       }
 
-      const content_hash = await SHA256(blob);
+      const matches =
+        expected === content_hash || fallback.includes(content_hash);
       // Sometimes answers gets cached and we get an empty result, we shouldn't mark those as a hash mismatch
-      if (
-        !arraysEqual(
-          base64UrlToUint8Array(manifest_hash),
-          new Uint8Array(content_hash),
-        ) &&
-        blob.byteLength !== 0
-      ) {
+      if (!matches && blob.byteLength !== 0) {
         deny(filter);
         filter.close();
         this.#ui.showErrorPage(
           details,
           new WebcatError(WebcatErrorCode.File.MISMATCH, [
             pathname,
-            String(manifest_hash),
-            String(Uint8ArrayToBase64Url(new Uint8Array(content_hash))),
+            expected ?? fallback.join(","),
+            content_hash,
           ]),
           true,
         );

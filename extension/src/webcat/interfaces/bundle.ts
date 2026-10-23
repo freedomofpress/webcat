@@ -33,8 +33,14 @@ export interface Manifest {
   extra_csp: {
     [matchPrefix: string]: string;
   };
-  default_index: string;
-  default_fallback: string;
+  // Hashes of files, each also a value in files, accepted at any path on
+  // top-level navigation only: error pages, SPA catch-alls, but not for
+  // subresources. The duplication in the files map is to ease auditing.
+  fallback_hashes?: string[];
+  /** @deprecated Rewritten into files and fallback_hashes on load. */
+  default_index?: string;
+  /** @deprecated Rewritten into fallback_hashes on load. */
+  default_fallback?: string;
   timestamp?: string; // Used only for sigsum
   files: {
     [filePath: string]: string;
