@@ -7,6 +7,7 @@ import { logger } from "./logger";
 import { BundleFetcher, BundleFetcherConfig, OriginState } from "./originstate";
 import { WebcatUI } from "./ui";
 
+/* v8 ignore next -- @preserve */
 const allowedPorts = import.meta.env.VITE_TESTING
   ? ["8080", "8443", ""]
   : ["80", "443", ""];
@@ -28,6 +29,7 @@ export function enforceHTTPS(urlobj: URL): string | undefined {
     urlobj.hostname.substring(urlobj.hostname.lastIndexOf(".")) !== ".onion"
   ) {
     urlobj.protocol = "https:";
+    /* v8 ignore next -- @preserve */
     if (import.meta.env.VITE_TESTING) {
       urlobj.port = "8443";
     }
