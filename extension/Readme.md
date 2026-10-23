@@ -20,6 +20,8 @@ Alternatively, `make package` will install, build, fetch the current enrollment 
 
 The extension can also be built as an npm library with `npm run build:lib`. API docs are generated with [Typedoc](https://typedoc.org).
 
+The npm package also ships the test build, as `@freedomofpress/webcat/test-extension.zip`, for local development tools such as [webcat-cli](https://github.com/freedomofpress/webcat-cli). It trusts any enrollment list served at `http://localhost:1234/` (the light client is mocked), allows ports 8080 and 8443, and upgrades `http://` to `https://` on port 8443. It is unsigned, so Firefox only loads it as a temporary add-on: use it in a throwaway profile, never in a browser you use day to day.
+
 ### Tests
 
 Unit tests use [vitest](https://vitest.dev/) and run natively, with the browser APIs mocked:
