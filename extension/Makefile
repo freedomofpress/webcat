@@ -28,20 +28,14 @@ package: install build fetch-data
 	  | LC_ALL=C sort \
 	  | zip -X -9 -@ $(OUT)
 
-package-test: install build-test fetch-data
-	find $(INPUTS) -type f -exec touch -h -t $(FIXED_MTIME) {} +
-	TZ=UTC find $(INPUTS) -type f \
-	  | LC_ALL=C sort \
-	  | zip -X -0 -@ $(OUT_TEST)
+package-test: install build-test fetch-data zip-test
 
-# The test build, zipped into the npm package for local development.
-# Run after `VITE_TESTING=true npm run build` and fetch-data; see build:test-extension.
-test-extension-zip:
-	rm -f dist/webcat-extension-test.zip
+zip-test:
+	rm -f $(OUT_TEST)
 	find $(INPUTS) -type f -exec touch -h -t $(FIXED_MTIME) {} +
 	TZ=UTC find $(INPUTS) -type f \
 	  | LC_ALL=C sort \
-	  | zip -X -9 -@ dist/webcat-extension-test.zip
+	  | zip -X -9 -@ $(OUT_TEST)
 
 # npm package built with the test flag, consumed by ../test/libext
 package-lib-test: install fetch-data
