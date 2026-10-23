@@ -34,6 +34,15 @@ package-test: install build-test fetch-data
 	  | LC_ALL=C sort \
 	  | zip -X -0 -@ $(OUT_TEST)
 
+# The test build, zipped into the npm package for local development.
+# Run after `VITE_TESTING=true npm run build` and fetch-data; see build:test-extension.
+test-extension-zip:
+	rm -f dist/webcat-extension-test.zip
+	find $(INPUTS) -type f -exec touch -h -t $(FIXED_MTIME) {} +
+	TZ=UTC find $(INPUTS) -type f \
+	  | LC_ALL=C sort \
+	  | zip -X -9 -@ dist/webcat-extension-test.zip
+
 # npm package built with the test flag, consumed by ../test/libext
 package-lib-test: install fetch-data
 	rm -f $(DIST)/freedomofpress-webcat-*.tgz
