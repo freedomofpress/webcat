@@ -145,9 +145,9 @@ export enum WebcatErrorManifest {
    */
   FILES_MALFORMED = "ERR_WEBCAT_MANIFEST_FILES_MALFORMED",
   /**
-   * fallback_hashes is not a list of hashes of files in the file list.
+   * fallback_hashes is not a list of hashes in the same format as files.
    */
-  FALLBACK_HASHES_UNKNOWN_FILE = "ERR_WEBCAT_MANIFEST_FALLBACK_HASHES_UNKNOWN_FILE",
+  FALLBACK_HASHES_MALFORMED = "ERR_WEBCAT_MANIFEST_FALLBACK_HASHES_MALFORMED",
   /**
    * No default CSP is present on the manifest.
    */

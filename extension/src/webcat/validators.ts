@@ -363,18 +363,18 @@ export function validateManifest(manifest: Manifest): WebcatError | null {
     return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_CSP_MISSING);
   }
 
-  // A fallback must be a listed file, so auditors can locate it.
-  const known = new Set(Object.values(manifest.files));
+  // Auditors find each fallback at /.well-known/webcat/<hash>; that is for the
+  // CLI or other auditing tools.
   if (
     manifest.fallback_hashes !== undefined &&
     !(
       Array.isArray(manifest.fallback_hashes) &&
-      manifest.fallback_hashes.every((h) => known.has(h))
+      manifest.fallback_hashes.every(
+        (h) => typeof h === "string" && SHA256_BASE64URL.test(h),
+      )
     )
   ) {
-    return new WebcatError(
-      WebcatErrorCode.Manifest.FALLBACK_HASHES_UNKNOWN_FILE,
-    );
+    return new WebcatError(WebcatErrorCode.Manifest.FALLBACK_HASHES_MALFORMED);
   }
 
   if (!manifest.wasm) {

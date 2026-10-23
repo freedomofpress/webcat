@@ -484,14 +484,14 @@ describe("OriginState.verifyManifest", () => {
     );
   });
 
-  it("fails when a fallback hash is not a listed file", async () => {
+  it("fails when fallback_hashes is malformed", async () => {
     const badManifest = { ...manifest, fallback_hashes: ["/missing.html"] };
 
     await state.verifyManifest(badManifest, signatures);
 
     expect(state.isFailed()).toBe(true);
     expect(state.error?.code).toBe(
-      WebcatErrorCode.Manifest.FALLBACK_HASHES_UNKNOWN_FILE,
+      WebcatErrorCode.Manifest.FALLBACK_HASHES_MALFORMED,
     );
   });
 

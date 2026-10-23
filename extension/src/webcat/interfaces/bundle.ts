@@ -33,9 +33,9 @@ export interface Manifest {
   extra_csp: {
     [matchPrefix: string]: string;
   };
-  // Hashes of files, each also a value in files, accepted at any path on
-  // top-level navigation only: error pages, SPA catch-alls, but not for
-  // subresources. The duplication in the files map is to ease auditing.
+  // Hashes accepted at any path on top-level navigation only: error pages,
+  // SPA catch-alls, but not for subresources. For auditing, each is also
+  // served at /.well-known/webcat/<hash>; browsers do not check that.
   fallback_hashes?: string[];
   /** @deprecated Rewritten into files and fallback_hashes on load. */
   default_index?: string;
