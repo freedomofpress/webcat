@@ -14,6 +14,7 @@
   "files": [
     "dist/lib",
     "dist/hooks/content.js",
+    "dist/webcat-extension-test.zip",
     "data",
     "icons",
     "pages"
@@ -28,13 +29,15 @@
     "./data/*.json": "./data/*.json",
     "./icons/light/*.SVG": "./icons/light/*.SVG",
     "./icons/dark/*.SVG": "./icons/dark/*.SVG",
-    "./pages/*": "./pages/*"
+    "./pages/*": "./pages/*",
+    "./test-extension.zip": "./dist/webcat-extension-test.zip"
   },
   "scripts": {
     "build:hooks": "tsc -p tsconfig.hooks.json && vite build --config vite.config.hooks.page.ts && vite build --config vite.config.hooks.content.ts",
     "build:lib": "npm run build:hooks && vite build --config vite.config.lib.ts && tsc -p tsconfig.lib.json && cp src/validator_set.d.ts dist/lib/validator_set.d.ts",
     "build": "npm run build:hooks && tsc && vite build",
-    "prepack": "npm run build:lib",
+    "build:test-extension": "VITE_TESTING=true npm run build && make test-extension-zip",
+    "prepack": "npm run build:lib && npm run build:test-extension",
     "test": "npm run build:hooks && vitest",
     "coverage": "npm run build:hooks && vitest --coverage",
     "test:playwright": "vitest --config vite.config.playwright.ts",
