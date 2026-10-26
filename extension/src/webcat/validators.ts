@@ -36,7 +36,8 @@ import {
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { parseContentSecurityPolicy } from "./parsers";
 
-enum directives {
+/** The CSP directives WEBCAT restricts, plus child-src, read to decide whether worker-src is required. */
+export enum CspDirective {
   DefaultSrc = "default-src",
   ScriptSrc = "script-src",
   ScriptSrcElem = "script-src-elem",
@@ -53,20 +54,20 @@ enum directives {
 /**
  * The directives {@link cspErrors} checks; any other directive is left to the site.
  */
-export const RESTRICTED_DIRECTIVES: string[] = [
-  directives.DefaultSrc,
-  directives.ScriptSrc,
-  directives.ScriptSrcElem,
-  directives.ScriptSrcAttr,
-  directives.StyleSrc,
-  directives.StyleSrcElem,
-  directives.StyleSrcAttr,
-  directives.ObjectSrc,
-  directives.WorkerSrc,
+export const RESTRICTED_DIRECTIVES: CspDirective[] = [
+  CspDirective.DefaultSrc,
+  CspDirective.ScriptSrc,
+  CspDirective.ScriptSrcElem,
+  CspDirective.ScriptSrcAttr,
+  CspDirective.StyleSrc,
+  CspDirective.StyleSrcElem,
+  CspDirective.StyleSrcAttr,
+  CspDirective.ObjectSrc,
+  CspDirective.WorkerSrc,
 ];
 
 export interface CspError {
-  directive?: string; // absent: the header holds several policies (a comma)
+  directive?: CspDirective; // absent: the header holds several policies (a comma)
   source?: string; // absent: the directive is required but missing
   message: string;
 }
@@ -116,11 +117,11 @@ export function cspErrors(csp: string): CspError[] {
 
   // Step 1: default-src is 'none' and/or 'self'. A lone 'none' makes every
   // other directive optional. See https://github.com/freedomofpress/webcat/issues/99
-  const default_src = parsedCSP.get(directives.DefaultSrc) ?? [];
+  const default_src = parsedCSP.get(CspDirective.DefaultSrc) ?? [];
   for (const src of default_src) {
     if (src !== source_keywords.None && src !== source_keywords.Self) {
       errors.push({
-        directive: directives.DefaultSrc,
+        directive: CspDirective.DefaultSrc,
         source: src,
         message: `Unexpected or non-allowed default-src directive: ${src}`,
       });
@@ -135,7 +136,7 @@ export function cspErrors(csp: string): CspError[] {
   // The directive is required unless `optional`. Each source must be an
   // allowed keyword or, with `hashes`, a hash-source.
   function validateDirective(
-    directive: directives,
+    directive: CspDirective,
     allowed_keywords: source_keywords[],
     hashes = false,
     optional = default_src_is_none,
@@ -144,7 +145,7 @@ export function cspErrors(csp: string): CspError[] {
     if (!list?.length && !optional) {
       errors.push({
         directive,
-        message: `${directives.DefaultSrc} is not none, and ${directive} is not defined.`,
+        message: `${CspDirective.DefaultSrc} is not none, and ${directive} is not defined.`,
       });
     }
     for (const src of list ?? []) {
@@ -163,26 +164,26 @@ export function cspErrors(csp: string): CspError[] {
   }
 
   // Step 2: object-src must be 'none'
-  validateDirective(directives.ObjectSrc, [source_keywords.None]);
+  validateDirective(CspDirective.ObjectSrc, [source_keywords.None]);
 
   // Step 3: scripts. Hashes allow inline scripts, see
   // https://github.com/freedomofpress/webcat/pull/111
-  validateDirective(directives.ScriptSrc, script_keywords, true);
+  validateDirective(CspDirective.ScriptSrc, script_keywords, true);
   // script-src-attr covers inline event handlers and javascript: URLs.
   // Optional (falls back to script-src); if present it must be 'none'.
   validateDirective(
-    directives.ScriptSrcAttr,
+    CspDirective.ScriptSrcAttr,
     [source_keywords.None],
     false,
     true,
   );
   // An -elem directive is only required when its base directive is missing, already an error.
-  validateDirective(directives.ScriptSrcElem, script_keywords, true, true);
+  validateDirective(CspDirective.ScriptSrcElem, script_keywords, true, true);
 
   // Step 4: styles
-  validateDirective(directives.StyleSrc, style_keywords, true);
-  validateDirective(directives.StyleSrcElem, style_keywords, true, true);
-  validateDirective(directives.StyleSrcAttr, style_keywords, true, true);
+  validateDirective(CspDirective.StyleSrc, style_keywords, true);
+  validateDirective(CspDirective.StyleSrcElem, style_keywords, true, true);
+  validateDirective(CspDirective.StyleSrcAttr, style_keywords, true, true);
 
   // Step 5: frame-src / child-src are unrestricted. Enrolled documents are
   // origin-keyed (Origin-Agent-Cluster: ?1) => any frame, same-site or not, is
@@ -191,10 +192,10 @@ export function cspErrors(csp: string): CspError[] {
   // Workers fall back to child-src, which is unrestricted. Require worker-src
   // when child-src is set.
   validateDirective(
-    directives.WorkerSrc,
+    CspDirective.WorkerSrc,
     [source_keywords.None, source_keywords.Self],
     false,
-    default_src_is_none && !parsedCSP.has(directives.ChildSrc),
+    default_src_is_none && !parsedCSP.has(CspDirective.ChildSrc),
   );
 
   return errors;
