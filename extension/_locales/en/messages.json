@@ -18,7 +18,7 @@
     "message": "WEBCAT is running"
   },
   "WEBCAT_webcatIsUnavailable": {
-    "message": "WEBCAT unavailable on this site."
+    "message": "WEBCAT unavailable on this site"
   },
   "WEBCAT_webcatNotOperational": {
     "message": "WEBCAT may not be operating correctly"

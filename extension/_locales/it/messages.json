@@ -1,0 +1,56 @@
+{
+  "WEBCAT_warningSecurityRisk": {
+    "message": "Avviso: Rischio per la sicurezza"
+  },
+  "WEBCAT_didNotVerify": {
+    "message": "Verifica non riuscita"
+  },
+  "WEBCAT_errorShortDesc": {
+    "message": "WEBCAT non è riuscito a verificare che il codice servito da $1 corrisponda al suo manifest firmato, quindi la pagina è stata bloccata."
+  },
+  "WEBCAT_thisSite": {
+    "message": "questo sito"
+  },
+  "WEBCAT_advanced": {
+    "message": "Avanzate"
+  },
+  "WEBCAT_hideAdvanced": {
+    "message": "Nascondi avanzate"
+  },
+  "WEBCAT_goBack": {
+    "message": "Torna indietro"
+  },
+  "WEBCAT_whatYouCanDo": {
+    "message": "Il problema riguarda il sito, non la tua connessione. Il codice o l'ambiente che ha servito non corrispondono a ciò che i suoi sviluppatori hanno firmato crittograficamente, quindi WEBCAT ha bloccato la pagina per proteggerti. Puoi avvisare il proprietario del sito oppure, se ritieni che si tratti di un bug, aprire una segnalazione nel $1."
+  },
+  "WEBCAT_webcatRepository": {
+    "message": "repository di WEBCAT"
+  },
+  "WEBCAT_file": {
+    "message": "File: $1"
+  },
+  "WEBCAT_errorCode": {
+    "message": "Codice di errore: $1"
+  },
+  "WEBCAT_webcatVerificationSuccessful": {
+    "message": "Verifica WEBCAT riuscita"
+  },
+  "WEBCAT_webcatVerificationFailed": {
+    "message": "Verifica WEBCAT non riuscita"
+  },
+  "WEBCAT_webcatIsRunning": {
+    "message": "WEBCAT è in esecuzione"
+  },
+  "WEBCAT_webcatIsUnavailable": {
+    "message": "WEBCAT non disponibile su questo sito"
+  },
+  "WEBCAT_webcatNotOperational": {
+    "message": "WEBCAT potrebbe non funzionare correttamente"
+  },
+  "WEBCAT_missingPermissions": {
+    "message": "A WEBCAT mancano i seguenti permessi:\n\n$1"
+  },
+  "WEBCAT_fix": {
+    "message": "Correggi"
+  }
+}
