@@ -54,8 +54,7 @@ export const defaults = {
   /** {@inheritDoc WebcatConfig.connectionName} */
   connectionName: "WEBCAT",
   /** {@inheritDoc WebcatConfig.iconPaths} */
-  iconPaths: (p: PathTemplateProperties) =>
-    `icons/${p.colorScheme}/${p.name}.SVG`,
+  iconPaths: (p: PathTemplateProperties) => `icons/${p.name}.SVG`,
   /** {@inheritDoc WebcatConfig.pagePaths} */
   pagePaths: (p: PathTemplateProperties) => `pages/${p.name}.html`,
 } as const satisfies WebcatConfig;

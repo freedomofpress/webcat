@@ -8,12 +8,6 @@ vi.mock("../../src/browser/permissions", () => ({
 
 import { BrowserChromeController } from "../../src/browser/chrome";
 
-const mockMatchMedia = vi.fn().mockReturnValue({ matches: false });
-
-vi.stubGlobal("window", {
-  matchMedia: mockMatchMedia,
-});
-
 const mockSetTitle = vi.fn();
 const mockSetIcon = vi.fn();
 const mockSetPopup = vi.fn();
@@ -50,25 +44,6 @@ describe("BrowserChromeController", () => {
       pagePaths,
     });
     vi.clearAllMocks();
-  });
-
-  it("should detect the color scheme based on a media query", () => {
-    mockMatchMedia.mockReturnValueOnce({
-      matches: true,
-    });
-    expect(bcc.getColorScheme()).toBe("dark");
-    expect(mockMatchMedia).toHaveBeenCalledExactlyOnceWith(
-      "(prefers-color-scheme: dark)",
-    );
-
-    mockMatchMedia.mockClear();
-    mockMatchMedia.mockReturnValueOnce({
-      matches: false,
-    });
-    expect(bcc.getColorScheme()).toBe("light");
-    expect(mockMatchMedia).toHaveBeenCalledExactlyOnceWith(
-      "(prefers-color-scheme: dark)",
-    );
   });
 
   it("resolves page URLs", () => {

@@ -27,8 +27,7 @@
     "./browser/*": "./dist/lib/browser/*.js",
     "./validator_set": "./dist/lib/validator_set.js",
     "./data/*.json": "./data/*.json",
-    "./icons/light/*.SVG": "./icons/light/*.SVG",
-    "./icons/dark/*.SVG": "./icons/dark/*.SVG",
+    "./icons/*.SVG": "./icons/*.SVG",
     "./pages/*": "./pages/*",
     "./test-extension.zip": "./dist/webcat-extension-test.zip"
   },
