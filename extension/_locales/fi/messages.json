@@ -1,7 +1,4 @@
 {
-  "WEBCAT_warningSecurityRisk": {
-    "message": "Varoitus: Tietoturvariski"
-  },
   "WEBCAT_didNotVerify": {
     "message": "Ei varmennettu"
   },

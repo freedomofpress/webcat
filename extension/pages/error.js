@@ -22,6 +22,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const host = params.get("host") || "";
   const file = params.get("file") || "";
 
+  // Tab title names WEBCAT and the blocked host; <title> was localized above.
+  document.title = `WEBCAT: ${document.title}${host ? ` — ${host}` : ""}`;
   setText("error-host", host || browser.i18n.getMessage("WEBCAT_thisSite"));
   setText("debug-code", code);
 
