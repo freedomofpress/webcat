@@ -11,7 +11,7 @@
  * webcat.start({
  *   localDataPath: "webcat/data",
  *   staticHookPath: "webcat/hooks/content.js",
- *   iconPaths: (p) => `webcat/icons/${p.name}-${p.colorScheme}.png`,
+ *   iconPaths: (p) => `webcat/icons/${p.name}.svg`,
  *   pagePaths: (p) => `webcat/pages/${p.name}.html`,
  * });
  *

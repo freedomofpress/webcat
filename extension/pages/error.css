@@ -1,9 +1,3 @@
 body.webcaterror .title {
-  background-image: url("../icons/light/webcat-error.SVG");
-}
-
-@media (prefers-color-scheme: dark) {
-  body.webcaterror .title {
-    background-image: url("../icons/dark/webcat-error.SVG");
-  }
+  background-image: url("../icons/webcat-error.SVG");
 }

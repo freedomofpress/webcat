@@ -1,21 +1,16 @@
 import permissions from "./permissions";
 
-/** @inline */
-type ColorScheme = "dark" | "light";
-
 /** Properties passed to {@link PathTemplate} functions. */
 export type PathTemplateProperties = {
   /** The name of the resource. */
   name: string;
-  /** The current color scheme of the browser. */
-  colorScheme: ColorScheme;
 };
 
 /**
  * A template for a file path.
  *
  * @example
- * const icons: PathTemplate = ({ name, colorScheme }) => `icons/${name}-${colorScheme}.png`;
+ * const icons: PathTemplate = ({ name }) => `icons/${name}.svg`;
  */
 export type PathTemplate = (p: PathTemplateProperties) => string;
 
@@ -55,18 +50,6 @@ export class BrowserChromeController {
   }
 
   /**
-   * Determines the browser color scheme currently in use.
-   *
-   * @returns The current color scheme.
-   */
-  getColorScheme(): ColorScheme {
-    if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      return "dark";
-    }
-    return "light";
-  }
-
-  /**
    * Computes the URL of a named page.
    *
    * @param name The name of the page.
@@ -80,9 +63,7 @@ export class BrowserChromeController {
       fragment?: string | URLSearchParams;
     },
   ) {
-    let url = browser.runtime.getURL(
-      this.#pagePaths({ name, colorScheme: this.getColorScheme() }),
-    );
+    let url = browser.runtime.getURL(this.#pagePaths({ name }));
     if (options?.query) {
       url += `?${options.query.toString()}`;
     }
@@ -106,10 +87,7 @@ export class BrowserChromeController {
       browser.pageAction.setTitle({ tabId, title: options.title });
     }
     if (options?.name) {
-      const path = this.#iconPaths({
-        name: options.name,
-        colorScheme: this.getColorScheme(),
-      });
+      const path = this.#iconPaths({ name: options.name });
       await browser.pageAction.setIcon({ tabId, path });
     }
     if (options?.popup) {
