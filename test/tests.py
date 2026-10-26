@@ -633,10 +633,8 @@ def test_config_paths(browser: Browser, server: Server, update_server: UpdateSer
         "var results; (async () => {"
         "  const c = state.config;"
         "  const paths = [`${c.localDataPath}/list.json`, `${c.localDataPath}/block.json`, c.staticHookPath,"
-        "    ...['light', 'dark'].flatMap(colorScheme => ["
-        "      c.pagePaths({name: 'error', colorScheme}),"
-        "      ...['webcat', 'webcat-ok', 'webcat-error'].map(name => c.iconPaths({name, colorScheme}))]"
-        "  )];"
+        "    c.pagePaths({name: 'error'}),"
+        "    ...['webcat', 'webcat-ok', 'webcat-error'].map(name => c.iconPaths({name}))];"
         "  results = await Promise.all(paths.map(async p =>"
         "    [p, await fetch(browser.runtime.getURL(p)).then(r => r.ok, () => false)]));"
         "})();",

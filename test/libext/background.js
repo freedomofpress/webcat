@@ -6,6 +6,6 @@ webcat.start({
   endpoint: "http://localhost:1234/",
   localDataPath: "webcat/data",
   staticHookPath: "webcat/hooks/content.js",
-  iconPaths: (p) => `webcat/icons/${p.colorScheme}/${p.name}.SVG`,
+  iconPaths: (p) => `webcat/icons/${p.name}.SVG`,
   pagePaths: (p) => `webcat/pages/${p.name}.html`,
 });
