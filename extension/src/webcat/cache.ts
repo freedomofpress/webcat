@@ -316,6 +316,9 @@ export class LRUSet<T> {
    * @param limit The maximum number of entries held by the cache.
    */
   constructor(limit: number) {
+    if (limit <= 0) {
+      throw new TypeError("limit must be greater than zero");
+    }
     this.#limit = limit;
     this.#cache = new Set<T>();
   }

@@ -298,6 +298,12 @@ describe("PersistentLRUCache", () => {
 });
 
 describe("LRUSet", () => {
+  it("should throw when limit is zero", () => {
+    expect(() => new LRUSet<number>(0)).toThrow(
+      "limit must be greater than zero",
+    );
+  });
+
   it("should check for existence of values", async () => {
     const cache = new LRUSet<number>(3);
     cache.add(1);
