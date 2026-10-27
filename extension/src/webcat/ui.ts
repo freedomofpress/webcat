@@ -64,7 +64,7 @@ export class WebcatUI extends BrowserChromeController {
     await super.showIcon(tabId, {
       name: options?.name ?? "webcat",
       title:
-        options?.title ?? browser.i18n.getMessage("WEBCAT_webcatIsRunning"),
+        options?.title ?? browser.i18n.getMessage("WEBCAT_webcatIsVerifying"),
       popup: options?.popup,
     });
   }
@@ -119,6 +119,30 @@ export class WebcatUI extends BrowserChromeController {
     await super.showIcon(tabId, {
       name: "webcat-ok",
       title,
+    });
+  }
+
+  /**
+   * Marks a tab whose top-level site is not enrolled as embedding verified
+   * content.
+   *
+   * @param tabId The ID of the tab to display the icon in.
+   */
+  async showPartialIcon(tabId: number) {
+    if (tabId < 0) {
+      return;
+    }
+    if (this.#showWarnings) {
+      await this.showWarningIcon(tabId);
+      return;
+    }
+    const title = await browser.pageAction.getTitle({ tabId });
+    if (title !== browser.i18n.getMessage("WEBCAT_webcatNotEnrolled")) {
+      return;
+    }
+    await super.showIcon(tabId, {
+      name: "webcat",
+      title: browser.i18n.getMessage("WEBCAT_webcatPartiallyVerified"),
     });
   }
 
@@ -256,7 +280,7 @@ export class WebcatUI extends BrowserChromeController {
           if (
             title === browser.i18n.getMessage("WEBCAT_webcatNotOperational")
           ) {
-            await this.hideIcon(tab.id as number);
+            await this.resetIcon(tab.id as number);
           }
         }),
       );

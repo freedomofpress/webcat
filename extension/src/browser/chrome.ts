@@ -102,12 +102,15 @@ export class BrowserChromeController {
   }
 
   /**
-   * Hides the icon shown on a specific tab.
+   * Resets the icon, title and popup of a specific tab to the manifest
+   * defaults.
    *
-   * @param tabId The ID of the tab to hide the icon from.
+   * @param tabId The ID of the tab to reset.
    */
-  async hideIcon(tabId: number) {
-    await browser.pageAction.hide(tabId);
+  async resetIcon(tabId: number) {
+    browser.pageAction.setTitle({ tabId, title: null });
+    browser.pageAction.setPopup({ tabId, popup: null });
+    await browser.pageAction.setIcon({ tabId });
   }
 
   /**

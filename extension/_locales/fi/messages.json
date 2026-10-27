@@ -35,11 +35,14 @@
   "WEBCAT_webcatVerificationFailed": {
     "message": "WEBCAT-varmennus epäonnistui"
   },
-  "WEBCAT_webcatIsRunning": {
-    "message": "WEBCAT on käynnissä"
+  "WEBCAT_webcatIsVerifying": {
+    "message": "WEBCAT varmentaa tätä sivustoa"
   },
-  "WEBCAT_webcatIsUnavailable": {
-    "message": "WEBCAT ei käytettävissä tällä sivustolla"
+  "WEBCAT_webcatNotEnrolled": {
+    "message": "Tätä sivustoa ei ole rekisteröity WEBCATiin"
+  },
+  "WEBCAT_webcatPartiallyVerified": {
+    "message": "Tätä sivustoa ei ole rekisteröity WEBCATiin, mutta se upottaa WEBCATin varmentamaa sisältöä"
   },
   "WEBCAT_webcatNotOperational": {
     "message": "WEBCAT ei välttämättä toimi oikein"

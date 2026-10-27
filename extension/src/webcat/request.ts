@@ -43,14 +43,14 @@ export async function validateOrigin(
   details: Stateful<BeforeRequestDetails>,
   config: BundleFetcherConfig,
 ) {
-  const { fqdn, cachePartition, isFrame } = details.state;
+  const { fqdn, cachePartition } = details.state;
   const enrollment_hash = await db.getFQDNEnrollment(fqdn, cachePartition);
   if (enrollment_hash.length === 0) {
     //console.debug(`${url} is not enrolled, skipping...`);
     return;
   }
 
-  if (isFrame) {
+  if (details.type === "main_frame") {
     ui.showIcon(details.tabId);
   }
 

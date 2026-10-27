@@ -12,7 +12,6 @@ const mockSetTitle = vi.fn();
 const mockSetIcon = vi.fn();
 const mockSetPopup = vi.fn();
 const mockShow = vi.fn();
-const mockHide = vi.fn();
 const mockUpdate = vi.fn();
 vi.stubGlobal("browser", {
   runtime: {
@@ -27,7 +26,6 @@ vi.stubGlobal("browser", {
     setIcon: mockSetIcon,
     setPopup: mockSetPopup,
     show: mockShow,
-    hide: mockHide,
   },
   tabs: {
     update: mockUpdate,
@@ -127,8 +125,16 @@ describe("BrowserChromeController", () => {
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 
-  it("hides an icon correctly", async () => {
-    await expect(bcc.hideIcon(456)).resolves.toBeUndefined();
-    expect(mockHide).toHaveBeenCalledExactlyOnceWith(456);
+  it("resets an icon to the manifest defaults", async () => {
+    await expect(bcc.resetIcon(456)).resolves.toBeUndefined();
+    expect(mockSetTitle).toHaveBeenCalledExactlyOnceWith({
+      tabId: 456,
+      title: null,
+    });
+    expect(mockSetPopup).toHaveBeenCalledExactlyOnceWith({
+      tabId: 456,
+      popup: null,
+    });
+    expect(mockSetIcon).toHaveBeenCalledExactlyOnceWith({ tabId: 456 });
   });
 });
