@@ -65,6 +65,14 @@ describe("cspErrors", () => {
       },
     ]);
     expect(cspErrors("default-src 'none'")).toEqual([]);
+    // Keywords are case-insensitive in default-src too, including the strict form.
+    expect(cspErrors("default-src 'NONE'")).toEqual([]);
+    expect(cspErrors("default-src 'Self'").map((e) => e.directive)).toEqual([
+      "object-src",
+      "script-src",
+      "style-src",
+      "worker-src",
+    ]);
     expect(cspErrors("default-src 'none', default-src 'self'")).toEqual([
       {
         message: "CSP contains a comma: default-src 'none', default-src 'self'",

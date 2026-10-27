@@ -119,7 +119,9 @@ export function cspErrors(csp: string): CspError[] {
   // other directive optional. See https://github.com/freedomofpress/webcat/issues/99
   const default_src = parsedCSP.get(CspDirective.DefaultSrc) ?? [];
   for (const src of default_src) {
-    if (src !== source_keywords.None && src !== source_keywords.Self) {
+    // Keywords are case-insensitive, as in every other directive below.
+    const lower = src.toLowerCase();
+    if (lower !== source_keywords.None && lower !== source_keywords.Self) {
       errors.push({
         directive: CspDirective.DefaultSrc,
         source: src,
@@ -128,7 +130,8 @@ export function cspErrors(csp: string): CspError[] {
     }
   }
   const default_src_is_none =
-    default_src.length === 1 && default_src[0] === source_keywords.None;
+    default_src.length === 1 &&
+    default_src[0].toLowerCase() === source_keywords.None;
 
   // https://w3c.github.io/webappsec-csp/#grammardef-hash-source
   const hash_source = /^'sha(256|384|512)-[A-Za-z0-9+/_-]+={0,2}'$/i;
