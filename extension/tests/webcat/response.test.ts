@@ -1,5 +1,4 @@
-import { TrustedRoot } from "@freedomofpress/sigstore-browser";
-import { beforeEach, describe, expect, it, Mock, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/browser/permissions", () => ({
   default: {
@@ -7,706 +6,171 @@ vi.mock("../../src/browser/permissions", () => ({
   },
 }));
 
-import { HeadersReceivedDetails } from "../../src/browser/requests";
-import { defaults } from "../../src/config";
-import { canonicalize } from "../../src/webcat/canonicalize";
+import {
+  BeforeRequestDetails,
+  HeadersReceivedDetails,
+} from "../../src/browser/requests";
 import { WebcatDatabase } from "../../src/webcat/db";
-import { stringToUint8Array } from "../../src/webcat/encoding";
 import { HookBuilder } from "../../src/webcat/hookbuilder";
-import type {
-  Enrollment,
-  Manifest,
-  SigstoreEnrollment,
-  SigstoreSignatures,
-  SigsumEnrollment,
-  SigsumSignatures,
-} from "../../src/webcat/interfaces/bundle";
-import { EnrollmentTypes } from "../../src/webcat/interfaces/bundle";
 import {
   WebcatError,
   WebcatErrorCode,
 } from "../../src/webcat/interfaces/errors";
 import { Stateful } from "../../src/webcat/interfaces/requeststate";
-import { BundleFetcher, OriginState } from "../../src/webcat/originstate";
 import { ResponseValidator } from "../../src/webcat/response";
 import { WebcatUI } from "../../src/webcat/ui";
-import { SHA256 } from "../../src/webcat/utils";
-
-function makeDummyFetcher(): BundleFetcher {
-  // base URL is irrelevant, fetch will never be awaited in these tests
-  return new BundleFetcher("https://example.com", defaults);
-}
 
 // --- Mocks ---
+const mockFilterResponseData = vi.fn();
 vi.stubGlobal("browser", {
-  browsingData: {
-    remove: vi.fn().mockResolvedValue(undefined),
-  },
   webRequest: {
-    onBeforeRequest: { removeListener: vi.fn() },
-    onHeadersReceived: { removeListener: vi.fn() },
+    filterResponseData: mockFilterResponseData,
   },
 });
 
-vi.mock("../../src/webcat/db", () => {
-  return {
-    WebcatDatabase: vi.fn().mockImplementation(function () {
-      return {
-        getFQDNEnrollment: vi.fn(async (fqdn: string) => {
-          if (fqdn === "trusted.com") {
-            return new Uint8Array([0, 1, 2, 3]);
-          }
-          return new Uint8Array();
-        }),
+describe("ResponseValidator.validateHeaders", () => {
+  let ui: WebcatUI;
+  let rv: ResponseValidator;
+  let details: Stateful<HeadersReceivedDetails>;
 
-        setLastChecked: vi.fn(),
-        getLastChecked: vi.fn(async () => Date.now()),
-
-        updateList: vi.fn(),
-        getBlockMeta: vi.fn(async () => ({
-          blockTime: 1337,
-          rootHash: "deadbeef",
-        })),
-      };
-    }),
-  };
-});
-
-vi.mock("@freedomofpress/sigsum/dist/verify", () => ({
-  verifyMessageWithCompiledPolicy: vi.fn(async () => true),
-}));
-
-vi.mock("../../src/webcat/validators", async () => {
-  const actual = await vi.importActual<
-    typeof import("../../src/webcat/validators")
-  >("../../src/webcat/validators");
-  const defaultNow = Math.floor(Date.now() / 1000);
-  const witnessTimestampsFromCosignedTreeHead = vi.fn(
-    async (_policy, _head) => {
-      return [defaultNow - 5000, defaultNow - 100000, defaultNow - 200000];
-    },
-  );
-
-  return {
-    ...actual,
-    validateCSP: vi.fn(async () => {}),
-    witnessTimestampsFromCosignedTreeHead,
-    verifySigsumManifest: vi.fn(
-      async (
-        enrollment: {
-          signers: string[];
-          threshold: number;
-          max_age: number;
+  beforeEach(() => {
+    ui = {
+      showOKIcon: vi.fn(),
+    } as unknown as WebcatUI;
+    rv = new ResponseValidator({} as WebcatDatabase, ui, {} as HookBuilder);
+    rv.extractAndValidateHeaders = vi.fn();
+    details = {
+      url: "https://example.com/",
+      type: "main_frame",
+      tabId: 123,
+      state: {
+        pendingOrigin: {
+          isRequestSent: vi.fn().mockReturnValue(false),
+          isManifestVerified: vi.fn().mockReturnValue(true),
+          isFailed: vi.fn().mockReturnValue(false),
+          verifyEnrollment: vi.fn(),
+          verifyManifest: vi.fn(),
+          verifyCSP: vi.fn().mockReturnValue(true),
         },
-        manifest: { timestamp?: string },
-        signatures: Record<string, string>,
-      ) => {
-        let validCount = 0;
-        for (const pubKey of Object.keys(signatures)) {
-          if (enrollment.signers.includes(pubKey)) {
-            validCount++;
-          }
-        }
-
-        if (validCount < enrollment.threshold) {
-          return new WebcatError(
-            WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED,
-            [String(validCount), String(enrollment.threshold)],
-          );
-        }
-
-        if (!manifest.timestamp) {
-          return new WebcatError(WebcatErrorCode.Manifest.TIMESTAMP_MISSING);
-        }
-
-        const timestamps = await witnessTimestampsFromCosignedTreeHead(
-          new Uint8Array(),
-          manifest.timestamp,
-        );
-
-        const timestamp = timestamps.sort((a, b) => a - b)[
-          Math.floor((timestamps.length - 1) / 2)
-        ];
-        const now = Math.floor(Date.now() / 1000);
-
-        if (now - timestamp > enrollment.max_age) {
-          return new WebcatError(WebcatErrorCode.Manifest.EXPIRED, [
-            String(enrollment.max_age),
-            String(timestamp),
-          ]);
-        }
-
-        return null;
-      },
-    ),
-    verifySigstoreManifest: vi.fn(async () => null),
-  };
-});
-
-// Helper: compute hash exactly as production does
-async function computeEnrollmentHash(
-  enrollment: Enrollment,
-): Promise<Uint8Array> {
-  const canonical = canonicalize(enrollment);
-  if (canonical === null) {
-    throw new Error("failed to canonicalize test enrollment");
-  }
-  const bytes = stringToUint8Array(canonical);
-  const digest = await SHA256(bytes);
-  return digest instanceof Uint8Array ? digest : new Uint8Array(digest);
-}
-
-// Dummy policy & signers
-const TEST_POLICY_B64URL = "c29tZS1zaWdzdW0tcG9saWN5";
-const SIGNER1 = "c2lnbmVyMQ";
-const SIGNER2 = "c2lnbmVyMg";
-const SIGNER3 = "c2lnbmVyMw";
-
-//
-// ─────────────────────────────────────────────
-//   OriginStateInitial.verifyEnrollment
-// ─────────────────────────────────────────────
-//
-describe("OriginState.verifyEnrollment", () => {
-  let enrollment: SigsumEnrollment;
-  let enrollmentHash: Uint8Array;
-  let state: OriginState;
-  let db: WebcatDatabase;
-  const cachePartition = {
-    firstParty: "https://example.com",
-    incognito: false,
-  };
-
-  beforeEach(async () => {
-    enrollment = {
-      type: EnrollmentTypes.Sigsum,
-      policy: TEST_POLICY_B64URL,
-      signers: [SIGNER1, SIGNER2, SIGNER3],
-      threshold: 2,
-      max_age: 360000,
-      cas_url: "https://cas.example.com",
-      logs: {
-        log1: "https://log.example.com",
       },
     };
+  });
 
-    enrollmentHash = await computeEnrollmentHash(enrollment);
-    db = new WebcatDatabase(defaults);
-    state = new OriginState(
-      db,
-      makeDummyFetcher(),
-      enrollmentHash,
-      cachePartition,
+  it("rejects when pendingOrigin is unavailable", async () => {
+    delete details.state.pendingOrigin;
+    const result = rv.validateHeaders(details);
+    await expect(result).rejects.toThrow(
+      "missing pendingOrigin in request state",
     );
   });
 
-  it("accepts a valid enrollment that matches hash", async () => {
-    await state.verifyEnrollment(enrollment);
-
-    expect(state.isEnrollmentVerified()).toBe(true);
-    expect(state.enrollment).toEqual(enrollment);
+  it("returns an error when extractAndValidateheaders returns an error", async () => {
+    const error = new WebcatError(WebcatErrorCode.Headers.MISSING);
+    vi.mocked(rv.extractAndValidateHeaders).mockReturnValueOnce(error);
+    const result = await rv.validateHeaders(details);
+    expect(result).toBe(error);
   });
 
-  it("fails when enrollment hash mismatches", async () => {
-    const different: SigsumEnrollment = { ...enrollment, threshold: 3 };
-
-    await state.verifyEnrollment(different);
-
-    expect(state.isFailed()).toBe(true);
-    expect(state.error?.code).toBe(WebcatErrorCode.Enrollment.MISMATCH);
-  });
-
-  it("fails when signers is not an array", async () => {
-    // eslint-disable-next-line
-    const mutated = { ...enrollment, signers: null as any };
-
-    const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginState(
-      db,
-      makeDummyFetcher(),
-      mutatedHash,
-      cachePartition,
+  it("shows the OK icon when everything is as expected", async () => {
+    vi.mocked(rv.extractAndValidateHeaders).mockReturnValueOnce(
+      new Map([["content-security-policy", "policy"]]),
     );
-
-    await mutatedState.verifyEnrollment(mutated);
-
-    expect(mutatedState.isFailed()).toBe(true);
-    expect(mutatedState.error?.code).toBe(
-      WebcatErrorCode.Enrollment.SIGNERS_MALFORMED,
+    const result = await rv.validateHeaders(details);
+    expect(result).toBeUndefined();
+    expect(
+      details.state.pendingOrigin.verifyCSP,
+    ).toHaveBeenCalledExactlyOnceWith("policy", "/");
+    expect(ui.showOKIcon).toHaveBeenCalledExactlyOnceWith(
+      details.tabId,
+      undefined,
     );
   });
 
-  it("fails when signers is empty", async () => {
-    const mutated = { ...enrollment, signers: [] };
-
-    const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginState(
-      db,
-      makeDummyFetcher(),
-      mutatedHash,
-      cachePartition,
+  it("verifies the enrollment and manifest when in the request_sent state", async () => {
+    vi.mocked(rv.extractAndValidateHeaders).mockReturnValueOnce(
+      new Map([["content-security-policy", "policy"]]),
     );
-
-    await mutatedState.verifyEnrollment(mutated);
-
-    expect(mutatedState.isFailed()).toBe(true);
-    expect(mutatedState.error?.code).toBe(
-      WebcatErrorCode.Enrollment.SIGNERS_EMPTY,
-    );
-  });
-
-  it("fails when threshold <= 0", async () => {
-    const mutated = { ...enrollment, threshold: 0 };
-
-    const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginState(
-      db,
-      makeDummyFetcher(),
-      mutatedHash,
-      cachePartition,
-    );
-
-    await mutatedState.verifyEnrollment(mutated);
-
-    expect(mutatedState.isFailed()).toBe(true);
-    expect(mutatedState.error?.code).toBe(
-      WebcatErrorCode.Enrollment.THRESHOLD_MALFORMED,
+    details.state.pendingOrigin.isRequestSent.mockReturnValueOnce(true);
+    const result = await rv.validateHeaders(details);
+    expect(result).toBeUndefined();
+    expect(
+      details.state.pendingOrigin.verifyEnrollment,
+    ).toHaveBeenCalledExactlyOnceWith(undefined, undefined);
+    expect(
+      details.state.pendingOrigin.verifyManifest,
+    ).toHaveBeenCalledExactlyOnceWith();
+    expect(
+      details.state.pendingOrigin.verifyCSP,
+    ).toHaveBeenCalledExactlyOnceWith("policy", "/");
+    expect(ui.showOKIcon).toHaveBeenCalledExactlyOnceWith(
+      details.tabId,
+      undefined,
     );
   });
 
-  it("fails when threshold > signers length", async () => {
-    const mutated = { ...enrollment, threshold: 10 };
-
-    const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginState(
-      db,
-      makeDummyFetcher(),
-      mutatedHash,
-      cachePartition,
+  it("accepts an enrollment in a header", async () => {
+    vi.mocked(rv.extractAndValidateHeaders).mockReturnValueOnce(
+      new Map([
+        ["content-security-policy", "policy"],
+        ["x-webcat-enrollment", "e30="],
+      ]),
     );
-
-    await mutatedState.verifyEnrollment(mutated);
-
-    expect(mutatedState.isFailed()).toBe(true);
-    expect(mutatedState.error?.code).toBe(
-      WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE,
-    );
-  });
-});
-
-//
-// ─────────────────────────────────────────────
-//   OriginState.verifyEnrollment (sigstore)
-// ─────────────────────────────────────────────
-//
-describe("OriginState.verifyEnrollment (sigstore)", () => {
-  let enrollment: SigstoreEnrollment;
-  let enrollmentHash: Uint8Array;
-  let state: OriginState;
-  let db: WebcatDatabase;
-  const trustedRoot = {} as unknown as SigstoreEnrollment["trusted_root"];
-  const cachePartition = {
-    firstParty: "https://example.com",
-    incognito: false,
-  };
-
-  beforeEach(async () => {
-    enrollment = {
-      type: EnrollmentTypes.Sigstore,
-      trusted_root: trustedRoot,
-      claims: {
-        "2.5.29.17": "https://github.com/example/repo",
-      },
-      max_age: 3600,
-    };
-
-    enrollmentHash = await computeEnrollmentHash(enrollment);
-    db = new WebcatDatabase(defaults);
-    state = new OriginState(
-      db,
-      makeDummyFetcher(),
-      enrollmentHash,
-      cachePartition,
+    details.state.pendingOrigin.isRequestSent.mockReturnValueOnce(true);
+    const result = await rv.validateHeaders(details);
+    expect(result).toBeUndefined();
+    expect(
+      details.state.pendingOrigin.verifyEnrollment,
+    ).toHaveBeenCalledExactlyOnceWith({}, undefined);
+    expect(
+      details.state.pendingOrigin.verifyManifest,
+    ).toHaveBeenCalledExactlyOnceWith();
+    expect(
+      details.state.pendingOrigin.verifyCSP,
+    ).toHaveBeenCalledExactlyOnceWith("policy", "/");
+    expect(ui.showOKIcon).toHaveBeenCalledExactlyOnceWith(
+      details.tabId,
+      undefined,
     );
   });
 
-  it("accepts a valid sigstore enrollment that matches hash", async () => {
-    await state.verifyEnrollment(enrollment);
-
-    expect(state.isEnrollmentVerified()).toBe(true);
-    expect(state.enrollment).toEqual(enrollment);
-  });
-
-  it("fails when trusted_root is missing", async () => {
-    const mutated: SigstoreEnrollment = {
-      ...enrollment,
-      trusted_root: null as unknown as TrustedRoot,
-    };
-
-    const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginState(
-      db,
-      makeDummyFetcher(),
-      mutatedHash,
-      cachePartition,
+  it("returns an error on a bad enrollment header", async () => {
+    vi.mocked(rv.extractAndValidateHeaders).mockReturnValueOnce(
+      new Map([
+        ["content-security-policy", "policy"],
+        ["x-webcat-enrollment", "bad"],
+      ]),
     );
-
-    await mutatedState.verifyEnrollment(mutated);
-
-    expect(mutatedState.isFailed()).toBe(true);
-    expect(mutatedState.error?.code).toBe(
-      WebcatErrorCode.Enrollment.TRUSTED_ROOT_MISSING,
+    details.state.pendingOrigin.isRequestSent.mockReturnValueOnce(true);
+    const result = await rv.validateHeaders(details);
+    expect(result).toStrictEqual(
+      new WebcatError(WebcatErrorCode.Headers.ENROLLMENT_MALFORMED),
     );
   });
 
-  it("fails when claims is empty", async () => {
-    const mutated: Enrollment = {
-      type: EnrollmentTypes.Sigstore,
-      trusted_root: trustedRoot,
-      claims: {},
-      max_age: 3600,
-    };
-
-    const mutatedHash = await computeEnrollmentHash(mutated);
-    const mutatedState = new OriginState(
-      db,
-      makeDummyFetcher(),
-      mutatedHash,
-      cachePartition,
+  it("returns an error when enrollment fails to verify", async () => {
+    vi.mocked(rv.extractAndValidateHeaders).mockReturnValueOnce(
+      new Map([["content-security-policy", "policy"]]),
     );
+    details.state.pendingOrigin.isRequestSent.mockReturnValueOnce(true);
+    details.state.pendingOrigin.verifyEnrollment.mockImplementationOnce(() => {
+      details.state.pendingOrigin.error = "bad enrollment";
+      details.state.pendingOrigin.isFailed.mockReturnValueOnce(true);
+    });
+    const result = await rv.validateHeaders(details);
+    expect(result).toStrictEqual("bad enrollment");
+  });
 
-    await mutatedState.verifyEnrollment(mutated);
-
-    expect(mutatedState.isFailed()).toBe(true);
-    expect(mutatedState.error?.code).toBe(
-      WebcatErrorCode.Enrollment.CLAIMS_EMPTY,
+  it("returns an error when manifest fails to verify", async () => {
+    vi.mocked(rv.extractAndValidateHeaders).mockReturnValueOnce(
+      new Map([["content-security-policy", "policy"]]),
     );
-  });
-});
-
-//
-// ─────────────────────────────────────────────
-//   OriginState.verifyManifest
-// ─────────────────────────────────────────────
-//
-describe("OriginState.verifyManifest", () => {
-  let enrollment: Enrollment;
-  let enrollmentHash: Uint8Array;
-  let state: OriginState;
-  let db: WebcatDatabase;
-  const cachePartition = {
-    firstParty: "https://example.com",
-    incognito: false,
-  };
-
-  const defaultCSP =
-    "default-src 'none'; script-src 'self'; style-src 'self'; object-src 'none'";
-
-  let manifest: Manifest;
-  let signatures: SigsumSignatures;
-
-  beforeEach(async () => {
-    enrollment = {
-      type: EnrollmentTypes.Sigsum,
-      policy: TEST_POLICY_B64URL,
-      signers: [SIGNER1, SIGNER2, SIGNER3],
-      threshold: 2,
-      max_age: 360000,
-      cas_url: "https://cas.example.com",
-      logs: {
-        log1: "https://log.example.com",
-      },
-    };
-
-    enrollmentHash = await computeEnrollmentHash(enrollment);
-    db = new WebcatDatabase(defaults);
-    state = new OriginState(
-      db,
-      makeDummyFetcher(),
-      enrollmentHash,
-      cachePartition,
-    );
-
-    await state.verifyEnrollment(enrollment);
-
-    manifest = {
-      app: "test-app",
-      version: "1.0.0",
-      default_csp: defaultCSP,
-      extra_csp: {},
-      timestamp: new Date().toISOString(),
-      files: {
-        "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      },
-      wasm: [],
-    };
-
-    signatures = {
-      [SIGNER1]: "signature1",
-      [SIGNER2]: "signature2",
-    };
-  });
-
-  it("accepts a valid manifest", async () => {
-    await state.verifyManifest(manifest, signatures);
-
-    expect(state.isManifestVerified()).toBe(true);
-    expect(state.manifest).toEqual(manifest);
-  });
-
-  it("fails when not enough signatures", async () => {
-    const tooFew: SigsumSignatures = { [SIGNER1]: "signature1" };
-
-    await state.verifyManifest(manifest, tooFew);
-
-    expect(state.isFailed()).toBe(true);
-    expect(state.error?.code).toBe(
-      WebcatErrorCode.Manifest.THRESHOLD_UNSATISFIED,
-    );
-  });
-
-  it("fails when files list empty", async () => {
-    const emptyFiles = { ...manifest, files: {} };
-
-    await state.verifyManifest(emptyFiles, signatures);
-
-    expect(state.isFailed()).toBe(true);
-    expect(state.error?.code).toBe(WebcatErrorCode.Manifest.FILES_MISSING);
-  });
-
-  it("fails when default_csp missing", async () => {
-    const badManifest = { ...manifest, default_csp: "" };
-
-    await state.verifyManifest(badManifest, signatures);
-
-    expect(state.isFailed()).toBe(true);
-    expect(state.error?.code).toBe(
-      WebcatErrorCode.Manifest.DEFAULT_CSP_MISSING,
-    );
-  });
-
-  it("fails when fallback_hashes is malformed", async () => {
-    const badManifest = { ...manifest, fallback_hashes: ["/missing.html"] };
-
-    await state.verifyManifest(badManifest, signatures);
-
-    expect(state.isFailed()).toBe(true);
-    expect(state.error?.code).toBe(
-      WebcatErrorCode.Manifest.FALLBACK_HASHES_MALFORMED,
-    );
-  });
-
-  it("rewrites legacy default_index and default_fallback", async () => {
-    const legacy = {
-      ...manifest,
-      fallback_hashes: undefined,
-      default_index: "index.html",
-      default_fallback: "/404.html",
-      files: {
-        "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "/docs/index.html": "hash2_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "/404.html": "hash3_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      },
-    };
-
-    await state.verifyManifest(legacy, signatures);
-
-    expect(state.isManifestVerified()).toBe(true);
-    expect(state.manifest.files["/"]).toBe(legacy.files["/index.html"]);
-    expect(state.manifest.files["/docs/"]).toBe(
-      legacy.files["/docs/index.html"],
-    );
-    expect(state.manifest.fallback_hashes).toEqual([legacy.files["/404.html"]]);
-  });
-
-  it("fails when wasm missing", async () => {
-    const badManifest = { ...manifest };
-    // @ts-expect-error simulate missing wasm
-    delete badManifest.wasm;
-
-    await state.verifyManifest(badManifest, signatures);
-
-    expect(state.isFailed()).toBe(true);
-    expect(state.error?.code).toBe(WebcatErrorCode.Manifest.WASM_MISSING);
-  });
-
-  it("fails when expired", async () => {
-    const validators = await import("../../src/webcat/validators");
-    const mock = validators.witnessTimestampsFromCosignedTreeHead as Mock;
-
-    // Force timestamps extremely old
-    mock.mockResolvedValue([10, 20, 30]);
-
-    await state.verifyManifest(manifest, signatures);
-
-    expect(state.isFailed()).toBe(true);
-    expect(state.error?.code).toBe(WebcatErrorCode.Manifest.EXPIRED);
-  });
-});
-
-//
-// ─────────────────────────────────────────────
-//   OriginState.verifyManifest (sigstore)
-// ─────────────────────────────────────────────
-//
-describe("OriginState.verifyManifest (sigstore)", () => {
-  let enrollment: Enrollment;
-  let enrollmentHash: Uint8Array;
-  let state: OriginState;
-  let manifest: Manifest;
-  let signatures: SigstoreSignatures;
-  let db: WebcatDatabase;
-  const trustedRoot = {} as unknown as SigstoreEnrollment["trusted_root"];
-  const cachePartition = {
-    firstParty: "https://example.com",
-    incognito: false,
-  };
-
-  const defaultCSP =
-    "default-src 'none'; script-src 'self'; style-src 'self'; object-src 'none'";
-
-  beforeEach(async () => {
-    enrollment = {
-      type: EnrollmentTypes.Sigstore,
-      trusted_root: trustedRoot,
-      claims: {
-        "2.5.29.17": "https://github.com/example/repo",
-      },
-      max_age: 3600,
-    };
-
-    enrollmentHash = await computeEnrollmentHash(enrollment);
-    db = new WebcatDatabase(defaults);
-    state = new OriginState(
-      db,
-      makeDummyFetcher(),
-      enrollmentHash,
-      cachePartition,
-    );
-
-    await state.verifyEnrollment(enrollment);
-
-    manifest = {
-      app: "test-app",
-      version: "1.0.0",
-      default_csp: defaultCSP,
-      extra_csp: {},
-      files: {
-        "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "/index.html.br": "hash2_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "/index.html.gz": "hash3_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "/index.html.zst": "hash4_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "/index.html.xz": "hash5_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "/index.html.bz2": "hash6_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "/index.html.lz4": "hash7_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      },
-      wasm: [],
-    };
-
-    signatures = [{} as SigstoreSignatures[number]];
-  });
-
-  it("accepts a valid sigstore manifest", async () => {
-    await state.verifyManifest(manifest, signatures);
-
-    expect(state.isManifestVerified()).toBe(true);
-    expect(state.manifest).toEqual(manifest);
-  });
-
-  it("fails when sigstore verification fails", async () => {
-    const validators = await import("../../src/webcat/validators");
-    const mock = validators.verifySigstoreManifest as Mock;
-
-    mock.mockResolvedValueOnce(
-      new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED),
-    );
-
-    await state.verifyManifest(manifest, signatures);
-
-    expect(state.isFailed()).toBe(true);
-    expect(state.error?.code).toBe(WebcatErrorCode.Manifest.VERIFY_FAILED);
-  });
-});
-
-//
-// ─────────────────────────────────────────────
-//   OriginStateVerifiedManifest.verifyCSP
-// ─────────────────────────────────────────────
-//
-describe("OriginStateVerifiedManifest.verifyCSP", () => {
-  let enrollment: Enrollment;
-  let enrollmentHash: Uint8Array;
-  let state: OriginState;
-  let db: WebcatDatabase;
-
-  const cachePartition = {
-    firstParty: "https://example.com",
-    incognito: false,
-  };
-  const defaultCSP =
-    "default-src 'none'; script-src 'self'; style-src 'self'; object-src 'none'";
-
-  beforeEach(async () => {
-    enrollment = {
-      type: EnrollmentTypes.Sigsum,
-      policy: TEST_POLICY_B64URL,
-      signers: [SIGNER1, SIGNER2],
-      threshold: 1,
-      max_age: 360000,
-      cas_url: "https://cas.example.com",
-      logs: {
-        log1: "https://log.example.com",
-      },
-    };
-
-    enrollmentHash = await computeEnrollmentHash(enrollment);
-    db = new WebcatDatabase(defaults);
-    state = new OriginState(
-      db,
-      makeDummyFetcher(),
-      enrollmentHash,
-      cachePartition,
-    );
-
-    await state.verifyEnrollment(enrollment);
-
-    const manifest: Manifest = {
-      app: "test-app",
-      version: "1.0.0",
-      default_csp: defaultCSP,
-      extra_csp: {
-        "/admin": "default-src 'none'; script-src 'self' 'unsafe-inline';",
-      },
-      fallback_hashes: ["hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
-      timestamp: new Date().toISOString(),
-      files: {
-        "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "/admin/index.html": "hash2_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-      },
-      wasm: [],
-    };
-
-    state.status = "verified_manifest";
-    state.manifest = manifest;
-    state.validUntil = 0;
-  });
-
-  it("matches default CSP for /", () => {
-    expect(state.verifyCSP(defaultCSP, "/")).toBe(true);
-  });
-
-  it("matches extra CSP for exact path", () => {
-    const csp = "default-src 'none'; script-src 'self' 'unsafe-inline';";
-    expect(state.verifyCSP(csp, "/admin")).toBe(true);
-  });
-
-  it("falls back to default CSP", () => {
-    expect(state.verifyCSP(defaultCSP, "/other")).toBe(true);
-  });
-
-  it("returns false for incorrect CSP", () => {
-    const badCsp = "default-src 'self'; script-src 'self';";
-    expect(state.verifyCSP(badCsp, "/")).toBe(false);
+    details.state.pendingOrigin.isRequestSent.mockReturnValueOnce(true);
+    details.state.pendingOrigin.verifyManifest.mockImplementationOnce(() => {
+      details.state.pendingOrigin.error = "bad manifest";
+      details.state.pendingOrigin.isFailed.mockReturnValueOnce(true);
+    });
+    const result = await rv.validateHeaders(details);
+    expect(result).toStrictEqual("bad manifest");
   });
 });
 
@@ -715,7 +179,7 @@ describe("ResponseValidator.extractAndValidateHeaders", () => {
 
   beforeEach(() => {
     rv = new ResponseValidator(
-      new WebcatDatabase(defaults),
+      {} as WebcatDatabase,
       {} as WebcatUI,
       {} as HookBuilder,
     );
@@ -895,5 +359,148 @@ describe("ResponseValidator.extractAndValidateHeaders", () => {
     expect((result as { code: string }).code).toBe(
       WebcatErrorCode.Headers.LOCATION_EXTERNAL,
     );
+  });
+});
+
+describe("ResponseValidator.validateContent", () => {
+  let ui: WebcatUI;
+  let rv: ResponseValidator;
+  let filter: {
+    onstart?: () => void;
+    ondata?: (event: unknown) => void;
+    onstop?: () => Promise<void>;
+    close: () => void;
+    disconnect: () => void;
+    write: () => void;
+  };
+  let verified: boolean;
+  let details: Stateful<BeforeRequestDetails>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    ui = {
+      showErrorPage: vi.fn(),
+    } as unknown as WebcatUI;
+    rv = new ResponseValidator({} as WebcatDatabase, ui, {} as HookBuilder);
+    filter = {
+      close: vi.fn(),
+      disconnect: vi.fn(),
+      write: vi.fn(),
+    };
+    verified = false;
+    details = {
+      requestId: "request-id",
+      url: "https://example.com/path",
+      state: {
+        pendingOrigin: {
+          isManifestVerified() {
+            return verified;
+          },
+          manifest: {
+            files: {},
+          },
+        },
+      },
+      type: "other",
+    };
+  });
+
+  it("rejects when no pendingOrigin is available", async () => {
+    delete details.state.pendingOrigin;
+    await expect(rv.validateContent(details)).rejects.toThrow(
+      "missing pendingOrigin in request state",
+    );
+  });
+
+  it("throws when manifest is unverified", async () => {
+    mockFilterResponseData.mockReturnValueOnce(filter);
+    const result = await rv.validateContent(details);
+    expect(result).toBeUndefined();
+    expect(mockFilterResponseData).toHaveBeenCalledExactlyOnceWith(
+      "request-id",
+    );
+
+    details.responseHeaders = [];
+    expect(filter.onstart).toThrow();
+  });
+
+  it("throws when response headers are unavailable", async () => {
+    mockFilterResponseData.mockReturnValueOnce(filter);
+    const result = await rv.validateContent(details);
+    expect(result).toBeUndefined();
+    expect(mockFilterResponseData).toHaveBeenCalledExactlyOnceWith(
+      "request-id",
+    );
+
+    verified = true;
+    expect(filter.onstart).toThrow();
+  });
+
+  it("allows a pass-through type unfiltered", async () => {
+    mockFilterResponseData.mockReturnValueOnce(filter);
+    const result = await rv.validateContent(details);
+    expect(result).toBeUndefined();
+    expect(mockFilterResponseData).toHaveBeenCalledExactlyOnceWith(
+      "request-id",
+    );
+
+    verified = true;
+    details.responseHeaders = [];
+    filter.onstart?.();
+    expect(filter.close).not.toHaveBeenCalled();
+    expect(filter.disconnect).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("denies a response with a mismatching hash", async () => {
+    mockFilterResponseData.mockReturnValueOnce(filter);
+    const result = await rv.validateContent(details);
+    expect(result).toBeUndefined();
+    expect(mockFilterResponseData).toHaveBeenCalledExactlyOnceWith(
+      "request-id",
+    );
+
+    const data = new TextEncoder().encode("data").buffer;
+    verified = true;
+    details.state.pendingOrigin.manifest.files["/path"] = "hash";
+    details.responseHeaders = [];
+    filter.onstart?.();
+    filter.ondata?.({ data });
+    await filter.onstop?.();
+    expect(filter.write).toHaveBeenCalledExactlyOnceWith(
+      new Uint8Array([68, 69, 78, 73, 69, 68]),
+    );
+    expect(filter.close).toHaveBeenCalledExactlyOnceWith();
+    expect(filter.disconnect).not.toHaveBeenCalled();
+    expect(ui.showErrorPage).toHaveBeenCalledExactlyOnceWith(
+      details,
+      new WebcatError(WebcatErrorCode.File.MISMATCH, [
+        "/path",
+        "hash",
+        "Om6weQ85rIfJTzhWst0sXREOaBFgImGpqSPTuyOtyLc",
+      ]),
+      true,
+    );
+  });
+
+  it("allows a response with a matching hash", async () => {
+    mockFilterResponseData.mockReturnValueOnce(filter);
+    const result = await rv.validateContent(details);
+    expect(result).toBeUndefined();
+    expect(mockFilterResponseData).toHaveBeenCalledExactlyOnceWith(
+      "request-id",
+    );
+
+    const data = new TextEncoder().encode("data").buffer;
+    verified = true;
+    details.state.pendingOrigin.manifest.files["/path"] =
+      "Om6weQ85rIfJTzhWst0sXREOaBFgImGpqSPTuyOtyLc";
+    details.responseHeaders = [];
+    filter.onstart?.();
+    filter.ondata?.({ data });
+    await filter.onstop?.();
+    expect(filter.write).toHaveBeenCalledExactlyOnceWith(data);
+    expect(filter.close).toHaveBeenCalledExactlyOnceWith();
+    expect(filter.disconnect).not.toHaveBeenCalled();
+    expect(ui.showErrorPage).not.toHaveBeenCalled();
   });
 });
