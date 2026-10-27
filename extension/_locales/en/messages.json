@@ -14,11 +14,14 @@
   "WEBCAT_webcatVerificationFailed": {
     "message": "WEBCAT verification failed"
   },
-  "WEBCAT_webcatIsRunning": {
-    "message": "WEBCAT is running"
+  "WEBCAT_webcatIsVerifying": {
+    "message": "WEBCAT is verifying this site"
   },
-  "WEBCAT_webcatIsUnavailable": {
-    "message": "WEBCAT unavailable on this site"
+  "WEBCAT_webcatNotEnrolled": {
+    "message": "This site is not enrolled in WEBCAT"
+  },
+  "WEBCAT_webcatPartiallyVerified": {
+    "message": "This site is not enrolled in WEBCAT, but it embeds WEBCAT-verified content"
   },
   "WEBCAT_webcatNotOperational": {
     "message": "WEBCAT may not be operating correctly"

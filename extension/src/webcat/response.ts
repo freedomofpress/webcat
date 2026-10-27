@@ -219,6 +219,8 @@ export class ResponseValidator {
         details.tabId,
         details.state.pendingOrigin.delegation,
       );
+    } else if (details.type === "sub_frame") {
+      this.#ui.showPartialIcon(details.tabId);
     }
   }
 
@@ -470,6 +472,8 @@ export class ResponseValidator {
       filter.close();
       if (details.type === "main_frame") {
         this.#ui.showOKIcon(details.tabId, originState.delegation);
+      } else if (details.type === "sub_frame") {
+        this.#ui.showPartialIcon(details.tabId);
       }
       // Redirect the main frame to an error page
     };

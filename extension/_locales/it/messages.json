@@ -35,11 +35,14 @@
   "WEBCAT_webcatVerificationFailed": {
     "message": "Verifica WEBCAT non riuscita"
   },
-  "WEBCAT_webcatIsRunning": {
-    "message": "WEBCAT è in esecuzione"
+  "WEBCAT_webcatIsVerifying": {
+    "message": "WEBCAT sta verificando questo sito"
   },
-  "WEBCAT_webcatIsUnavailable": {
-    "message": "WEBCAT non disponibile su questo sito"
+  "WEBCAT_webcatNotEnrolled": {
+    "message": "Questo sito non è registrato in WEBCAT"
+  },
+  "WEBCAT_webcatPartiallyVerified": {
+    "message": "Questo sito non è registrato in WEBCAT, ma incorpora contenuti verificati da WEBCAT"
   },
   "WEBCAT_webcatNotOperational": {
     "message": "WEBCAT potrebbe non funzionare correttamente"

@@ -36,6 +36,7 @@ describe("ResponseValidator.validateHeaders", () => {
   beforeEach(() => {
     ui = {
       showOKIcon: vi.fn(),
+      showPartialIcon: vi.fn(),
     } as unknown as WebcatUI;
     rv = new ResponseValidator({} as WebcatDatabase, ui, {} as HookBuilder);
     rv.extractAndValidateHeaders = vi.fn();
@@ -84,6 +85,17 @@ describe("ResponseValidator.validateHeaders", () => {
       details.tabId,
       undefined,
     );
+  });
+
+  it("shows the partial icon for a sub_frame", async () => {
+    vi.mocked(rv.extractAndValidateHeaders).mockReturnValueOnce(
+      new Map([["content-security-policy", "policy"]]),
+    );
+    details.type = "sub_frame";
+    const result = await rv.validateHeaders(details);
+    expect(result).toBeUndefined();
+    expect(ui.showOKIcon).not.toHaveBeenCalled();
+    expect(ui.showPartialIcon).toHaveBeenCalledExactlyOnceWith(details.tabId);
   });
 
   it("verifies the enrollment and manifest when in the request_sent state", async () => {
@@ -380,6 +392,8 @@ describe("ResponseValidator.validateContent", () => {
     vi.clearAllMocks();
     ui = {
       showErrorPage: vi.fn(),
+      showOKIcon: vi.fn(),
+      showPartialIcon: vi.fn(),
     } as unknown as WebcatUI;
     rv = new ResponseValidator({} as WebcatDatabase, ui, {} as HookBuilder);
     filter = {
@@ -502,5 +516,33 @@ describe("ResponseValidator.validateContent", () => {
     expect(filter.close).toHaveBeenCalledExactlyOnceWith();
     expect(filter.disconnect).not.toHaveBeenCalled();
     expect(ui.showErrorPage).not.toHaveBeenCalled();
+    expect(ui.showOKIcon).not.toHaveBeenCalled();
+    expect(ui.showPartialIcon).not.toHaveBeenCalled();
+  });
+
+  it("shows the partial icon for a verified sub_frame", async () => {
+    details.type = "sub_frame";
+    details.tabId = 123;
+    // Frames require the end marker; capture it from markContent
+    const marker = { onstart: () => {}, write: vi.fn() };
+    mockFilterResponseData.mockReturnValueOnce(marker);
+    rv.markContent(details);
+    marker.onstart();
+
+    mockFilterResponseData.mockReturnValueOnce(filter);
+    await rv.validateContent(details);
+
+    const data = new TextEncoder().encode("data").buffer;
+    verified = true;
+    details.state.pendingOrigin.manifest.files["/path"] =
+      "Om6weQ85rIfJTzhWst0sXREOaBFgImGpqSPTuyOtyLc";
+    details.responseHeaders = [];
+    filter.onstart?.();
+    filter.ondata?.({ data: marker.write.mock.calls[0][0].slice().buffer });
+    filter.ondata?.({ data });
+    await filter.onstop?.();
+    expect(filter.write).toHaveBeenCalledExactlyOnceWith(data);
+    expect(ui.showOKIcon).not.toHaveBeenCalled();
+    expect(ui.showPartialIcon).toHaveBeenCalledExactlyOnceWith(123);
   });
 });

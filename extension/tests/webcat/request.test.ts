@@ -163,7 +163,7 @@ describe("validateOrigin", () => {
     cfg = {} as BundleFetcherConfig;
   });
 
-  it("calls ui.showIcon on enrolled frames", async () => {
+  it("calls ui.showIcon on enrolled main frames", async () => {
     vi.mocked(db.getFQDNEnrollment).mockResolvedValue(
       new Uint8Array([1, 2, 3]),
     );
@@ -173,6 +173,7 @@ describe("validateOrigin", () => {
       {
         url: "https://example.com/",
         tabId: 34,
+        type: "main_frame",
         state: {
           isFrame: true,
         },
@@ -182,7 +183,7 @@ describe("validateOrigin", () => {
     expect(ui.showIcon).toHaveBeenCalledExactlyOnceWith(34);
   });
 
-  it("does not call ui.showIcon on non-frames", async () => {
+  it("does not call ui.showIcon on sub-frames", async () => {
     vi.mocked(db.getFQDNEnrollment).mockResolvedValue(
       new Uint8Array([1, 2, 3]),
     );
@@ -192,8 +193,9 @@ describe("validateOrigin", () => {
       {
         url: "https://example.com/",
         tabId: 34,
+        type: "sub_frame",
         state: {
-          isFrame: false,
+          isFrame: true,
         },
       },
       cfg,
