@@ -30,7 +30,11 @@ export type IconOptions = {
 
 /** @internal @inline */
 export type BrowserChromeControllerConfig = {
-  /** Template for icon paths. */
+  /**
+   * Template for icon paths. The extension supports both a light and a dark
+   * color scheme: use an icon with a `prefers-color-scheme` media query where
+   * available.
+   */
   iconPaths: PathTemplate;
   /** Template for page paths. */
   pagePaths: PathTemplate;
