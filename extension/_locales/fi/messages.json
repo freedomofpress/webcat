@@ -42,7 +42,7 @@
     "message": "Tätä sivustoa ei ole rekisteröity WEBCATiin"
   },
   "WEBCAT_webcatPartiallyVerified": {
-    "message": "Tätä sivustoa ei ole rekisteröity WEBCATiin, mutta se upottaa WEBCATin varmentamaa sisältöä"
+    "message": "Tätä sivustoa ei ole rekisteröity WEBCATiin, mutta siihen on upotettu WEBCATin varmentamaa sisältöä"
   },
   "WEBCAT_webcatNotOperational": {
     "message": "WEBCAT ei välttämättä toimi oikein"
