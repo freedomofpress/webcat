@@ -1,7 +1,7 @@
 {
   "name": "@freedomofpress/webcat",
   "type": "module",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "WEBCAT web application integrity library, used by the WEBCAT browser extension and developer tooling.",
   "repository": {
     "type": "git",
