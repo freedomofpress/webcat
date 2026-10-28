@@ -8,6 +8,8 @@ import { wasmHook } from "./wasm";
 import { serviceWorkerHook, sharedWorkerHook, workerHook } from "./workers";
 
 console.log("[WEBCAT] Installing content script hook");
+// Lets enrolled sites detect WEBCAT (#292).
+Object.defineProperty(window.wrappedJSObject, "hasWebcat", { value: true });
 const data = "__DATA_PLACEHOLDER__";
 
 // Find the first ancestor that is same-origin with the current window

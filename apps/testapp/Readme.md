@@ -16,7 +16,7 @@ object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; sty
 ```
 
 ### Tests
-1. `alert.js` attempts basic JS execution
+1. `alert.js` attempts basic JS execution and checks `window.hasWebcat`
 2. `csp.js` tests whether `eval()` blocking is enforced by CSP
 3. `import.js` tests an ES6 module import of `import_test.js`
 4. `load_serviceworker.js` attempts to register the `workers/serviceworker.js` ServiceWorker
