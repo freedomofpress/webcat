@@ -204,4 +204,39 @@ describe("verifySigstoreManifest claim matching", () => {
 
     expect(result).not.toBeNull();
   });
+
+  it("records the identity and Fulcio extensions of the passing certificate", async () => {
+    const run = "https://github.com/example/repo/actions/runs/1/attempts/1";
+    const cert = {
+      ...createSanCert(
+        "https://github.com/example/repo/.github/workflows/r.yml@refs/heads/main",
+      ),
+      extension: (oid: string) =>
+        oid === "1.3.6.1.4.1.57264.1.21"
+          ? { value: new TextEncoder().encode(run), valueObj: {} }
+          : undefined,
+    };
+    const provenance: Record<string, string> = {};
+    const result = await verifySigstoreManifest(
+      baseEnrollment({ "2.5.29.17": "^https://github.com/example/" }),
+      manifest,
+      [
+        {
+          cert,
+          verificationMaterial: {
+            tlogEntries: [{ logIndex: "42", logId: { keyId: "log" } }],
+          },
+        },
+      ] as unknown as SigstoreSignatures,
+      provenance,
+    );
+    expect(result).toBe(1787137043);
+    expect(provenance).toEqual({
+      "2.5.29.17":
+        "https://github.com/example/repo/.github/workflows/r.yml@refs/heads/main",
+      "1.3.6.1.4.1.57264.1.21": run,
+      logIndex: "42",
+      logId: "log",
+    });
+  });
 });

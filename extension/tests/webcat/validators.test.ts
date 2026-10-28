@@ -533,6 +533,7 @@ describe("verifySigsumManifest", () => {
     ].join("\n");
 
     const signer = Uint8ArrayToBase64Url(await rawKey());
+    const provenance: Record<string, string> = {};
     const result = await verifySigsumManifest(
       {
         type: EnrollmentTypes.Sigsum,
@@ -545,7 +546,15 @@ describe("verifySigsumManifest", () => {
       },
       (withTimestamp ? { timestamp: treeHead } : {}) as Manifest,
       { [signer]: "proof" },
+      provenance,
     );
+    if (typeof result === "number") {
+      expect(provenance).toEqual({
+        signed: "1",
+        witnesses: String(offsets.length),
+        timestamp: String(result - 3600),
+      });
+    }
     return { result, now };
   };
 

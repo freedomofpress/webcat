@@ -31,5 +31,95 @@
   },
   "WEBCAT_fix": {
     "message": "Fix"
+  },
+  "WEBCAT_logEntry": {
+    "message": "Log entry"
+  },
+  "WEBCAT_signersThreshold": {
+    "message": "at least $1 of the $2 keys registered for this site"
+  },
+  "WEBCAT_detailsUnavailable": {
+    "message": "Details unavailable"
+  },
+  "WEBCAT_signedWith": {
+    "message": "Signed with"
+  },
+  "WEBCAT_manifest": {
+    "message": "Manifest"
+  },
+  "WEBCAT_enrollment": {
+    "message": "Enrollment"
+  },
+  "WEBCAT_explorer": {
+    "message": "Explorer"
+  },
+  "WEBCAT_builtFrom": {
+    "message": "Built from"
+  },
+  "WEBCAT_ref": {
+    "message": "Ref"
+  },
+  "WEBCAT_workflow": {
+    "message": "Workflow"
+  },
+  "WEBCAT_signedBy": {
+    "message": "Signed by"
+  },
+  "WEBCAT_ciRun": {
+    "message": "CI run"
+  },
+  "WEBCAT_commit": {
+    "message": "Commit"
+  },
+  "WEBCAT_platform": {
+    "message": "Platform"
+  },
+  "WEBCAT_repository": {
+    "message": "Repository"
+  },
+  "WEBCAT_privateSigstore": {
+    "message": "Sigstore, private instance"
+  },
+  "WEBCAT_pinnedCA": {
+    "message": "$1, the certificate authority pinned by this site"
+  },
+  "WEBCAT_verification": {
+    "message": "Verification"
+  },
+  "WEBCAT_verificationNotAvailable": {
+    "message": "not available"
+  },
+  "WEBCAT_verificationInProgress": {
+    "message": "in progress"
+  },
+  "WEBCAT_signersCount": {
+    "message": "$1 of the $2 keys registered for this site, $3 required"
+  },
+  "WEBCAT_witnessedOn": {
+    "message": "Witnessed on"
+  },
+  "WEBCAT_witnessedBy": {
+    "message": "$1, by $2 witnesses"
+  },
+  "WEBCAT_error": {
+    "message": "Error"
+  },
+  "WEBCAT_details": {
+    "message": "Details"
+  },
+  "WEBCAT_unavailable": {
+    "message": "unavailable"
+  },
+  "WEBCAT_version": {
+    "message": "Version"
+  },
+  "WEBCAT_delegation": {
+    "message": "Delegation"
+  },
+  "WEBCAT_embedded": {
+    "message": "Embedded"
+  },
+  "WEBCAT_embeddedDetails": {
+    "message": "Embedded details"
   }
 }

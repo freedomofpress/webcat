@@ -1,16 +1,58 @@
+body {
+  width: 22rem;
+  margin: 0;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.9rem;
+}
+
 .warning {
   margin: 2px;
   white-space: preserve-breaks;
-  background: #f8d7da;
+  background: light-dark(#f8d7da, #4a1c21);
   border-radius: 7px;
-  border: solid 1px #dc3545;
-  color: #721c24;
+  border: solid 1px light-dark(#dc3545, #e4606d);
+  color: light-dark(#721c24, #f8d7da);
   padding: 0.5em 0.8em;
 }
 
 .warning button {
   float: right;
-  color: #721c24;
+  color: inherit;
   margin-left: 2em;
   min-width: 0;
+}
+
+dd img {
+  width: 1.2em;
+  height: 1.2em;
+  vertical-align: text-bottom;
+}
+
+details > section {
+  margin: 0.4em 0 0.4em 0.8em;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.2em 0.8em;
+  margin: 0.3em 0;
+}
+
+dt {
+  opacity: 0.7;
+}
+
+/* Long values stay on one line; the full text is in the tooltip */
+dd,
+.links a {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.links a {
+  display: block;
+  margin: 0.2em 0;
 }

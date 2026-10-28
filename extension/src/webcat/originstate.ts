@@ -120,6 +120,8 @@ export class OriginState implements IOriginState {
   fetcher: BundleFetcher;
   enrollment?: Enrollment;
   manifest?: Manifest;
+  signatures?: SigsumSignatures | SigstoreSignatures;
+  provenance?: Record<string, string>;
   delegation?: string;
   error?: WebcatError;
   validUntil?: number;
@@ -173,10 +175,17 @@ export class OriginState implements IOriginState {
     );
   }
 
-  #setVerifiedManifest(manifest: Manifest, validUntil: number) {
+  #setVerifiedManifest(
+    manifest: Manifest,
+    validUntil: number,
+    signatures: SigsumSignatures | SigstoreSignatures,
+    provenance?: Record<string, string>,
+  ) {
     this.status = "verified_manifest";
     this.manifest = manifest;
     this.validUntil = validUntil;
+    this.signatures = signatures;
+    this.provenance = provenance;
   }
 
   isManifestVerified(): this is OriginStateVerifiedManifest {
@@ -313,6 +322,7 @@ export class OriginState implements IOriginState {
     }
 
     let verify_result: WebcatError | number;
+    const provenance: Record<string, string> = {};
 
     switch (this.enrollment.type) {
       case EnrollmentTypes.Sigsum:
@@ -320,6 +330,7 @@ export class OriginState implements IOriginState {
           this.enrollment,
           manifest,
           signatures as SigsumSignatures,
+          provenance,
         );
         break;
 
@@ -328,6 +339,7 @@ export class OriginState implements IOriginState {
           this.enrollment,
           manifest,
           signatures as SigstoreSignatures,
+          provenance,
         );
         break;
 
@@ -395,7 +407,12 @@ export class OriginState implements IOriginState {
         );
       }
     }
-    return this.#setVerifiedManifest(manifest, verify_result);
+    return this.#setVerifiedManifest(
+      manifest,
+      verify_result,
+      signatures,
+      provenance,
+    );
   }
 
   verifyCSP(csp: string, pathname: string): boolean {
@@ -441,6 +458,9 @@ export class OriginState implements IOriginState {
       status: "verified_manifest",
       enrollment_hash: this.enrollment_hash.toBase64(),
       manifest: this.manifest,
+      enrollment: this.enrollment,
+      signatures: this.signatures,
+      provenance: this.provenance,
       delegation: this.delegation,
       validUntil: this.validUntil,
     };
@@ -458,6 +478,9 @@ export class OriginState implements IOriginState {
     );
     restored.status = pojo.status;
     restored.manifest = pojo.manifest;
+    restored.enrollment = pojo.enrollment;
+    restored.signatures = pojo.signatures;
+    restored.provenance = pojo.provenance;
     restored.delegation = pojo.delegation;
     restored.validUntil = pojo.validUntil;
     return restored;

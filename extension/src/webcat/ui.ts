@@ -6,9 +6,12 @@ import {
 import { NamespacedKVStore } from "../browser/kvstore";
 import permissions from "../browser/permissions";
 import { RequestDetails } from "../browser/requests";
+import { Mutex } from "../browser/sync";
+import { CacheKey } from "./cache";
 import { Database } from "./interfaces/database";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
-import { Stateful } from "./interfaces/requeststate";
+import { CachePartition } from "./interfaces/originstate";
+import { RequestState, Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { clearBrowserCaches, getFQDN } from "./utils";
 
@@ -21,6 +24,8 @@ export class WebcatUI extends BrowserChromeController {
   readonly #warnings: NamespacedKVStore;
 
   #showWarnings = false;
+  // Serializes read-modify-write of the per-tab popup URL (frames)
+  readonly #popupLock = new Mutex();
 
   /**
    * @param db The database to load enrollments from.
@@ -47,6 +52,50 @@ export class WebcatUI extends BrowserChromeController {
       this.#onErrorPageNavigation.bind(this),
       { url: [{ urlPrefix: this.getPageURL("error") }] },
     );
+    browser.webRequest.onBeforeRequest.addListener(
+      this.#onJSONRequest.bind(this),
+      { urls: [`${WebcatUI.JSON_ORIGIN}/*`], types: ["main_frame"] },
+      ["blocking"],
+    );
+  }
+
+  /**
+   * Origin of the synthetic URLs the popup opens for a verified origin's
+   * manifest or enrollment: `<origin>/<part>/<cache key>`. The request is
+   * redirected to a data: URL before it leaves the browser, and the tab runs
+   * in a web process, where Firefox's JSON viewer renders it.
+   */
+  static readonly JSON_ORIGIN = "https://json.webcat.invalid";
+
+  async #onJSONRequest(details: { url: string; originUrl?: string }) {
+    // Only navigations started by the extension's own pages are served
+    if (
+      details.originUrl &&
+      !details.originUrl.startsWith(browser.runtime.getURL(""))
+    ) {
+      return { cancel: true };
+    }
+    const [, part, key] = new URL(details.url).pathname.split("/");
+    const origin = await this.#db.origins.get(
+      decodeURIComponent(key) as CacheKey<CachePartition>,
+    );
+    const pojo = origin?.isManifestVerified() ? origin.toPOJO() : undefined;
+    // The manifest view includes its signatures
+    const value =
+      pojo && part === "manifest"
+        ? { manifest: pojo.manifest, signatures: pojo.signatures }
+        : pojo && part === "enrollment"
+          ? pojo.enrollment
+          : undefined;
+    // Firefox allows top-level data: navigations for JSON, PDF and images, so
+    // the unavailable case is JSON as well
+    const payload = value ?? {
+      error: browser.i18n.getMessage("WEBCAT_detailsUnavailable"),
+    };
+    const redirectUrl =
+      "data:application/json;charset=utf-8," +
+      encodeURIComponent(JSON.stringify(payload, null, 2));
+    return { redirectUrl };
   }
 
   /**
@@ -96,10 +145,11 @@ export class WebcatUI extends BrowserChromeController {
    * shows the warning icon instead.
    *
    * @param tabId The ID of the tab to display the icon in.
+   * @param state The verified request state, shown in the popup.
    * @param delegation Optional delegation information to include in the title
    *   text.
    */
-  async showOKIcon(tabId: number, delegation?: string) {
+  async showOKIcon(tabId: number, state: RequestState, delegation?: string) {
     if (this.#showWarnings) {
       await this.showWarningIcon(tabId);
       return;
@@ -116,19 +166,35 @@ export class WebcatUI extends BrowserChromeController {
     if (delegation) {
       title += ` (${delegation})`;
     }
+    // The popup reads the verified origin from storage; only identifiers go
+    // in the URL. Verified sub-frames are appended by showPartialIcon.
+    const fragment = new URLSearchParams({ origin: this.#popupEntry(state) });
+    if (delegation) {
+      fragment.set("delegation", delegation);
+    }
     await super.showIcon(tabId, {
       name: "webcat-ok",
       title,
+      popup: { name: "popup", fragment },
+    });
+  }
+
+  #popupEntry(state: RequestState) {
+    return JSON.stringify({
+      fqdn: state.fqdn,
+      key: CacheKey(state.fqdn, state.cachePartition),
     });
   }
 
   /**
-   * Marks a tab whose top-level site is not enrolled as embedding verified
-   * content.
+   * Records a verified sub-frame on its tab: a tab whose top-level site is
+   * not enrolled gets the partial icon, and the frame is listed in the popup
+   * of partial and OK tabs. Verifying and error tabs keep their state.
    *
-   * @param tabId The ID of the tab to display the icon in.
+   * @param tabId The ID of the tab containing the frame.
+   * @param state The verified request state of the frame.
    */
-  async showPartialIcon(tabId: number) {
+  async showPartialIcon(tabId: number, state: RequestState) {
     if (tabId < 0) {
       return;
     }
@@ -136,14 +202,30 @@ export class WebcatUI extends BrowserChromeController {
       await this.showWarningIcon(tabId);
       return;
     }
+    using _lock = await this.#popupLock.acquire();
     const title = await browser.pageAction.getTitle({ tabId });
-    if (title !== browser.i18n.getMessage("WEBCAT_webcatNotEnrolled")) {
-      return;
+    const popup = await browser.pageAction.getPopup({ tabId });
+    if (title === browser.i18n.getMessage("WEBCAT_webcatNotEnrolled")) {
+      await super.showIcon(tabId, {
+        name: "webcat",
+        title: browser.i18n.getMessage("WEBCAT_webcatPartiallyVerified"),
+        popup: {
+          name: "popup",
+          fragment: new URLSearchParams({ frame: this.#popupEntry(state) }),
+        },
+      });
+    } else if (popup.startsWith(this.getPageURL("popup"))) {
+      const url = new URL(popup);
+      const fragment = new URLSearchParams(url.hash.slice(1));
+      const entry = this.#popupEntry(state);
+      // The same frame arrives once at headers time and again after the body
+      if (fragment.getAll("frame").includes(entry)) {
+        return;
+      }
+      fragment.append("frame", entry);
+      url.hash = fragment.toString();
+      browser.pageAction.setPopup({ tabId, popup: url.href });
     }
-    await super.showIcon(tabId, {
-      name: "webcat",
-      title: browser.i18n.getMessage("WEBCAT_webcatPartiallyVerified"),
-    });
   }
 
   /**
