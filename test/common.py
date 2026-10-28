@@ -24,6 +24,7 @@ BAD_WASM = Hook(
 [
     LOGENTRY_INLINE,
     LOGENTRY_ALERT,
+    LOGENTRY_HASWEBCAT,
     LOGENTRY_CSP,
     LOGENTRY_WASM_FETCH,
     LOGENTRY_WASM,
@@ -42,6 +43,7 @@ BAD_WASM = Hook(
 ] = EXPECTED_LOGS = [
     ["inline:",True],
     ["alert.js:",True],
+    ["hasWebcat:",True],
     ["csp.js",True],
     ["wasm_fetch.js:",True],
     ["wasm.js:",True],
