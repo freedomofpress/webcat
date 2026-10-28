@@ -192,13 +192,14 @@ export const serviceWorkerHook = updatableHook(
     if (typeof data === "string") {
       // data is the placeholder, so we're in a frame
       try {
-        Object.hasOwn(global.top || {}, "name");
-        // top is same-origin, so there's nothing to do
-        return;
+        if (global.top?.origin === global.origin) {
+          // top is same-origin, so there's nothing to do
+          return;
+        }
       } catch {
         // top is cross-origin, continue
       }
-    } else if ((data as unknown as boolean) === true) {
+    } else if (data.sameOriginWithFirstParty === true) {
       // we're in a worker that's same-origin with
       // the first party; nothing to do
       return;
@@ -222,7 +223,7 @@ export const serviceWorkerHook = updatableHook(
 export const workerHook = updatableHook(
   "Worker",
   function (data: Promise<{ firstParty: string }>) {
-    if (!global.SharedWorker) {
+    if (!global.Worker) {
       return;
     }
 
@@ -245,7 +246,7 @@ export const workerHook = updatableHook(
       ...args: [scriptUrl: string | URL, options?: WorkerOptions]
     ) {
       if (!(this instanceof HookedWorker)) {
-        throw new TypeError("Worker constructor: 'new' is required");
+        throw new global.TypeError("Worker constructor: 'new' is required");
       }
       if ((args.length as number) === 0) {
         throw new global.TypeError(
