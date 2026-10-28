@@ -95,11 +95,8 @@
   "WEBCAT_signersCount": {
     "message": "$1 of the $2 keys registered for this site, $3 required"
   },
-  "WEBCAT_witnessedOn": {
-    "message": "Witnessed on"
-  },
   "WEBCAT_witnessedBy": {
-    "message": "$1, by $2 witnesses"
+    "message": "$1, witnessed by $2"
   },
   "WEBCAT_error": {
     "message": "Error"
@@ -121,5 +118,11 @@
   },
   "WEBCAT_embeddedDetails": {
     "message": "Embedded details"
+  },
+  "WEBCAT_signedOn": {
+    "message": "Signed on"
+  },
+  "WEBCAT_validUntil": {
+    "message": "Valid until"
   }
 }

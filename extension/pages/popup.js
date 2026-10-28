@@ -235,27 +235,6 @@ async function proofRows(stored) {
           : i18n("signersThreshold", required, registered),
       ),
     ]);
-    // The median witness timestamp, derived from the expiry for entries stored
-    // before it was recorded
-    const witnessed = Number(
-      provenance?.timestamp ?? stored.validUntil - enrollment.max_age,
-    );
-    if (Number.isFinite(witnessed)) {
-      const date = new Date(witnessed * 1000).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      });
-      rows.push([
-        i18n("witnessedOn"),
-        el(
-          "span",
-          provenance?.witnesses
-            ? i18n("witnessedBy", date, provenance.witnesses)
-            : date,
-        ),
-      ]);
-    }
     const logs = await sigsumLogsByKeyHash(enrollment.logs);
     for (const proof of Object.values(signatures ?? {})) {
       const url = logs[proofLine(proof, "log")];
@@ -286,6 +265,12 @@ function keyValueList(rows) {
   return dl;
 }
 
+const when = (seconds) =>
+  new Date(seconds * 1000).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
 const version = (stored) => stored.manifest.version.replace(/^\D+(?=\d)/, "");
 
 const icon = (ok) =>
@@ -313,6 +298,19 @@ async function renderOrigin(entry, stored, rows, after = []) {
       const [proof, logLinks] = await proofRows(stored);
       rows.push(...proof);
       links.push(...logLinks);
+      // Both systems set the expiry to the signing time plus max_age: the
+      // certificate's issue time for Sigstore, the median witness time for Sigsum
+      const signedOn = stored.validUntil - stored.enrollment.max_age;
+      const witnesses = stored.provenance?.witnesses;
+      rows.push(
+        [
+          i18n("signedOn"),
+          witnesses
+            ? i18n("witnessedBy", when(signedOn), witnesses)
+            : when(signedOn),
+        ],
+        [i18n("validUntil"), when(stored.validUntil)],
+      );
     }
   }
   rows.push(...after);
