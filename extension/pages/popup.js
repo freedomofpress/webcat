@@ -319,10 +319,11 @@ async function originLinks(entry, stored, rows) {
     const a = el("a", i18n(part), { href: "#" });
     a.addEventListener("click", (e) => {
       e.preventDefault();
-      browser.tabs.create({
-        url: `${JSON_ORIGIN}/${part}/${encodeURIComponent(entry.key)}`,
-      });
-      window.close();
+      browser.tabs
+        .create({
+          url: `${JSON_ORIGIN}/${part}/${encodeURIComponent(entry.key)}`,
+        })
+        .then(() => window.close());
     });
     links.push(a);
   }
