@@ -1,0 +1,122 @@
+{
+  "description": "OLPC Canonical JSON vectors for WEBCAT (server.md §1.0). Generated with olpc-cjson 0.1.4 plus the |n| <= 2^53-1 integer bound. canonical_hex is the exact byte string; sha256 is over those bytes. Entries with error:true MUST be rejected.",
+  "vectors": [
+    {
+      "canonical_hex": "7b7d",
+      "input": {},
+      "name": "empty object",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "canonical_hex": "5b5d",
+      "input": [],
+      "name": "empty array",
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    {
+      "canonical_hex": "7b2261223a5b747275652c66616c73652c6e756c6c5d2c2262223a312c2263223a7b2279223a7b7d2c227a223a5b5d7d7d",
+      "input": {
+        "a": [
+          true,
+          false,
+          null
+        ],
+        "b": 1,
+        "c": {
+          "y": {},
+          "z": []
+        }
+      },
+      "name": "keys sorted, nested, no whitespace",
+      "sha256": "a2fec540960a668c6c143f35af9724980524ada9b150077ff9ecde261019e98a"
+    },
+    {
+      "canonical_hex": "7b225a223a332c2261223a342c22efbfbf223a312c22f0908080223a327d",
+      "input": {
+        "Z": 3,
+        "a": 4,
+        "￿": 1,
+        "𐀀": 2
+      },
+      "name": "keys sorted by UTF-8 bytes, not UTF-16 code units",
+      "sha256": "9e9643750b8586d554955ab6f0cd453cd8e4a5f43fc1b725eb9acdb52c15139b"
+    },
+    {
+      "canonical_hex": "22615c22625c5c632f64c3a922",
+      "input": "a\"b\\c/dé",
+      "name": "only quote and backslash escaped",
+      "sha256": "4964977cf7258a70d92c12797066eb2c15be1191e900451613e58af80459f190"
+    },
+    {
+      "canonical_hex": "2274616209686572650a6e6c006e756c22",
+      "input": "tab\there\nnl\u0000nul",
+      "name": "control characters emitted raw",
+      "sha256": "66404ad53495e78bbf27483bdfab4ca62ccc2c4a7d123ee6cc89114239dd5f2d"
+    },
+    {
+      "canonical_hex": "2268c3a96c6c6f2077c3b6726c6420f09fa68022",
+      "input": "héllo wörld 🦀",
+      "name": "multibyte UTF-8 emitted raw",
+      "sha256": "f191a18d5078bd2f566bf4868bc70b43a1f719ace87b927c7a1ec2f070aef701"
+    },
+    {
+      "canonical_hex": "5b302c2d312c34322c393030373139393235343734303939312c2d393030373139393235343734303939315d",
+      "input": [
+        0,
+        -1,
+        42,
+        9007199254740991,
+        -9007199254740991
+      ],
+      "name": "integers",
+      "sha256": "4817afe8a2030d41925db08abb474e5defec15139e046f0086f53357ba4c6eb7"
+    },
+    {
+      "canonical_hex": "7b22656e726f6c6c6d656e745f736368656d61223a312c226c6f6773223a7b22526b53764b723067394f5170313949326e62436859796466766a6a766459796e464c784b584c79343130453d223a2268747470733a2f2f706f632e73696773756d2e6f72672f6a656c6c7966697368227d2c226d61785f616765223a38363430302c22706f6c696379223a226247396e494451324e4452685a6a4a68596d51794d4759305a5451794f5751335a44497a4e6a6c6b596a42684d54597a4d6a63315a6d4a6c4d7a686c5a6a63314f474e684e7a4530596d4d305954566a596d4e694f4751334e6a45676148523063484d364c79397762324d7561473973624756796447567a6443357a6157647a6457307562334a6e4c3270766347787062677033615852755a584e7a494452684e7a466d4e4751315a6d49324d6d56685a6d55354f5749334d475531595467354e546b774e7a4134595751774e5455354f444d314d5467794d6d566a595441794e7a637a4e7a6c6d4e544d335a5749335a4449676148523063484d364c793933615852755a584e7a4c57526c6469357a6157647a6457307562334a6e4c33427659777078645739796457306764326c30626d567a63776f3d222c227369676e657273223a5b226b76335a6b456d4c354e30746a6c4d4f4c75534e684567587a57567679797650635938683875615a30514d3d222c22374a62365735466a355870357030487137573361324c33513879304b316d395677584a3462326e365467593d225d2c227468726573686f6c64223a312c2274797065223a2273696773756d227d",
+      "input": {
+        "enrollment_schema": 1,
+        "logs": {
+          "RkSvKr0g9OQp19I2nbChYydfvjjvdYynFLxKXLy410E=": "https://poc.sigsum.org/jellyfish"
+        },
+        "max_age": 86400,
+        "policy": "bG9nIDQ2NDRhZjJhYmQyMGY0ZTQyOWQ3ZDIzNjlkYjBhMTYzMjc1ZmJlMzhlZjc1OGNhNzE0YmM0YTVjYmNiOGQ3NjEgaHR0cHM6Ly9wb2MuaG9sbGVydGVzdC5zaWdzdW0ub3JnL2pvcGxpbgp3aXRuZXNzIDRhNzFmNGQ1ZmI2MmVhZmU5OWI3MGU1YTg5NTkwNzA4YWQwNTU5ODM1MTgyMmVjYTAyNzczNzlmNTM3ZWI3ZDIgaHR0cHM6Ly93aXRuZXNzLWRldi5zaWdzdW0ub3JnL3BvYwpxdW9ydW0gd2l0bmVzcwo=",
+        "signers": [
+          "kv3ZkEmL5N0tjlMOLuSNhEgXzWVvyyvPcY8h8uaZ0QM=",
+          "7Jb6W5Fj5Xp5p0Hq7W3a2L3Q8y0K1m9VwXJ4b2n6TgY="
+        ],
+        "threshold": 1,
+        "type": "sigsum"
+      },
+      "name": "sigsum enrollment",
+      "sha256": "f3abd729e442abf70946a67525d21f88c8948654814d26c8ab56b8bb82f96305"
+    },
+    {
+      "error": true,
+      "input": {
+        "x": 1.5
+      },
+      "name": "float rejected"
+    },
+    {
+      "error": true,
+      "input": [
+        1e+21
+      ],
+      "name": "exponent rejected"
+    },
+    {
+      "error": true,
+      "input": [
+        9007199254740993
+      ],
+      "name": "integer above 2^53-1 rejected"
+    },
+    {
+      "error": true,
+      "input": [
+        -9223372036854775808
+      ],
+      "name": "integer below -(2^53-1) rejected"
+    }
+  ]
+}

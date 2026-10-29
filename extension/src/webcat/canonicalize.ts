@@ -10,15 +10,23 @@ function canonicalizeString(string: string): string {
   return '"' + escapedString + '"';
 }
 
-// Recursively encodes the supplied value as canonical JSON. It's a restricted
-// dialect of JSON in which keys are lexically sorted, floats are not allowed,
-// and only double quotes and backslashes are escaped. Archived spec:
+// Keys sort by code point, which is UTF-8 byte order, as the spec and the
+// olpc-cjson crate require. Array.prototype.sort() compares UTF-16 code units
+// instead, which disagrees for keys above U+FFFF: "\u{10000}" is the pair
+// D800 DC00, so .sort() puts it before "\uFFFF", while its UTF-8 bytes
+// F0 90 80 80 sort after EF BF BF. Fixed-width hex per code point makes the
+// plain string comparison match.
+const byCodePoint = (s: string) =>
+  Array.from(s, (c) =>
+    (c.codePointAt(0) as number).toString(16).padStart(6, "0"),
+  ).join("");
+
+// Recursively encodes the supplied value as OLPC canonical JSON, as fixed by
+// webcat-spec server.md §1.0: keys sorted by UTF-8 bytes, only `"` and `\`
+// escaped, integers only and only in the JS safe range. Archived spec:
 // https://web.archive.org/web/20251209150702/http://wiki.laptop.org/go/Canonical_JSON
 //
-// tuf-js encodes it the same way, and webcat-infra-chain does too (via the
-// olpc-cjson crate), so the enrollment hashes match. Sigstore's canonical JSON
-// diverges, but only on floats and control characters, which should not appear
-// in what we hash.
+// webcat-infra-chain encodes the same way (via the olpc-cjson crate).
 //
 // Returns null for anything it can't encode.
 export function canonicalize(object: unknown): string | null {
@@ -27,7 +35,7 @@ export function canonicalize(object: unknown): string | null {
     buffer.push(canonicalizeString(object));
   } else if (typeof object === "boolean") {
     buffer.push(JSON.stringify(object));
-  } else if (Number.isInteger(object)) {
+  } else if (Number.isSafeInteger(object)) {
     buffer.push(JSON.stringify(object));
   } else if (object === null) {
     buffer.push(JSON.stringify(object));
@@ -47,7 +55,14 @@ export function canonicalize(object: unknown): string | null {
   } else if (typeof object === "object") {
     buffer.push(LEFT_CURLY_BRACKET);
     let first = true;
-    for (const property of Object.keys(object).sort()) {
+    const keys = Object.keys(object).sort((a, b) =>
+      byCodePoint(a) < byCodePoint(b)
+        ? -1
+        : byCodePoint(a) > byCodePoint(b)
+          ? 1
+          : 0,
+    );
+    for (const property of keys) {
       if (!first) {
         buffer.push(COMMA);
       }
