@@ -1,8 +1,7 @@
-/* Mirrors Firefox's trust panel (browser/themes/shared/controlcenter/panel.css
-   and customizableui/panelUI-shared.css): same font and width, a header row
-   with favicon and host on the left and the connection button on the right,
-   and a subview that slides in with a back button. Uses the design tokens
-   Firefox ships. */
+/* The popup carries the ids and classes of Firefox's trust panel and loads
+   Firefox's panel stylesheets after this one, so their rules apply and follow
+   the running version. The rules here are the fallback: the same layout with
+   the values measured in Firefox 158, using the design tokens it ships. */
 
 /* 11px is the root font size of Firefox's chrome window, so rem-based tokens
    resolve to the same pixels as in the panel; the text itself is the menu font */
@@ -48,28 +47,28 @@ body {
   transform: translateX(0);
 }
 
-#header-row {
+#trustpanel-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-block: var(--space-small);
-  padding-inline-start: var(--space-large);
+  padding-block: var(--space-small, 0.5rem);
+  padding-inline-start: var(--space-large, 1rem);
 }
 
-#site {
+#trustpanel-popup-host-wrapper {
   display: flex;
   align-items: center;
   min-width: 0;
 }
 
-#favicon {
+#trustpanel-popup-icon {
   width: 16px;
   height: 16px;
   flex: none;
-  margin-inline-end: var(--space-xsmall);
+  margin-inline-end: var(--space-xsmall, 0.25rem);
 }
 
-#host {
+#trustpanel-popup-host {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -82,10 +81,10 @@ body {
   align-items: center;
   box-sizing: border-box;
   min-height: 24px;
-  margin: var(--panel-menuitem-margin);
-  padding: var(--panel-menuitem-padding);
+  margin: var(--panel-menuitem-margin, 0 8px);
+  padding: var(--panel-menuitem-padding, 8px);
   border: 0;
-  border-radius: var(--border-radius-large);
+  border-radius: var(--border-radius-large, 16px);
   background: none;
   color: inherit;
   font: inherit;
@@ -95,32 +94,66 @@ body {
 
 .subviewbutton:enabled:hover,
 .links a:hover {
-  background-color: var(--button-background-color-ghost-hover);
+  background-color: var(
+    --button-background-color-ghost-hover,
+    color-mix(in srgb, currentColor 7%, transparent)
+  );
 }
 
 .subviewbutton:enabled:active,
 .links a:active {
-  background-color: var(--button-background-color-ghost-active);
+  background-color: var(
+    --button-background-color-ghost-active,
+    color-mix(in srgb, currentColor 14%, transparent)
+  );
 }
 
 .subviewbutton img {
   width: 16px;
   height: 16px;
-  margin-inline-end: var(--space-xsmall);
+  margin-inline-end: var(--space-xsmall, 0.25rem);
 }
 
 /* The last item is the panel footer, with the menu items' inline margin below */
 .links a:last-child {
-  margin-bottom: var(--panel-menuitem-margin-inline);
+  margin-bottom: var(--panel-menuitem-margin-inline, 8px);
 }
 
-#status {
+/* External links open a site: mark them and keep them below the others */
+.links a.external::after {
+  content: url("chrome://global/skin/icons/open-in-new.svg");
+  -moz-context-properties: fill, fill-opacity;
+  fill: currentColor;
+  fill-opacity: 0.6;
+  margin-inline-start: var(--space-small, 0.5rem);
+  display: flex;
+}
+
+.links a:not(.external) + a.external {
+  margin-top: var(--space-small, 0.5rem);
+  position: relative;
+}
+
+.links a:not(.external) + a.external::before {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--space-small, 0.5rem) / 2 - 0.5px);
+  left: 0;
+  right: 0;
+  border-top: 1px solid
+    var(
+      --panel-separator-color,
+      color-mix(in srgb, currentColor 25%, transparent)
+    );
+}
+
+#trustpanel-popup-connection {
   flex: none;
   max-width: 60%;
 }
 
-#status.failed {
-  font-weight: var(--font-weight-bold);
+#trustpanel-popup-connection.failed {
+  font-weight: var(--font-weight-bold, 700);
 }
 
 .nav::after {
@@ -128,21 +161,28 @@ body {
   -moz-context-properties: fill, fill-opacity;
   fill: currentColor;
   fill-opacity: 0.6;
-  margin-inline-start: var(--space-small);
+  margin-inline-start: var(--space-small, 0.5rem);
   display: flex;
 }
 
-.nav:disabled::after {
+/* Specific enough to beat Firefox's own arrow rule for disabled items */
+.PanelUI-subView .subviewbutton-nav.nav:disabled::after {
   content: none;
+}
+
+#main-body:empty {
+  display: none;
 }
 
 .panel-header {
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  min-height: calc(16px + 2 * 6px + 2 * var(--panel-separator-padding-inline));
-  padding: var(--panel-menuitem-margin-inline);
-  font-weight: var(--font-weight-semibold);
+  min-height: calc(
+    16px + 2 * 6px + 2 * var(--panel-separator-padding-inline, 8px)
+  );
+  padding: var(--panel-menuitem-margin-inline, 8px);
+  font-weight: var(--font-weight-semibold, 600);
 }
 
 .panel-header h1 {
@@ -164,7 +204,7 @@ body {
   margin: 0;
   padding: 6px;
   border: 0;
-  border-radius: var(--border-radius-small);
+  border-radius: var(--border-radius-small, 4px);
   background: none;
   color: inherit;
 }
@@ -177,13 +217,20 @@ body {
 }
 
 .back:hover {
-  background-color: var(--button-background-color-ghost-hover);
+  background-color: var(
+    --button-background-color-ghost-hover,
+    color-mix(in srgb, currentColor 7%, transparent)
+  );
 }
 
 hr {
   border: 0;
-  border-top: 1px solid var(--panel-separator-color);
-  margin: var(--panel-separator-padding);
+  border-top: 1px solid
+    var(
+      --panel-separator-color,
+      color-mix(in srgb, currentColor 25%, transparent)
+    );
+  margin: var(--panel-separator-padding, 4px 8px);
 }
 
 .panel-header + hr {
@@ -191,24 +238,27 @@ hr {
 }
 
 .panel-subview-body {
-  padding-block: var(--panel-subview-body-padding-block) 0;
+  padding-block: var(--panel-subview-body-padding-block, 8px) 0;
 }
 
 /* Content aligned with the panel's text, past the menu item padding */
 .indented {
-  margin-inline: var(--panel-menuitem-margin-inline);
-  padding-inline: var(--panel-menuitem-padding-inline);
+  margin-inline: var(--panel-menuitem-margin-inline, 8px);
+  padding-inline: var(--panel-menuitem-padding-inline, 8px);
 }
 
 dl {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--space-xsmall) var(--space-medium);
-  margin: var(--space-xsmall) 0 var(--space-small);
+  gap: var(--space-xsmall, 0.25rem) var(--space-medium, 0.75rem);
+  margin: var(--space-xsmall, 0.25rem) 0 var(--space-small, 0.5rem);
 }
 
 dt {
-  color: var(--text-color-deemphasized);
+  color: var(
+    --text-color-deemphasized,
+    color-mix(in srgb, currentColor 69%, transparent)
+  );
 }
 
 dd {
@@ -225,17 +275,17 @@ dd img {
 }
 
 h2 {
-  margin: var(--space-medium) 0 var(--space-xsmall);
+  margin: var(--space-medium, 0.75rem) 0 var(--space-xsmall, 0.25rem);
   font-size: inherit;
   font-weight: var(--font-weight-heading, 600);
 }
 
 .warning {
-  margin: var(--panel-menuitem-margin);
-  padding: var(--panel-menuitem-padding);
+  margin: var(--panel-menuitem-margin, 0 8px);
+  padding: var(--panel-menuitem-padding, 8px);
   white-space: preserve-breaks;
   background: light-dark(#f8d7da, #4a1c21);
-  border-radius: var(--border-radius-small);
+  border-radius: var(--border-radius-small, 4px);
   border: solid 1px light-dark(#dc3545, #e4606d);
   color: light-dark(#721c24, #f8d7da);
 }

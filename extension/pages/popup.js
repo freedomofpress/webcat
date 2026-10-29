@@ -42,7 +42,12 @@ function link(href, text = href) {
   if (!/^https?:$/.test(URL.parse(href)?.protocol)) {
     return el("span", text);
   }
-  return el("a", text, { href, target: "_blank", rel: "noreferrer" });
+  return el("a", text, {
+    href,
+    target: "_blank",
+    rel: "noreferrer",
+    class: "external",
+  });
 }
 
 const EXPLORER = "https://explore.webcat.tech/";
@@ -242,7 +247,7 @@ async function proofRows(stored) {
       if (url && index) {
         links.push(
           link(
-            `${url}/get-leaves/${index}/${index}`,
+            `${url}/get-leaves/${index}/${Number(index) + 1}`,
             `${i18n("logEntry")} ${new URL(url).hostname} #${index}`,
           ),
         );
@@ -313,8 +318,10 @@ async function originLinks(entry, stored, rows) {
       [i18n("validUntil"), when(stored.validUntil)],
     );
   }
-  // A tab created through the tabs API runs in a web process, where
-  // Firefox's JSON viewer renders the redirected data: URL
+  // Internal items first, external links last. A tab created through the
+  // tabs API runs in a web process, where Firefox's JSON viewer renders the
+  // redirected data: URL
+  const internal = [];
   for (const part of ["manifest", "enrollment"]) {
     const a = el("a", i18n(part), { href: "#" });
     a.addEventListener("click", (e) => {
@@ -325,11 +332,11 @@ async function originLinks(entry, stored, rows) {
         })
         .then(() => window.close());
     });
-    links.push(a);
+    internal.push(a);
   }
   const explorer = new URLSearchParams({ q: entry.fqdn, host: entry.fqdn });
   links.push(link(`${EXPLORER}?${explorer}`, i18n("explorer")));
-  return links;
+  return [...internal, ...links];
 }
 
 function indented(...children) {
@@ -374,9 +381,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   // status button on the right; details slide in from the right
   const errorPage = browser.runtime.getURL("pages/error.html");
   let host = URL.parse(tab?.url ?? "")?.hostname ?? "";
-  const status = document.getElementById("status");
-  const statusIcon = document.getElementById("status-icon");
-  const statusLabel = document.getElementById("status-label");
+  const status = document.getElementById("trustpanel-popup-connection");
+  const statusIcon = document.getElementById("trustpanel-connection-icon");
+  const statusLabel = document.getElementById("trustpanel-connection-label");
   const rows = [];
   const embedded = [];
   let icon = "webcat";
@@ -409,8 +416,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   } else if (title === i18n("webcatIsVerifying")) {
     label = i18n("statusVerifying");
   }
-  document.getElementById("host").textContent = host;
-  const favicon = document.getElementById("favicon");
+  document.getElementById("trustpanel-popup-host").textContent = host;
+  const favicon = document.getElementById("trustpanel-popup-icon");
   favicon.src =
     tab?.favIconUrl || "chrome://global/skin/icons/defaultFavicon.svg";
   favicon.addEventListener("error", () => {
