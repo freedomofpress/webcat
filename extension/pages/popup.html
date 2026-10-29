@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src chrome:; img-src chrome: 'self'; object-src 'none';"
+      content="default-src chrome:; img-src chrome: 'self' https: data:; object-src 'none';"
     />
     <meta name="color-scheme" content="light dark" />
     <link
@@ -15,10 +15,28 @@
     <script src="popup.js"></script>
   </head>
   <body>
-    <header class="panel-header">
-      <h1><span id="host"></span></h1>
-    </header>
-    <hr />
-    <main id="origins" class="panel-subview-body"></main>
+    <div id="views">
+      <section id="main" class="view">
+        <header id="header-row">
+          <div id="site">
+            <img id="favicon" alt="" />
+            <span id="host"></span>
+          </div>
+          <button id="status" class="subviewbutton nav" hidden>
+            <img id="status-icon" alt="" />
+            <span id="status-label"></span>
+          </button>
+        </header>
+        <div id="main-body" class="panel-subview-body"></div>
+      </section>
+      <section id="sub" class="view">
+        <header class="panel-header">
+          <button id="back" class="back" aria-label="Back"></button>
+          <h1><span id="sub-title"></span></h1>
+        </header>
+        <hr />
+        <div id="sub-body" class="panel-subview-body"></div>
+      </section>
+    </div>
   </body>
 </html>

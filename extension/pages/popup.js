@@ -279,18 +279,6 @@ const icon = (ok) =>
     alt: ok ? "✓" : "✗",
   });
 
-// The status row at the top, like Firefox's "Connection secure" row
-function connection(iconName, label, failed = false) {
-  const row = el("div", undefined, {
-    class: failed ? "connection failed" : "connection",
-  });
-  row.append(
-    el("img", undefined, { src: `../icons/${iconName}.SVG`, alt: "" }),
-    el("span", label),
-  );
-  return row;
-}
-
 // One row per embedded origin: host, tick or cross, version
 function embeddedRow(fqdn, stored, ok = true) {
   const value = el("span", fqdn);
@@ -299,8 +287,9 @@ function embeddedRow(fqdn, stored, ok = true) {
   return [i18n("embedded"), value];
 }
 
-async function renderOrigin(entry, stored, rows, after = []) {
-  const section = el("section", undefined, { class: "indented" });
+// Key/value rows, then a separator and the links, for one origin
+async function renderOrigin(entry, stored, rows) {
+  const frag = document.createDocumentFragment();
   const links = [];
   if (!stored) {
     rows.push([i18n("details"), i18n("unavailable")]);
@@ -325,12 +314,12 @@ async function renderOrigin(entry, stored, rows, after = []) {
       );
     }
   }
-  rows.push(...after);
+  const section = el("section", undefined, { class: "indented" });
   section.append(keyValueList(rows));
+  frag.append(section);
   if (!stored) {
-    return section;
+    return frag;
   }
-  const details = el("details");
   const linkList = el("div", undefined, { class: "links" });
   linkList.append(...links);
   // A tab created through the tabs API runs in a web process, where
@@ -348,9 +337,16 @@ async function renderOrigin(entry, stored, rows, after = []) {
   }
   const explorer = new URLSearchParams({ q: entry.fqdn, host: entry.fqdn });
   linkList.append(link(`${EXPLORER}?${explorer}`, i18n("explorer")));
-  details.append(el("summary", i18n("advanced")), linkList);
-  section.append(details);
-  return section;
+  frag.append(el("hr"), linkList);
+  return frag;
+}
+
+// Slides between the main view and the details view, like panelmultiview
+function show(id) {
+  const views = document.getElementById("views");
+  const view = document.getElementById(id);
+  views.style.height = `${view.offsetHeight}px`;
+  views.classList.toggle("sub", id === "sub");
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -365,26 +361,33 @@ document.addEventListener("DOMContentLoaded", async () => {
       const button = renderers[id].button(...warnings[id]);
       warning.prepend(button);
     }
-    document.body.prepend(warning);
+    document.getElementById("main").prepend(warning);
   }
 
-  const main = document.getElementById("origins");
   const origin = params.get("origin");
-  // Header with the host, a status row, then the indented key/value list:
-  // the shape of Firefox's identity panel
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   const title = tab?.id
     ? await browser.pageAction.getTitle({ tabId: tab.id })
     : "";
-  const rows = [];
-  const embedded = [];
+
+  // Header row like Firefox's trust panel: favicon and host on the left, the
+  // status button on the right; details slide in from the right
   const errorPage = browser.runtime.getURL("pages/error.html");
   let host = URL.parse(tab?.url ?? "")?.hostname ?? "";
-  let status;
+  const status = document.getElementById("status");
+  const statusIcon = document.getElementById("status-icon");
+  const statusLabel = document.getElementById("status-label");
+  const rows = [];
+  const embedded = [];
+  let icon = "webcat";
+  let label = i18n("statusNotCovered");
   if (origin) {
-    status = connection("webcat-ok", i18n("statusVerified"));
+    icon = "webcat-ok";
+    label = i18n("statusVerified");
   } else if (title === i18n("webcatVerificationFailed")) {
-    status = connection("webcat-error", i18n("statusFailed"), true);
+    icon = "webcat-error";
+    label = i18n("statusFailed");
+    status.classList.add("failed");
     // The error page carries the code and host in its fragment. In a frame,
     // the tab's own URL is the parent's, so look at every frame of the tab.
     const frames = tab?.id
@@ -404,43 +407,52 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
   } else if (title === i18n("webcatIsVerifying")) {
-    status = connection("webcat", i18n("statusVerifying"));
-  } else {
-    status = connection("webcat", i18n("statusNotCovered"));
+    label = i18n("statusVerifying");
   }
   document.getElementById("host").textContent = host;
-  main.append(status);
+  const favicon = document.getElementById("favicon");
+  favicon.src =
+    tab?.favIconUrl || "chrome://global/skin/icons/defaultFavicon.svg";
+  favicon.addEventListener("error", () => {
+    favicon.src = "chrome://global/skin/icons/defaultFavicon.svg";
+  });
+  statusIcon.src = `../icons/${icon}.SVG`;
+  statusLabel.textContent = label;
+  document.getElementById("sub-title").textContent = label;
+  status.hidden = false;
 
-  // Verified embedded origins: a row each in the main list, details below
+  // Verified embedded origins: a row each in the main view, details below
   const frames = params.getAll("frame").map((f) => JSON.parse(f));
   const framesStored = await Promise.all(frames.map(loadStored));
   frames.forEach((f, i) => embedded.push(embeddedRow(f.fqdn, framesStored[i])));
 
+  const mainBody = document.getElementById("main-body");
+  const subBody = document.getElementById("sub-body");
+  if (embedded.length > 0) {
+    const section = el("section", undefined, { class: "indented" });
+    section.append(keyValueList(embedded));
+    mainBody.append(section);
+  }
   if (origin) {
     const delegation = params.get("delegation");
     if (delegation) {
       rows.push([i18n("delegation"), delegation]);
     }
     const entry = JSON.parse(origin);
-    main.append(
-      await renderOrigin(entry, await loadStored(entry), rows, embedded),
-    );
-  } else if (rows.length + embedded.length > 0) {
+    subBody.append(await renderOrigin(entry, await loadStored(entry), rows));
+  } else if (rows.length > 0) {
     const section = el("section", undefined, { class: "indented" });
-    section.append(keyValueList([...rows, ...embedded]));
-    main.append(section);
+    section.append(keyValueList(rows));
+    subBody.append(section);
+  }
+  for (const [i, frame] of frames.entries()) {
+    const heading = el("section", undefined, { class: "indented" });
+    heading.append(el("h2", `${i18n("embedded")}: ${frame.fqdn}`));
+    subBody.append(heading, await renderOrigin(frame, framesStored[i], []));
   }
 
-  if (frames.length > 0) {
-    const details = el("details", undefined, { class: "indented" });
-    details.append(el("summary", i18n("embeddedDetails")));
-    for (const [i, frame] of frames.entries()) {
-      details.append(
-        await renderOrigin(frame, framesStored[i], [
-          [i18n("embedded"), frame.fqdn],
-        ]),
-      );
-    }
-    main.append(details);
-  }
+  status.disabled = subBody.childElementCount === 0;
+  status.addEventListener("click", () => show("sub"));
+  document.getElementById("back").addEventListener("click", () => show("main"));
+  show("main");
 });

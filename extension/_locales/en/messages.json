@@ -1,7 +1,4 @@
 {
-  "WEBCAT_advanced": {
-    "message": "Advanced"
-  },
   "WEBCAT_hideAdvanced": {
     "message": "Hide advanced"
   },
@@ -106,9 +103,6 @@
   },
   "WEBCAT_embedded": {
     "message": "Embedded"
-  },
-  "WEBCAT_embeddedDetails": {
-    "message": "Embedded details"
   },
   "WEBCAT_signedOn": {
     "message": "Signed on"
