@@ -165,9 +165,10 @@ body {
   display: flex;
 }
 
-/* Specific enough to beat Firefox's own arrow rule for disabled items */
-.PanelUI-subView .subviewbutton-nav.nav:disabled::after {
-  content: none;
+/* Firefox's arrow rule is a selector list with an ID in it, so a nested
+   ::after takes that specificity; only !important hides it when disabled */
+.nav:disabled::after {
+  content: none !important;
 }
 
 #main-body:empty {
