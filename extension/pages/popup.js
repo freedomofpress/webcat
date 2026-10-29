@@ -279,6 +279,18 @@ const icon = (ok) =>
     alt: ok ? "✓" : "✗",
   });
 
+// The status row at the top, like Firefox's "Connection secure" row
+function connection(iconName, label, failed = false) {
+  const row = el("div", undefined, {
+    class: failed ? "connection failed" : "connection",
+  });
+  row.append(
+    el("img", undefined, { src: `../icons/${iconName}.SVG`, alt: "" }),
+    el("span", label),
+  );
+  return row;
+}
+
 // One row per embedded origin: host, tick or cross, version
 function embeddedRow(fqdn, stored, ok = true) {
   const value = el("span", fqdn);
@@ -288,7 +300,7 @@ function embeddedRow(fqdn, stored, ok = true) {
 }
 
 async function renderOrigin(entry, stored, rows, after = []) {
-  const section = el("section");
+  const section = el("section", undefined, { class: "indented" });
   const links = [];
   if (!stored) {
     rows.push([i18n("details"), i18n("unavailable")]);
@@ -358,43 +370,46 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const main = document.getElementById("origins");
   const origin = params.get("origin");
-  // Leading rows: "Verification" with a tick, "not available", "in progress"
-  // or a cross plus "Error" rows with the code. The site is in the URL bar.
+  // Header with the host, a status row, then the indented key/value list:
+  // the shape of Firefox's identity panel
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   const title = tab?.id
     ? await browser.pageAction.getTitle({ tabId: tab.id })
     : "";
   const rows = [];
   const embedded = [];
+  const errorPage = browser.runtime.getURL("pages/error.html");
+  let host = URL.parse(tab?.url ?? "")?.hostname ?? "";
+  let status;
   if (origin) {
-    rows.push([i18n("verification"), icon(true)]);
+    status = connection("webcat-ok", i18n("statusVerified"));
   } else if (title === i18n("webcatVerificationFailed")) {
-    rows.push([i18n("verification"), icon(false)]);
+    status = connection("webcat-error", i18n("statusFailed"), true);
     // The error page carries the code and host in its fragment. In a frame,
     // the tab's own URL is the parent's, so look at every frame of the tab.
-    const errorPage = browser.runtime.getURL("pages/error.html");
     const frames = tab?.id
       ? await browser.webNavigation.getAllFrames({ tabId: tab.id })
       : [];
     for (const frame of frames ?? []) {
       if (!frame.url.startsWith(errorPage)) continue;
       const p = new URLSearchParams(new URL(frame.url).hash.slice(1));
-      const host = p.get("host") ?? "";
-      const where = frame.frameId === 0 ? "" : ` (${host})`;
-      rows.push([i18n("error"), `${p.get("code") ?? "UNKNOWN"}${where}`]);
-      if (frame.frameId !== 0)
-        embedded.push(embeddedRow(host, undefined, false));
+      const frameHost = p.get("host") ?? "";
+      const code = p.get("code") ?? "UNKNOWN";
+      if (frame.frameId === 0) {
+        host = frameHost;
+        rows.push([i18n("error"), code]);
+      } else {
+        rows.push([i18n("error"), `${code} (${frameHost})`]);
+        embedded.push(embeddedRow(frameHost, undefined, false));
+      }
     }
   } else if (title === i18n("webcatIsVerifying")) {
-    rows.push([i18n("verification"), i18n("verificationInProgress")]);
-  } else if (
-    title === i18n("webcatNotEnrolled") ||
-    title === i18n("webcatPartiallyVerified")
-  ) {
-    rows.push([i18n("verification"), i18n("verificationNotAvailable")]);
+    status = connection("webcat", i18n("statusVerifying"));
   } else {
-    rows.push([i18n("verification"), title]);
+    status = connection("webcat", i18n("statusNotCovered"));
   }
+  document.getElementById("host").textContent = host;
+  main.append(status);
 
   // Verified embedded origins: a row each in the main list, details below
   const frames = params.getAll("frame").map((f) => JSON.parse(f));
@@ -410,12 +425,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     main.append(
       await renderOrigin(entry, await loadStored(entry), rows, embedded),
     );
-  } else {
-    main.append(keyValueList([...rows, ...embedded]));
+  } else if (rows.length + embedded.length > 0) {
+    const section = el("section", undefined, { class: "indented" });
+    section.append(keyValueList([...rows, ...embedded]));
+    main.append(section);
   }
 
   if (frames.length > 0) {
-    const details = el("details");
+    const details = el("details", undefined, { class: "indented" });
     details.append(el("summary", i18n("embeddedDetails")));
     for (const [i, frame] of frames.entries()) {
       details.append(

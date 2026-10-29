@@ -36,7 +36,7 @@
     "message": "Log entry"
   },
   "WEBCAT_signersThreshold": {
-    "message": "at least $1 of the $2 keys registered for this site"
+    "message": "at least $1 of $2 registered keys"
   },
   "WEBCAT_detailsUnavailable": {
     "message": "Details unavailable"
@@ -83,17 +83,8 @@
   "WEBCAT_pinnedCA": {
     "message": "$1, the certificate authority pinned by this site"
   },
-  "WEBCAT_verification": {
-    "message": "Verification"
-  },
-  "WEBCAT_verificationNotAvailable": {
-    "message": "not available"
-  },
-  "WEBCAT_verificationInProgress": {
-    "message": "in progress"
-  },
   "WEBCAT_signersCount": {
-    "message": "$1 of the $2 keys registered for this site, $3 required"
+    "message": "$1 of $2 registered keys, $3 required"
   },
   "WEBCAT_witnessedBy": {
     "message": "$1, witnessed by $2"
@@ -124,5 +115,17 @@
   },
   "WEBCAT_validUntil": {
     "message": "Valid until"
+  },
+  "WEBCAT_statusVerified": {
+    "message": "Verified by WEBCAT"
+  },
+  "WEBCAT_statusNotCovered": {
+    "message": "Not covered by WEBCAT"
+  },
+  "WEBCAT_statusVerifying": {
+    "message": "Verifying…"
+  },
+  "WEBCAT_statusFailed": {
+    "message": "Verification failed"
   }
 }
