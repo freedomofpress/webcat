@@ -121,5 +121,8 @@
   },
   "WEBCAT_statusFailed": {
     "message": "Verification failed"
+  },
+  "WEBCAT_advanced": {
+    "message": "Advanced"
   }
 }

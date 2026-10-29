@@ -287,41 +287,32 @@ function embeddedRow(fqdn, stored, ok = true) {
   return [i18n("embedded"), value];
 }
 
-// Key/value rows, then a separator and the links, for one origin
-async function renderOrigin(entry, stored, rows) {
-  const frag = document.createDocumentFragment();
+// Fills rows with the origin's facts and returns its links for the details view
+async function originLinks(entry, stored, rows) {
   const links = [];
   if (!stored) {
     rows.push([i18n("details"), i18n("unavailable")]);
-  } else {
-    rows.push([i18n("version"), version(stored)]);
-    if (stored.enrollment) {
-      const [proof, logLinks] = await proofRows(stored);
-      rows.push(...proof);
-      links.push(...logLinks);
-      // Both systems set the expiry to the signing time plus max_age: the
-      // certificate's issue time for Sigstore, the median witness time for Sigsum
-      const signedOn = stored.validUntil - stored.enrollment.max_age;
-      const witnesses = stored.provenance?.witnesses;
-      rows.push(
-        [
-          i18n("signedOn"),
-          witnesses
-            ? i18n("witnessedBy", when(signedOn), witnesses)
-            : when(signedOn),
-        ],
-        [i18n("validUntil"), when(stored.validUntil)],
-      );
-    }
+    return links;
   }
-  const section = el("section", undefined, { class: "indented" });
-  section.append(keyValueList(rows));
-  frag.append(section);
-  if (!stored) {
-    return frag;
+  rows.push([i18n("version"), version(stored)]);
+  if (stored.enrollment) {
+    const [proof, logLinks] = await proofRows(stored);
+    rows.push(...proof);
+    links.push(...logLinks);
+    // Both systems set the expiry to the signing time plus max_age: the
+    // certificate's issue time for Sigstore, the median witness time for Sigsum
+    const signedOn = stored.validUntil - stored.enrollment.max_age;
+    const witnesses = stored.provenance?.witnesses;
+    rows.push(
+      [
+        i18n("signedOn"),
+        witnesses
+          ? i18n("witnessedBy", when(signedOn), witnesses)
+          : when(signedOn),
+      ],
+      [i18n("validUntil"), when(stored.validUntil)],
+    );
   }
-  const linkList = el("div", undefined, { class: "links" });
-  linkList.append(...links);
   // A tab created through the tabs API runs in a web process, where
   // Firefox's JSON viewer renders the redirected data: URL
   for (const part of ["manifest", "enrollment"]) {
@@ -333,12 +324,17 @@ async function renderOrigin(entry, stored, rows) {
       });
       window.close();
     });
-    linkList.append(a);
+    links.push(a);
   }
   const explorer = new URLSearchParams({ q: entry.fqdn, host: entry.fqdn });
-  linkList.append(link(`${EXPLORER}?${explorer}`, i18n("explorer")));
-  frag.append(el("hr"), linkList);
-  return frag;
+  links.push(link(`${EXPLORER}?${explorer}`, i18n("explorer")));
+  return links;
+}
+
+function indented(...children) {
+  const section = el("section", undefined, { class: "indented" });
+  section.append(...children);
+  return section;
 }
 
 // Slides between the main view and the details view, like panelmultiview
@@ -364,6 +360,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("main").prepend(warning);
   }
 
+  for (const e of document.querySelectorAll("[data-i18n]")) {
+    e.textContent = i18n(e.dataset.i18n);
+  }
   const origin = params.get("origin");
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   const title = tab?.id
@@ -418,37 +417,38 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   statusIcon.src = `../icons/${icon}.SVG`;
   statusLabel.textContent = label;
-  document.getElementById("sub-title").textContent = label;
   status.hidden = false;
 
-  // Verified embedded origins: a row each in the main view, details below
+  // Main view: the facts. Details view: the links, per origin.
   const frames = params.getAll("frame").map((f) => JSON.parse(f));
   const framesStored = await Promise.all(frames.map(loadStored));
   frames.forEach((f, i) => embedded.push(embeddedRow(f.fqdn, framesStored[i])));
 
   const mainBody = document.getElementById("main-body");
   const subBody = document.getElementById("sub-body");
-  if (embedded.length > 0) {
-    const section = el("section", undefined, { class: "indented" });
-    section.append(keyValueList(embedded));
-    mainBody.append(section);
-  }
   if (origin) {
     const delegation = params.get("delegation");
     if (delegation) {
       rows.push([i18n("delegation"), delegation]);
     }
     const entry = JSON.parse(origin);
-    subBody.append(await renderOrigin(entry, await loadStored(entry), rows));
-  } else if (rows.length > 0) {
-    const section = el("section", undefined, { class: "indented" });
-    section.append(keyValueList(rows));
-    subBody.append(section);
+    const links = await originLinks(entry, await loadStored(entry), rows);
+    const linkList = el("div", undefined, { class: "links" });
+    linkList.append(...links);
+    subBody.append(linkList);
+  }
+  if (rows.length + embedded.length > 0) {
+    mainBody.append(indented(keyValueList([...rows, ...embedded])));
   }
   for (const [i, frame] of frames.entries()) {
-    const heading = el("section", undefined, { class: "indented" });
-    heading.append(el("h2", `${i18n("embedded")}: ${frame.fqdn}`));
-    subBody.append(heading, await renderOrigin(frame, framesStored[i], []));
+    const frameRows = [];
+    const links = await originLinks(frame, framesStored[i], frameRows);
+    const linkList = el("div", undefined, { class: "links" });
+    linkList.append(...links);
+    subBody.append(
+      indented(el("h2", `${i18n("embedded")}: ${frame.fqdn}`)),
+      linkList,
+    );
   }
 
   status.disabled = subBody.childElementCount === 0;

@@ -4,11 +4,14 @@
    and a subview that slides in with a back button. Uses the design tokens
    Firefox ships. */
 
+/* 11px is the root font size of Firefox's chrome window, so rem-based tokens
+   resolve to the same pixels as in the panel; the text itself is the menu font */
 html {
-  font: menu;
+  font-size: 11px;
 }
 
 body {
+  font: menu;
   width: 30.81em;
   margin: 0;
   background-color: Menu;
@@ -49,7 +52,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-block-start: var(--space-small);
+  padding-block: var(--space-small);
   padding-inline-start: var(--space-large);
 }
 
@@ -57,13 +60,13 @@ body {
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: var(--space-small);
 }
 
 #favicon {
   width: 16px;
   height: 16px;
   flex: none;
+  margin-inline-end: var(--space-xsmall);
 }
 
 #host {
@@ -77,10 +80,12 @@ body {
 .links a {
   display: flex;
   align-items: center;
+  box-sizing: border-box;
+  min-height: 24px;
   margin: var(--panel-menuitem-margin);
   padding: var(--panel-menuitem-padding);
   border: 0;
-  border-radius: var(--border-radius-small);
+  border-radius: var(--border-radius-large);
   background: none;
   color: inherit;
   font: inherit;
@@ -101,7 +106,12 @@ body {
 .subviewbutton img {
   width: 16px;
   height: 16px;
-  margin-inline-end: 8px;
+  margin-inline-end: var(--space-xsmall);
+}
+
+/* The last item is the panel footer, with the menu items' inline margin below */
+.links a:last-child {
+  margin-bottom: var(--panel-menuitem-margin-inline);
 }
 
 #status {
@@ -176,8 +186,12 @@ hr {
   margin: var(--panel-separator-padding);
 }
 
+.panel-header + hr {
+  margin-top: 0;
+}
+
 .panel-subview-body {
-  padding-block: var(--panel-subview-body-padding-block);
+  padding-block: var(--panel-subview-body-padding-block) 0;
 }
 
 /* Content aligned with the panel's text, past the menu item padding */
