@@ -9,12 +9,14 @@ html {
   font-size: 11px;
 }
 
+/* Firefox colors the popup's panel from this background, so it must be the
+   arrow panels' own color token, with the system menu colors as fallback */
 body {
   font: menu;
   width: 30.81em;
   margin: 0;
-  background-color: Menu;
-  color: MenuText;
+  background-color: var(--panel-background-color, Menu);
+  color: var(--panel-text-color, MenuText);
   overflow: hidden;
 }
 
