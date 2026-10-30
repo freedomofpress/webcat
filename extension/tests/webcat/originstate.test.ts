@@ -6,10 +6,13 @@ vi.mock("../../src/browser/permissions", () => ({
   },
 }));
 
+import {
+  canonicalizeJCS,
+  canonicalizeOLPC,
+} from "@freedomofpress/crypto-browser";
 import { TrustedRoot } from "@freedomofpress/sigstore-browser";
 
 import { defaults } from "../../src/config";
-import { canonicalize } from "../../src/webcat/canonicalize";
 import { WebcatDatabase } from "../../src/webcat/db";
 import { stringToUint8Array } from "../../src/webcat/encoding";
 import {
@@ -105,11 +108,7 @@ function makeDummyFetcher(): BundleFetcher {
 async function computeEnrollmentHash(
   enrollment: Enrollment,
 ): Promise<Uint8Array> {
-  const canonical = canonicalize(enrollment);
-  if (canonical === null) {
-    throw new Error("failed to canonicalize test enrollment");
-  }
-  const bytes = stringToUint8Array(canonical);
+  const bytes = stringToUint8Array(canonicalizeJCS(enrollment));
   const digest = await SHA256(bytes);
   return digest instanceof Uint8Array ? digest : new Uint8Array(digest);
 }
@@ -172,6 +171,71 @@ describe("OriginState.verifyEnrollment", () => {
 
     expect(state.isFailed()).toBe(true);
     expect(state.error?.code).toBe(WebcatErrorCode.Enrollment.MISMATCH);
+  });
+
+  // Spec server.md §1.0: enrollments hash under RFC 8785 only, with or
+  // without enrollment_schema. A raw newline is where OLPC would differ.
+  const hashWith = async (
+    encode: (e: object) => string,
+    e: SigsumEnrollment,
+  ): Promise<Uint8Array> =>
+    new Uint8Array(await SHA256(stringToUint8Array(encode(e))));
+
+  it("accepts a legacy enrollment committed under RFC 8785", async () => {
+    const legacy = {
+      ...enrollment,
+      logs: { log1: "https://log.example.com\n" },
+    };
+    const legacyState = new OriginState(
+      db,
+      makeDummyFetcher(),
+      await hashWith(canonicalizeJCS, legacy),
+      cachePartition,
+    );
+
+    await legacyState.verifyEnrollment(legacy);
+
+    expect(legacyState.isEnrollmentVerified()).toBe(true);
+  });
+
+  it("rejects an enrollment older than the configured minimum schema", async () => {
+    const fetcher = new BundleFetcher("https://example.com", {
+      ...defaults,
+      minEnrollmentSchema: 1,
+    });
+    const minState = new OriginState(
+      db,
+      fetcher,
+      await hashWith(canonicalizeJCS, enrollment),
+      cachePartition,
+    );
+
+    await minState.verifyEnrollment(enrollment);
+
+    expect(minState.error?.code).toBe(
+      WebcatErrorCode.Enrollment.SCHEMA_DEPRECATED,
+    );
+  });
+
+  it("rejects an enrollment committed under OLPC canonical JSON", async () => {
+    const { cas_url: _, ...rest } = enrollment;
+    const versioned: SigsumEnrollment = {
+      ...rest,
+      enrollment_schema: 1,
+      logs: { log1: "https://log.example.com\n" },
+    };
+    const versionedState = new OriginState(
+      db,
+      makeDummyFetcher(),
+      await hashWith(canonicalizeOLPC, versioned),
+      cachePartition,
+    );
+
+    await versionedState.verifyEnrollment(versioned);
+
+    expect(versionedState.error?.code).toBe(
+      WebcatErrorCode.Enrollment.MISMATCH,
+    );
   });
 
   it("fails when signers is not an array", async () => {
@@ -446,7 +510,18 @@ describe("OriginState.verifyManifest", () => {
   });
 
   it("fails when fallback_hashes is malformed", async () => {
-    const badManifest = { ...manifest, fallback_hashes: ["/missing.html"] };
+    // fallback_hashes exists from manifest_schema 1 on, without the legacy fields.
+    const {
+      app: _app,
+      default_index: _i,
+      default_fallback: _f,
+      ...rest
+    } = manifest;
+    const badManifest = {
+      ...rest,
+      manifest_schema: 1 as const,
+      fallback_hashes: ["/missing.html"],
+    };
 
     await state.verifyManifest(badManifest, signatures);
 
@@ -633,7 +708,7 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
     await state.verifyEnrollment(enrollment);
 
     const manifest: Manifest = {
-      app: "test-app",
+      manifest_schema: 1,
       version: "1.0.0",
       default_csp: defaultCSP,
       extra_csp: {

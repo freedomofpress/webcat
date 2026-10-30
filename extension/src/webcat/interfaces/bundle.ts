@@ -6,6 +6,8 @@ export enum EnrollmentTypes {
 }
 
 export interface BaseEnrollment {
+  /** Absent on enrollments that predate versioning (spec server.md). */
+  enrollment_schema?: 1;
   max_age: number;
 }
 
@@ -14,7 +16,8 @@ export interface SigsumEnrollment extends BaseEnrollment {
   signers: string[];
   threshold: number;
   policy: string;
-  cas_url: string;
+  /** @deprecated Only in enrollments without `enrollment_schema`. */
+  cas_url?: string;
   logs: Record<string, string>;
 }
 
@@ -27,7 +30,14 @@ export interface SigstoreEnrollment extends BaseEnrollment {
 export type Enrollment = SigsumEnrollment | SigstoreEnrollment;
 
 export interface Manifest {
-  app: string;
+  /** Absent on manifests that predate versioning (spec manifest.md). */
+  manifest_schema?: 1;
+  /** @deprecated Replaced by `source`; only in manifests without `manifest_schema`. */
+  app?: string;
+  /** Git repository the application is built from; auditors rebuild from it. */
+  source?: string;
+  /** Release archive URL template with `${version}`; auditors fetch it. */
+  artifact?: string;
   version: string;
   default_csp: string;
   extra_csp: {

@@ -24,7 +24,7 @@ import {
   RawPublicKey,
 } from "@freedomofpress/sigsum/dist/types";
 
-import { canonicalize } from "./canonicalize";
+import { canonicalForm } from "./canonicalize";
 import { base64UrlToUint8Array, stringToUint8Array } from "./encoding";
 import {
   Manifest,
@@ -35,6 +35,12 @@ import {
 } from "./interfaces/bundle";
 import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { parseContentSecurityPolicy } from "./parsers";
+import {
+  manifestSchema,
+  sigstoreEnrollmentSchema,
+  sigsumEnrollmentSchema,
+  validate,
+} from "./schema";
 
 /** The CSP directives WEBCAT restricts, plus child-src, read to decide whether worker-src is required. */
 export enum CspDirective {
@@ -273,149 +279,35 @@ export async function witnessTimestampsFromCosignedTreeHead(
   return timestamps;
 }
 
+// The field rules live in schema.ts, one table per document.
 export function validateSigsumEnrollment(
   enrollment: SigsumEnrollment,
+  minSchema = 0,
 ): WebcatError | null {
-  if (typeof enrollment.policy !== "string") {
-    return new WebcatError(WebcatErrorCode.Enrollment.POLICY_MALFORMED);
-  }
-
-  if (enrollment.policy.length === 0 || enrollment.policy.length > 8192) {
-    return new WebcatError(WebcatErrorCode.Enrollment.POLICY_LENGTH);
-  }
-
-  if (!Array.isArray(enrollment.signers)) {
-    return new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_MALFORMED);
-  }
-
-  if (enrollment.signers.length === 0) {
-    return new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_EMPTY);
-  }
-
-  for (const key of enrollment.signers) {
-    if (typeof key !== "string") {
-      return new WebcatError(WebcatErrorCode.Enrollment.SIGNERS_KEY_MALFORMED, [
-        String(key),
-      ]);
-    }
-  }
-
-  if (
-    typeof enrollment.threshold !== "number" ||
-    !Number.isInteger(enrollment.threshold) ||
-    enrollment.threshold < 1
-  ) {
-    return new WebcatError(WebcatErrorCode.Enrollment.THRESHOLD_MALFORMED);
-  }
-
-  if (enrollment.threshold > enrollment.signers.length) {
-    return new WebcatError(WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE);
-  }
-
-  if (
-    typeof enrollment.max_age !== "number" ||
-    !Number.isFinite(enrollment.max_age)
-  ) {
-    return new WebcatError(WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED);
-  }
-
-  if (
-    typeof enrollment.logs !== "object" ||
-    enrollment.logs === null ||
-    Object.keys(enrollment.logs).length === 0
-  ) {
-    return new WebcatError(WebcatErrorCode.Enrollment.LOGS_MALFORMED);
-  }
-
-  for (const [pubkey, url] of Object.entries(enrollment.logs)) {
-    if (typeof pubkey !== "string" || typeof url !== "string") {
-      return new WebcatError(WebcatErrorCode.Enrollment.LOGS_MALFORMED);
-    }
-  }
-
-  return null;
+  return validate(enrollment, sigsumEnrollmentSchema, minSchema);
 }
 
 export function validateSigstoreEnrollment(
   enrollment: SigstoreEnrollment,
+  minSchema = 0,
 ): WebcatError | null {
-  // Trusted root is mandatory
-  if (!enrollment.trusted_root) {
-    return new WebcatError(WebcatErrorCode.Enrollment.TRUSTED_ROOT_MISSING);
-  }
-
-  if (
-    typeof enrollment.claims !== "object" ||
-    enrollment.claims === null ||
-    Array.isArray(enrollment.claims)
-  ) {
-    return new WebcatError(WebcatErrorCode.Enrollment.CLAIMS_MISSING);
-  }
-
-  if (Object.keys(enrollment.claims).length < 1) {
-    return new WebcatError(WebcatErrorCode.Enrollment.CLAIMS_EMPTY);
-  }
-
-  for (const [oid, value] of Object.entries(enrollment.claims)) {
-    if (typeof oid !== "string" || oid.length < 1) {
-      return new WebcatError(WebcatErrorCode.Enrollment.CLAIMS_MALFORMED);
-    }
-    if (typeof value !== "string" || value.length < 1) {
-      return new WebcatError(WebcatErrorCode.Enrollment.CLAIMS_MALFORMED, [
-        String(oid),
-      ]);
-    }
-  }
-
-  if (
-    typeof enrollment.max_age !== "number" ||
-    !Number.isFinite(enrollment.max_age)
-  ) {
-    return new WebcatError(WebcatErrorCode.Enrollment.MAX_AGE_MALFORMED);
-  }
-
-  return null;
+  return validate(enrollment, sigstoreEnrollmentSchema, minSchema);
 }
 
-// File hashes are SHA-256 digests in unpadded base64url, as response.ts
-// decodes them. The last character carries two padding bits, which must be
-// zero for the encoding to be canonical.
-const SHA256_BASE64URL = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
+export function validateManifest(
+  manifest: Manifest,
+  minSchema = 0,
+): WebcatError | null {
+  return validate(manifest, manifestSchema, minSchema);
+}
 
-export function validateManifest(manifest: Manifest): WebcatError | null {
-  if (!manifest.files || Object.keys(manifest.files).length < 1) {
-    return new WebcatError(WebcatErrorCode.Manifest.FILES_MISSING);
+// The bytes a manifest was signed over; null for one that cannot be encoded.
+function signedBytes(manifest: Manifest): Uint8Array | null {
+  try {
+    return stringToUint8Array(canonicalForm(manifest));
+  } catch {
+    return null;
   }
-
-  for (const [path, hash] of Object.entries(manifest.files)) {
-    if (!SHA256_BASE64URL.test(hash)) {
-      return new WebcatError(WebcatErrorCode.Manifest.FILES_MALFORMED, [path]);
-    }
-  }
-
-  if (!manifest.default_csp) {
-    return new WebcatError(WebcatErrorCode.Manifest.DEFAULT_CSP_MISSING);
-  }
-
-  // Auditors find each fallback at /.well-known/webcat/<hash>; that is for the
-  // CLI or other auditing tools.
-  if (
-    manifest.fallback_hashes !== undefined &&
-    !(
-      Array.isArray(manifest.fallback_hashes) &&
-      manifest.fallback_hashes.every(
-        (h) => typeof h === "string" && SHA256_BASE64URL.test(h),
-      )
-    )
-  ) {
-    return new WebcatError(WebcatErrorCode.Manifest.FALLBACK_HASHES_MALFORMED);
-  }
-
-  if (!manifest.wasm) {
-    return new WebcatError(WebcatErrorCode.Manifest.WASM_MISSING);
-  }
-
-  return null;
 }
 
 export async function verifySigsumManifest(
@@ -432,13 +324,10 @@ export async function verifySigsumManifest(
   ) {
     return new WebcatError(WebcatErrorCode.Bundle.SIGNATURES_MISSING);
   }
-  // canonicalize returns null for a manifest it cannot encode.
-  const canonical = canonicalize(manifest);
-  if (canonical === null) {
+  const canonicalized = signedBytes(manifest);
+  if (canonicalized === null) {
     return new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED);
   }
-  const canonicalized = stringToUint8Array(canonical);
-
   // The purpose of cloning the original list of signers is to have logic to ensure
   // that each signers can at most sign once. Since we are dealing with a lot of
   // transformations (hex, b64, etc) and any of these can have malleability, we want to
@@ -690,13 +579,10 @@ export async function verifySigstoreManifest(
     return new WebcatError(WebcatErrorCode.Bundle.SIGNATURES_MISSING);
   }
 
-  // canonicalize returns null for a manifest it cannot encode.
-  const canonical = canonicalize(manifest);
-  if (canonical === null) {
+  const canonicalized = signedBytes(manifest);
+  if (canonicalized === null) {
     return new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED);
   }
-  const canonicalized = stringToUint8Array(canonical);
-
   let verified = false;
   const errors: string[] = [];
 

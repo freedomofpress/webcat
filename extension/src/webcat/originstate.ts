@@ -1,4 +1,6 @@
-import { canonicalize } from "./canonicalize";
+import { canonicalizeJCS } from "@freedomofpress/crypto-browser";
+
+import { hasSchema } from "./canonicalize";
 import { stringToUint8Array } from "./encoding";
 import {
   Bundle,
@@ -39,14 +41,20 @@ export type BundleFetcherConfig = {
   bundlePath: string;
   /** The path to `bundle-prev.json`. */
   bundlePrevPath: string;
+  /** Oldest `enrollment_schema` accepted; 0 also accepts enrollments without the field. */
+  minEnrollmentSchema: number;
+  /** Oldest `manifest_schema` accepted; 0 also accepts manifests without the field. */
+  minManifestSchema: number;
 };
 
 /** @internal */
 export class BundleFetcher {
   readonly current: BundleFetch;
   readonly previous: BundleFetch;
+  readonly config: BundleFetcherConfig;
 
   constructor(base: string, config: BundleFetcherConfig) {
+    this.config = config;
     this.current = {
       promise: fetch(`${base}${config.bundlePath}`, {
         cache: "no-store",
@@ -197,13 +205,17 @@ export class OriginState implements IOriginState {
     );
   }
 
-  // Hashes an enrollment; null if it can't be canonicalized.
-  async #enrollmentHash(enrollment: Enrollment): Promise<Uint8Array | null> {
-    const canonicalized = canonicalize(enrollment);
-    if (canonicalized === null) {
-      return null;
+  // Whether the enrollment hashes to the committed value under RFC 8785
+  // (spec server.md §1.0); false if it cannot be encoded.
+  async #enrollmentMatches(enrollment: Enrollment): Promise<boolean> {
+    let canonical: string;
+    try {
+      canonical = canonicalizeJCS(enrollment);
+    } catch {
+      return false;
     }
-    return new Uint8Array(await SHA256(stringToUint8Array(canonicalized)));
+    const hash = new Uint8Array(await SHA256(stringToUint8Array(canonical)));
+    return arraysEqual(this.enrollment_hash, hash);
   }
 
   // This functiont ries to verify the enrollment information against the value in the local list
@@ -227,13 +239,8 @@ export class OriginState implements IOriginState {
       enrollment = this.fetcher.current.value.enrollment;
     }
 
-    // An enrollment that does not canonicalize counts as a non-match.
-    const canonicalized_hash = await this.#enrollmentHash(enrollment);
-
     // If it doesn't match, stop early
-    const match =
-      canonicalized_hash !== null &&
-      arraysEqual(this.enrollment_hash, canonicalized_hash);
+    const match = await this.#enrollmentMatches(enrollment);
     // In this case, we already tried both bundles and we should bail
     // Or we got direct enrollment passed, and we shpuldn't fallback automatically
     if (match) {
@@ -246,13 +253,8 @@ export class OriginState implements IOriginState {
       }
       enrollment = this.fetcher.previous.value.enrollment;
 
-      const canonicalized_hash_prev = await this.#enrollmentHash(enrollment);
-
       // If this also fails it's fatal
-      if (
-        canonicalized_hash_prev === null ||
-        !arraysEqual(this.enrollment_hash, canonicalized_hash_prev)
-      ) {
+      if (!(await this.#enrollmentMatches(enrollment))) {
         return this.#fail(new WebcatError(WebcatErrorCode.Enrollment.MISMATCH));
       }
       this.#bundle = this.fetcher.previous.value;
@@ -261,9 +263,15 @@ export class OriginState implements IOriginState {
     let err: WebcatError | null = null;
 
     if (enrollment.type === EnrollmentTypes.Sigsum) {
-      err = validateSigsumEnrollment(enrollment);
+      err = validateSigsumEnrollment(
+        enrollment,
+        this.fetcher.config.minEnrollmentSchema,
+      );
     } else if (enrollment.type === EnrollmentTypes.Sigstore) {
-      err = validateSigstoreEnrollment(enrollment);
+      err = validateSigstoreEnrollment(
+        enrollment,
+        this.fetcher.config.minEnrollmentSchema,
+      );
     } else {
       err = new WebcatError(WebcatErrorCode.Enrollment.TYPE_INVALID);
     }
@@ -278,9 +286,6 @@ export class OriginState implements IOriginState {
     //}
 
     // we probably don't care about validating it in the client as it is useful for monitoring
-    //if (typeof enrollment.cas_url !== "string") {
-    //  return fail("cas_url must be a string");
-    //}
 
     // TODO: we currently use the orginal raw enrollment data structure
     // However we should import signing keys once as cryptokeys and
@@ -341,25 +346,30 @@ export class OriginState implements IOriginState {
       return this.#fail(verify_result);
     }
 
-    // TODO: drop a few months after release, with the two deprecated Manifest
-    // fields. Legacy default_index/default_fallback manifests, rewritten to
-    // directory keys and fallback_hashes (#263)
-    if (manifest.default_index) {
-      const suffix = "/" + manifest.default_index;
-      for (const path of Object.keys(manifest.files)) {
-        if (path.endsWith(suffix)) {
-          manifest.files[path.slice(0, 1 - suffix.length)] ??=
-            manifest.files[path];
-        }
-      }
-    }
-    if (manifest.default_fallback && !manifest.fallback_hashes) {
-      manifest.fallback_hashes = [manifest.files[manifest.default_fallback]];
-    }
-
-    const format_error = validateManifest(manifest);
+    const format_error = validateManifest(
+      manifest,
+      this.fetcher.config.minManifestSchema,
+    );
     if (format_error) {
       return this.#fail(format_error);
+    }
+
+    // Manifests without manifest_schema carry default_index/default_fallback,
+    // rewritten to directory keys and fallback_hashes (#263). Versioned
+    // manifests must not carry them; validateManifest rejects them.
+    if (!hasSchema(manifest)) {
+      if (manifest.default_index) {
+        const suffix = "/" + manifest.default_index;
+        for (const path of Object.keys(manifest.files)) {
+          if (path.endsWith(suffix)) {
+            manifest.files[path.slice(0, 1 - suffix.length)] ??=
+              manifest.files[path];
+          }
+        }
+      }
+      if (manifest.default_fallback) {
+        manifest.fallback_hashes = [manifest.files[manifest.default_fallback]];
+      }
     }
 
     // Validate the default CSP
