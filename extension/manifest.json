@@ -50,6 +50,7 @@
       "128": "icons/webcat.SVG"
     },
     "default_title": "__MSG_WEBCAT_webcatNotEnrolled__",
+    "default_popup": "pages/popup.html",
     "show_matches": ["*://*/*"]
   },
   "default_locale": "en"

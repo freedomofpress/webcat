@@ -217,10 +217,11 @@ export class ResponseValidator {
     if (details.type === "main_frame") {
       this.#ui.showOKIcon(
         details.tabId,
+        details.state,
         details.state.pendingOrigin.delegation,
       );
     } else if (details.type === "sub_frame") {
-      this.#ui.showPartialIcon(details.tabId);
+      this.#ui.showPartialIcon(details.tabId, details.state);
     }
   }
 
@@ -471,9 +472,13 @@ export class ResponseValidator {
       // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
       filter.close();
       if (details.type === "main_frame") {
-        this.#ui.showOKIcon(details.tabId, originState.delegation);
+        this.#ui.showOKIcon(
+          details.tabId,
+          details.state,
+          originState.delegation,
+        );
       } else if (details.type === "sub_frame") {
-        this.#ui.showPartialIcon(details.tabId);
+        this.#ui.showPartialIcon(details.tabId, details.state);
       }
       // Redirect the main frame to an error page
     };

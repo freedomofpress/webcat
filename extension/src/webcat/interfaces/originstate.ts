@@ -12,6 +12,11 @@ export type OriginStateObject = {
   status: "verified_manifest";
   enrollment_hash: string;
   manifest: Manifest;
+  // Shown by the popup
+  enrollment?: Enrollment;
+  signatures?: SigsumSignatures | SigstoreSignatures;
+  /** Identity and Fulcio extensions of the Sigstore certificate that passed. */
+  provenance?: Record<string, string>;
   delegation?: string;
   validUntil: number;
 };

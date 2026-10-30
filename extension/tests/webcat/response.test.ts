@@ -83,6 +83,7 @@ describe("ResponseValidator.validateHeaders", () => {
     ).toHaveBeenCalledExactlyOnceWith("policy", "/");
     expect(ui.showOKIcon).toHaveBeenCalledExactlyOnceWith(
       details.tabId,
+      details.state,
       undefined,
     );
   });
@@ -95,7 +96,10 @@ describe("ResponseValidator.validateHeaders", () => {
     const result = await rv.validateHeaders(details);
     expect(result).toBeUndefined();
     expect(ui.showOKIcon).not.toHaveBeenCalled();
-    expect(ui.showPartialIcon).toHaveBeenCalledExactlyOnceWith(details.tabId);
+    expect(ui.showPartialIcon).toHaveBeenCalledExactlyOnceWith(
+      details.tabId,
+      details.state,
+    );
   });
 
   it("verifies the enrollment and manifest when in the request_sent state", async () => {
@@ -116,6 +120,7 @@ describe("ResponseValidator.validateHeaders", () => {
     ).toHaveBeenCalledExactlyOnceWith("policy", "/");
     expect(ui.showOKIcon).toHaveBeenCalledExactlyOnceWith(
       details.tabId,
+      details.state,
       undefined,
     );
   });
@@ -141,6 +146,7 @@ describe("ResponseValidator.validateHeaders", () => {
     ).toHaveBeenCalledExactlyOnceWith("policy", "/");
     expect(ui.showOKIcon).toHaveBeenCalledExactlyOnceWith(
       details.tabId,
+      details.state,
       undefined,
     );
   });
@@ -543,6 +549,9 @@ describe("ResponseValidator.validateContent", () => {
     await filter.onstop?.();
     expect(filter.write).toHaveBeenCalledExactlyOnceWith(data);
     expect(ui.showOKIcon).not.toHaveBeenCalled();
-    expect(ui.showPartialIcon).toHaveBeenCalledExactlyOnceWith(123);
+    expect(ui.showPartialIcon).toHaveBeenCalledExactlyOnceWith(
+      123,
+      details.state,
+    );
   });
 });

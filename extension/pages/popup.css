@@ -1,16 +1,300 @@
+/* The popup carries the ids and classes of Firefox's trust panel and loads
+   Firefox's panel stylesheets after this one, so their rules apply and follow
+   the running version. The rules here are the fallback: the same layout with
+   the values measured in Firefox 158, using the design tokens it ships. */
+
+/* 11px is the root font size of Firefox's chrome window, so rem-based tokens
+   resolve to the same pixels as in the panel; the text itself is the menu font */
+html {
+  font-size: 11px;
+}
+
+/* Firefox colors the popup's panel from this background, so it must be the
+   arrow panels' own color token, with the system menu colors as fallback */
+body {
+  font: menu;
+  width: 30.81em;
+  margin: 0;
+  background-color: var(--panel-background-color, Menu);
+  color: var(--panel-text-color, MenuText);
+  overflow: hidden;
+}
+
+/* The two views are stacked; the inactive one is translated out of the clipped
+   container, which follows the active view's height */
+#views {
+  position: relative;
+  overflow: hidden;
+  transition: height var(--panelui-subview-transition-duration, 150ms);
+}
+
+.view {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  transition: transform var(--panelui-subview-transition-duration, 150ms)
+    var(--animation-easing-function, cubic-bezier(0.07, 0.95, 0, 1));
+}
+
+#sub {
+  transform: translateX(100%);
+}
+
+#views.sub #main {
+  transform: translateX(-100%);
+}
+
+#views.sub #sub {
+  transform: translateX(0);
+}
+
+#trustpanel-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: var(--space-small, 0.5rem);
+  padding-inline-start: var(--space-large, 1rem);
+}
+
+#trustpanel-popup-host-wrapper {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+#trustpanel-popup-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-inline-end: var(--space-xsmall, 0.25rem);
+}
+
+#trustpanel-popup-host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Panel menu items: the status button, the back button and the links */
+.subviewbutton,
+.links a {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 24px;
+  margin: var(--panel-menuitem-margin, 0 8px);
+  padding: var(--panel-menuitem-padding, 8px);
+  border: 0;
+  border-radius: var(--border-radius-large, 16px);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: none;
+  text-align: start;
+}
+
+.subviewbutton:enabled:hover,
+.links a:hover {
+  background-color: var(
+    --button-background-color-ghost-hover,
+    color-mix(in srgb, currentColor 7%, transparent)
+  );
+}
+
+.subviewbutton:enabled:active,
+.links a:active {
+  background-color: var(
+    --button-background-color-ghost-active,
+    color-mix(in srgb, currentColor 14%, transparent)
+  );
+}
+
+.subviewbutton img {
+  width: 16px;
+  height: 16px;
+  margin-inline-end: var(--space-xsmall, 0.25rem);
+}
+
+/* The last item is the panel footer, with the menu items' inline margin below */
+.links a:last-child {
+  margin-bottom: var(--panel-menuitem-margin-inline, 8px);
+}
+
+/* External links open a site: mark them and keep them below the others */
+.links a.external::after {
+  content: url("chrome://global/skin/icons/open-in-new.svg");
+  -moz-context-properties: fill, fill-opacity;
+  fill: currentColor;
+  fill-opacity: 0.6;
+  margin-inline-start: var(--space-small, 0.5rem);
+  display: flex;
+}
+
+.links a:not(.external) + a.external {
+  margin-top: var(--space-small, 0.5rem);
+  position: relative;
+}
+
+.links a:not(.external) + a.external::before {
+  content: "";
+  position: absolute;
+  top: calc(-1 * var(--space-small, 0.5rem) / 2 - 0.5px);
+  left: 0;
+  right: 0;
+  border-top: 1px solid
+    var(
+      --panel-separator-color,
+      color-mix(in srgb, currentColor 25%, transparent)
+    );
+}
+
+#trustpanel-popup-connection {
+  flex: none;
+  max-width: 60%;
+}
+
+#trustpanel-popup-connection.failed {
+  font-weight: var(--font-weight-bold, 700);
+}
+
+.nav::after {
+  content: url("chrome://global/skin/icons/arrow-right.svg");
+  -moz-context-properties: fill, fill-opacity;
+  fill: currentColor;
+  fill-opacity: 0.6;
+  margin-inline-start: var(--space-small, 0.5rem);
+  display: flex;
+}
+
+/* Firefox's arrow rule is a selector list with an ID in it, so a nested
+   ::after takes that specificity; only !important hides it when disabled */
+.nav:disabled::after {
+  content: none !important;
+}
+
+#main-body:empty {
+  display: none;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: calc(
+    16px + 2 * 6px + 2 * var(--panel-separator-padding-inline, 8px)
+  );
+  padding: var(--panel-menuitem-margin-inline, 8px);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+.panel-header h1 {
+  flex: auto;
+  margin: 0;
+  /* Centered in the header, offset for the back button's width */
+  margin-inline-end: calc(16px + 2 * 6px);
+  font-size: inherit;
+  font-weight: inherit;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.back {
+  width: calc(16px + 2 * 6px);
+  height: calc(16px + 2 * 6px);
+  margin: 0;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--border-radius-small, 4px);
+  background: none;
+  color: inherit;
+}
+
+.back::before {
+  content: url("chrome://global/skin/icons/arrow-left.svg");
+  -moz-context-properties: fill;
+  fill: currentColor;
+  display: flex;
+}
+
+.back:hover {
+  background-color: var(
+    --button-background-color-ghost-hover,
+    color-mix(in srgb, currentColor 7%, transparent)
+  );
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid
+    var(
+      --panel-separator-color,
+      color-mix(in srgb, currentColor 25%, transparent)
+    );
+  margin: var(--panel-separator-padding, 4px 8px);
+}
+
+.panel-header + hr {
+  margin-top: 0;
+}
+
+.panel-subview-body {
+  padding-block: var(--panel-subview-body-padding-block, 8px) 0;
+}
+
+/* Content aligned with the panel's text, past the menu item padding */
+.indented {
+  margin-inline: var(--panel-menuitem-margin-inline, 8px);
+  padding-inline: var(--panel-menuitem-padding-inline, 8px);
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-xsmall, 0.25rem) var(--space-medium, 0.75rem);
+  margin: var(--space-xsmall, 0.25rem) 0 var(--space-small, 0.5rem);
+}
+
+dt {
+  color: var(
+    --text-color-deemphasized,
+    color-mix(in srgb, currentColor 69%, transparent)
+  );
+}
+
+dd {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+dd img {
+  width: 16px;
+  height: 16px;
+  vertical-align: text-bottom;
+}
+
+h2 {
+  margin: var(--space-medium, 0.75rem) 0 var(--space-xsmall, 0.25rem);
+  font-size: inherit;
+  font-weight: var(--font-weight-heading, 600);
+}
+
 .warning {
-  margin: 2px;
+  margin: var(--panel-menuitem-margin, 0 8px);
+  padding: var(--panel-menuitem-padding, 8px);
   white-space: preserve-breaks;
-  background: #f8d7da;
-  border-radius: 7px;
-  border: solid 1px #dc3545;
-  color: #721c24;
-  padding: 0.5em 0.8em;
+  background: light-dark(#f8d7da, #4a1c21);
+  border-radius: var(--border-radius-small, 4px);
+  border: solid 1px light-dark(#dc3545, #e4606d);
+  color: light-dark(#721c24, #f8d7da);
 }
 
 .warning button {
   float: right;
-  color: #721c24;
+  color: inherit;
   margin-left: 2em;
-  min-width: 0;
 }

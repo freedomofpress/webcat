@@ -4,11 +4,62 @@
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src chrome:; img-src chrome: 'self'; object-src 'none';"
+      content="default-src chrome:; img-src chrome: 'self' https: data:; object-src 'none';"
     />
-    <link rel="stylesheet" href="chrome://global/skin/in-content/common.css" />
+    <meta name="color-scheme" content="light dark" />
+    <link
+      rel="stylesheet"
+      href="chrome://global/skin/design-system/tokens-platform.css"
+    />
     <link rel="stylesheet" href="popup.css" />
+    <!-- Firefox's own panel styles, keyed on the same ids and classes as its
+         trust panel. They win over popup.css where present and track the
+         running version; popup.css is the fallback if they ever go away. -->
+    <link
+      rel="stylesheet"
+      href="chrome://browser/skin/customizableui/panelUI-shared.css"
+    />
+    <link
+      rel="stylesheet"
+      href="chrome://browser/skin/controlcenter/panel.css"
+    />
     <script src="popup.js"></script>
   </head>
-  <body></body>
+  <body id="trustpanel-popup">
+    <div id="views">
+      <section id="main" class="view PanelUI-subView">
+        <div id="trustpanel-popup-mainView">
+          <div id="trustpanel-header-section">
+            <div id="trustpanel-header-row">
+              <div id="trustpanel-popup-host-wrapper">
+                <img id="trustpanel-popup-icon" alt="" />
+                <span id="trustpanel-popup-host"></span>
+              </div>
+              <button
+                id="trustpanel-popup-connection"
+                class="subviewbutton subviewbutton-nav nav"
+                hidden
+              >
+                <img id="trustpanel-connection-icon" alt="" />
+                <span id="trustpanel-connection-label"></span>
+              </button>
+            </div>
+          </div>
+          <div id="main-body" class="panel-subview-body"></div>
+        </div>
+      </section>
+      <section id="sub" class="view PanelUI-subView">
+        <div class="panel-header">
+          <button
+            id="back"
+            class="subviewbutton subviewbutton-back back"
+            aria-label="Back"
+          ></button>
+          <h1><span data-i18n="advanced"></span></h1>
+        </div>
+        <hr />
+        <div id="sub-body" class="panel-subview-body"></div>
+      </section>
+    </div>
+  </body>
 </html>

@@ -2,6 +2,7 @@ import {
   AllOf,
   EXTENSION_OID_OTHERNAME,
   PolicyError,
+  SigstoreBundle,
   SigstoreVerifier,
   VerificationPolicy,
   X509Certificate,
@@ -422,6 +423,7 @@ export async function verifySigsumManifest(
   enrollment: SigsumEnrollment,
   manifest: Manifest,
   signatures: SigsumSignatures,
+  provenance?: Record<string, string>,
 ): Promise<WebcatError | number> {
   // signatures must be a non-null object keyed by public key.
   const untrusted: unknown = signatures;
@@ -518,7 +520,63 @@ export async function verifySigsumManifest(
     ]);
   }
 
+  // For display only: how many keys signed and how many witnesses vouched
+  Object.assign(provenance ?? {}, {
+    signed: String(validCount),
+    witnesses: String(timestamps.length),
+    timestamp: String(timestamp),
+  });
   return timestamp + enrollment.max_age;
+}
+
+/**
+ * Decodes a string-valued certificate extension; undefined if absent.
+ * Fulcio V1 extensions are raw OCTET STRINGs, V2 ones wrap a DER UTF8String.
+ */
+function decodeExtension(
+  cert: X509Certificate,
+  oid: string,
+): string | undefined {
+  const ext = cert.extension(oid);
+  if (!ext) {
+    return undefined;
+  }
+  try {
+    const inner = ext.valueObj.subs?.[0];
+    return new TextDecoder().decode(inner?.value ?? ext.value);
+  } catch {
+    throw new PolicyError(`Unable to decode extension ${oid}`);
+  }
+}
+
+const FULCIO_OID = "1.3.6.1.4.1.57264.1.";
+
+/**
+ * Always passes; records the identity and Fulcio extensions of the
+ * certificate it last saw, for display only.
+ */
+class ProvenancePolicy implements VerificationPolicy {
+  values: Record<string, string> = {};
+
+  verify(cert: X509Certificate): void {
+    this.values = {};
+    const san = cert.extSubjectAltName;
+    const identity =
+      san?.rfc822Name ?? san?.uri ?? san?.otherName(EXTENSION_OID_OTHERNAME);
+    if (identity) {
+      this.values["2.5.29.17"] = identity;
+    }
+    for (let i = 1; i <= 22; i++) {
+      try {
+        const value = decodeExtension(cert, FULCIO_OID + i);
+        if (value) {
+          this.values[FULCIO_OID + i] = value;
+        }
+      } catch {
+        // An undecodable extension is skipped
+      }
+    }
+  }
 }
 
 class ClaimPolicy implements VerificationPolicy {
@@ -565,39 +623,9 @@ class ClaimPolicy implements VerificationPolicy {
     }
 
     // Generic extension handling
-    const ext = cert.extension(this.oid);
-    if (!ext) {
+    const got = decodeExtension(cert, this.oid);
+    if (got === undefined) {
       throw new PolicyError(`Certificate missing extension ${this.oid}`);
-    }
-
-    let got: string | undefined;
-
-    try {
-      /*
-        ext.valueObj is the ASN.1 object for extnValue.
-        For V1 Fulcio:
-            OCTET STRING → raw bytes
-        For V2 Fulcio:
-            OCTET STRING → DER UTF8String
-      */
-
-      const valueObj = ext.valueObj;
-
-      // Case 1: DER-wrapped UTF8String (Fulcio V2-style)
-      if (valueObj.subs && valueObj.subs.length > 0) {
-        const inner = valueObj.subs[0];
-
-        if (inner?.value) {
-          got = new TextDecoder().decode(inner.value);
-        }
-      }
-
-      // Case 2: Raw OCTET STRING (Fulcio V1-style)
-      if (!got) {
-        got = new TextDecoder().decode(ext.value);
-      }
-    } catch {
-      throw new PolicyError(`Unable to decode extension ${this.oid}`);
     }
 
     if (!this.claimMatches(got)) {
@@ -645,6 +673,7 @@ export async function verifySigstoreManifest(
   enrollment: SigstoreEnrollment,
   manifest: Manifest,
   signatures: SigstoreSignatures,
+  provenance?: Record<string, string>,
 ): Promise<WebcatError | number> {
   const verifier = new SigstoreVerifier();
   await verifier.loadSigstoreRoot(enrollment.trusted_root);
@@ -682,6 +711,9 @@ export async function verifySigstoreManifest(
   // Keep your existing freshness behavior (previously inside IdentityMatch)
   const freshnessPolicy = new CertFreshnessPolicy(enrollment.max_age);
   claimPolicies.push(freshnessPolicy);
+  // Runs last, so it holds the values of the certificate that passed
+  const provenancePolicy = new ProvenancePolicy();
+  claimPolicies.push(provenancePolicy);
 
   const policy = new AllOf(claimPolicies);
 
@@ -698,6 +730,7 @@ export async function verifySigstoreManifest(
   const canonicalized = stringToUint8Array(canonical);
 
   let verified = false;
+  let verifiedBundle: SigstoreBundle | undefined;
   const errors: string[] = [];
 
   // Does it make sense for this to be an array? Is there cases where the same manifest
@@ -710,6 +743,7 @@ export async function verifySigstoreManifest(
         canonicalized,
       );
       if (verified) {
+        verifiedBundle = bundle;
         break;
       }
       errors.push(`bundle ${index}: verification failed`);
@@ -727,5 +761,11 @@ export async function verifySigstoreManifest(
     );
   }
 
+  Object.assign(provenance ?? {}, provenancePolicy.values);
+  const tlog = verifiedBundle?.verificationMaterial?.tlogEntries?.[0];
+  if (provenance && tlog) {
+    provenance.logIndex = tlog.logIndex;
+    provenance.logId = tlog.logId.keyId;
+  }
   return freshnessPolicy.validUntil;
 }
