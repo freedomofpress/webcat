@@ -39,16 +39,16 @@ Tests are parametrized across `firefox` and `tor` browsers. Use `-k` to filter:
 
 ```bash
 # Firefox only
-cd test && .venv/bin/pytest -v tests.py --addon ../dist/webcat-extension-test.zip -k firefox
+cd test && .venv/bin/pytest -v . --addon ../dist/webcat-extension-test.zip -k firefox
 
 # Tor only
-cd test && .venv/bin/pytest -v tests.py --addon ../dist/webcat-extension-test.zip -k tor
+cd test && .venv/bin/pytest -v . --addon ../dist/webcat-extension-test.zip -k tor
 ```
 
 ### Running a specific test
 
 ```bash
-cd test && .venv/bin/pytest -v tests.py --addon ../dist/webcat-extension-test.zip -k "test_webcat and firefox"
+cd test && .venv/bin/pytest -v . --addon ../dist/webcat-extension-test.zip -k "test_webcat and firefox"
 ```
 
 ### Extra pytest arguments

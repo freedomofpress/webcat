@@ -22,7 +22,7 @@ install: venv
 	$(PIP) install -r requirements.txt
 
 test: install
-	$(PYTEST) -v tests.py $(TESTARGS)
+	$(PYTEST) -v . $(TESTARGS)
 
 benchmark: install
 	$(PYTEST) -v benchmarks.py $(TESTARGS) $(BENCHARGS)
