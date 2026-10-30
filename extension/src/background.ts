@@ -1,5 +1,6 @@
 import { defaults, test } from "./config";
 import webcat from "./webcat";
+import { logger } from "./webcat/logger";
 
-console.log("[webcat] Starting up background");
+logger.info("Starting up background");
 webcat.start(import.meta.env.VITE_TESTING ? test : defaults);

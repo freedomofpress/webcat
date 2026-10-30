@@ -3,6 +3,7 @@ import permissions from "../browser/permissions";
 import { CacheKey, LRUSet, PersistentLRUCache } from "./cache";
 import { BlockMeta, Database } from "./interfaces/database";
 import { CachePartition } from "./interfaces/originstate";
+import { logger } from "./logger";
 import { OriginState } from "./originstate";
 import { extractHostname, extractRawHash } from "./parsers";
 
@@ -64,7 +65,7 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
     await this.origins.clear();
     await this.nonOrigins.clear();
 
-    console.log(`[webcat] Replaced list with ${leaves.length} entries`);
+    logger.info(`Replaced list with ${leaves.length} entries`);
   }
 
   async getBlockMeta(): Promise<BlockMeta | null> {
