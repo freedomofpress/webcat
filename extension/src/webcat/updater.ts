@@ -11,6 +11,7 @@ import permissions from "../browser/permissions";
 import { Mutex } from "../browser/sync";
 import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { Database } from "./interfaces/database";
+import { logger } from "./logger";
 import { arraysEqual } from "./utils";
 
 /**
@@ -159,14 +160,14 @@ export class EnrollmentUpdater extends EventTarget {
       this.dispatchEvent(new Event("scheduled"));
     });
 
-    console.log("[webcat] Importing bundled list");
+    logger.info("Importing bundled list");
     this.update(true)
       .finally(async () => {
-        console.log("[webcat] Attempting network update");
+        logger.info("Attempting network update");
         await this.#checkAndUpdate();
       })
       .catch((error) => {
-        console.error("[webcat] Bundled list import failed:", error);
+        logger.error("Bundled list import failed", undefined, error);
       });
   }
 
@@ -176,7 +177,7 @@ export class EnrollmentUpdater extends EventTarget {
    */
   async update(local = false) {
     try {
-      console.log("[webcat] Running production list updater");
+      logger.info("Running production list updater");
       await this.#db.setLastChecked();
 
       let leavesUrl: string;
@@ -184,12 +185,12 @@ export class EnrollmentUpdater extends EventTarget {
 
       if (local) {
         // Use bundled files at install or update time
-        console.log("[webcat] Loading bundled update files");
+        logger.info("Loading bundled update files");
         leavesUrl = browser.runtime.getURL(`${this.#localDataPath}/list.json`);
         blocksUrl = browser.runtime.getURL(`${this.#localDataPath}/block.json`);
       } else {
         // Use network endpoints for production
-        console.log("[webcat] Fetching update files");
+        logger.info("Fetching update files");
         leavesUrl = `${this.#endpoint}list.json`;
         blocksUrl = `${this.#endpoint}block.json`;
       }
@@ -202,15 +203,13 @@ export class EnrollmentUpdater extends EventTarget {
 
       // 2 Await latest block
       const block = await (await blockResponse).json();
-      console.log("[webcat] Update block fetched");
+      logger.info("Update block fetched");
 
       if (import.meta.env.VITE_TESTING) {
         const reschedule = block.__WEBCAT_TEST_SCHEDULE_UPDATE__;
         if (reschedule) {
-          console.log(
-            "[webcat] Rescheduling update for test in",
-            reschedule,
-            "second(s)",
+          logger.info(
+            `Rescheduling update for test in ${reschedule} second(s)`,
           );
           browser.alarms.create(this.#alarm, {
             when: Date.now() + reschedule * 1000,
@@ -226,11 +225,8 @@ export class EnrollmentUpdater extends EventTarget {
       const out = await verifyCommit(sh, vset, cryptoIndex, this.#chainId);
 
       if (out.ok) {
-        console.log(
-          "[webcat] Block verified, app_hash: ",
-          Uint8ArrayToBase64(out.appHash),
-          "time: ",
-          out.headerTime,
+        logger.info(
+          `Block verified, app_hash: ${Uint8ArrayToBase64(out.appHash)} time: ${out.headerTime?.seconds}`,
         );
       } else {
         throw new Error(`Block verification failed: ${out}`);
@@ -242,7 +238,7 @@ export class EnrollmentUpdater extends EventTarget {
 
       const meta = await this.#db.getBlockMeta();
       if (meta !== null && out.headerTime.seconds <= meta.blockTime) {
-        console.log("[webcat] Block already applied, skipping");
+        logger.info("Block already applied, skipping");
         this.#lastUpdateFailed = false;
         this.dispatchEvent(new UpdateEvent(false, local));
         return;
@@ -269,13 +265,13 @@ export class EnrollmentUpdater extends EventTarget {
       if (!local) {
         await this.#db.setLastUpdated();
       }
-      console.log(`[webcat] List updated successfully`);
+      logger.info(`List updated successfully`);
       this.dispatchEvent(new UpdateEvent(true, local));
 
       // Success - clear failure flag
       this.#lastUpdateFailed = false;
     } catch (error) {
-      console.error("[webcat] Update failed:", error);
+      logger.error("Update failed", undefined, error);
       this.#lastUpdateFailed = true;
       this.dispatchEvent(new UpdateEvent(false, local));
       throw error;
@@ -288,11 +284,11 @@ export class EnrollmentUpdater extends EventTarget {
    */
   async retryIfFailed(): Promise<void> {
     if (this.#lastUpdateFailed) {
-      console.log("[webcat] Retrying failed update on main_frame navigation");
+      logger.info("Retrying failed update on main_frame navigation");
       try {
         await this.#checkAndUpdate();
       } catch (error) {
-        console.error("[webcat] Retry update failed:", error);
+        logger.error("Retry update failed", undefined, error);
         // Don't re-throw, don't block navigation
       }
     }
@@ -301,11 +297,11 @@ export class EnrollmentUpdater extends EventTarget {
   async #checkAndUpdate(): Promise<void> {
     using _lock = await this.#mutex.acquire();
     if ((await this.isDue()) || import.meta.env.VITE_TESTING) {
-      console.log("[webcat] Running overdue scheduled update");
+      logger.info("Running overdue scheduled update");
       try {
         await this.update();
       } catch (error) {
-        console.error("[webcat] Scheduled update failed:", error);
+        logger.error("Scheduled update failed", undefined, error);
       }
     }
   }
@@ -329,7 +325,7 @@ export class EnrollmentUpdater extends EventTarget {
     try {
       await this.#checkAndUpdate();
     } catch (error) {
-      console.error("[webcat] Error in update alarm handler:", error);
+      logger.error("Error in update alarm handler", undefined, error);
     }
   }
 
