@@ -4,104 +4,10 @@ import tempfile
 import pytest
 from time import sleep, monotonic
 from helpers import Browser, TorBrowser, Server, Hook, UpdateServer
-import logging
 import json
-import canonicaljson
-import hashlib
 from pytest_check import check
 import urllib.parse
-
-class Fatal(Exception):
-    pass
-
-logging.getLogger("geckordp").setLevel(logging.CRITICAL)
-logging.getLogger("psutil").setLevel(logging.CRITICAL)
-logging.getLogger().setLevel(logging.WARNING)
-
-WEBCAT_ICON = Hook(
-    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAQAAAC1+jfqAAAABGdBTUEAALGPC/xhBQAAACBjSFJN"
-    "AAB6JgAAgIQAAPoAAACA6AAAdTAAAOpgAAA6mAAAF3CculE8AAAAAmJLR0QA/4ePzL8AAAAHdElN"
-    "RQfoChYSHzod9YOfAAABNUlEQVQoz1XRv0ubARDG8c+bvMFW/BFfaAMupZWKgoPULQWXgg3orFBE"
-    "cHNQ3Do46aJQFP8EB8Glg7qIOrjYuSKpguDiKNomaaEIaXw7vPZNfW457r4cd/dkNRXoUJBHXdws"
-    "JsroM6Lgj0DoxqEz900gZ8KgfV8FfntiSEnZljpZMO6lNeeKlpwYVbfhvW7lZHyfT7rwzpVb0/bM"
-    "I7KmPwHmlPDaqVjDN5tGQMk8tFlWwLr4IWqOvcVzKzoy8gIVL4yl5+7asSBS1ZDPCNBiRk8KjJpT"
-    "MuVeIAjVMGM2/QiRCHfahaqhn35Y1Oqxjm1741oNel2kC8YavvjolU6rBv7xH1RS4LNnaLdgqjkw"
-    "a9KlWOy7ojbDVkzKJS2IlR24FqsIFUV2HWn872aSP5WXU/UrcRL+AtouWZWI+tGIAAAAJXRFWHRk"
-    "YXRlOmNyZWF0ZQAyMDI0LTEwLTIyVDE4OjIxOjM3KzAwOjAwXUyimQAAACV0RVh0ZGF0ZTptb2Rp"
-    "ZnkAMjAyNC0xMC0yMlQxNDo1Mzo0MyswMDowMGXvS2oAAAAASUVORK5CYII=",
-    type="image/png", base64=True)
-
-BAD_WASM = Hook(
-    "AGFzbQEAAAABCgJgAABgAn9/AX8DAwIAAQQFAXABAQEFBgEBggKCAgcRBAFhAgABYgAAAWMAAQFk"
-    "AQAKCQICAAsEAEEACw==", type="application/wasm", base64=True)
-
-[
-    LOGENTRY_INLINE,
-    LOGENTRY_ALERT,
-    LOGENTRY_CSP,
-    LOGENTRY_WASM_FETCH,
-    LOGENTRY_WASM,
-    LOGENTRY_IMPORT,
-    LOGENTRY_LOAD_WORKER,
-    LOGENTRY_LOAD_SHAREDWORKER,
-    LOGENTRY_LOAD_WASMWORKER,
-    LOGENTRY_LOAD_AUDIOWORKLET,
-    LOGENTRY_WASM_FRAME,
-    LOGENTRY_ERROR_SHAREDWORKER_ONERROR,
-    LOGENTRY_ERROR_SHAREDWORKER_CALLBACK,
-    LOGENTRY_ERROR_SHAREDWORKER_HANDLER,
-    LOGENTRY_ERROR_WORKER_ONERROR,
-    LOGENTRY_ERROR_WORKER_CALLBACK,
-    LOGENTRY_ERROR_WORKER_HANDLER,
-] = EXPECTED_LOGS = [
-    ["inline:",True],
-    ["alert.js:",True],
-    ["csp.js",True],
-    ["wasm_fetch.js:",True],
-    ["wasm.js:",True],
-    ["import.js",True],
-    ["load_worker.js:",True],
-    ["load_sharedworker.js:",True],
-    ["load_wasmworker.js:",True],
-    ["load_audioworklet.js:",True],
-    ["wasm_frame.js:",True],
-    ["Error: error in sharedworker", True, "onerror"],
-    ["Error: error in sharedworker", True, "callback"],
-    ["Error: error in sharedworker", True, "handler"],
-    ["Error: error in worker", True, "onerror"],
-    ["Error: error in worker", True, "callback"],
-    ["Error: error in worker", True, "handler"],
-]
-
-EXPECTED_CSP = {
-    "content-security-policy": "object-src 'none'; default-src 'self'; script-src 'self' 'wasm-unsafe-eval' "
-                               "'sha256-oiHtO61BAW24D+FpLSqz2Jnv6Wv67XDn90HOTlaklfQ='; "
-                               "style-src 'self'; frame-src 'none'; worker-src 'self';"
-}
-
-FRAMEHOST_HOOK = {
-    "/framehost.html": Hook(open("cases/testapp/framehost.html", "rb").read(), type="text/html", headers={
-        "content-security-policy": "",
-    }),
-}
-
-CSS_PATHS = set(map(lambda filename: f"/css/{filename}", os.listdir("./cases/testapp/css/")))
-JS_PATHS = set(map(lambda filename: f"/js/{filename}", os.listdir("./cases/testapp/js/")))
-WASM_PATHS = set(map(lambda filename: f"/wasm/{filename}", os.listdir("./cases/testapp/wasm/")))
-WORKER_PATHS = set(map(lambda filename: f"/workers/{filename}", os.listdir("./cases/testapp/workers/")))
-SERVICEWORKER_PATHS = set(filter(lambda path: "serviceworker" in path, WORKER_PATHS))
-FRAME_PATHS = {"/js/framehost.js", "/wasm/frame_addThree.wasm"}
-ALL_PATHS = {"/"}.union(CSS_PATHS,JS_PATHS,WASM_PATHS,WORKER_PATHS)
-NON_FRAME_PATHS = ALL_PATHS-FRAME_PATHS
-
-def setdiff(a: list, b: list):
-    a = a.copy()
-    for el in b:
-        try:
-            a.remove(el)
-        except:
-            pass
-    return a
+from common import *
 
 @pytest.mark.parametrize("browser, incognito", [
     pytest.param("firefox", False, id="firefox"),
@@ -230,6 +136,16 @@ def setdiff(a: list, b: list):
 ], indirect=["root"])
 def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, expected, logs, errors, rejections,
                 paths_to_wait, origin_cached, first_party, incognito, addon_path, dnsnames, non_enrolled_dnsnames):
+    """
+    Tests the basic verification and blocking behavior, both in the top-level
+    frame and in an iframe. Performs five distinct checks:
+
+     - Do page contents match expectations?
+     - Does console.log output match expectation?
+     - Do uncaught errors match expectations?
+     - Do uncaught Promise rejections match expectations?
+     - Do the generated origin cache entries match expectations?
+    """
     logs, errors, rejections = logs.copy(), errors.copy(), rejections.copy()
     browser.install_extension(addon_path)
     update_server.wait_for_update()
@@ -276,48 +192,6 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
-    ("cases/testapp", EXPECTED_CSP | {
-        "cache-control": "max-age=180"
-    }, {"/console_log.png": WEBCAT_ICON}, "ERR_WEBCAT_FILE_MISMATCH"),
-], indirect=["root"])
-def test_in_memory_cache(browser, server: Server, update_server: UpdateServer, expected, addon_path):
-    with server.wait_for({"/console_log.png"}):
-        browser.navigate(f'{server.url()}/console_log.png')
-    browser.install_extension(addon_path)
-    update_server.wait_for_update()
-    browser.navigate(f'{server.url()}/console_log.png')
-    sleep(2) # loading from cache, so can't use server.wait_for
-    res = browser.execute("document.body.textContent")
-    assert expected in res
-
-@pytest.mark.parametrize("browser", ["firefox", "tbb"], indirect=True)
-@pytest.mark.parametrize("root, headers, hooks", [
-    ("cases/testapp", EXPECTED_CSP | {"cache-control": "max-age=180"}, FRAMEHOST_HOOK),
-], indirect=["root"])
-def test_cached_workers(browser, server: Server, update_server: UpdateServer, addon_path):
-    browser.install_extension(addon_path)
-    update_server.wait_for_update()
-    paths_to_wait = NON_FRAME_PATHS
-    if isinstance(browser, TorBrowser):
-        # ServiceWorkers are disabled in TBB by NoScript
-        paths_to_wait = paths_to_wait-SERVICEWORKER_PATHS
-    # First navigation fetches and validates from the network and warms the
-    # HTTP cache; the reload serves the worker scripts with fromCache=true
-    with server.wait_for(paths_to_wait):
-        browser.navigate(server.url())
-    counts = {path: Server._counts.get(path, 0) for path in WORKER_PATHS}
-    browser.navigate(server.url())
-    sleep(4) # loading from cache, so can't use server.wait_for
-    refetched = {path for path in WORKER_PATHS if Server._counts.get(path, 0) > counts[path]}
-    assert refetched != WORKER_PATHS, "no worker script was served from cache"
-    res = browser.execute("document.body.textContent")
-    assert "Hello!" in res
-    logs = json.loads(browser.execute("JSON.stringify(window.capture?.logs || [])"))
-    for expected_log in [LOGENTRY_LOAD_WORKER, LOGENTRY_LOAD_SHAREDWORKER, LOGENTRY_LOAD_WASMWORKER]:
-        check.is_in(expected_log, logs)
-
-@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
-@pytest.mark.parametrize("root, headers, hooks, expected", [
     pytest.param("cases/testapp", EXPECTED_CSP, {
             "/": Hook(open("cases/testapp/index.html", "rb").read(), type="text/html", delay=2),
             "/js/alert.js": Hook(b"alert('hacked');", type="text/javascript"),
@@ -326,6 +200,11 @@ def test_cached_workers(browser, server: Server, update_server: UpdateServer, ad
         id="corrupted_js_with_induced_error_test"),
 ], indirect=["root"])
 def test_multiple_tabs(browser: Browser, server: Server, update_server: UpdateServer, expected, addon_path):
+    """
+    Tests that concurrent errors in separate tabs don't conflict with each
+    other: a corrupted script should be treated as such despite a simultaneous
+    verification error in another tab.
+    """
     browser.install_extension(addon_path)
     update_server.wait_for_update()
     with server.wait_for({"/js/alert.js"}):
@@ -344,6 +223,11 @@ def test_multiple_tabs(browser: Browser, server: Server, update_server: UpdateSe
         id="non_enrolled_loads_enrolled_subresource_test"),
 ], indirect=["root"])
 def test_non_enrolled_subresource(browser: Browser, server: Server, update_server: UpdateServer, expected, addon_path, dnsnames, non_enrolled_dnsnames):
+    """
+    Tests that a subresource from an enrolled origin on a non-enrolled page is
+    verified correctly: when the enrolled subresource is corrupted, the
+    non-enrolled page should be blocked.
+    """
     enrolled_url = server.url(dnsnames[0])
     non_enrolled_url = server.url(non_enrolled_dnsnames[0])
     # Non-enrolled landing page that loads a single sub-resource cross-origin
@@ -360,29 +244,6 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, update_serve
     update_server.wait_for_update()
     with server.wait_for({"/js/alert.js"}):
         browser.navigate(non_enrolled_url)
-    res = browser.execute("document.body.textContent")
-    assert expected in res
-
-@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
-@pytest.mark.parametrize("root, headers, hooks, expected", [
-    pytest.param("cases/testapp", EXPECTED_CSP, {
-            "/": Hook(open("cases/testapp/index.html", "rb").read(), type="text/html", delay=2),
-            "/js/alert.js": Hook(b"alert('hacked');", type="text/javascript"),
-        }, "ERR_WEBCAT_FILE_MISMATCH",
-        id="corrupted_js_with_cache_eviction_test"),
-], indirect=["root"])
-def test_cache_eviction(browser: Browser, server: Server, update_server: UpdateServer, expected, addon_path, dnsnames):
-    browser.install_extension(addon_path)
-    update_server.wait_for_update()
-    with server.wait_for({"/js/alert.js"}):
-        browser.execute(
-            "const w = window.open();"
-            f"window.open('{server.url()}');"
-            "setTimeout(() => {"
-            f"    w.location.href = '{server.url(dnsnames[0])}/console_log.png';"
-            f"    location.href = '{server.url(dnsnames[1])}/console_log.png';"
-            "}, 1000)"
-        )
     res = browser.execute("document.body.textContent")
     assert expected in res
 
@@ -409,6 +270,10 @@ def test_cache_eviction(browser: Browser, server: Server, update_server: UpdateS
         id="delegation_rejected_test"),
 ], indirect=["root"])
 def test_delegation(browser: Browser, server: Server, update_server: UpdateServer, delegated_fqdn, should_verify, paths_to_wait, addon_path, dnsnames):
+    """
+    Tests that verification can be delegated to a different origin's
+    enrollment. Delegating to a non-enrolled origin is not allowed.
+    """
     browser.install_extension(addon_path)
     update_server.wait_for_update()
     # Subscribe before navigation so we don't miss the "Setting ok icon" line
@@ -443,6 +308,10 @@ def test_delegation(browser: Browser, server: Server, update_server: UpdateServe
         id="version_refresh_test"),
 ], indirect=["root"])
 def test_version_refresh(browser: Browser, server: Server, update_server: UpdateServer, bundle_generator, expected, paths_to_wait, addon_path, root):
+    """
+    Tests that a server can update its manifest during an active session.
+    Updated resources should be rendered in the browser with no errors.
+    """
     # Load v0.1: server serves the bundle that the `root` fixture signed.
     browser.install_extension(addon_path)
     update_server.wait_for_update()
@@ -494,6 +363,11 @@ def test_version_refresh(browser: Browser, server: Server, update_server: Update
     ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {}),
 ], indirect=["root"])
 def test_bundle_redirect(browser: Browser, server: Server, update_server: UpdateServer, addon_path, root, dnsnames, non_enrolled_dnsnames):
+    """
+    Tests that the extension blocks HTTP redirects on bundle fetch. The tab
+    associated with the fetch should display an error when the bundle URL
+    redirects across origins.
+    """
     bundle_path = "/.well-known/webcat/bundle.json"
     target = "/redirect-target-bundle.json"
     with open(f"{root}{bundle_path}", "rb") as f:
@@ -525,6 +399,12 @@ def test_bundle_redirect(browser: Browser, server: Server, update_server: Update
     ("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {}),
 ], indirect=["root"])
 def test_default_fallback(browser: Browser, server: Server, update_server: UpdateServer, addon_path, root, dnsnames):
+    """
+    Tests fallback hash behavior. Top-level navigations to paths not present in
+    the manifest are allowed if the contents match a fallback; loading
+    subresources from paths missing from the manifest is not and should trigger
+    an error.
+    """
     # Serve the fallback content for paths missing from the manifest, as a
     # server attempting to swap resources would
     index = open(f"{root}/index.html", "rb").read()
@@ -590,6 +470,12 @@ parent.postMessage({ results }, "*");
     pytest.param("nonenrolled.localhost", False, False, id="non_enrolled_parent"),
 ])
 def test_same_site_frame_isolation(browser: Browser, server: Server, update_server: UpdateServer, addon_path, parent, isolated, historical_cluster):
+    """
+    Tests that Origin Agent Clustering (OAC) is enforced correctly: A framed
+    subdomain should not be able to access its parent even if both frames opt
+    in to domain relaxing. When OAC is unavailable due to a historical agent
+    cluster, the frame should be blocked with an error.
+    """
     frame_url = f"{server.url(f'frame.{parent}')}/oac/frame.html"
     if historical_cluster:
         with server.wait_for({"/oac/parent.html", "/oac/frame.html"}):
@@ -619,13 +505,18 @@ def test_same_site_frame_isolation(browser: Browser, server: Server, update_serv
         "moduleHandedOver": module,
     })
 
+
 @pytest.mark.parametrize("browser", ["firefox"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks", [
     ("cases/testapp", EXPECTED_CSP, {}),
 ], indirect=["root"])
-def test_config_paths(browser: Browser, server: Server, update_server: UpdateServer, addon_path):
-    # Every asset path in the running config must resolve inside the addon.
-    # Relevant for extensions built on the library with relocated assets (libext/)
+def test_config_paths(browser: Browser, update_server: UpdateServer, addon_path):
+    """
+    Tests that the configured paths of the extension all resolve. Bundled data,
+    the static hook script, the error page, and icons must all be present, even
+    a custom extension built using the library, where the assets have been
+    relocated.
+    """
     browser.install_extension(addon_path)
     update_server.wait_for_update()
     browser.attach_extension_console()
@@ -645,73 +536,3 @@ def test_config_paths(browser: Browser, server: Server, update_server: UpdateSer
         sleep(0.2)
     results = json.loads(results)
     assert [p for p, ok in results if not ok] == []
-
-@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
-@pytest.mark.parametrize("root, headers, hooks, expected", [
-    ("cases/testapp", EXPECTED_CSP | {
-        "cache-control": "max-age=180"
-    }, {}, "ERR_WEBCAT_FILE_MISMATCH"),
-], indirect=["root"])
-def test_in_memory_cache_on_update(browser, server: Server, update_server: UpdateServer, expected, addon_path, root, non_enrolled_dnsnames):
-    browser.install_extension(addon_path)
-    update_server.reschedule(2, once=True)
-    update_server.wait_for_update()
-
-    # load a non-enrolled site into browser cache
-    with server.wait_for({"/console_log.png"}):
-        browser.navigate(f'{server.url(non_enrolled_dnsnames[0])}/console_log.png')
-
-    # enroll the site
-    with open(f'{root}/.well-known/webcat/bundle.json') as bundle:
-        enrollment = json.load(bundle)["enrollment"]
-        canonical_enrollment = canonicaljson.encode_canonical_json(enrollment)
-        enrollment_hash = hashlib.sha256(canonical_enrollment).hexdigest()
-        update_server.set(non_enrolled_dnsnames[0], enrollment_hash)
-    
-    sleep(2) # wait for the rescheduled update
-    server.hooks["/console_log.png"] = WEBCAT_ICON
-    with server.wait_for({"/console_log.png"}):
-        browser.navigate(f'{server.url(non_enrolled_dnsnames[0])}/console_log.png')
-    res = browser.execute("document.body.textContent")
-    assert expected in res
-
-@pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer"], indirect=True)
-@pytest.mark.parametrize("config_path, bundle_path, root, headers, hooks", [pytest.param(
-    "cases/drawio/webcat.config.json",
-    "cases/drawio/.well-known/webcat/bundle.json",
-    "cases/drawio/webapp",
-    {
-        "content-security-policy": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'",
-    }, {},
-    id="drawio"
-)], indirect=["root"])
-def test_drawio(browser, server: Server, update_server: UpdateServer, addon_path):
-    server.hooks["/.well-known/webcat/bundle.json"] = Hook(open("cases/drawio/.well-known/webcat/bundle.json", "rb").read(), type="application/json")
-    browser.install_extension(addon_path)
-    update_server.wait_for_update()
-
-    def error():
-        return browser.execute("Array.from(document.querySelectorAll('.geDialog>div>div:not(:last-child)')).map(e => e.textContent).join(': ')")
-
-    with server.wait_for(["/images/github-logo.svg"]):
-        browser.navigate(f"{server.url()}?dark=0")
-    title = browser.execute("document.title")
-    check.equal(title, "Untitled Diagram - draw.io")
-    check.equal(error(), "")
-
-    with server.wait_for(["/templates/software/class_1.xml"]):
-        browser.navigate(f"#U{server.url()}/templates/software/class_1.xml")
-    title = browser.execute("document.title")
-    check.equal(title, "class_1.xml - draw.io")
-    check.equal(error(), "")
-    content = browser.execute("document.querySelector('.geDiagramContainer')?.textContent")
-    check.is_in(
-        "Classname"
-        "+ field: type"
-        "+ field: type"
-        "+ field: type"
-        "+ field: type"
-        "+ field: type"
-        "+ method(type): type"
-        "+ method(type): type",
-        content)

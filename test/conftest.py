@@ -4,10 +4,15 @@ import pytest
 import json
 import canonicaljson
 import hashlib
+import logging
 
 from helpers import Browser, UpdateServer, Server, TorBrowser, generate_ssl_cert
 from sigsum import BundleGenerator
 from pytest_benchmark.fixture import BenchmarkFixture
+
+logging.getLogger("geckordp").setLevel(logging.CRITICAL)
+logging.getLogger("psutil").setLevel(logging.CRITICAL)
+logging.getLogger().setLevel(logging.WARNING)
 
 _firefox_skips = {
     "corrupted_serviceworker_test-in_frame": "ServiceWorkers disabled in frames",

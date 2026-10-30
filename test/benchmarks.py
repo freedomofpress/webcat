@@ -3,7 +3,7 @@ import pytest
 
 from time import sleep
 from helpers import Browser, Server
-from tests import EXPECTED_CSP
+from common import *
 
 js_code = """
     (() => {
