@@ -107,6 +107,12 @@ export enum WebcatErrorEnrollment {
    * The enrollment claims array is empty. Sigstore-specific.
    */
   CLAIMS_EMPTY = "ERR_WEBCAT_ENROLLMENT_CLAIMS_EMPTY",
+  /** `enrollment_schema` is present but not a positive integer. */
+  SCHEMA_INVALID = "ERR_WEBCAT_ENROLLMENT_SCHEMA_INVALID",
+  /** `enrollment_schema` is newer than this extension supports; an update may be available. */
+  SCHEMA_UNSUPPORTED = "ERR_WEBCAT_ENROLLMENT_SCHEMA_UNSUPPORTED",
+  /** `enrollment_schema` is older than the configured minimum; the site must enroll again under a newer schema. */
+  SCHEMA_DEPRECATED = "ERR_WEBCAT_ENROLLMENT_SCHEMA_DEPRECATED",
   // #endregion
 }
 
@@ -168,6 +174,14 @@ export enum WebcatErrorManifest {
    * No wasm property is present on the manifest.
    */
   WASM_MISSING = "ERR_WEBCAT_MANIFEST_WASM_MISSING",
+  /** `manifest_schema` is present but not a positive integer. */
+  SCHEMA_INVALID = "ERR_WEBCAT_MANIFEST_SCHEMA_INVALID",
+  /** `manifest_schema` is newer than this extension supports; an update may be available. */
+  SCHEMA_UNSUPPORTED = "ERR_WEBCAT_MANIFEST_SCHEMA_UNSUPPORTED",
+  /** `manifest_schema` is older than the configured minimum; the site must publish a manifest under a newer schema. */
+  SCHEMA_DEPRECATED = "ERR_WEBCAT_MANIFEST_SCHEMA_DEPRECATED",
+  /** `source` or `artifact` is present but not a string. */
+  PROVENANCE_MALFORMED = "ERR_WEBCAT_MANIFEST_PROVENANCE_MALFORMED",
 }
 
 /**
