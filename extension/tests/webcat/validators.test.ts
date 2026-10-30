@@ -435,7 +435,7 @@ describe("validateCSP", () => {
 
 describe("validateManifest", () => {
   const manifest: Manifest = {
-    app: "app",
+    manifest_schema: 1,
     version: "1.0.0",
     default_csp: "default-src 'self'",
     extra_csp: {},

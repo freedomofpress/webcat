@@ -32,6 +32,10 @@ export const defaults = {
   bundlePath: "/.well-known/webcat/bundle.json",
   /** {@inheritDoc WebcatConfig.bundlePrevPath} */
   bundlePrevPath: "/.well-known/webcat/bundle-prev.json",
+  /** {@inheritDoc WebcatConfig.minEnrollmentSchema} */
+  minEnrollmentSchema: 0,
+  /** {@inheritDoc WebcatConfig.minManifestSchema} */
+  minManifestSchema: 0,
 
   /** {@inheritDoc WebcatConfig.endpoint} */
   endpoint: "https://webcat.freedom.press/",
