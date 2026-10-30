@@ -21,6 +21,7 @@ import { BeforeRequestDetails, RequestEvent } from "./browser/requests";
 import { defaults, WebcatConfig } from "./config";
 import { WebcatDatabase } from "./webcat/db";
 import { WebcatRequestHandler } from "./webcat/handler";
+import { logger } from "./webcat/logger";
 import { WebcatUI } from "./webcat/ui";
 import { EnrollmentUpdater } from "./webcat/updater";
 
@@ -59,7 +60,7 @@ export default {
         await requestHandler.bind(fqdns);
         firstUpdate = false;
       } catch (error) {
-        console.error("[webcat] Bundled list import failed:", error);
+        logger.error("Bundled list import failed", undefined, error);
       }
     });
     updater.start();

@@ -8,7 +8,7 @@ vi.mock("../../src/globals", () => ({
 }));
 
 vi.mock("../../src/webcat/logger", () => ({
-  logger: { addLog: vi.fn() },
+  logger: { addLog: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock("../../src/browser/permissions", () => ({
