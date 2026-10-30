@@ -3,11 +3,15 @@ import { LogEntry } from "./interfaces/log";
 import { Stateful } from "./interfaces/requeststate";
 
 type ConsoleLevel = "log" | "warn" | "error" | "info" | "debug";
+// Capped to avoid long running browser sessions to grow forever
+const MAX_LOGS = 1000;
 const globalLogs: LogEntry[] = [];
 
 // Logger Class
 class Logger {
-  private debugMode: boolean = true; // Controls if debug/info logs are printed
+  // Controls if log/debug/info lines are printed; warn/error always are
+  private debugMode: boolean =
+    import.meta.env.DEV || !!import.meta.env.VITE_TESTING;
 
   /**
    * Enable or disable debug mode.
@@ -21,17 +25,23 @@ class Logger {
    * Add a log entry.
    * @param level - Log level (debug, info, warn, error).
    * @param message - The log message.
-   * @param tabId - The tab ID associated with the log.
+   * @param tabId - The tab ID associated with the log, or -1 if none.
    * @param origin - The origin of the log (e.g., URL or script).
-   * @param stack - Optional stack trace.
+   * @param cause - Optional caught error whose stack is recorded.
    */
   public addLog(
     level: ConsoleLevel,
     message: string,
-    tabId: number,
-    origin: string,
-    stack?: string,
+    tabId = -1,
+    origin = "",
+    cause?: unknown,
   ): void {
+    const stack =
+      cause === undefined
+        ? undefined
+        : cause instanceof Error
+          ? cause.stack
+          : String(cause);
     const logEntry: LogEntry = {
       timestamp: new Date(),
       tabId,
@@ -41,67 +51,61 @@ class Logger {
       stack,
     };
 
-    // Store log in the global log array
     globalLogs.push(logEntry);
+    if (globalLogs.length > MAX_LOGS) {
+      globalLogs.shift();
+    }
 
-    // Conditional console output
     if (this.shouldPrint(level)) {
-      // Cast console[level] to a function type
-      let tab: string;
-      if (logEntry.tabId > 0) {
-        tab = `Tab ${logEntry.tabId}`;
-      } else {
-        tab = "worker";
-      }
+      const tab = tabId > 0 ? `Tab ${tabId}` : "worker";
+      const where = origin ? ` [${origin}]` : "";
       console[level](
-        `[${logEntry.timestamp.toISOString()}] [${tab}] [${logEntry.origin}] ${logEntry.message}`,
+        `[WEBCAT] [${logEntry.timestamp.toISOString()}] [${tab}]${where} ${message}` +
+          (stack ? `\n${stack}` : ""),
       );
     }
   }
 
   /** Adds a log entry with the default level. */
-  public log(
-    message: string,
-    details: Stateful<RequestDetails>,
-    stack?: string,
-  ) {
-    this.addLog("log", message, details.tabId, details.state.fqdn, stack);
+  public log(message: string, details?: Stateful<RequestDetails>) {
+    this.#emit("log", message, details);
   }
 
   /** Adds a warning log entry. */
   public warn(
     message: string,
-    details: Stateful<RequestDetails>,
-    stack?: string,
+    details?: Stateful<RequestDetails>,
+    cause?: unknown,
   ) {
-    this.addLog("warn", message, details.tabId, details.state.fqdn, stack);
+    this.#emit("warn", message, details, cause);
   }
 
   /** Adds an error log entry. */
   public error(
     message: string,
-    details: Stateful<RequestDetails>,
-    stack?: string,
+    details?: Stateful<RequestDetails>,
+    cause?: unknown,
   ) {
-    this.addLog("error", message, details.tabId, details.state.fqdn, stack);
+    this.#emit("error", message, details, cause);
   }
 
   /** Adds an informational log entry. */
-  public info(
-    message: string,
-    details: Stateful<RequestDetails>,
-    stack?: string,
-  ) {
-    this.addLog("info", message, details.tabId, details.state.fqdn, stack);
+  public info(message: string, details?: Stateful<RequestDetails>) {
+    this.#emit("info", message, details);
   }
 
   /** Add a debug log entry. */
-  public debug(
+  public debug(message: string, details?: Stateful<RequestDetails>) {
+    this.#emit("debug", message, details);
+  }
+
+  #emit(
+    level: ConsoleLevel,
     message: string,
-    details: Stateful<RequestDetails>,
-    stack?: string,
+    details?: Stateful<RequestDetails>,
+    cause?: unknown,
   ) {
-    this.addLog("debug", message, details.tabId, details.state.fqdn, stack);
+    this.addLog(level, message, details?.tabId, details?.state.fqdn, cause);
   }
 
   /**
@@ -120,30 +124,6 @@ class Logger {
    */
   public getLogs(): LogEntry[] {
     return [...globalLogs];
-  }
-
-  /**
-   * Get logs filtered by level.
-   * @param level - Log level to filter by (debug, info, warn, error).
-   */
-  public getLogsByLevel(level: ConsoleLevel): LogEntry[] {
-    return globalLogs.filter((log) => log.level === level);
-  }
-
-  /**
-   * Get logs filtered by tab ID.
-   * @param tabId - Tab ID to filter by.
-   */
-  public getLogsByTab(tabId: number): LogEntry[] {
-    return globalLogs.filter((log) => log.tabId === tabId);
-  }
-
-  /**
-   * Get logs filtered by origin.
-   * @param origin - Origin (e.g., URL or script) to filter by.
-   */
-  public getLogsByOrigin(origin: string): LogEntry[] {
-    return globalLogs.filter((log) => log.origin === origin);
   }
 
   /**

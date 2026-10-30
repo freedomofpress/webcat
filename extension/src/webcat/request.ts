@@ -46,7 +46,6 @@ export async function validateOrigin(
   const { fqdn, cachePartition } = details.state;
   const enrollment_hash = await db.getFQDNEnrollment(fqdn, cachePartition);
   if (enrollment_hash.length === 0) {
-    //console.debug(`${url} is not enrolled, skipping...`);
     return;
   }
 
