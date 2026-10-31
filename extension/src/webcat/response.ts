@@ -1,15 +1,18 @@
+import {
+  base64UrlToUint8Array,
+  sha256,
+  stringToUint8Array,
+  uint8ArrayEqual,
+  Uint8ArrayToBase64Url,
+  Uint8ArrayToString,
+} from "@freedomofpress/crypto-browser";
+
 import permissions from "../browser/permissions";
 import {
   BeforeRequestDetails,
   HeadersReceivedDetails,
 } from "../browser/requests";
 import { CacheKey } from "./cache";
-import {
-  base64UrlToUint8Array,
-  stringToUint8Array,
-  Uint8ArrayToBase64Url,
-  Uint8ArrayToString,
-} from "./encoding";
 import { HookBuilder } from "./hookbuilder";
 import { Enrollment, Manifest } from "./interfaces/bundle";
 import { Database } from "./interfaces/database";
@@ -22,13 +25,7 @@ import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { PASS_THROUGH_TYPES } from "./resources";
 import { WebcatUI } from "./ui";
-import {
-  arraysEqual,
-  clearBrowserCaches,
-  isNewerSemver,
-  isSameOriginURL,
-  SHA256,
-} from "./utils";
+import { clearBrowserCaches, isNewerSemver, isSameOriginURL } from "./utils";
 
 const WORKER_FETCH_DESTINATIONS = [
   "worker",
@@ -368,7 +365,9 @@ export class ResponseValidator {
                 details.state.cachePartition.firstParty ===
                   new URL(details.url).origin,
               );
-              source.push(hooks.then((h) => stringToUint8Array(h).buffer));
+              source.push(
+                hooks.then((h) => new TextEncoder().encode(h).buffer),
+              );
             }
             break;
           }
@@ -386,7 +385,7 @@ export class ResponseValidator {
       // blob later. If the data is the marker, flush all buffered data;
       // anything received up to that point is from this or other extensions, not
       // the network.
-      if (arraysEqual(this.#marker, new Uint8Array(event.data))) {
+      if (uint8ArrayEqual(this.#marker, new Uint8Array(event.data))) {
         source.forEach((hook) => {
           writeQueue = writeQueue.then(async () => filter.write(await hook));
         });
@@ -422,7 +421,7 @@ export class ResponseValidator {
       const blob = await new Blob(await Promise.all(source)).arrayBuffer();
 
       const content_hash = Uint8ArrayToBase64Url(
-        new Uint8Array(await SHA256(blob)),
+        await sha256(new Uint8Array(blob)),
       );
 
       // A main_frame navigation passes if the content is the file keyed at

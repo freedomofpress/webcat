@@ -7,14 +7,12 @@ vi.mock("../../src/browser/permissions", () => ({
 }));
 
 import {
-  arraysEqual,
   clearBrowserCaches,
   getFQDN,
   getFQDNSafe,
   isExtensionRequest,
   isNewerSemver,
   isSameOriginURL,
-  SHA256,
 } from "./../../src/webcat/utils";
 
 const mockRemove = vi.fn();
@@ -242,58 +240,10 @@ describe("isExtensionRequest", () => {
   });
 });
 
-describe("SHA256", () => {
-  it("should correctly hash a string input", async () => {
-    const hashBuffer = await SHA256("test");
-    const hashHex = arrayBufferToHex(hashBuffer);
-    expect(hashHex).toBe(
-      "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-    );
-  });
-
-  it("should correctly hash a Uint8Array input", async () => {
-    const input = new TextEncoder().encode("test");
-    const hashBuffer = await SHA256(input);
-    const hashHex = arrayBufferToHex(hashBuffer);
-    expect(hashHex).toBe(
-      "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-    );
-  });
-
-  it("should correctly hash an ArrayBuffer input", async () => {
-    const input = new TextEncoder().encode("test").buffer;
-    const hashBuffer = await SHA256(input);
-    const hashHex = arrayBufferToHex(hashBuffer);
-    expect(hashHex).toBe(
-      "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
-    );
-  });
-});
-
 describe("arrayBufferToHex", () => {
   it("should convert an ArrayBuffer to a hexadecimal string", () => {
     const buffer = new Uint8Array([0, 255, 16, 32]).buffer;
     expect(arrayBufferToHex(buffer)).toBe("00ff1020");
-  });
-});
-
-describe("arraysEqual", () => {
-  it("should return true for identical arrays", () => {
-    const a = new Uint8Array([1, 2, 3]);
-    const b = new Uint8Array([1, 2, 3]);
-    expect(arraysEqual(a, b)).toBe(true);
-  });
-
-  it("should return false for arrays with different lengths", () => {
-    const a = new Uint8Array([1, 2, 3]);
-    const b = new Uint8Array([1, 2, 3, 4]);
-    expect(arraysEqual(a, b)).toBe(false);
-  });
-
-  it("should return false for arrays with different values", () => {
-    const a = new Uint8Array([1, 2, 3]);
-    const b = new Uint8Array([3, 2, 1]);
-    expect(arraysEqual(a, b)).toBe(false);
   });
 });
 

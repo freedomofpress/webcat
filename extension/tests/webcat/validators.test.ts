@@ -1,15 +1,15 @@
 // validateCSP.test.ts
 // No browser/permissions mock: validators must load without a `browser`
 // global so tooling (e.g. webcat-cli) can import them.
+import {
+  Uint8ArrayToBase64Url,
+  Uint8ArrayToHex,
+} from "@freedomofpress/crypto-browser";
 import { hashKey, importKey } from "@freedomofpress/sigsum/dist/crypto";
 import { compilePolicy } from "@freedomofpress/sigsum/dist/policyCompiler";
 import { RawPublicKey } from "@freedomofpress/sigsum/dist/types";
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  Uint8ArrayToBase64Url,
-  Uint8ArrayToHex,
-} from "../../src/webcat/encoding";
 import { EnrollmentTypes, Manifest } from "../../src/webcat/interfaces/bundle";
 import { WebcatErrorCode } from "../../src/webcat/interfaces/errors";
 import {
@@ -435,7 +435,7 @@ describe("validateCSP", () => {
 
 describe("validateManifest", () => {
   const manifest: Manifest = {
-    app: "app",
+    manifest_schema: 1,
     version: "1.0.0",
     default_csp: "default-src 'self'",
     extra_csp: {},
