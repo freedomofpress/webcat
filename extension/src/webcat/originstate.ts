@@ -1,7 +1,13 @@
-import { canonicalizeJCS } from "@freedomofpress/crypto-browser";
+import {
+  base64ToUint8Array,
+  canonicalizeJCS,
+  sha256,
+  stringToUint8Array,
+  uint8ArrayEqual,
+  Uint8ArrayToBase64,
+} from "@freedomofpress/crypto-browser";
 
 import { hasSchema } from "./canonicalize";
-import { stringToUint8Array } from "./encoding";
 import {
   Bundle,
   Enrollment,
@@ -20,8 +26,6 @@ import {
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
-import { arraysEqual } from "./utils";
-import { SHA256 } from "./utils";
 import { validateCSP, validateSigstoreEnrollment } from "./validators";
 import {
   validateManifest,
@@ -201,12 +205,11 @@ export class OriginState implements IOriginState {
       this.#cachePartition,
     );
     return (
-      delegation_hash && arraysEqual(delegation_hash, this.enrollment_hash)
+      delegation_hash && uint8ArrayEqual(delegation_hash, this.enrollment_hash)
     );
   }
 
-  // Whether the enrollment hashes to the committed value under RFC 8785
-  // (spec server.md §1.0); false if it cannot be encoded.
+  // Enrollments hash under RFC 8785 (spec server.md §1.0).
   async #enrollmentMatches(enrollment: Enrollment): Promise<boolean> {
     let canonical: string;
     try {
@@ -214,8 +217,8 @@ export class OriginState implements IOriginState {
     } catch {
       return false;
     }
-    const hash = new Uint8Array(await SHA256(stringToUint8Array(canonical)));
-    return arraysEqual(this.enrollment_hash, hash);
+    const hash = await sha256(stringToUint8Array(canonical));
+    return uint8ArrayEqual(this.enrollment_hash, hash);
   }
 
   // This functiont ries to verify the enrollment information against the value in the local list
@@ -354,9 +357,8 @@ export class OriginState implements IOriginState {
       return this.#fail(format_error);
     }
 
-    // Manifests without manifest_schema carry default_index/default_fallback,
-    // rewritten to directory keys and fallback_hashes (#263). Versioned
-    // manifests must not carry them; validateManifest rejects them.
+    // A manifest without manifest_schema names its index and fallback files;
+    // they become directory keys and fallback_hashes (#263).
     if (!hasSchema(manifest)) {
       if (manifest.default_index) {
         const suffix = "/" + manifest.default_index;
@@ -449,7 +451,7 @@ export class OriginState implements IOriginState {
 
     return {
       status: "verified_manifest",
-      enrollment_hash: this.enrollment_hash.toBase64(),
+      enrollment_hash: Uint8ArrayToBase64(this.enrollment_hash),
       manifest: this.manifest,
       delegation: this.delegation,
       validUntil: this.validUntil,
@@ -463,7 +465,7 @@ export class OriginState implements IOriginState {
     const restored = new OriginState(
       {} as Database,
       {} as BundleFetcher,
-      Uint8Array.fromBase64(pojo.enrollment_hash),
+      base64ToUint8Array(pojo.enrollment_hash),
       {} as CachePartition,
     );
     restored.status = pojo.status;

@@ -3,15 +3,18 @@ import { verifyCommit } from "@freedomofpress/cometbft/dist/lightclient";
 import { CommitJson, ValidatorJson } from "@freedomofpress/cometbft/dist/types";
 import { importValidators } from "@freedomofpress/cometbft/dist/validators";
 import {
+  hexToUint8Array,
+  uint8ArrayEqual,
+  Uint8ArrayToBase64,
+} from "@freedomofpress/crypto-browser";
+import {
   verifyWebcatProof,
   WebcatLeavesFile,
 } from "@freedomofpress/ics23/dist/webcat";
 
 import permissions from "../browser/permissions";
 import { Mutex } from "../browser/sync";
-import { hexToUint8Array, Uint8ArrayToBase64 } from "./encoding";
 import { Database } from "./interfaces/database";
-import { arraysEqual } from "./utils";
 
 /**
  * An event indicating the completion of an update attempt.
@@ -252,7 +255,9 @@ export class EnrollmentUpdater extends EventTarget {
       const leaves = (await (await leavesResponse).json()) as WebcatLeavesFile;
 
       // 6 Verify leaves file app_hash matches the block one
-      if (!arraysEqual(hexToUint8Array(leaves.proof.app_hash), out.appHash)) {
+      if (
+        !uint8ArrayEqual(hexToUint8Array(leaves.proof.app_hash), out.appHash)
+      ) {
         throw new Error("app hash mismatch");
       }
 

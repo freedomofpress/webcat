@@ -9,12 +9,13 @@ vi.mock("../../src/browser/permissions", () => ({
 import {
   canonicalizeJCS,
   canonicalizeOLPC,
+  sha256,
 } from "@freedomofpress/crypto-browser";
+import { stringToUint8Array } from "@freedomofpress/crypto-browser";
 import { TrustedRoot } from "@freedomofpress/sigstore-browser";
 
 import { defaults } from "../../src/config";
 import { WebcatDatabase } from "../../src/webcat/db";
-import { stringToUint8Array } from "../../src/webcat/encoding";
 import {
   Enrollment,
   EnrollmentTypes,
@@ -29,7 +30,6 @@ import {
   WebcatErrorCode,
 } from "../../src/webcat/interfaces/errors";
 import { BundleFetcher, OriginState } from "../../src/webcat/originstate";
-import { SHA256 } from "../../src/webcat/utils";
 
 // --- Mocks ---
 vi.mock("../../src/webcat/validators", async () => {
@@ -109,8 +109,7 @@ async function computeEnrollmentHash(
   enrollment: Enrollment,
 ): Promise<Uint8Array> {
   const bytes = stringToUint8Array(canonicalizeJCS(enrollment));
-  const digest = await SHA256(bytes);
-  return digest instanceof Uint8Array ? digest : new Uint8Array(digest);
+  return sha256(bytes);
 }
 
 // Dummy policy & signers
@@ -173,13 +172,11 @@ describe("OriginState.verifyEnrollment", () => {
     expect(state.error?.code).toBe(WebcatErrorCode.Enrollment.MISMATCH);
   });
 
-  // Spec server.md §1.0: enrollments hash under RFC 8785 only, with or
-  // without enrollment_schema. A raw newline is where OLPC would differ.
+  // Enrollments hash under RFC 8785 with or without enrollment_schema.
   const hashWith = async (
     encode: (e: object) => string,
     e: SigsumEnrollment,
-  ): Promise<Uint8Array> =>
-    new Uint8Array(await SHA256(stringToUint8Array(encode(e))));
+  ): Promise<Uint8Array> => sha256(stringToUint8Array(encode(e)));
 
   it("accepts a legacy enrollment committed under RFC 8785", async () => {
     const legacy = {

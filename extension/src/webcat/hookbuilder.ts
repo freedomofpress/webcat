@@ -1,3 +1,9 @@
+import {
+  base64UrlToUint8Array,
+  Uint8ArrayToBase64Url,
+  Uint8ArrayToString,
+} from "@freedomofpress/crypto-browser";
+
 import { KVStore } from "../browser/kvstore";
 import { RequestDetails } from "../browser/requests";
 import pageHooks from "./../../dist/hooks/page.js?raw";
@@ -165,9 +171,7 @@ export class HookBuilder {
     if (markerIndex === -1) {
       throw new Error("no fragment present when decrypting");
     }
-    const efpo = Uint8Array.fromBase64(url.substring(markerIndex + 1), {
-      alphabet: "base64url",
-    });
+    const efpo = base64UrlToUint8Array(url.substring(markerIndex + 1));
     const fpo = await crypto.subtle.decrypt(
       {
         name: "AES-GCM",
@@ -176,7 +180,7 @@ export class HookBuilder {
       await this.#firstPartyKey,
       efpo.slice(12),
     );
-    return new TextDecoder().decode(fpo);
+    return Uint8ArrayToString(new Uint8Array(fpo));
   }
 
   async #get(
@@ -217,7 +221,7 @@ export class HookBuilder {
     const efpo = new Uint8Array(iv.byteLength + ct.byteLength);
     efpo.set(new Uint8Array(iv));
     efpo.set(ct, iv.byteLength);
-    const efpoBase64 = efpo.toBase64({ alphabet: "base64url" });
+    const efpoBase64 = Uint8ArrayToBase64Url(efpo);
     // Return the hook script updated with data
     return hooks[type].replace(
       '"__DATA_PLACEHOLDER__"',
