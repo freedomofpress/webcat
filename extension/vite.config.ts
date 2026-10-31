@@ -9,7 +9,7 @@ export default defineConfig({
     minify: !isTesting,
     outDir: "dist",
     emptyOutDir: false,
-    target: "ES2020",
+    target: "es2022",
     rollupOptions: {
       input: {
         main: "src/background.ts", // Use regular background.ts

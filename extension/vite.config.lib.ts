@@ -11,7 +11,7 @@ export default defineConfig({
   build: {
     minify: false,
     outDir: "dist/lib",
-    target: "ES2020",
+    target: "es2022",
     ssr: true, // HACK: disable __vitePreload; see https://github.com/vitejs/vite/issues/4016
     rollupOptions: {
       preserveEntrySignatures: "strict",

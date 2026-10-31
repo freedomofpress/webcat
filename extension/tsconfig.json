@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
-    "target": "ES2020", // Or higher if needed (e.g., ES2017, ES2020)
-    "lib": ["DOM", "ESNext"], // Includes modern JS features like Promise and the browser API
+    "target": "ES2022",
+    "lib": ["DOM", "ESNext"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,

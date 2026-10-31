@@ -113,40 +113,40 @@ describe("isDue", () => {
     vi.useRealTimers();
   });
 
-  it("returns true when lastUpdated is null (never updated)", () => {
+  it("returns true when lastUpdated is null (never updated)", async () => {
     db.getLastUpdated.mockResolvedValue(null);
-    expect(updater.isDue()).resolves.toBe(true);
+    await expect(updater.isDue()).resolves.toBe(true);
   });
 
-  it("returns true when lastUpdated is exactly UPDATE_INTERVAL_MS ago", () => {
+  it("returns true when lastUpdated is exactly UPDATE_INTERVAL_MS ago", async () => {
     db.getLastUpdated.mockResolvedValue(
       Date.now() - EnrollmentUpdater.DefaultUpdateInterval,
     );
-    expect(updater.isDue()).resolves.toBe(true);
+    await expect(updater.isDue()).resolves.toBe(true);
   });
 
-  it("returns true when lastUpdated is older than UPDATE_INTERVAL_MS", () => {
+  it("returns true when lastUpdated is older than UPDATE_INTERVAL_MS", async () => {
     db.getLastUpdated.mockResolvedValue(
       Date.now() - EnrollmentUpdater.DefaultUpdateInterval - 1,
     );
-    expect(updater.isDue()).resolves.toBe(true);
+    await expect(updater.isDue()).resolves.toBe(true);
   });
 
-  it("returns false when lastUpdated is less than UPDATE_INTERVAL_MS ago", () => {
+  it("returns false when lastUpdated is less than UPDATE_INTERVAL_MS ago", async () => {
     db.getLastUpdated.mockResolvedValue(
       Date.now() - EnrollmentUpdater.DefaultUpdateInterval + 1,
     );
-    expect(updater.isDue()).resolves.toBe(false);
+    await expect(updater.isDue()).resolves.toBe(false);
   });
 
-  it("returns false when lastUpdated is very recent", () => {
+  it("returns false when lastUpdated is very recent", async () => {
     db.getLastUpdated.mockResolvedValue(Date.now() - 1000);
-    expect(updater.isDue()).resolves.toBe(false);
+    await expect(updater.isDue()).resolves.toBe(false);
   });
 
-  it("returns false when lastUpdated is now", () => {
+  it("returns false when lastUpdated is now", async () => {
     db.getLastUpdated.mockResolvedValue(Date.now());
-    expect(updater.isDue()).resolves.toBe(false);
+    await expect(updater.isDue()).resolves.toBe(false);
   });
 
   it("returns true after time advances past the interval", async () => {
