@@ -1,4 +1,5 @@
 /// <reference types="vitest" />
+import { playwright } from "@vitest/browser-playwright";
 import { defineConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 
@@ -21,7 +22,7 @@ export default defineConfig({
   test: {
     globals: true,
     browser: {
-      provider: "playwright", // or 'webdriverio'
+      provider: playwright(),
       enabled: true,
       // at least one instance is required
       instances: [{ browser: "firefox" }],

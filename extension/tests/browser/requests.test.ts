@@ -231,7 +231,7 @@ describe("RequestHandler", () => {
     );
   });
 
-  it("should reuse the details object in events when requestId matches", () => {
+  it("should reuse the details object in events when requestId matches", async () => {
     handler.bind(["example.com"]);
     const detailsById = new Map<string, RequestDetails>();
     const listener = (event: RequestEvent<RequestDetails>) => {
@@ -268,7 +268,7 @@ describe("RequestHandler", () => {
     });
     expect(Array.from(detailsById.keys())).toEqual(["123", "456"]);
     expect(detailsById.get("123")).not.toBe(detailsById.get("456"));
-    expect(detailsById.get("456")?.completed).rejects.toBeUndefined();
+    await expect(detailsById.get("456")?.completed).rejects.toBeUndefined();
   });
 
   it("should mark RequestDetails as completed when the onCompleted event fires", async () => {
