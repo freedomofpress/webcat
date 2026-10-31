@@ -1,6 +1,6 @@
 // From https://github.com/helmetjs/content-security-policy-parser/blob/main/mod.ts
 
-import { hexToUint8Array } from "./encoding";
+import { hexToUint8Array } from "@freedomofpress/crypto-browser";
 
 // "ASCII whitespace is U+0009 TAB, U+000A LF, U+000C FF, U+000D CR, or
 // U+0020 SPACE."

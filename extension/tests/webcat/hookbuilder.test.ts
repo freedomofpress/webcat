@@ -79,7 +79,7 @@ describe("HookBuilder", () => {
     await expect(
       hb.getPageHooks([], "https://example.com", false),
     ).resolves.toBe(
-      `page {{ {"hashes":[],"firstParty":"egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM=","sameOriginWithFirstParty":false,"connectionName":"conn"} }}`,
+      `page {{ {"hashes":[],"firstParty":"egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM","sameOriginWithFirstParty":false,"connectionName":"conn"} }}`,
     );
     expect(store.set).toHaveBeenCalledWith(
       { firstPartySalt: new Uint8Array(256 / 8).fill(0) },
@@ -97,7 +97,7 @@ describe("HookBuilder", () => {
     ).resolves.toStrictEqual([
       expect.any(Function),
       [
-        '{"hashes":[],"firstParty":"egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM=","sameOriginWithFirstParty":false,"connectionName":"conn"}',
+        '{"hashes":[],"firstParty":"egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM","sameOriginWithFirstParty":false,"connectionName":"conn"}',
       ],
     ]);
     expect(store.set).toHaveBeenCalledWith(
@@ -113,7 +113,7 @@ describe("HookBuilder", () => {
   it("should correctly decrypt a fragment", async () => {
     await expect(
       hb.decryptFragment(
-        "https://webcat.tech/worker.js#egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM=",
+        "https://webcat.tech/worker.js#egOLMfeVlE8w__HOJT410NMGCCxj67csTwNTCATLSv5O_a3Ff1Lb7Dk-MWpWzPM",
       ),
     ).resolves.toBe("https://example.com");
     expect(store.set).toHaveBeenCalledWith(
@@ -146,7 +146,7 @@ describe("HookBuilder", () => {
     await expect(
       hb.getPageHooks([], "https://example.com", false),
     ).resolves.toBe(
-      `page {{ {"hashes":[],"firstParty":"iUVA3nR8tTZvSXRqV_fxC0266M2ZQFFQkrup04pLjVLLm3WdeuUeCXmJXIv3uVc=","sameOriginWithFirstParty":false,"connectionName":"conn"} }}`,
+      `page {{ {"hashes":[],"firstParty":"iUVA3nR8tTZvSXRqV_fxC0266M2ZQFFQkrup04pLjVLLm3WdeuUeCXmJXIv3uVc","sameOriginWithFirstParty":false,"connectionName":"conn"} }}`,
     );
     expect(store.set).not.toHaveBeenCalled();
   });

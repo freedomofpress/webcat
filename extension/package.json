@@ -69,10 +69,10 @@
     "yazl": "^3.3.1"
   },
   "dependencies": {
-    "@freedomofpress/cometbft": "^0.2.0",
-    "@freedomofpress/crypto-browser": "^0.2.0",
-    "@freedomofpress/ics23": "^0.2.0",
-    "@freedomofpress/sigstore-browser": "^0.1.16",
-    "@freedomofpress/sigsum": "^0.4.0"
+    "@freedomofpress/cometbft": "^0.4.0",
+    "@freedomofpress/crypto-browser": "^0.3.0",
+    "@freedomofpress/ics23": "^0.3.0",
+    "@freedomofpress/sigstore-browser": "^0.2.0",
+    "@freedomofpress/sigsum": "^0.6.0"
   }
 }

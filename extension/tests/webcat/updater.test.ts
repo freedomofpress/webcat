@@ -33,15 +33,11 @@ vi.mock("@freedomofpress/ics23/dist/webcat", () => ({
   verifyWebcatProof: vi.fn(() => [["example.com", "abc123"]]),
 }));
 
-vi.mock("../../src/webcat/encoding", () => ({
+vi.mock("@freedomofpress/crypto-browser", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@freedomofpress/crypto-browser")>()),
   hexToUint8Array: vi.fn(() => new Uint8Array([1, 2, 3])),
   Uint8ArrayToBase64: vi.fn(() => "AQID"),
-  stringToUint8Array: vi.fn((s: string) => new TextEncoder().encode(s)),
-  Uint8ArrayToBase64Url: vi.fn(() => "AQID"),
-}));
-
-vi.mock("../../src/webcat/utils", () => ({
-  arraysEqual: vi.fn(() => true),
+  uint8ArrayEqual: vi.fn(() => true),
 }));
 
 // Mock browser.alarms API
@@ -275,8 +271,8 @@ describe("update", () => {
   });
 
   it("throws when app_hash mismatches", async () => {
-    const { arraysEqual } = await import("../../src/webcat/utils");
-    (arraysEqual as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
+    const { uint8ArrayEqual } = await import("@freedomofpress/crypto-browser");
+    (uint8ArrayEqual as ReturnType<typeof vi.fn>).mockReturnValueOnce(false);
 
     await expect(updater.update()).rejects.toThrow("app hash mismatch");
   });
