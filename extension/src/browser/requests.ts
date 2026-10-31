@@ -101,11 +101,14 @@ export class BlockingResponse
    * to signal successful completion.
    */
   cancel: boolean | undefined = true;
-  redirectUrl?: string | undefined;
-  upgradeToSecure?: boolean | undefined;
-  requestHeaders?: browser.webRequest.HttpHeaders | undefined;
-  responseHeaders?: browser.webRequest.HttpHeaders | undefined;
-  authCredentials?:
+  // `declare` keeps these out of the instance until set, so merging responses
+  // with Object.assign does not overwrite one listener's value with another's
+  // undefined.
+  declare redirectUrl?: string | undefined;
+  declare upgradeToSecure?: boolean | undefined;
+  declare requestHeaders?: browser.webRequest.HttpHeaders | undefined;
+  declare responseHeaders?: browser.webRequest.HttpHeaders | undefined;
+  declare authCredentials?:
     browser.webRequest._BlockingResponseAuthCredentials | undefined;
 
   constructor(details?: RequestDetails) {
