@@ -1,4 +1,9 @@
 import {
+  base64UrlToUint8Array,
+  stringToUint8Array,
+  Uint8ArrayToString,
+} from "@freedomofpress/crypto-browser";
+import {
   AllOf,
   EXTENSION_OID_OTHERNAME,
   PolicyError,
@@ -25,7 +30,6 @@ import {
 } from "@freedomofpress/sigsum/dist/types";
 
 import { canonicalForm } from "./canonicalize";
-import { base64UrlToUint8Array, stringToUint8Array } from "./encoding";
 import {
   Manifest,
   SigstoreEnrollment,
@@ -279,7 +283,6 @@ export async function witnessTimestampsFromCosignedTreeHead(
   return timestamps;
 }
 
-// The field rules live in schema.ts, one table per document.
 export function validateSigsumEnrollment(
   enrollment: SigsumEnrollment,
   minSchema = 0,
@@ -301,7 +304,7 @@ export function validateManifest(
   return validate(manifest, manifestSchema, minSchema);
 }
 
-// The bytes a manifest was signed over; null for one that cannot be encoded.
+// null when the dialect cannot encode the manifest.
 function signedBytes(manifest: Manifest): Uint8Array | null {
   try {
     return stringToUint8Array(canonicalForm(manifest));
@@ -477,13 +480,13 @@ class ClaimPolicy implements VerificationPolicy {
         const inner = valueObj.subs[0];
 
         if (inner?.value) {
-          got = new TextDecoder().decode(inner.value);
+          got = Uint8ArrayToString(inner.value);
         }
       }
 
       // Case 2: Raw OCTET STRING (Fulcio V1-style)
       if (!got) {
-        got = new TextDecoder().decode(ext.value);
+        got = Uint8ArrayToString(ext.value);
       }
     } catch {
       throw new PolicyError(`Unable to decode extension ${this.oid}`);
