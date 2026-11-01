@@ -72,7 +72,7 @@
     "@freedomofpress/cometbft": "^0.4.0",
     "@freedomofpress/crypto-browser": "^0.3.0",
     "@freedomofpress/ics23": "^0.3.0",
-    "@freedomofpress/sigstore-browser": "^0.2.0",
+    "@freedomofpress/sigstore-browser": "^0.3.0",
     "@freedomofpress/sigsum": "^0.6.0"
   }
 }
