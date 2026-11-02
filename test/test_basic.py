@@ -212,6 +212,10 @@ def test_multiple_tabs(browser: Browser, server: Server, update_server: UpdateSe
             f"window.open('{server.url()}');"
             f"setTimeout(() => location.href = '{server.url()}/x', 1000)"
         )
+    # The first mismatch refetches the bundle and reloads the tab; the error
+    # page follows the second mismatch
+    with server.wait_for({"/js/alert.js"}):
+        pass
     res = browser.execute("document.body.textContent")
     assert expected in res
 
