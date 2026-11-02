@@ -19,12 +19,12 @@ import { BundleFetcherConfig } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
 import { ResponseValidator } from "./response";
+import { isNewerSemver } from "./semver";
 import { WebcatUI } from "./ui";
 import {
   clearBrowserCaches,
   getFQDN,
   isExtensionRequest,
-  isNewerSemver,
   isSameOriginURL,
 } from "./utils";
 

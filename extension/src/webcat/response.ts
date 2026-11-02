@@ -21,11 +21,11 @@ import {
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
 import { PASS_THROUGH_TYPES } from "./resources";
+import { isNewerSemver } from "./semver";
 import { WebcatUI } from "./ui";
 import {
   arraysEqual,
   clearBrowserCaches,
-  isNewerSemver,
   isSameOriginURL,
   SHA256,
 } from "./utils";
