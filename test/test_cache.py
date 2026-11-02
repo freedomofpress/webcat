@@ -1,5 +1,5 @@
 import pytest
-from time import sleep, monotonic
+from time import sleep
 from helpers import Browser, TorBrowser, Server, UpdateServer
 import json
 from pytest_check import check
@@ -85,11 +85,11 @@ def test_cache_eviction(browser: Browser, server: Server, update_server: UpdateS
             "}, 1000)"
         )
     # The first mismatch refetches the bundle and reloads the tab; the error
-    # page only appears after the second mismatch
-    deadline = monotonic() + 10
-    while expected not in str(res := browser.execute("document.body.textContent")):
-        assert monotonic() < deadline, f"error page not shown within 10s: {res}"
-        sleep(0.2)
+    # page follows the second mismatch
+    with server.wait_for({"/js/alert.js"}):
+        pass
+    res = browser.execute("document.body.textContent")
+    assert expected in res
 
 @pytest.mark.parametrize("browser", ["firefox", "tbb", "tbb_safer", "tbb_safest"], indirect=True)
 @pytest.mark.parametrize("root, headers, hooks, expected", [
