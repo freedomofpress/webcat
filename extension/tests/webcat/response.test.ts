@@ -26,6 +26,8 @@ vi.stubGlobal("browser", {
   webRequest: {
     filterResponseData: mockFilterResponseData,
   },
+  browsingData: { remove: vi.fn() },
+  tabs: { reload: vi.fn() },
 });
 
 describe("ResponseValidator.validateHeaders", () => {
@@ -395,7 +397,11 @@ describe("ResponseValidator.validateContent", () => {
       showOKIcon: vi.fn(),
       showPartialIcon: vi.fn(),
     } as unknown as WebcatUI;
-    rv = new ResponseValidator({} as WebcatDatabase, ui, {} as HookBuilder);
+    rv = new ResponseValidator(
+      { origins: { delete: vi.fn() } } as unknown as WebcatDatabase,
+      ui,
+      {} as HookBuilder,
+    );
     filter = {
       close: vi.fn(),
       disconnect: vi.fn(),
@@ -405,18 +411,44 @@ describe("ResponseValidator.validateContent", () => {
     details = {
       requestId: "request-id",
       url: "https://example.com/path",
+      tabId: 1,
       state: {
+        fqdn: "example.com",
         pendingOrigin: {
           isManifestVerified() {
             return verified;
           },
           manifest: {
+            version: "1.0.0",
             files: {},
           },
         },
       },
       type: "other",
     };
+  });
+
+  async function mismatch() {
+    mockFilterResponseData.mockReturnValueOnce(filter);
+    await rv.validateContent(details);
+    verified = true;
+    details.state.pendingOrigin.manifest.files["/path"] = "hash";
+    details.responseHeaders = [];
+    filter.onstart?.();
+    filter.ondata?.({ data: new TextEncoder().encode("data").buffer });
+    await filter.onstop?.();
+    expect(filter.write).toHaveBeenCalledWith(
+      new Uint8Array([68, 69, 78, 73, 69, 68]),
+    );
+    expect(filter.close).toHaveBeenCalled();
+    expect(filter.disconnect).not.toHaveBeenCalled();
+  }
+
+  it("refreshes the origin on the first mismatching hash", async () => {
+    await mismatch();
+    expect(browser.tabs.reload).toHaveBeenCalledExactlyOnceWith(1);
+    expect(details.state.pendingOrigin.stale).toBe(true);
+    expect(ui.showErrorPage).not.toHaveBeenCalled();
   });
 
   it("rejects when no pendingOrigin is available", async () => {
@@ -465,26 +497,10 @@ describe("ResponseValidator.validateContent", () => {
     expect(filter.disconnect).toHaveBeenCalledExactlyOnceWith();
   });
 
-  it("denies a response with a mismatching hash", async () => {
-    mockFilterResponseData.mockReturnValueOnce(filter);
-    const result = await rv.validateContent(details);
-    expect(result).toBeUndefined();
-    expect(mockFilterResponseData).toHaveBeenCalledExactlyOnceWith(
-      "request-id",
-    );
-
-    const data = new TextEncoder().encode("data").buffer;
-    verified = true;
-    details.state.pendingOrigin.manifest.files["/path"] = "hash";
-    details.responseHeaders = [];
-    filter.onstart?.();
-    filter.ondata?.({ data });
-    await filter.onstop?.();
-    expect(filter.write).toHaveBeenCalledExactlyOnceWith(
-      new Uint8Array([68, 69, 78, 73, 69, 68]),
-    );
-    expect(filter.close).toHaveBeenCalledExactlyOnceWith();
-    expect(filter.disconnect).not.toHaveBeenCalled();
+  it("denies a mismatching hash once the same version was refreshed", async () => {
+    await mismatch();
+    await mismatch();
+    expect(browser.tabs.reload).toHaveBeenCalledExactlyOnceWith(1);
     expect(ui.showErrorPage).toHaveBeenCalledExactlyOnceWith(
       details,
       new WebcatError(WebcatErrorCode.File.MISMATCH, [

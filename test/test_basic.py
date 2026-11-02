@@ -303,14 +303,18 @@ def test_delegation(browser: Browser, server: Server, update_server: UpdateServe
     pytest.param("tbb_safer", NON_FRAME_PATHS-SERVICEWORKER_PATHS-WASM_PATHS, id="tbb_safer"),
     pytest.param("tbb_safest", NON_FRAME_PATHS-JS_PATHS-WORKER_PATHS-WASM_PATHS, id="tbb_safest")
 ], indirect=["browser"])
-@pytest.mark.parametrize("root, headers, hooks, expected", [
-    pytest.param("cases/testapp", EXPECTED_CSP, {}, "Hello v2!",
+@pytest.mark.parametrize("root, headers, hooks, expected, signal", [
+    pytest.param("cases/testapp", EXPECTED_CSP, {}, "Hello v2!", {"x-webcat-version": "0.2"},
         id="version_refresh_test"),
+    pytest.param("cases/testapp", EXPECTED_CSP, {}, "Hello v2!", {},
+        id="mismatch_refresh_test"),
 ], indirect=["root"])
-def test_version_refresh(browser: Browser, server: Server, update_server: UpdateServer, bundle_generator, expected, paths_to_wait, addon_path, root):
+def test_version_refresh(browser: Browser, server: Server, update_server: UpdateServer, bundle_generator, expected, paths_to_wait, addon_path, root, signal):
     """
-    Tests that a server can update its manifest during an active session.
-    Updated resources should be rendered in the browser with no errors.
+    Tests that a server can update its manifest during an active session,
+    either announcing it with x-webcat-version or letting the hash mismatch
+    trigger the refresh. Updated resources should be rendered in the browser
+    with no errors.
     """
     # Load v0.1: server serves the bundle that the `root` fixture signed.
     browser.install_extension(addon_path)
@@ -345,11 +349,11 @@ def test_version_refresh(browser: Browser, server: Server, update_server: Update
         with open(index_path, "rb") as f:
             v2_index = f.read()
 
-    # Server now signals a new version and serves the v0.2 bundle + content.
-    # The extension should detect x-webcat-version > cached manifest.version,
-    # purge the origin cache and browser caches, and reload.
-    server.hooks["/"] = Hook(v2_index, type="text/html",
-                             headers={"x-webcat-version": "0.2"})
+    # Server now serves the v0.2 bundle + content, with or without signaling
+    # it. The extension should detect either x-webcat-version > cached
+    # manifest.version or the index hash mismatch, purge the origin cache and
+    # browser caches, and reload.
+    server.hooks["/"] = Hook(v2_index, type="text/html", headers=signal)
     server.hooks["/.well-known/webcat/bundle.json"] = Hook(
         v2_bundle, type="application/json",
         headers={"cache-control": "no-store"})

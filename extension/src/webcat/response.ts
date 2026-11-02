@@ -71,6 +71,8 @@ export class ResponseValidator {
   );
   readonly #db: Database;
   readonly #ui: WebcatUI;
+  /** origin cache key -> manifest version already refreshed once after a hash mismatch */
+  readonly #refreshed = new Map<string, string>();
   readonly #hooks: HookBuilder;
 
   constructor(db: Database, ui: WebcatUI, hooks: HookBuilder) {
@@ -181,14 +183,7 @@ export class ResponseValidator {
         `Detected new version ${version}, current_version ${details.state.pendingOrigin.manifest.version}`,
         details,
       );
-      await this.#db.origins.delete(
-        CacheKey(details.state.fqdn, details.state.cachePartition),
-      );
-      // Mark the origin state so any sibling request that shares it won't
-      // re-insert it via commitVerifiedOrigin later
-      details.state.pendingOrigin.stale = true;
-      await clearBrowserCaches([details.state.fqdn]);
-      browser.tabs.reload(details.tabId);
+      await this.#refresh(details, details.state.pendingOrigin);
     }
 
     const pathname = new URL(details.url).pathname;
@@ -323,6 +318,24 @@ export class ResponseValidator {
   }
 
   /**
+   * Drops the cached origin state and browser caches and reloads the tab, so
+   * the next load fetches the bundle again.
+   */
+  async #refresh(
+    details: Stateful<HeadersReceivedDetails | BeforeRequestDetails>,
+    origin: OriginState,
+  ) {
+    await this.#db.origins.delete(
+      CacheKey(details.state.fqdn, details.state.cachePartition),
+    );
+    // Mark the origin state so any sibling request that shares it won't
+    // re-insert it via commitVerifiedOrigin later
+    origin.stale = true;
+    await clearBrowserCaches([details.state.fqdn]);
+    browser.tabs.reload(details.tabId);
+  }
+
+  /**
    * Validates response content.
    *
    * @param details The request details object to validate.
@@ -450,6 +463,19 @@ export class ResponseValidator {
       if (!matches && blob.byteLength !== 0) {
         deny(filter);
         filter.close();
+        // A deploy changes files unexpectedly: refetch the bundle
+        // once per manifest version.
+        // TODO: worker requests have no tab to reload and go straight to
+        // the error page
+        const key = CacheKey(details.state.fqdn, details.state.cachePartition);
+        if (
+          details.tabId !== -1 &&
+          this.#refreshed.get(key) !== manifest.version
+        ) {
+          this.#refreshed.set(key, manifest.version);
+          await this.#refresh(details, originState);
+          return;
+        }
         this.#ui.showErrorPage(
           details,
           new WebcatError(WebcatErrorCode.File.MISMATCH, [
