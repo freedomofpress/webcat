@@ -12,7 +12,6 @@ import {
   getFQDN,
   getFQDNSafe,
   isExtensionRequest,
-  isNewerSemver,
   isSameOriginURL,
   SHA256,
 } from "./../../src/webcat/utils";
@@ -294,50 +293,6 @@ describe("arraysEqual", () => {
     const a = new Uint8Array([1, 2, 3]);
     const b = new Uint8Array([3, 2, 1]);
     expect(arraysEqual(a, b)).toBe(false);
-  });
-});
-
-describe("isNewerSemver", () => {
-  it("should return true for newer patch versions", () => {
-    expect(isNewerSemver("1.2.4", "1.2.3")).toBe(true);
-    expect(isNewerSemver("1.2.4", "1.2")).toBe(true);
-  });
-
-  it("should return true for newer minor versions", () => {
-    expect(isNewerSemver("1.3.3", "1.2.3")).toBe(true);
-    expect(isNewerSemver("1.3.3", "1.2")).toBe(true);
-    expect(isNewerSemver("1.3", "1.2.3")).toBe(true);
-    expect(isNewerSemver("1.3.3", "1")).toBe(true);
-  });
-
-  it("should return true for newer major versions", () => {
-    expect(isNewerSemver("2.2.3", "1.2.3")).toBe(true);
-    expect(isNewerSemver("2", "1.2.3")).toBe(true);
-    expect(isNewerSemver("2.2.3", "1")).toBe(true);
-  });
-
-  it("should return false for the same version", () => {
-    expect(isNewerSemver("1.2.3", "1.2.3")).toBe(false);
-    expect(isNewerSemver("1.0.0", "1")).toBe(false);
-    expect(isNewerSemver("1", "1.0.0")).toBe(false);
-  });
-
-  it("should return false for older major versions", () => {
-    expect(isNewerSemver("1.2.3", "2.2.3")).toBe(false);
-    expect(isNewerSemver("1.3.3", "2.2.3")).toBe(false);
-    expect(isNewerSemver("1.2.4", "2.2.3")).toBe(false);
-    expect(isNewerSemver("1.3.4", "2.2.3")).toBe(false);
-    expect(isNewerSemver("1.3.4", "2.2.3")).toBe(false);
-  });
-
-  it("should return false for older minor versions", () => {
-    expect(isNewerSemver("1.2.3", "1.3.3")).toBe(false);
-    expect(isNewerSemver("1.2.4", "1.3.3")).toBe(false);
-  });
-
-  it("should return false for an older patch version", () => {
-    expect(isNewerSemver("1.2.3", "1.2.4")).toBe(false);
-    expect(isNewerSemver("1.2", "1.2.4")).toBe(false);
   });
 });
 

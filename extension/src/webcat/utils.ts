@@ -58,23 +58,6 @@ export function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
-export function isNewerSemver(a: string, b: string): boolean {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-
-  const len = Math.max(pa.length, pb.length);
-
-  for (let i = 0; i < len; i++) {
-    const na = pa[i] ?? 0;
-    const nb = pb[i] ?? 0;
-
-    if (na > nb) return true;
-    if (na < nb) return false;
-  }
-
-  return false;
-}
-
 permissions.require("browsingData")(clearBrowserCaches);
 export async function clearBrowserCaches(fqdns: string[]) {
   // Caching is complicated. See:
