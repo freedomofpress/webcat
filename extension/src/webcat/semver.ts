@@ -1,11 +1,11 @@
 /**
- * Splits a version into its numeric core and prerelease identifiers. Any
- * leading "v" is tolerated (drawio ships "v31.1.8") and build metadata after
- * "+" is ignored, as Semantic Versioning 2.0.0 section 10 requires.
+ * Splits a version into its numeric core and prerelease identifiers. A leading
+ * "v" is tolerated even though it is not SemVer compliant, and build metadata
+ * after "+" is ignored, as Semantic Versioning 2.0.0 section 10 requires.
  */
 function parse(version: string): [number[], string[]] {
   const [core, prerelease = ""] = version
-    .replace(/^v+/i, "")
+    .replace(/^v/i, "")
     .split("+")[0]
     .split(/-(.*)/s);
   return [core.split(".").map(Number), prerelease ? prerelease.split(".") : []];
