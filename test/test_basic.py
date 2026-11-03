@@ -251,6 +251,45 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, update_serve
     res = browser.execute("document.body.textContent")
     assert expected in res
 
+# Only Tor Browser (Firefox ESR, bug 2048884) reports worker-initiated requests
+# under frameId 0; Safer is the level where NoScript drops the Worker hook
+@pytest.mark.parametrize("browser, incognito", [
+    pytest.param("tbb_safer", True, id="tbb_safer"),
+], indirect=["browser"])
+@pytest.mark.parametrize("root, headers, hooks", [
+    # SharedWorkers and ServiceWorkers have no tab: without a fragment their
+    # first party cannot be recovered, so they are not loaded here
+    pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {
+            "/js/load_sharedworker.js": b"",
+            "/js/load_serviceworker.js": b"",
+        }, id="worker_first_party_without_hooks_test-in_frame"),
+], indirect=["root"])
+def test_worker_first_party_without_hooks(browser: Browser, server: Server, update_server: UpdateServer, addon_path, dnsnames, non_enrolled_dnsnames, incognito):
+    """
+    Tests that dedicated Worker subresources of an enrolled frame are
+    partitioned under the embedding first party even when no worker URL
+    carries a first-party fragment. Another extension can replace
+    window.Worker after WEBCAT's hook (NoScript does so on Tor Browser Safer),
+    and Firefox reports importScripts() requests with frameId 0 and the worker
+    script as documentUrl.
+    """
+    browser.install_extension(addon_path)
+    update_server.wait_for_update()
+    browser.attach_extension_console()
+    # Drop the document_start hooks, so no worker is hooked and no URL gets a fragment
+    browser.execute("var unregistered = false; browser.scripting.unregisterContentScripts().then(() => unregistered = true);", in_extension=True)
+    deadline = monotonic() + 10
+    while browser.execute("JSON.stringify(unregistered)", in_extension=True) != "true":
+        assert monotonic() < deadline, "content scripts were not unregistered"
+        sleep(0.2)
+    url = f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url(dnsnames[0])}"
+    with server.wait_for({"/workers/worker_import.js"}):
+        browser.navigate(url)
+    browser.execute("var keys; state.origins.keys().then(k => keys = k);", in_extension=True)
+    cache_keys = json.loads(browser.execute("JSON.stringify(keys)", in_extension=True))
+    first_party = server.url(non_enrolled_dnsnames[0])
+    assert [f"{dnsnames[0]}?firstParty={urllib.parse.quote(first_party, safe="")},incognito={"true" if incognito else "false"}"] == cache_keys
+
 @pytest.mark.parametrize("browser, paths_to_wait", [
     pytest.param("firefox", NON_FRAME_PATHS, id="firefox"),
     pytest.param("tbb", NON_FRAME_PATHS-SERVICEWORKER_PATHS, id="tbb"),

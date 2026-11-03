@@ -384,8 +384,18 @@ export class WebcatRequestHandler extends RequestHandler {
         details.frameAncestors[details.frameAncestors.length - 1].url,
       ).origin;
     }
-    if (details.frameId !== 0 && details.frameId !== -1) {
-      // Subresource of a Worker in a frame; no frameAncestors available; check the tab
+    if (details.type === "main_frame") {
+      // Top-level navigation; FPO is the origin of the request URL
+      return new URL(details.url).origin;
+    }
+    if (details.tabId !== -1 && details.frameId !== -1) {
+      // Subresource of a Worker; no frameAncestors available. The first party
+      // of any request bound to a tab is the tab's top-level document, so take
+      // it from there: documentUrl is the worker script, which before bug
+      // 2048884 (fixed in Firefox 155, still present in ESR 140 and 153, so
+      // in Tor Browser 15 and 16) is reported under frameId 0 even for a
+      // worker owned by a cross-origin frame, and the URL fragment is missing
+      // whenever another extension replaced the Worker hook
       const frames = await browser.webNavigation.getAllFrames({
         tabId: details.tabId,
       });
@@ -403,12 +413,8 @@ export class WebcatRequestHandler extends RequestHandler {
       return details.requestId;
     }
     if (details.documentUrl) {
-      // Loading into the top-level document; FPO is the origin of documentUrl
+      // No tab (SharedWorker or ServiceWorker); FPO is the origin of documentUrl
       return new URL(details.documentUrl).origin;
-    }
-    if (details.type === "main_frame") {
-      // Top-level navigation; FPO is the origin of the request URL
-      return new URL(details.url).origin;
     }
     logger.addLog(
       "error",
