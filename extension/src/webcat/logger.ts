@@ -1,10 +1,9 @@
 import { RequestDetails } from "../browser/requests";
-import { LogEntry } from "./interfaces/log";
+import { ConsoleLevel, LogEntry } from "./interfaces/log";
 import { Stateful } from "./interfaces/requeststate";
 
-type ConsoleLevel = "log" | "warn" | "error" | "info" | "debug";
 // Capped to avoid long running browser sessions to grow forever
-const MAX_LOGS = 1000;
+const MAX_LOGS = 3000;
 const globalLogs: LogEntry[] = [];
 
 // Logger Class
