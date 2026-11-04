@@ -80,6 +80,10 @@ def pytest_addoption(parser):
         "--iterations", type=int, default=20,
         help="Number of iterations per test"
     )
+    parser.addoption(
+        "--base-addon", action="store", default=None,
+        help="live.py: zip built from the base commit, compared against --addon"
+    )
 
 @pytest.fixture(scope="session")
 def addon_path(request):

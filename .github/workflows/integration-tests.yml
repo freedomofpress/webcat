@@ -110,3 +110,58 @@ jobs:
           make test TESTARGS="--addon ${{ matrix.addon || '../dist/webcat-extension-test.zip' }} \
           --headless --reruns 2 --reruns-delay 5 --rerun-except Fatal -k '${{ matrix.test-filter }}'"
 
+
+  # Loads every enrolled domain with the extension built from the base commit
+  # and from this commit, and fails if any result changed.
+  live-sites:
+    runs-on: ubuntu-latest
+    name: Live sites (Firefox ESR)
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Firefox ESR
+        uses: browser-actions/setup-firefox@v1
+        with:
+          firefox-version: latest-esr
+
+      - name: Set up virtual display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb
+          Xvfb :99 -screen 0 1024x768x24 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+
+      - name: Initialize Firefox profile
+        run: |
+          firefox --headless -CreateProfile "default" 2>/dev/null || true
+          timeout 5 firefox --headless || true
+
+      - name: Build extension from this commit
+        run: |
+          make -C extension package
+          cp dist/webcat-extension.zip dist/head.zip
+
+      - name: Build extension from the base commit
+        run: |
+          git worktree add ../base ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
+          make -C ../base/extension package
+          cp ../base/dist/webcat-extension.zip dist/base.zip
+
+      - name: Load every enrolled domain with both builds
+        run: |
+          make -C test install
+          cd test && .venv/bin/pytest -v -s live.py --base-addon ../dist/base.zip --addon ../dist/head.zip --headless
