@@ -159,4 +159,29 @@ describe("WebcatRequestHandler", () => {
     await expect(event.ready()).resolves.toMatchObject({ cancel: true });
     errorLog.mockRestore();
   });
+
+  it("partitions origin state by container", async () => {
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    const wrh = new WebcatRequestHandler(db, ui, defaults);
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "2",
+      tabId: 7,
+      frameId: 5,
+      type: "script",
+      url: "https://enrolled.example/app.js",
+      documentUrl: "https://enrolled.example/",
+      frameAncestors: [{ url: "https://embedder.example/page", frameId: 0 }],
+      cookieStoreId: "firefox-container-2",
+    }) as RequestDetailsBase & {
+      state?: { cachePartition: { firstParty: string; cookieStoreId: string } };
+    };
+    wrh.dispatchEvent(new RequestEvent("beforerequest", details as never));
+
+    await vi.waitFor(() => expect(details.state).toBeDefined());
+    expect(details.state?.cachePartition).toMatchObject({
+      firstParty: "https://embedder.example",
+      cookieStoreId: "firefox-container-2",
+    });
+  });
 });

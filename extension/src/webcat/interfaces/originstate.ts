@@ -6,7 +6,12 @@ import {
 } from "./bundle";
 import { WebcatError } from "./errors";
 
-export type CachePartition = { firstParty: string; incognito: boolean };
+export type CachePartition = {
+  firstParty: string;
+  incognito: boolean;
+  /** The contextual identity (container) the request belongs to */
+  cookieStoreId: string;
+};
 
 export type OriginStateObject = {
   status: "verified_manifest";

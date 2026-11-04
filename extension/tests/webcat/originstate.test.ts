@@ -130,6 +130,7 @@ describe("OriginState.verifyEnrollment", () => {
   let db: WebcatDatabase;
   const cachePartition = {
     firstParty: "https://example.com",
+    cookieStoreId: "firefox-default",
     incognito: false,
   };
 
@@ -326,6 +327,7 @@ describe("OriginState.verifyEnrollment (sigstore)", () => {
   const trustedRoot = {} as unknown as SigstoreEnrollment["trusted_root"];
   const cachePartition = {
     firstParty: "https://example.com",
+    cookieStoreId: "firefox-default",
     incognito: false,
   };
 
@@ -415,6 +417,7 @@ describe("OriginState.verifyManifest", () => {
   let db: WebcatDatabase;
   const cachePartition = {
     firstParty: "https://example.com",
+    cookieStoreId: "firefox-default",
     incognito: false,
   };
 
@@ -593,6 +596,7 @@ describe("OriginState.verifyManifest (sigstore)", () => {
   const trustedRoot = {} as unknown as SigstoreEnrollment["trusted_root"];
   const cachePartition = {
     firstParty: "https://example.com",
+    cookieStoreId: "firefox-default",
     incognito: false,
   };
 
@@ -675,6 +679,7 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
 
   const cachePartition = {
     firstParty: "https://example.com",
+    cookieStoreId: "firefox-default",
     incognito: false,
   };
   const defaultCSP =

@@ -138,6 +138,7 @@ export class WebcatRequestHandler extends RequestHandler {
         cachePartition: {
           firstParty: await this.#getFirstParty(details),
           incognito: !!details.incognito,
+          cookieStoreId: details.cookieStoreId ?? "firefox-default",
         },
         isFrame: FRAME_TYPES.includes(details.type),
       },
