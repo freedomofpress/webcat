@@ -9,6 +9,7 @@ import {
 import { ContentScript } from "../browser/scripting";
 import { Mutex } from "../browser/sync";
 import { CacheKey, isInPartition } from "./cache";
+import { isThirdPartyWorkerScript, resolveFirstParty } from "./firstparty";
 import { HookBuilder, HookBuilderConfig } from "./hookbuilder";
 import { Database } from "./interfaces/database";
 import { WebcatError } from "./interfaces/errors";
@@ -136,7 +137,7 @@ export class WebcatRequestHandler extends RequestHandler {
       state: {
         fqdn: getFQDN(details.url),
         cachePartition: {
-          firstParty: await this.#getFirstParty(details),
+          firstParty: await resolveFirstParty(details),
           cookieStoreId: details.cookieStoreId ?? "firefox-default",
         },
         isFrame: FRAME_TYPES.includes(details.type),
@@ -371,68 +372,6 @@ export class WebcatRequestHandler extends RequestHandler {
     await this.#db.origins.set(CacheKey(fqdn, cachePartition), newState);
   }
 
-  /**
-   * Determines the first-party origin (FPO) for a given request
-   */
-  async #getFirstParty(details: BeforeRequestDetails): Promise<string> {
-    // An opaque top-level document (about:blank, data:) is nobody's first
-    // party; state loaded under one is kept to that request
-    const originOf = (url: string) => {
-      const origin = new URL(url).origin;
-      return origin === "null" ? details.requestId : origin;
-    };
-    if (details.frameAncestors?.length) {
-      // This is a request with frameAncestors; FPO is the origin of the topmost (last) ancestor
-      return originOf(
-        details.frameAncestors[details.frameAncestors.length - 1].url,
-      );
-    }
-    if (details.type === "main_frame") {
-      // Top-level navigation; FPO is the origin of the request URL
-      return new URL(details.url).origin;
-    }
-    if (details.tabId !== -1) {
-      // Subresource of a Worker, no frameAncestors. The first party of a
-      // request bound to a tab is the tab's top-level document, so read it
-      // from the tab rather than from documentUrl, which is the worker script.
-      // Before bug 2048884 (fixed in Firefox 155, not in ESR 140 or 153, so
-      // not in Tor Browser 15 or 16) these requests are reported under
-      // frameId 0 even when the worker belongs to a cross-origin frame; since
-      // the fix, a worker created by another worker is reported with
-      // frameId -1 while keeping its tabId.
-      // Rejects if the tab is gone, resolves null if it was discarded
-      const frames = await browser.webNavigation.getAllFrames({
-        tabId: details.tabId,
-      });
-      // The document that owns the request (a worker is same-origin with its
-      // document) must still be in the tab, otherwise the tab has navigated
-      // away and frame 0 belongs to the next site
-      const owner = new URL(details.documentUrl ?? details.url).origin;
-      if (
-        frames &&
-        (details.frameId === -1 ||
-          frames.find((frame) => frame.frameId === details.frameId)) &&
-        frames.some((frame) => new URL(frame.url).origin === owner)
-      ) {
-        // FPO is the origin of the frame with frameId === 0
-        return originOf(frames.find((frame) => frame.frameId === 0)?.url || "");
-      }
-      throw new Error(`no live frame for '${details.url}'`);
-    }
-    if (details.documentUrl) {
-      // No tab: a SharedWorker or ServiceWorker, or a script it loads.
-      // Third-party ones are cancelled in #onRequest, so documentUrl is
-      // first-party and its origin is the first party.
-      return new URL(details.documentUrl).origin;
-    }
-    if (!details.thirdParty) {
-      // No tab and no document, e.g. a ServiceWorker update check: the
-      // browser reports it is not cross-site, so its own origin is the first party
-      return new URL(details.url).origin;
-    }
-    throw new Error(`no first party for '${details.url}'`);
-  }
-
   async #onWindowClosed() {
     // Handle incognito sessions ending
     const windows = await browser.windows.getAll();
@@ -449,21 +388,4 @@ export class WebcatRequestHandler extends RequestHandler {
       }
     }
   }
-}
-
-/**
- * Whether a request is the script of a SharedWorker or ServiceWorker loading
- * in a third-party context: it has no tab, the browser flags it third-party,
- * and it is same-origin with the document that loads it. The last condition
- * excludes a first-party worker fetching another site, which is cross-origin.
- * Scripts imported by such a worker never load, since this cancels the
- * worker's main script first.
- */
-function isThirdPartyWorkerScript(details: BeforeRequestDetails): boolean {
-  return (
-    details.tabId === -1 &&
-    details.thirdParty === true &&
-    details.documentUrl !== undefined &&
-    new URL(details.url).origin === new URL(details.documentUrl).origin
-  );
 }
