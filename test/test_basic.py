@@ -157,8 +157,14 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
         url = f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url(dnsnames[0])}"
     else:
         url = server.url(dnsnames[0])
-    with server.wait_for(paths_to_wait):
+    # A file mismatch triggers a reload once before erroring, which means the
+    # waiting logic has to be adjusted to compensate
+    reload_expected = expected == "ERR_WEBCAT_FILE_MISMATCH"
+    with server.wait_for(paths_to_wait, not reload_expected):
         browser.navigate(url)
+    if reload_expected:
+        with server.wait_for(paths_to_wait):
+            pass
     if not in_frame:
         res = browser.execute("document.body.textContent")
         if "__WEBCAT_" in res:

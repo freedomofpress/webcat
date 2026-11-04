@@ -236,7 +236,7 @@ export const workerHook = updatableHook(
     };
 
     // Hook the Worker constructor
-    const OriginalWorker = unwrap(global.Worker);
+    let OriginalWorker = unwrap(global.Worker);
     const EventTarget = unwrap(global.EventTarget);
     const construct = unwrap(global.Reflect).construct.bind(
       unwrap(global.Reflect),
@@ -278,9 +278,34 @@ export const workerHook = updatableHook(
       });
       return self;
     }
-    exportFunc(HookedWorker, global, "Worker");
-    OriginalWorker.prototype.constructor = unwrap(global.Worker);
-    unwrap(global).Worker.prototype = OriginalWorker.prototype;
+    let WorkerValue: unknown;
+    const attrs = unwrap(new global.Object()) as PropertyDescriptor;
+    const originalWorkerPrototype = OriginalWorker.prototype;
+    exportFunc(
+      (val: typeof Worker) => {
+        if (unwrap(val)?.prototype === originalWorkerPrototype) {
+          // Other extensions (NoScript) may attempt to overwrite the Worker
+          // constructor with something derived from the original, removing
+          // hooks. That attempt lands here, in this setter, which re-hooks
+          // the thing. See issue #310.
+          const hooked = (WorkerValue = exportFunc(
+            HookedWorker,
+            global,
+            "Worker",
+          ));
+          OriginalWorker = unwrap(val) as typeof Worker;
+          OriginalWorker.prototype.constructor = hooked;
+          hooked.prototype = OriginalWorker.prototype;
+        } else {
+          WorkerValue = val;
+        }
+      },
+      attrs,
+      "set",
+    );
+    exportFunc(() => WorkerValue, attrs, "get");
+    Object.defineProperty(unwrap(global), "Worker", attrs);
+    unwrap(global).Worker = OriginalWorker;
 
     // Hook Worker.postMessage
     const originalPostMessage = OriginalWorker.prototype.postMessage;

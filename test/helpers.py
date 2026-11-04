@@ -489,9 +489,10 @@ class Server:
         return f"{scheme}://{hostname}:{self.port}"
     
     class _Wait:
-        def __init__(self, server, paths):
+        def __init__(self, server, paths, sleep=True):
             self.server = server
             self.paths = paths
+            self.sleep = sleep
             self.timeout = False
 
         def __enter__(self):
@@ -505,7 +506,8 @@ class Server:
             self.thread.join()
             if self.timeout:
                 raise RuntimeError(f"timeout waiting for '{"', '".join(self.counts.keys())}'")
-            sleep(0.5) # minimal sleep to allow the browser to process the last response
+            if self.sleep:
+                sleep(0.5) # minimal sleep to allow the browser to process the last response
 
         def _wait(self, lock):
             with self.server._served:
@@ -523,8 +525,8 @@ class Server:
                     if len(self.counts) == 0:
                         break
     
-    def wait_for(self, paths):
-        return Server._Wait(self, paths)
+    def wait_for(self, paths, sleep=True):
+        return Server._Wait(self, paths, sleep)
 
 def generate_ssl_cert(output_dir, dnsnames=[]):
     """Generate a self-signed certificate for 127.0.0.1."""
