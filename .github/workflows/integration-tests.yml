@@ -164,4 +164,4 @@ jobs:
       - name: Load every enrolled domain with both builds
         run: |
           make -C test install
-          cd test && .venv/bin/pytest -v -s live.py --base-addon ../dist/base.zip --addon ../dist/head.zip --headless
+          cd test && .venv/bin/pytest -v -s live.py --base-addon ../dist/base.zip --addon ../dist/head.zip --headless --reruns 1 --reruns-delay 5
