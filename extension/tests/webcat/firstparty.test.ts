@@ -298,6 +298,19 @@ describe("resolveFirstParty: tab-less requests", () => {
     ).resolves.toBe("https://enrolled.example");
   });
 
+  it("throws for a document-less request with no third-party flag at all", async () => {
+    await expect(
+      resolveFirstParty(
+        request({
+          tabId: -1,
+          frameId: -1,
+          url: "https://enrolled.example/workers/sw.js",
+        }),
+        noLookup,
+      ),
+    ).rejects.toThrow();
+  });
+
   it("throws for a document-less request the browser reports third-party", async () => {
     await expect(
       resolveFirstParty(
@@ -324,6 +337,12 @@ describe("isThirdPartyWorkerScript", () => {
 
   it("matches a SharedWorker or ServiceWorker script loading in a third-party context", () => {
     expect(isThirdPartyWorkerScript(request(script))).toBe(true);
+  });
+
+  it("matches a worker script with no third-party flag at all", () => {
+    expect(
+      isThirdPartyWorkerScript(request({ ...script, thirdParty: undefined })),
+    ).toBe(true);
   });
 
   it("does not match a first-party worker script", () => {

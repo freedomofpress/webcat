@@ -15,7 +15,7 @@ export type Frame = { frameId: number; url: string };
  * | top-level navigation | `type` | origin of the request URL |
  * | bound to a tab, no ancestors: a top-level document's subresources; loads from inside a dedicated worker or worklet (ESR reports those under frameId 0, Firefox 155+ under the owning frame or, for a worker created by a worker, frameId -1, see bug 2048884) | `tabId`, `frameId`, the tab's frames, `documentUrl` | origin of frame 0, provided the request's frame and the origin of its owning document are still in the tab; otherwise the tab navigated away or closed and the request throws |
  * | no tab, has a document: a SharedWorker or ServiceWorker script and what it loads | `documentUrl` | origin of `documentUrl`; third-party ones were cancelled by {@link isThirdPartyWorkerScript} before getting here |
- * | no tab, no document: a ServiceWorker update check | `thirdParty` | the request's own origin if the browser reports it is not cross-site; otherwise throws |
+ * | no tab, no document: a ServiceWorker update check | `thirdParty` | the request's own origin if the browser reports it is not cross-site; otherwise, or if the flag is missing, throws |
  *
  * An opaque origin, `about:blank` or `data:` at the top level, is nobody's
  * first party; the request gets a partition of its own, its `requestId`.
@@ -58,7 +58,7 @@ export async function resolveFirstParty(
   if (details.documentUrl) {
     return new URL(details.documentUrl).origin;
   }
-  if (!details.thirdParty) {
+  if (details.thirdParty === false) {
     return new URL(details.url).origin;
   }
   throw new Error(`no first party for '${details.url}'`);
@@ -70,12 +70,13 @@ export async function resolveFirstParty(
  * and it is same-origin with the document that loads it. The last condition
  * excludes a first-party worker fetching another site, which is cross-origin.
  * Such a request has no first party the browser would name, so it is
- * cancelled; the scripts it would import never load.
+ * cancelled; the scripts it would import never load. A missing flag counts
+ * as third-party: an unknown first party means no fetch.
  */
 export function isThirdPartyWorkerScript(details: BeforeRequestDetails) {
   return (
     details.tabId === -1 &&
-    details.thirdParty === true &&
+    details.thirdParty !== false &&
     details.documentUrl !== undefined &&
     new URL(details.url).origin === new URL(details.documentUrl).origin
   );
