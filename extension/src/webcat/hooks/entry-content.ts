@@ -2,10 +2,8 @@
 // dynamically updated with data and injected into scripts
 // by response.ts
 
-import { eventHook, eventTargetHook } from "./events";
 import { oacHook } from "./oac";
 import { wasmHook } from "./wasm";
-import { serviceWorkerHook, sharedWorkerHook, workerHook } from "./workers";
 
 console.log("[WEBCAT] Installing content script hook");
 // Lets enrolled sites detect WEBCAT (#292).
@@ -37,9 +35,4 @@ if (ancestor !== window) {
   wasmHook(window, data);
 }
 
-sharedWorkerHook(window, data);
-serviceWorkerHook(window, data);
-workerHook(window, data);
-eventTargetHook(window, data);
-eventHook(window, data);
 oacHook(window, data);

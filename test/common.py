@@ -55,10 +55,11 @@ BAD_WASM = Hook(
     ["wasm_frame.js:",True],
     ["Error: error in sharedworker", True, "onerror"],
     ["Error: error in sharedworker", True, "callback"],
-    ["Error: error in sharedworker", True, "handler"],
+    # A handleEvent listener is invoked with the listener object as this
+    ["Error: error in sharedworker", False, "handler"],
     ["Error: error in worker", True, "onerror"],
     ["Error: error in worker", True, "callback"],
-    ["Error: error in worker", True, "handler"],
+    ["Error: error in worker", False, "handler"],
 ]
 
 EXPECTED_CSP = {
@@ -78,6 +79,13 @@ JS_PATHS = set(map(lambda filename: f"/js/{filename}", os.listdir("./cases/testa
 WASM_PATHS = set(map(lambda filename: f"/wasm/{filename}", os.listdir("./cases/testapp/wasm/")))
 WORKER_PATHS = set(map(lambda filename: f"/workers/{filename}", os.listdir("./cases/testapp/workers/")))
 SERVICEWORKER_PATHS = set(filter(lambda path: "serviceworker" in path, WORKER_PATHS))
+SHAREDWORKER_PATHS = set(filter(lambda path: "sharedworker" in path, WORKER_PATHS))
+# What load_sharedworker.js logs when WEBCAT cancels the SharedWorker script
+LOGENTRIES_SHAREDWORKER_CANCELLED = [
+    [None, True, "onerror"],
+    [None, True, "callback"],
+    [None, False, "handler"],
+]
 FRAME_PATHS = {"/js/framehost.js", "/wasm/frame_addThree.wasm"}
 ALL_PATHS = {"/"}.union(CSS_PATHS,JS_PATHS,WASM_PATHS,WORKER_PATHS)
 NON_FRAME_PATHS = ALL_PATHS-FRAME_PATHS
