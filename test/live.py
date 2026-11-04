@@ -7,14 +7,14 @@ extension zips and fails if any site differs. Not run by
 """
 import json
 import os
-import re
 import time
 import zipfile
 
 import pytest
 from helpers import Browser
 
-PAGE = "JSON.stringify({ready: document.readyState, uri: document.documentURI, body: document.body?.textContent || ''})"
+# the code is matched in-page: returning the whole body trips the devtools long-string grip
+PAGE = "JSON.stringify({ready: document.readyState, uri: document.documentURI, code: (document.body?.textContent || '').match(/ERR_WEBCAT_\\w+/)?.[0]})"
 
 
 def verdict(browser: Browser, domain: str, settle=5):
@@ -36,8 +36,7 @@ def verdict(browser: Browser, domain: str, settle=5):
     page = json.loads(browser.execute(PAGE))
     if page["uri"].startswith("about:neterror"):
         return "unreachable"
-    m = re.search(r"ERR_WEBCAT_\w+", page["body"])
-    return m.group() if m else "ok"
+    return page.get("code", "ok")
 
 
 def start(addon, headless, port):
