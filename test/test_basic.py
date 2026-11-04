@@ -193,6 +193,8 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
 
     browser.execute("var keys; state.origins.keys().then(k => keys = k);", in_extension=True)
     cache_keys = json.loads(browser.execute("JSON.stringify(keys)", in_extension=True))
+    # Every request of a live page must be attributable to a first party
+    assert [l for l in browser.extension_logs() if "Unattributable" in json.dumps(l)] == []
     if origin_cached:
         store = "firefox-private" if incognito else "firefox-default"
         assert [f"{dnsnames[0]}?cookieStoreId={store},firstParty={urllib.parse.quote(first_party, safe="")}"] == cache_keys

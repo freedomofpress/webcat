@@ -164,7 +164,11 @@ export class WebcatRequestHandler extends RequestHandler {
     } catch (error) {
       // A request that cannot be attributed to a first party cannot be
       // partitioned, so it is not fetched
-      logger.warn(`Cancelling ${event.details.url}`, undefined, error);
+      logger.warn(
+        `Unattributable request ${event.details.url}`,
+        undefined,
+        error,
+      );
       return;
     }
 
@@ -371,11 +375,17 @@ export class WebcatRequestHandler extends RequestHandler {
    * Determines the first-party origin (FPO) for a given request
    */
   async #getFirstParty(details: BeforeRequestDetails): Promise<string> {
+    // An opaque top-level document (about:blank, data:) is nobody's first
+    // party; state loaded under one is kept to that request
+    const originOf = (url: string) => {
+      const origin = new URL(url).origin;
+      return origin === "null" ? details.requestId : origin;
+    };
     if (details.frameAncestors?.length) {
       // This is a request with frameAncestors; FPO is the origin of the topmost (last) ancestor
-      return new URL(
+      return originOf(
         details.frameAncestors[details.frameAncestors.length - 1].url,
-      ).origin;
+      );
     }
     if (details.type === "main_frame") {
       // Top-level navigation; FPO is the origin of the request URL
@@ -394,16 +404,19 @@ export class WebcatRequestHandler extends RequestHandler {
       const frames = await browser.webNavigation.getAllFrames({
         tabId: details.tabId,
       });
+      // The document that owns the request (a worker is same-origin with its
+      // document) must still be in the tab, otherwise the tab has navigated
+      // away and frame 0 belongs to the next site
+      const owner = new URL(details.documentUrl ?? details.url).origin;
       if (
         frames &&
         (details.frameId === -1 ||
-          frames.find((frame) => frame.frameId === details.frameId))
+          frames.find((frame) => frame.frameId === details.frameId)) &&
+        frames.some((frame) => new URL(frame.url).origin === owner)
       ) {
-        // Frame still exists; FPO is the origin of the frame with frameId === 0
-        return new URL(frames.find((frame) => frame.frameId === 0)?.url || "")
-          .origin;
+        // FPO is the origin of the frame with frameId === 0
+        return originOf(frames.find((frame) => frame.frameId === 0)?.url || "");
       }
-      // The frame or the tab is gone: nothing is left to attribute the request to
       throw new Error(`no live frame for '${details.url}'`);
     }
     if (details.documentUrl) {
@@ -412,13 +425,12 @@ export class WebcatRequestHandler extends RequestHandler {
       // first-party and its origin is the first party.
       return new URL(details.documentUrl).origin;
     }
-    logger.addLog(
-      "error",
-      `No first-party origin found for '${details.url}'`,
-      details.tabId,
-      getFQDN(details.url),
-    );
-    return details.requestId;
+    if (!details.thirdParty) {
+      // No tab and no document, e.g. a ServiceWorker update check: the
+      // browser reports it is not cross-site, so its own origin is the first party
+      return new URL(details.url).origin;
+    }
+    throw new Error(`no first party for '${details.url}'`);
   }
 
   async #onWindowClosed() {
