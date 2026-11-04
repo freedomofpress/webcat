@@ -192,4 +192,111 @@ describe("WebcatRequestHandler", () => {
     );
     expect(mockGetAllFrames).toHaveBeenCalledWith({ tabId: 7 });
   });
+
+  it("takes the first party of a nested worker request, reported without a frame, from the tab", async () => {
+    mockGetAllFrames.mockResolvedValue([
+      { frameId: 0, url: "https://embedder.example/page" },
+      { frameId: 5, url: "https://enrolled.example/" },
+    ]);
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    const wrh = new WebcatRequestHandler(db, ui, defaults);
+    // A worker created inside a worker, as Firefox 155+ reports it: the tab
+    // is known but frameId is -1
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "5",
+      tabId: 7,
+      frameId: -1,
+      type: "script",
+      url: "https://enrolled.example/workers/nested.js",
+      documentUrl: "https://enrolled.example/workers/worker.js",
+      originUrl: "https://enrolled.example/workers/worker.js",
+    }) as RequestDetailsBase & {
+      state?: { cachePartition: { firstParty: string } };
+    };
+    wrh.dispatchEvent(new RequestEvent("beforerequest", details as never));
+
+    await vi.waitFor(() => expect(details.state).toBeDefined());
+    expect(details.state?.cachePartition.firstParty).toBe(
+      "https://embedder.example",
+    );
+  });
+
+  it.each([
+    [
+      "tab is gone",
+      () => mockGetAllFrames.mockRejectedValue(new Error("Invalid tab ID: 7")),
+      0,
+    ],
+    ["tab was discarded", () => mockGetAllFrames.mockResolvedValue(null), 0],
+    [
+      "frame is gone",
+      () =>
+        mockGetAllFrames.mockResolvedValue([
+          { frameId: 0, url: "https://embedder.example/page" },
+        ]),
+      5,
+    ],
+  ])("cancels a worker request whose %s", async (_, arrange, frameId) => {
+    arrange();
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    const wrh = new WebcatRequestHandler(db, ui, defaults);
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "6",
+      tabId: 7,
+      frameId,
+      type: "script",
+      url: "https://enrolled.example/workers/import.js",
+      documentUrl: "https://enrolled.example/workers/worker.js",
+    });
+    const event = new RequestEvent("beforerequest", details as never);
+    wrh.dispatchEvent(event);
+
+    await expect(event.ready()).resolves.toMatchObject({ cancel: true });
+  });
+
+  it("refuses the script of a worker running in a third-party context", async () => {
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    const wrh = new WebcatRequestHandler(db, ui, defaults);
+    // A SharedWorker created by enrolled.example while embedded cross-site:
+    // no tab, flagged third-party, same-origin with its document
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "3",
+      tabId: -1,
+      frameId: -1,
+      type: "script",
+      thirdParty: true,
+      url: "https://enrolled.example/workers/shared.js",
+      documentUrl: "https://enrolled.example/",
+    });
+    const event = new RequestEvent("beforerequest", details as never);
+    wrh.dispatchEvent(event);
+
+    await expect(event.ready()).resolves.toMatchObject({ cancel: true });
+  });
+
+  it("takes the first party of a first-party worker script from documentUrl", async () => {
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    const wrh = new WebcatRequestHandler(db, ui, defaults);
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "4",
+      tabId: -1,
+      frameId: -1,
+      type: "script",
+      thirdParty: false,
+      url: "https://enrolled.example/workers/shared.js",
+      documentUrl: "https://enrolled.example/",
+    }) as RequestDetailsBase & {
+      state?: { cachePartition: { firstParty: string } };
+    };
+    wrh.dispatchEvent(new RequestEvent("beforerequest", details as never));
+
+    await vi.waitFor(() => expect(details.state).toBeDefined());
+    expect(details.state?.cachePartition.firstParty).toBe(
+      "https://enrolled.example",
+    );
+  });
 });

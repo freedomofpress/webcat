@@ -154,6 +154,14 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
         # ServiceWorkers are disabled in TBB by NoScript and in frames by WEBCAT
         paths_to_wait = paths_to_wait-SERVICEWORKER_PATHS
     if in_frame:
+        # WEBCAT cancels the SharedWorker scripts of a cross-site frame
+        paths_to_wait = paths_to_wait-SHAREDWORKER_PATHS
+        logs = setdiff(logs, [
+            LOGENTRY_LOAD_SHAREDWORKER,
+            LOGENTRY_ERROR_SHAREDWORKER_ONERROR,
+            LOGENTRY_ERROR_SHAREDWORKER_CALLBACK,
+            LOGENTRY_ERROR_SHAREDWORKER_HANDLER,
+        ]) + (LOGENTRIES_SHAREDWORKER_CANCELLED if LOGENTRY_LOAD_SHAREDWORKER in logs else [])
         url = f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={server.url(dnsnames[0])}"
     else:
         url = server.url(dnsnames[0])
@@ -252,13 +260,13 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, update_serve
     assert expected in res
 
 # Only Tor Browser (Firefox ESR, bug 2048884) reports worker-initiated requests
-# under frameId 0; Safer is the level where NoScript drops the Worker hook
+# under frameId 0
 @pytest.mark.parametrize("browser, incognito", [
     pytest.param("tbb_safer", True, id="tbb_safer"),
 ], indirect=["browser"])
 @pytest.mark.parametrize("root, headers, hooks", [
-    # SharedWorkers and ServiceWorkers have no tab: without a fragment their
-    # first party cannot be recovered, so they are not loaded here
+    # SharedWorkers and ServiceWorkers of a cross-site frame are cancelled by
+    # design, so they are not loaded here
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {
             "/js/load_sharedworker.js": b"",
             "/js/load_serviceworker.js": b"",
@@ -267,16 +275,15 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, update_serve
 def test_worker_first_party_without_hooks(browser: Browser, server: Server, update_server: UpdateServer, addon_path, dnsnames, non_enrolled_dnsnames, incognito):
     """
     Tests that dedicated Worker subresources of an enrolled frame are
-    partitioned under the embedding first party even when no worker URL
-    carries a first-party fragment. Another extension can replace
-    window.Worker after WEBCAT's hook (NoScript does so on Tor Browser Safer),
-    and Firefox reports importScripts() requests with frameId 0 and the worker
-    script as documentUrl.
+    partitioned under the embedding first party with every content script
+    hook removed: attribution must not depend on anything injected into the
+    page. Firefox ESR reports importScripts() requests with frameId 0 and the
+    worker script as documentUrl.
     """
     browser.install_extension(addon_path)
     update_server.wait_for_update()
     browser.attach_extension_console()
-    # Drop the document_start hooks, so no worker is hooked and no URL gets a fragment
+    # Remove the document_start hooks before loading
     browser.execute("var unregistered = false; browser.scripting.unregisterContentScripts().then(() => unregistered = true);", in_extension=True)
     deadline = monotonic() + 10
     while browser.execute("JSON.stringify(unregistered)", in_extension=True) != "true":

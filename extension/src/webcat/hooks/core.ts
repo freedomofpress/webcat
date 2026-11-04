@@ -13,26 +13,6 @@ declare global {
 
 export type LocalScope<T> = Record<string, { data: T; ready: Promise<void> }>;
 
-export type EventListenerArgs = [
-  type: string,
-  callback: EventListenerOrEventListenerObject,
-  options: AddEventListenerOptions | boolean,
-];
-export type EventListenerArgsByKind = {
-  nonCapturingArgs?: EventListenerArgs;
-  capturingArgs?: EventListenerArgs;
-};
-export type Hooked<T, I extends Internal<T>> = T & { [internal]: I };
-export type Internal<T> = {
-  instance: T & { [hooked]?: T };
-  listeners: Map<
-    string,
-    Map<EventListenerOrEventListenerObject, EventListenerArgsByKind>
-  >;
-};
-
-export const internal = Symbol("WEBCAT internal");
-export const hooked = Symbol("WEBCAT hooked");
 export const global = globalThis.self || globalThis;
 // Captured before any page code runs; invokes natives without a lookup of
 // .call/.apply on page-controlled prototypes
@@ -62,16 +42,6 @@ export function exportFunc<T extends Function>(
     (object as { [prop]: T })[prop] = func;
   }
   return func;
-}
-
-export function makeInternal<T, S extends object>(props: S) {
-  const internal = unwrap(new global.Object()) as Internal<T> & S;
-  for (const prop of Object.keys(props)) {
-    type P = { [prop]: unknown };
-    (internal as P)[prop] = (props as P)[prop];
-  }
-  internal.listeners = new Map();
-  return internal;
 }
 
 export function updatableHook<T extends { [index: string]: unknown }>(
