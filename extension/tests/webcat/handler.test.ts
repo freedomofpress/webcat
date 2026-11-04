@@ -181,6 +181,29 @@ describe("WebcatRequestHandler", () => {
     await expect(event.ready()).resolves.toMatchObject({ cancel: true });
   });
 
+  it("lets a first-party worker script through to attribution", async () => {
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    const wrh = new WebcatRequestHandler(db, ui, defaults);
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "4",
+      tabId: -1,
+      frameId: -1,
+      type: "script",
+      thirdParty: false,
+      url: "https://enrolled.example/workers/shared.js",
+      documentUrl: "https://enrolled.example/",
+    }) as RequestDetailsBase & {
+      state?: { cachePartition: { firstParty: string } };
+    };
+    wrh.dispatchEvent(new RequestEvent("beforerequest", details as never));
+
+    await vi.waitFor(() => expect(details.state).toBeDefined());
+    expect(details.state?.cachePartition.firstParty).toBe(
+      "https://enrolled.example",
+    );
+  });
+
   it("refuses the script of a worker running in a third-party context", async () => {
     const db = new WebcatDatabase(defaults);
     const ui = new WebcatUI(db, db.namespace("ui"), defaults);
