@@ -58,3 +58,13 @@ Pass additional arguments via `TESTARGS`:
 ```bash
 make test TESTARGS="--addon ../dist/webcat-extension-test.zip -k firefox --headless"
 ```
+
+### Live sites
+
+`live.py` loads every domain in the list bundled in the head zip with two
+production extension zips and fails if any site differs. CI
+runs it with the base and head builds of a pull request.
+
+```bash
+.venv/bin/pytest -s live.py --base-addon ../dist/base.zip --addon ../dist/webcat-extension.zip --headless
+```
