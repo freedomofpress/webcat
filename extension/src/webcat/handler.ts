@@ -172,6 +172,10 @@ export class WebcatRequestHandler extends RequestHandler {
       );
       return;
     }
+    logger.debug(
+      `Attributed ${details.url} to ${details.state.cachePartition.firstParty}`,
+      details,
+    );
 
     // Block until the handler has been fully bound
     using _ = await this.#mutex.acquire(this.#requestLock);
