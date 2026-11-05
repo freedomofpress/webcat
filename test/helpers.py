@@ -283,17 +283,27 @@ class Browser:
         logging.info(f"Navigating to {url}")
         return web.navigate_to(url)
     
-    def execute(self, javascript, in_extension=False):
-        if in_extension:
-            console_actor_id = self._ext_console_id
-        else:
-            current_tab = self.root.current_tab()
-            tab = TabActor(self.client, current_tab["actor"])
-            actor_ids = tab.get_target()
-            console_actor_id = actor_ids["consoleActor"]
+    def execute(self, javascript, in_extension=False, retries=3):
+        # A tab that navigates while being evaluated (the extension replacing
+        # it with the error page, for one) never answers on the old target;
+        # resolve the target again and retry
+        for attempt in range(retries):
+            if in_extension:
+                console_actor_id = self._ext_console_id
+            else:
+                current_tab = self.root.current_tab()
+                tab = TabActor(self.client, current_tab["actor"])
+                actor_ids = tab.get_target()
+                console_actor_id = actor_ids["consoleActor"]
 
-        logging.info(f"Executing js...")
-        return self.evaluate_js_sync(console_actor_id, javascript)
+            logging.info(f"Executing js...")
+            try:
+                return self.evaluate_js_sync(console_actor_id, javascript)
+            except queue.Empty:
+                if attempt == retries - 1:
+                    raise
+                logging.warning("evaluation timed out, retrying on the current target")
+                sleep(1)
 
     def evaluate_js_sync(self, console_actor_id, code, timeout=10):
         """
