@@ -9,6 +9,7 @@ import {
 import { ContentScript } from "../browser/scripting";
 import { Mutex } from "../browser/sync";
 import { CacheKey, isInPartition } from "./cache";
+import { isThirdPartyWorkerScript, resolveFirstParty } from "./firstparty";
 import { HookBuilder, HookBuilderConfig } from "./hookbuilder";
 import { Database } from "./interfaces/database";
 import { WebcatError } from "./interfaces/errors";
@@ -62,7 +63,7 @@ export class WebcatRequestHandler extends RequestHandler {
     this.#db = db;
     this.#ui = ui;
     this.#config = config;
-    this.#hooks = new HookBuilder(db.namespace("hooks"), ui, config);
+    this.#hooks = new HookBuilder(ui, config);
     this.#contentScript = new ContentScript(this.#hooks.getStaticHookPath());
     this.#responseValidator = new ResponseValidator(
       this.#db,
@@ -136,7 +137,7 @@ export class WebcatRequestHandler extends RequestHandler {
       state: {
         fqdn: getFQDN(details.url),
         cachePartition: {
-          firstParty: await this.#getFirstParty(details),
+          firstParty: await resolveFirstParty(details),
           incognito: !!details.incognito,
         },
         isFrame: FRAME_TYPES.includes(details.type),
@@ -150,7 +151,27 @@ export class WebcatRequestHandler extends RequestHandler {
       blockingResponse.cancel = false;
       return;
     }
-    const details = await this.#initializeState(event.details);
+    if (isThirdPartyWorkerScript(event.details)) {
+      // There is no tab to read the first party from and webRequest does not
+      // expose the partition the browser uses, so the origin state could only
+      // be filed under the worker's own origin. Cancel the load instead.
+      logger.info(`Cancelling third-party worker script ${event.details.url}`);
+      blockingResponse.cancel = true;
+      return;
+    }
+    let details: Stateful<BeforeRequestDetails>;
+    try {
+      details = await this.#initializeState(event.details);
+    } catch (error) {
+      // A request that cannot be attributed to a first party cannot be
+      // partitioned, so it is not fetched
+      logger.warn(
+        `Unattributable request ${event.details.url}`,
+        undefined,
+        error,
+      );
+      return;
+    }
 
     // Block until the handler has been fully bound
     using _ = await this.#mutex.acquire(this.#requestLock);
@@ -305,12 +326,7 @@ export class WebcatRequestHandler extends RequestHandler {
 
         browser.webNavigation.onDOMContentLoaded.removeListener(listener);
 
-        const [func, args] = await this.#hooks.getContentScriptHooks(
-          wasm,
-          details.state.cachePartition.firstParty,
-          details.state.cachePartition.firstParty ===
-            new URL(details.url).origin,
-        );
+        const [func, args] = await this.#hooks.getContentScriptHooks(wasm);
         await browser.scripting.executeScript({
           target: {
             tabId: details.tabId,
@@ -354,75 +370,6 @@ export class WebcatRequestHandler extends RequestHandler {
       }
     }
     await this.#db.origins.set(CacheKey(fqdn, cachePartition), newState);
-  }
-
-  /**
-   * Determines the first-party origin (FPO) for a given request
-   */
-  async #getFirstParty(details: BeforeRequestDetails): Promise<string> {
-    if (
-      details.tabId === -1 ||
-      details.frameId === -1 ||
-      details.frameId === 0
-    ) {
-      // This might be a SharedWorker or a ServiceWorker,
-      // or a Worker request affected by https://bugzilla.mozilla.org/show_bug.cgi?id=2048884
-      for (const url of [details.url, details.documentUrl, details.originUrl]) {
-        if (url === undefined) continue;
-        try {
-          // Try to decrypt the URL fragment; if successful, the result is the FPO
-          return await this.#hooks.decryptFragment(url);
-        } catch {
-          // The fragment was not a valid encrypted FPO; ignore
-        }
-      }
-      // No FPO found in URL hash; fall through
-    }
-    if (details.frameAncestors?.length) {
-      // This is a request with frameAncestors; FPO is the origin of the topmost (last) ancestor
-      return new URL(
-        details.frameAncestors[details.frameAncestors.length - 1].url,
-      ).origin;
-    }
-    if (details.type === "main_frame") {
-      // Top-level navigation; FPO is the origin of the request URL
-      return new URL(details.url).origin;
-    }
-    if (details.tabId !== -1 && details.frameId !== -1) {
-      // Subresource of a Worker; no frameAncestors available. The first party
-      // of any request bound to a tab is the tab's top-level document, so take
-      // it from there: documentUrl is the worker script, which before bug
-      // 2048884 (fixed in Firefox 155, still present in ESR 140 and 153, so
-      // in Tor Browser 15 and 16) is reported under frameId 0 even for a
-      // worker owned by a cross-origin frame, and the URL fragment is missing
-      // whenever another extension replaced the Worker hook
-      const frames = await browser.webNavigation.getAllFrames({
-        tabId: details.tabId,
-      });
-      if (frames.find((frame) => frame.frameId === details.frameId)) {
-        // Frame still exists; FPO is the origin of the frame with frameId === 0
-        return new URL(frames.find((frame) => frame.frameId === 0)?.url || "")
-          .origin;
-      }
-      logger.addLog(
-        "warn",
-        `Cannot determine first-party origin for '${details.url}'; using unique cache partition`,
-        details.tabId,
-        getFQDN(details.url),
-      );
-      return details.requestId;
-    }
-    if (details.documentUrl) {
-      // No tab (SharedWorker or ServiceWorker); FPO is the origin of documentUrl
-      return new URL(details.documentUrl).origin;
-    }
-    logger.addLog(
-      "error",
-      `No first-party origin found for '${details.url}'`,
-      details.tabId,
-      getFQDN(details.url),
-    );
-    return details.requestId;
   }
 
   async #onWindowClosed() {
