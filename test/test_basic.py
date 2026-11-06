@@ -187,7 +187,7 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
     cache_keys = json.loads(browser.execute("JSON.stringify(keys)", in_extension=True))
     if origin_cached:
         store = "firefox-private" if incognito else "firefox-default"
-        assert [f"{dnsnames[0]}?cookieStoreId={store},firstParty={urllib.parse.quote(first_party, safe="")},incognito={"true" if incognito else "false"}"] == cache_keys
+        assert [f"{dnsnames[0]}?cookieStoreId={store},firstParty={urllib.parse.quote(first_party, safe="")}"] == cache_keys
     else:
         assert [] == cache_keys
 
