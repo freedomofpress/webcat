@@ -34,8 +34,12 @@ export type Frame = { frameId: number; url: string };
  * the request and the lookup answers with the next document's frames. A
  * request of the outgoing page then throws, unless the next site frames the
  * owner's origin, in which case it is filed under the next site, the
- * partition such a visit creates anyway. A discarded tab has no frames, so
- * every request still pending on it throws.
+ * partition such a visit creates anyway. On Firefox ESR, which reports worker
+ * loads under frame 0, a request of a worker in a torn-down frame passes the
+ * frame check against the next document, so when the tab navigates to the
+ * worker's own origin the request is filed under that origin's top-level
+ * partition. A discarded tab has no frames, so every request still pending
+ * on it throws.
  *
  * An opaque top-level origin, `about:blank` or `data:`, is nobody's first
  * party; the request gets a partition of its own, its `requestId`.

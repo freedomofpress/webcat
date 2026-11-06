@@ -59,3 +59,53 @@ def test_navigation_race(browser: Browser, server: Server, update_server: Update
     expected = sorted({quote(site1, safe="")} | ({quote(ne, safe="")} if embeds_owner else set()))
     assert first_parties == expected
     print(f"\nstragglers cancelled over {ROUNDS} navigations: {stragglers}")
+
+# A worker of a framed enrolled document keeps issuing requests while the tab
+# navigates to the enrolled origin itself. Firefox ESR reports importScripts()
+# and nested worker loads under frame 0
+# (https://bugzilla.mozilla.org/show_bug.cgi?id=2048884), so a request that
+# reaches the extension after the frame is gone passes the frame check against
+# the new top-level document and is filed under the enrolled origin's own
+# partition. The browser aborts those requests, so nothing is served under
+# that partition. Tracked, not fixed.
+ESR_FRAME0 = pytest.mark.xfail(reason="Firefox ESR reports worker loads under frame 0 (bug 2048884)", strict=False)
+
+@pytest.mark.parametrize("browser, mode", [
+    pytest.param("firefox", "fetch", id="fetch-firefox"),
+    pytest.param("firefox", "import", id="import-firefox"),
+    pytest.param("firefox", "nested", id="nested-firefox"),
+    pytest.param("tbb", "fetch", id="fetch-tbb"),
+    pytest.param("tbb", "import", id="import-tbb", marks=ESR_FRAME0),
+    pytest.param("tbb", "nested", id="nested-tbb", marks=ESR_FRAME0),
+], indirect=["browser"])
+@pytest.mark.parametrize("root, headers, hooks", [
+    pytest.param("cases/testapp", EXPECTED_CSP, {
+        f"/{page}.html": Hook(b'<!DOCTYPE html><iframe src="https://site1.localhost:8443/race/' + page.encode() + b'"></iframe>', type="text/html", headers={"content-security-policy": ""})
+        for page in ("index", "import", "nested")
+    }, id="race_to_owner"),
+], indirect=["root"])
+def test_navigation_race_to_owner(browser: Browser, server: Server, update_server: UpdateServer, addon_path, dnsnames, non_enrolled_dnsnames, mode):
+    """
+    The embedder frames an enrolled page whose worker fetches, imports or
+    spawns workers in a loop; the tab then navigates to the enrolled origin.
+    No request of the frame's worker may be attributed to the enrolled origin
+    as first party.
+    """
+    browser.install_extension(addon_path)
+    update_server.wait_for_update()
+    browser.attach_extension_console()
+    site1 = server.url(dnsnames[0])
+    ne = server.url(non_enrolled_dnsnames[0])
+    page = "index" if mode == "fetch" else mode
+    wrong = []
+    for _ in range(ROUNDS):
+        browser.navigate(f"{ne}/{page}.html")
+        sleep(1.0)
+        n0 = len(browser.extension_logs())
+        browser.navigate(f"{site1}/race/quiet.html")
+        sleep(1.5)
+        for entry in browser.extension_logs()[n0:]:
+            line = json.dumps(entry)
+            if "/race/ping.js?" in line and "Attributed" in line and f"to {ne}" not in line:
+                wrong.append(line[:300])
+    assert wrong == [], "request of the frame's worker attributed to the new top-level site"
