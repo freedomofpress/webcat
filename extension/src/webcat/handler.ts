@@ -152,9 +152,7 @@ export class WebcatRequestHandler extends RequestHandler {
       return;
     }
     if (isThirdPartyWorkerScript(event.details)) {
-      // There is no tab to read the first party from and webRequest does not
-      // expose the partition the browser uses, so the origin state could only
-      // be filed under the worker's own origin. Cancel the load instead.
+      // No tab, and the browser names no first party: nothing to partition under
       logger.info(`Cancelling third-party worker script ${event.details.url}`);
       blockingResponse.cancel = true;
       return;
@@ -163,8 +161,7 @@ export class WebcatRequestHandler extends RequestHandler {
     try {
       details = await this.#initializeState(event.details);
     } catch (error) {
-      // A request that cannot be attributed to a first party cannot be
-      // partitioned, so it is not fetched
+      // No first party, no partition, no fetch: the response cancels by default
       logger.warn(
         `Unattributable request ${event.details.url}`,
         undefined,

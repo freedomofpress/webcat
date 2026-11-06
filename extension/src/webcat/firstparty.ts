@@ -4,21 +4,41 @@ import { BeforeRequestDetails } from "../browser/requests";
 export type Frame = { frameId: number; url: string };
 
 /**
- * Resolves the first-party origin of a request from what the browser reports
- * about it. Every input comes from the browser; the page is never consulted.
- * A request that no row covers throws, and the caller cancels it: nothing is
- * fetched on behalf of a request whose first party is unknown.
+ * Resolves the first-party origin of a request from the fields of
+ * `webRequest.onBeforeRequest` and, for tab-bound requests, the tab's frame
+ * tree. A request no row covers throws, and the handler cancels it.
  *
  * | Request | Inputs | First party |
  * |---|---|---|
- * | has frame ancestors: a framed document, its subresources, a worker script it creates | `frameAncestors` | origin of the topmost ancestor |
+ * | has frame ancestors | `frameAncestors` | origin of the topmost ancestor |
  * | top-level navigation | `type` | origin of the request URL |
- * | bound to a tab, no ancestors: a top-level document's subresources; loads from inside a dedicated worker or worklet (ESR reports those under frameId 0, Firefox 155+ under the owning frame or, for a worker created by a worker, frameId -1, see bug 2048884) | `tabId`, `frameId`, the tab's frames, `documentUrl` | origin of frame 0, provided the request's frame and the origin of its owning document are still in the tab; otherwise the tab navigated away or closed and the request throws |
- * | no tab, has a document: a SharedWorker or ServiceWorker script and what it loads | `documentUrl` | origin of `documentUrl`; third-party ones were cancelled by {@link isThirdPartyWorkerScript} before getting here |
- * | no tab, no document: a ServiceWorker update check | `thirdParty` | the request's own origin if the browser reports it is not cross-site; otherwise, or if the flag is missing, throws |
+ * | bound to a tab, no ancestors | `tabId`, `frameId`, `documentUrl`, the tab's frames | origin of frame 0, if the request's frame and a frame of the owning document's origin are both in the tab; otherwise throws |
+ * | no tab, has a document | `documentUrl` | its origin |
+ * | no tab, no document | `thirdParty` | the request's own origin if the flag is `false`; otherwise throws |
  *
- * An opaque origin, `about:blank` or `data:` at the top level, is nobody's
- * first party; the request gets a partition of its own, its `requestId`.
+ * Tab-bound requests without ancestors are a top-level document's
+ * subresources and the loads of dedicated workers and worklets. Firefox ESR
+ * reports worker loads under frameId 0 with the worker script as
+ * `documentUrl`; Firefox 155+ reports them under the owning frame, or under
+ * frameId -1 for a worker created by a worker
+ * (https://bugzilla.mozilla.org/show_bug.cgi?id=2048884). A worker is
+ * same-origin with its document, so the owner's origin identifies it.
+ *
+ * Tab-less requests are SharedWorker and ServiceWorker scripts and what they
+ * load. {@link isThirdPartyWorkerScript} cancels a main script loading in a
+ * third-party context, so every worker that runs is first-party and
+ * `documentUrl` names its first party. A document-less request is a
+ * ServiceWorker update check.
+ *
+ * Limitations. The frame lookup is asynchronous: a tab that navigates between
+ * the request and the lookup answers with the next document's frames. A
+ * request of the outgoing page then throws, unless the next site frames the
+ * owner's origin, in which case it is filed under the next site, the
+ * partition such a visit creates anyway. A discarded tab has no frames, so
+ * every request still pending on it throws.
+ *
+ * An opaque top-level origin, `about:blank` or `data:`, is nobody's first
+ * party; the request gets a partition of its own, its `requestId`.
  *
  * @param details The request, as passed to `webRequest.onBeforeRequest`.
  * @param getFrames Lists the frames of a tab. Rejects if the tab is gone,
@@ -65,13 +85,12 @@ export async function resolveFirstParty(
 }
 
 /**
- * Whether a request is the script of a SharedWorker or ServiceWorker loading
- * in a third-party context: it has no tab, the browser flags it third-party,
- * and it is same-origin with the document that loads it. The last condition
- * excludes a first-party worker fetching another site, which is cross-origin.
- * Such a request has no first party the browser would name, so it is
- * cancelled; the scripts it would import never load. A missing flag counts
- * as third-party: an unknown first party means no fetch.
+ * Whether a request is the main script of a SharedWorker or ServiceWorker
+ * loading in a third-party context: no tab, `thirdParty` not `false`, and
+ * same-origin with its document. A first-party worker fetching another site
+ * is cross-origin with its document and does not match. The browser names no
+ * first party for such a script, so it is cancelled and nothing it would
+ * import loads. A missing flag counts as third-party.
  */
 export function isThirdPartyWorkerScript(details: BeforeRequestDetails) {
   return (

@@ -194,9 +194,8 @@ def test_webcat(browser, in_frame, server: Server, update_server: UpdateServer, 
     browser.execute("var keys; state.origins.keys().then(k => keys = k);", in_extension=True)
     cache_keys = json.loads(browser.execute("JSON.stringify(keys)", in_extension=True))
     if expected == "Hello!":
-        # Every request of a live page must be attributable to a first party.
-        # Runs that trigger a mismatch reload may cancel a request of the
-        # torn-down document's worker, which is intended
+        # Every request of a live page is attributable. Runs that reload on a
+        # mismatch may cancel a request of the torn-down document's worker
         assert [l for l in browser.extension_logs() if "Unattributable" in json.dumps(l)] == []
     if origin_cached:
         store = "firefox-private" if incognito else "firefox-default"
@@ -265,14 +264,13 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, update_serve
     res = browser.execute("document.body.textContent")
     assert expected in res
 
-# Only Tor Browser (Firefox ESR, bug 2048884) reports worker-initiated requests
-# under frameId 0
+# Firefox ESR, hence Tor Browser, reports worker-initiated requests under
+# frameId 0: https://bugzilla.mozilla.org/show_bug.cgi?id=2048884
 @pytest.mark.parametrize("browser, incognito", [
     pytest.param("tbb_safer", True, id="tbb_safer"),
 ], indirect=["browser"])
 @pytest.mark.parametrize("root, headers, hooks", [
-    # SharedWorkers and ServiceWorkers of a cross-site frame are cancelled by
-    # design, so they are not loaded here
+    # SharedWorkers and ServiceWorkers of a cross-site frame are cancelled
     pytest.param("cases/testapp", EXPECTED_CSP, FRAMEHOST_HOOK | {
             "/js/load_sharedworker.js": b"",
             "/js/load_serviceworker.js": b"",
@@ -280,11 +278,11 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, update_serve
 ], indirect=["root"])
 def test_worker_first_party_without_hooks(browser: Browser, server: Server, update_server: UpdateServer, addon_path, dnsnames, non_enrolled_dnsnames, incognito):
     """
-    Tests that dedicated Worker subresources of an enrolled frame are
-    partitioned under the embedding first party with every content script
-    hook removed: attribution must not depend on anything injected into the
-    page. Firefox ESR reports importScripts() requests with frameId 0 and the
-    worker script as documentUrl.
+    Dedicated Worker subresources of an enrolled frame are partitioned under
+    the embedding first party with the content scripts unregistered, so
+    attribution uses browser-reported data only. Firefox ESR reports
+    importScripts() requests with frameId 0 and the worker script as
+    documentUrl.
     """
     browser.install_extension(addon_path)
     update_server.wait_for_update()
@@ -301,7 +299,8 @@ def test_worker_first_party_without_hooks(browser: Browser, server: Server, upda
     browser.execute("var keys; state.origins.keys().then(k => keys = k);", in_extension=True)
     cache_keys = json.loads(browser.execute("JSON.stringify(keys)", in_extension=True))
     first_party = server.url(non_enrolled_dnsnames[0])
-    assert [f"{dnsnames[0]}?firstParty={urllib.parse.quote(first_party, safe="")},incognito={"true" if incognito else "false"}"] == cache_keys
+    store = "firefox-private" if incognito else "firefox-default"
+    assert [f"{dnsnames[0]}?cookieStoreId={store},firstParty={urllib.parse.quote(first_party, safe="")}"] == cache_keys
 
 @pytest.mark.parametrize("browser, paths_to_wait", [
     pytest.param("firefox", NON_FRAME_PATHS, id="firefox"),

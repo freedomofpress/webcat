@@ -24,7 +24,7 @@ def test_navigation_race(browser: Browser, server: Server, update_server: Update
     navigates away. None of them may be attributed to the incoming site, even
     when that site frames the worker's origin from its first bytes with the
     frame's document already cached and verified. Requests that reach the
-    extension after the old document is gone must be cancelled instead.
+    extension after the old document is gone are cancelled.
     """
     browser.install_extension(addon_path)
     update_server.wait_for_update()

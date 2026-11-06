@@ -14,9 +14,6 @@ declare global {
 export type LocalScope<T> = Record<string, { data: T; ready: Promise<void> }>;
 
 export const global = globalThis.self || globalThis;
-// Captured before any page code runs; invokes natives without a lookup of
-// .call/.apply on page-controlled prototypes
-export const apply = Reflect.apply;
 const isolated = typeof globalThis.exportFunction === "function";
 
 export function unwrap<T>(object: T) {
