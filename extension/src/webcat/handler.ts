@@ -137,7 +137,6 @@ export class WebcatRequestHandler extends RequestHandler {
         fqdn: getFQDN(details.url),
         cachePartition: {
           firstParty: await this.#getFirstParty(details),
-          incognito: !!details.incognito,
           cookieStoreId: details.cookieStoreId ?? "firefox-default",
         },
         isFrame: FRAME_TYPES.includes(details.type),
@@ -425,12 +424,12 @@ export class WebcatRequestHandler extends RequestHandler {
     const windows = await browser.windows.getAll();
     if (windows.filter((win) => win.incognito).length === 0) {
       for (const key of await this.#db.origins.keys()) {
-        if (isInPartition(key, { incognito: true })) {
+        if (isInPartition(key, { cookieStoreId: "firefox-private" })) {
           this.#db.origins.delete(key);
         }
       }
       for (const value of await this.#db.nonOrigins.values()) {
-        if (isInPartition(value, { incognito: true })) {
+        if (isInPartition(value, { cookieStoreId: "firefox-private" })) {
           this.#db.nonOrigins.delete(value);
         }
       }

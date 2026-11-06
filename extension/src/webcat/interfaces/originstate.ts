@@ -8,8 +8,7 @@ import { WebcatError } from "./errors";
 
 export type CachePartition = {
   firstParty: string;
-  incognito: boolean;
-  /** The contextual identity (container) the request belongs to */
+  /** Container the request belongs to; "firefox-private" for private windows */
   cookieStoreId: string;
 };
 
