@@ -157,7 +157,7 @@ jobs:
 
       - name: Build extension from the base commit
         run: |
-          git worktree add ../base ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD~1' }}
+          git worktree add ../base ${{ github.base_ref && format('origin/{0}', github.base_ref) || github.event.before || 'HEAD~1' }}
           make -C ../base/extension package
           cp ../base/dist/webcat-extension.zip dist/base.zip
 
