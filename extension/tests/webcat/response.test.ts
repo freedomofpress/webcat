@@ -567,29 +567,21 @@ describe("ResponseValidator.validateContent", () => {
     expect(ui.showErrorPage).not.toHaveBeenCalled();
   });
 
-  it("strips a marker delivered twice, as a repeated header event installs two marking filters", async () => {
+  it("marks a request once across repeated header events, and again after its filter errors", async () => {
     details.type = "sub_frame";
-    details.tabId = 123;
-    const marker = { onstart: () => {}, write: vi.fn() };
+    const marker = {
+      onstart: () => {},
+      write: vi.fn(),
+      onerror: undefined as undefined | (() => void),
+    };
     mockFilterResponseData.mockReturnValueOnce(marker);
     rv.markContent(details);
-    marker.onstart();
-    mockFilterResponseData.mockReturnValueOnce(filter);
-    await rv.validateContent(details);
-    verified = true;
-    details.state.pendingOrigin.manifest.files["/path"] =
-      "Om6weQ85rIfJTzhWst0sXREOaBFgImGpqSPTuyOtyLc";
-    details.responseHeaders = [];
-    filter.onstart?.();
-    const markerBytes = new Uint8Array(marker.write.mock.calls[0][0]);
-    filter.ondata?.({ data: markerBytes.slice().buffer });
-    filter.ondata?.({ data: markerBytes.slice().buffer });
-    filter.ondata?.({ data: new TextEncoder().encode("data").buffer });
-    await filter.onstop?.();
-    expect(
-      filter.write.mock.calls.map((c) => new TextDecoder().decode(c[0])),
-    ).toStrictEqual(["data"]);
-    expect(ui.showErrorPage).not.toHaveBeenCalled();
+    rv.markContent(details);
+    expect(mockFilterResponseData).toHaveBeenCalledTimes(1);
+    marker.onerror?.();
+    mockFilterResponseData.mockReturnValueOnce(marker);
+    rv.markContent(details);
+    expect(mockFilterResponseData).toHaveBeenCalledTimes(2);
   });
 
   it("recognises the marker split across chunks", async () => {

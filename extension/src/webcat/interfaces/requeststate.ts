@@ -5,6 +5,8 @@ export type RequestState = {
   isFrame: boolean;
   cachePartition: CachePartition;
   pendingOrigin?: OriginState;
+  /** A marking filter is attached to the response */
+  marked?: boolean;
 };
 
 export type Stateful<T> = T & {
