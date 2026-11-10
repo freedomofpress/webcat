@@ -2,7 +2,6 @@ import {
   base64UrlToUint8Array,
   sha256,
   stringToUint8Array,
-  uint8ArrayEqual,
   Uint8ArrayToBase64Url,
   Uint8ArrayToString,
 } from "@freedomofpress/crypto-browser";
@@ -352,7 +351,10 @@ export class ResponseValidator {
 
     let manifest!: Manifest;
     const filter = browser.webRequest.filterResponseData(details.requestId);
+    // Content chunks, hashed and written once complete
     const source: Promise<ArrayBuffer>[] = [];
+    // WEBCAT's own hooks for a worker script, written ahead of the content
+    let injected: Promise<ArrayBuffer> | undefined;
     filter.onstart = () => {
       assertVerifiedManifest(originState);
       assertHeadersAvailable(details);
@@ -379,9 +381,7 @@ export class ResponseValidator {
                 details.state.cachePartition.firstParty ===
                   new URL(details.url).origin,
               );
-              source.push(
-                hooks.then((h) => new TextEncoder().encode(h).buffer),
-              );
+              injected = hooks.then((h) => new TextEncoder().encode(h).buffer);
             }
             break;
           }
@@ -390,24 +390,39 @@ export class ResponseValidator {
     };
 
     let writeQueue: Promise<void> = Promise.resolve();
+    // Bytes received before the marker: hooks this and other extensions
+    // prepended, which pass through as they are. Content can only be hashed
+    // at the end, so its chunks are kept and written once validated.
+    let prelude = new Uint8Array(0);
+    let scanned = 0;
     let markerSeen = false;
     filter.ondata = (event: { data: ArrayBuffer }) => {
-      // The data here is usually chunked; normally it would be streamed down as
-      // we get it but since we can hash the content only at the end, we have to
-      // wait until we have everything before deciding if the response content
-      // matches the manifest or not. So we are saving it and we will build a
-      // blob later. If the data is the marker, flush all buffered data;
-      // anything received up to that point is from this or other extensions, not
-      // the network.
-      if (uint8ArrayEqual(this.#marker, new Uint8Array(event.data))) {
-        source.forEach((hook) => {
-          writeQueue = writeQueue.then(async () => filter.write(await hook));
-        });
-        source.length = 0;
-        markerSeen = true;
-      } else {
+      // Pass-through types carry no marker: every chunk is content
+      if (markerSeen || PASS_THROUGH_TYPES.has(details.type)) {
         source.push(Promise.resolve(event.data));
+        return;
       }
+      // An extension upstream may deliver the marker inside a larger chunk
+      // or split across chunks, so search the bytes received so far
+      prelude = concat(prelude, new Uint8Array(event.data));
+      const at = indexOf(prelude, this.#marker, scanned);
+      scanned = Math.max(0, prelude.length - this.#marker.length + 1);
+      if (at === -1) {
+        return;
+      }
+      const hooks = prelude.subarray(0, at);
+      const content = prelude.subarray(at + this.#marker.length);
+      if (injected) {
+        const own = injected;
+        writeQueue = writeQueue.then(async () => filter.write(await own));
+      }
+      if (hooks.length) {
+        writeQueue = writeQueue.then(() => filter.write(hooks));
+      }
+      if (content.length) {
+        source.push(Promise.resolve(content.slice().buffer));
+      }
+      markerSeen = true;
     };
 
     filter.onstop = async () => {
@@ -432,11 +447,15 @@ export class ResponseValidator {
         filter.close();
         return;
       }
-      const blob = await new Blob(await Promise.all(source)).arrayBuffer();
-
-      const content_hash = Uint8ArrayToBase64Url(
-        await sha256(new Uint8Array(blob)),
+      // A request may get the marker more than once, from a marking filter
+      // installed at each of several header events; only this validator can
+      // produce it, so every occurrence is stripped before hashing
+      const blob = without(
+        new Uint8Array(await new Blob(await Promise.all(source)).arrayBuffer()),
+        this.#marker,
       );
+
+      const content_hash = Uint8ArrayToBase64Url(await sha256(blob));
 
       // A main_frame navigation passes if the content is the file keyed at
       // this path, or any fallback document: error and maintenance pages at
@@ -492,7 +511,7 @@ export class ResponseValidator {
       logger.info(`${pathname} verified.`, details);
 
       await writeQueue;
-      filter.write(blob);
+      filter.write(blob.buffer as ArrayBuffer);
       // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
       // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
       filter.close();
@@ -532,4 +551,33 @@ export class ResponseValidator {
     endMarkerInjector.ondata = (event) => endMarkerInjector.write(event.data);
     endMarkerInjector.onstop = () => endMarkerInjector.close();
   }
+}
+
+function concat(a: Uint8Array, b: Uint8Array) {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a);
+  out.set(b, a.length);
+  return out;
+}
+
+/** haystack with every occurrence of needle removed, over an exact-size buffer */
+function without(haystack: Uint8Array, needle: Uint8Array) {
+  let at;
+  while ((at = indexOf(haystack, needle)) !== -1) {
+    haystack = concat(
+      haystack.subarray(0, at),
+      haystack.subarray(at + needle.length),
+    );
+  }
+  return haystack;
+}
+
+/** The offset of the first occurrence of needle in haystack at or after from, or -1 */
+function indexOf(haystack: Uint8Array, needle: Uint8Array, from = 0) {
+  for (let i = from; i + needle.length <= haystack.length; i++) {
+    let j = 0;
+    while (j < needle.length && haystack[i + j] === needle[j]) j++;
+    if (j === needle.length) return i;
+  }
+  return -1;
 }
