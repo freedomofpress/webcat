@@ -353,7 +353,7 @@ export class ResponseValidator {
     const filter = browser.webRequest.filterResponseData(details.requestId);
     // Content chunks, hashed and written once complete
     const source: Promise<ArrayBuffer>[] = [];
-    // WEBCAT's own hooks for a worker script, written ahead of the content
+    // WEBCAT's hooks for a worker script, written ahead of the content
     let injected: Promise<ArrayBuffer> | undefined;
     filter.onstart = () => {
       assertVerifiedManifest(originState);
@@ -390,20 +390,17 @@ export class ResponseValidator {
     };
 
     let writeQueue: Promise<void> = Promise.resolve();
-    // Bytes received before the marker: hooks this and other extensions
-    // prepended, which pass through as they are. Content can only be hashed
-    // at the end, so its chunks are kept and written once validated.
+    // Bytes received before the marker, hooks of this and other extensions, pass through as they are
     let prelude = new Uint8Array(0);
     let scanned = 0;
     let markerSeen = false;
     filter.ondata = (event: { data: ArrayBuffer }) => {
-      // Pass-through types carry no marker: every chunk is content
+      // Pass-through types carry no marker
       if (markerSeen || PASS_THROUGH_TYPES.has(details.type)) {
         source.push(Promise.resolve(event.data));
         return;
       }
-      // An extension upstream may deliver the marker inside a larger chunk
-      // or split across chunks, so search the bytes received so far
+      // An upstream extension may deliver the marker inside a larger chunk or split across chunks
       prelude = concat(prelude, new Uint8Array(event.data));
       const at = indexOf(prelude, this.#marker, scanned);
       scanned = Math.max(0, prelude.length - this.#marker.length + 1);
@@ -447,15 +444,21 @@ export class ResponseValidator {
         filter.close();
         return;
       }
-      // A request may get the marker more than once, from a marking filter
-      // installed at each of several header events; only this validator can
-      // produce it, so every occurrence is stripped before hashing
-      const blob = without(
-        new Uint8Array(await new Blob(await Promise.all(source)).arrayBuffer()),
-        this.#marker,
-      );
+      const blob = await new Blob(await Promise.all(source)).arrayBuffer();
+      if (
+        blob.byteLength >= this.#marker.length &&
+        indexOf(new Uint8Array(blob, 0, this.#marker.length), this.#marker) ===
+          0
+      ) {
+        logger.warn(
+          `A second marker reached the content of ${details.url}`,
+          details,
+        );
+      }
 
-      const content_hash = Uint8ArrayToBase64Url(await sha256(blob));
+      const content_hash = Uint8ArrayToBase64Url(
+        await sha256(new Uint8Array(blob)),
+      );
 
       // A main_frame navigation passes if the content is the file keyed at
       // this path, or any fallback document: error and maintenance pages at
@@ -511,7 +514,7 @@ export class ResponseValidator {
       logger.info(`${pathname} verified.`, details);
 
       await writeQueue;
-      filter.write(blob.buffer as ArrayBuffer);
+      filter.write(blob);
       // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
       // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
       filter.close();
@@ -533,23 +536,22 @@ export class ResponseValidator {
    * @param details
    * @returns
    */
-  markContent(details: HeadersReceivedDetails) {
-    if (PASS_THROUGH_TYPES.has(details.type)) return;
-    // Install a marking filter at the last possible moment: after
-    // all extensions, including WEBCAT and NoScript, have injected their
-    // hooks, but before receiving any code from the network
+  markContent(details: Stateful<HeadersReceivedDetails>) {
+    if (PASS_THROUGH_TYPES.has(details.type) || details.state.marked) return;
+    // A repeated header event on the same channel, as a service worker update check gets, reuses the first filter
+    details.state.marked = true;
+    // Installed last, so it sits nearest the network and writes before every extension's hooks
     const endMarkerInjector = browser.webRequest.filterResponseData(
       details.requestId,
     );
     endMarkerInjector.onstart = () => {
-      // Inject the end marker, signaling the end of extension hooks and
-      // the start of code that should be validated
+      // Stays connected, a disconnected filter gets no onerror on redirect
       endMarkerInjector.write(this.#marker);
-      // We'd disconnect here, but that would corrupt the response;
-      // see https://bugzilla.mozilla.org/show_bug.cgi?id=2065230
     };
     endMarkerInjector.ondata = (event) => endMarkerInjector.write(event.data);
     endMarkerInjector.onstop = () => endMarkerInjector.close();
+    // A redirect ends this filter and the next hop marks again
+    endMarkerInjector.onerror = () => (details.state.marked = false);
   }
 }
 
@@ -558,18 +560,6 @@ function concat(a: Uint8Array, b: Uint8Array) {
   out.set(a);
   out.set(b, a.length);
   return out;
-}
-
-/** haystack with every occurrence of needle removed, over an exact-size buffer */
-function without(haystack: Uint8Array, needle: Uint8Array) {
-  let at;
-  while ((at = indexOf(haystack, needle)) !== -1) {
-    haystack = concat(
-      haystack.subarray(0, at),
-      haystack.subarray(at + needle.length),
-    );
-  }
-  return haystack;
 }
 
 /** The offset of the first occurrence of needle in haystack at or after from, or -1 */

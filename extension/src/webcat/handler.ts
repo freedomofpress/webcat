@@ -271,7 +271,7 @@ export class WebcatRequestHandler extends RequestHandler {
       blockingResponse.setHeader("Origin-Agent-Cluster", "?1");
     }
 
-    this.#responseValidator.markContent(event.details);
+    this.#responseValidator.markContent(details);
 
     // Here we must have already validated the enrollment and the manifest
     // and thus should have all the information, but we haven't started
