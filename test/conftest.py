@@ -16,6 +16,7 @@ logging.getLogger().setLevel(logging.WARNING)
 
 _firefox_skips = {
     "corrupted_serviceworker_test-in_frame": "ServiceWorkers disabled in frames",
+    "corrupted_sharedworker_test-in_frame": "SharedWorkers of cross-site frames are cancelled",
 }
 
 _tbb_skips = {
