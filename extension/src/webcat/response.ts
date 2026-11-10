@@ -352,9 +352,9 @@ export class ResponseValidator {
     let manifest!: Manifest;
     const filter = browser.webRequest.filterResponseData(details.requestId);
     // Content chunks, hashed and written once complete
-    const source: Promise<ArrayBuffer>[] = [];
+    const source: ArrayBuffer[] = [];
     // WEBCAT's hooks for a worker script, written ahead of the content
-    let injected: Promise<ArrayBuffer> | undefined;
+    let injected: ArrayBuffer | undefined;
     filter.onstart = () => {
       assertVerifiedManifest(originState);
       assertHeadersAvailable(details);
@@ -365,23 +365,18 @@ export class ResponseValidator {
         filter.disconnect();
       }
       // Inject hooks to worker scripts
-      if (details.type === "script" && details.requestHeaders) {
-        for (const header of details.requestHeaders) {
-          if (
-            header.name.toLowerCase() === "sec-fetch-dest" &&
-            header.value !== undefined
-          ) {
-            if (WORKER_FETCH_DESTINATIONS.includes(header.value)) {
-              const hooks = this.#hooks.getPageHooks(manifest.wasm);
-              injected = hooks.then((h) => new TextEncoder().encode(h).buffer);
-            }
-            break;
-          }
-        }
+      const destination = fetchDestination(details);
+      if (
+        details.type === "script" &&
+        destination &&
+        WORKER_FETCH_DESTINATIONS.includes(destination)
+      ) {
+        injected = new TextEncoder().encode(
+          this.#hooks.getPageHooks(manifest.wasm),
+        ).buffer;
       }
     };
 
-    let writeQueue: Promise<void> = Promise.resolve();
     // Bytes received before the marker, hooks of this and other extensions, pass through as they are
     let prelude = new Uint8Array(0);
     let scanned = 0;
@@ -389,7 +384,7 @@ export class ResponseValidator {
     filter.ondata = (event: { data: ArrayBuffer }) => {
       // Pass-through types carry no marker
       if (markerSeen || PASS_THROUGH_TYPES.has(details.type)) {
-        source.push(Promise.resolve(event.data));
+        source.push(event.data);
         return;
       }
       // An upstream extension may deliver the marker inside a larger chunk or split across chunks
@@ -402,14 +397,13 @@ export class ResponseValidator {
       const hooks = prelude.subarray(0, at);
       const content = prelude.subarray(at + this.#marker.length);
       if (injected) {
-        const own = injected;
-        writeQueue = writeQueue.then(async () => filter.write(await own));
+        filter.write(injected);
       }
       if (hooks.length) {
-        writeQueue = writeQueue.then(() => filter.write(hooks));
+        filter.write(hooks);
       }
       if (content.length) {
-        source.push(Promise.resolve(content.slice().buffer));
+        source.push(content.slice().buffer);
       }
       markerSeen = true;
     };
@@ -436,7 +430,7 @@ export class ResponseValidator {
         filter.close();
         return;
       }
-      const blob = await new Blob(await Promise.all(source)).arrayBuffer();
+      const blob = await new Blob(source).arrayBuffer();
       if (
         blob.byteLength >= this.#marker.length &&
         indexOf(new Uint8Array(blob, 0, this.#marker.length), this.#marker) ===
@@ -505,7 +499,6 @@ export class ResponseValidator {
       // If everything is OK then we can just write the raw blob back
       logger.info(`${pathname} verified.`, details);
 
-      await writeQueue;
       filter.write(blob);
       // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
       // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
@@ -545,6 +538,15 @@ export class ResponseValidator {
     // A redirect ends this filter and the next hop marks again
     endMarkerInjector.onerror = () => (details.state.marked = false);
   }
+}
+
+/** The Sec-Fetch-Dest request header, when known */
+export function fetchDestination(details: {
+  requestHeaders?: browser.webRequest.HttpHeaders;
+}) {
+  return details.requestHeaders?.find(
+    (header) => header.name.toLowerCase() === "sec-fetch-dest",
+  )?.value;
 }
 
 function concat(a: Uint8Array, b: Uint8Array) {

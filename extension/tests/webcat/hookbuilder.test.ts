@@ -31,13 +31,13 @@ describe("HookBuilder", () => {
   });
 
   it("should embed inputs into page hooks", async () => {
-    await expect(hb.getPageHooks(["abc"])).resolves.toBe(
+    expect(hb.getPageHooks(["abc"])).toBe(
       `page {{ {"hashes":["abc"],"connectionName":"conn"} }}`,
     );
   });
 
   it("should embed inputs into content script hooks", async () => {
-    await expect(hb.getContentScriptHooks(["abc"])).resolves.toStrictEqual([
+    expect(hb.getContentScriptHooks(["abc"])).toStrictEqual([
       expect.any(Function),
       ['{"hashes":["abc"],"connectionName":"conn"}'],
     ]);

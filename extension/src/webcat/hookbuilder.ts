@@ -63,22 +63,20 @@ export class HookBuilder {
 
   /**
    * @param wasm An array of hashes to validate WASM modules against.
-   * @returns A Promise that resolves to hook code ready to be injected
-   *   directly to a script file.
+   * @returns Hook code ready to be injected directly to a script file.
    */
-  async getPageHooks(wasm: string[]) {
+  getPageHooks(wasm: string[]) {
     return this.#get("page", wasm);
   }
 
   /**
    * @param wasm An array of hashes to validate WASM modules against.
-   * @returns A Promise that resolves to hook code ready to be included in a
-   *   content script.
+   * @returns Hook code ready to be included in a content script.
    */
-  async getContentScriptHooks(
+  getContentScriptHooks(
     wasm: string[],
-  ): Promise<[func: (data: string) => void, args: [data: string]]> {
-    const data = await this.#get("content_script", wasm);
+  ): [func: (data: string) => void, args: [data: string]] {
+    const data = this.#get("content_script", wasm);
     return [
       function (data: string) {
         const scope = window as unknown as {
@@ -93,7 +91,7 @@ export class HookBuilder {
     ];
   }
 
-  async #get(type: "page" | "content_script", wasm: string[]) {
+  #get(type: "page" | "content_script", wasm: string[]) {
     return hooks[type].replace(
       '"__DATA_PLACEHOLDER__"',
       JSON.stringify({
