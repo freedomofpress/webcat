@@ -372,15 +372,7 @@ export class ResponseValidator {
             header.value !== undefined
           ) {
             if (WORKER_FETCH_DESTINATIONS.includes(header.value)) {
-              const hooks = this.#hooks.getPageHooks(
-                manifest.wasm,
-                details.state.cachePartition.firstParty,
-                // Hooks are only injected to workers, and CSP restrictions only allow
-                // same-origin workers, so the request's web origin is the URL's origin;
-                // determine whether the URL is same-origin with the first party
-                details.state.cachePartition.firstParty ===
-                  new URL(details.url).origin,
-              );
+              const hooks = this.#hooks.getPageHooks(manifest.wasm);
               injected = hooks.then((h) => new TextEncoder().encode(h).buffer);
             }
             break;

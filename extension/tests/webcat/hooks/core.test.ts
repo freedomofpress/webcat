@@ -110,46 +110,6 @@ describe("exportFunc", () => {
   });
 });
 
-describe("makeInternal", () => {
-  it("creates an unwrapped object when exportFunction exists", async () => {
-    // Stub the object constructor to detect creation of fresh objects
-    class FreshObject {}
-    vi.stubGlobal("self", { Object: FreshObject });
-
-    // Stub Firefox APIs
-    const mockUnwrap = vi.fn();
-    vi.stubGlobal("exportFunction", () => {});
-    vi.stubGlobal("XPCNativeWrapper", { unwrap: mockUnwrap });
-
-    const { makeInternal } = await import("../../../src/webcat/hooks/core");
-
-    const unwrapped = {};
-    mockUnwrap.mockReturnValueOnce(unwrapped);
-    expect(makeInternal({})).toBe(unwrapped);
-    expect(mockUnwrap).toHaveBeenCalledOnce();
-    expect(mockUnwrap.mock.calls[0].length).toBe(1);
-    expect(mockUnwrap.mock.calls[0][0]).toBeInstanceOf(FreshObject);
-    expect(unwrapped).toStrictEqual({ listeners: new Map() });
-  });
-
-  it("adds all properties on the created object", async () => {
-    const { makeInternal } = await import("../../../src/webcat/hooks/core");
-
-    expect(
-      makeInternal({
-        foo: 1,
-        bar: "lorem ipsum",
-        ["dolor sit amet"]: /abc/,
-      }),
-    ).toStrictEqual({
-      listeners: new Map(),
-      foo: 1,
-      bar: "lorem ipsum",
-      ["dolor sit amet"]: /abc/,
-    });
-  });
-});
-
 describe("updatableHook", () => {
   it("runs the hook code only on first invocation", async () => {
     const { updatableHook } = await import("../../../src/webcat/hooks/core");
