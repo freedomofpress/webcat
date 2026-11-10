@@ -23,7 +23,7 @@ import { logger } from "./logger";
 import { BundleFetcherConfig } from "./originstate";
 import { validateOrigin } from "./request";
 import { FRAME_TYPES } from "./resources";
-import { ResponseValidator } from "./response";
+import { fetchDestination, ResponseValidator } from "./response";
 import { isNewerSemver } from "./semver";
 import { WebcatUI } from "./ui";
 import {
@@ -353,7 +353,7 @@ export class WebcatRequestHandler extends RequestHandler {
 
         browser.webNavigation.onDOMContentLoaded.removeListener(listener);
 
-        const [func, args] = await this.#hooks.getContentScriptHooks(wasm);
+        const [func, args] = this.#hooks.getContentScriptHooks(wasm);
         await browser.scripting.executeScript({
           target: {
             tabId: details.tabId,
@@ -415,10 +415,4 @@ export class WebcatRequestHandler extends RequestHandler {
       }
     }
   }
-}
-
-function fetchDestination(details: HeadersReceivedDetails) {
-  return details.requestHeaders?.find(
-    (header) => header.name.toLowerCase() === "sec-fetch-dest",
-  )?.value;
 }
