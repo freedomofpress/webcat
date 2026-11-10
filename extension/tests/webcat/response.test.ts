@@ -536,6 +536,87 @@ describe("ResponseValidator.validateContent", () => {
     expect(ui.showPartialIcon).not.toHaveBeenCalled();
   });
 
+  it("passes an upstream extension's prefix through when it delivers the marker inside one chunk", async () => {
+    details.type = "sub_frame";
+    details.tabId = 123;
+    const marker = { onstart: () => {}, write: vi.fn() };
+    mockFilterResponseData.mockReturnValueOnce(marker);
+    rv.markContent(details);
+    marker.onstart();
+    mockFilterResponseData.mockReturnValueOnce(filter);
+    await rv.validateContent(details);
+    verified = true;
+    details.state.pendingOrigin.manifest.files["/path"] =
+      "Om6weQ85rIfJTzhWst0sXREOaBFgImGpqSPTuyOtyLc";
+    details.responseHeaders = [];
+    filter.onstart?.();
+    // An extension that buffers the response writes its patch, the marker
+    // and the content in a single chunk
+    const enc = new TextEncoder();
+    const markerBytes = new Uint8Array(marker.write.mock.calls[0][0]);
+    const chunk = new Uint8Array([
+      ...enc.encode("patch;"),
+      ...markerBytes,
+      ...enc.encode("data"),
+    ]);
+    filter.ondata?.({ data: chunk.buffer });
+    await filter.onstop?.();
+    expect(
+      filter.write.mock.calls.map((c) => new TextDecoder().decode(c[0])),
+    ).toStrictEqual(["patch;", "data"]);
+    expect(ui.showErrorPage).not.toHaveBeenCalled();
+  });
+
+  it("strips a marker delivered twice, as a repeated header event installs two marking filters", async () => {
+    details.type = "sub_frame";
+    details.tabId = 123;
+    const marker = { onstart: () => {}, write: vi.fn() };
+    mockFilterResponseData.mockReturnValueOnce(marker);
+    rv.markContent(details);
+    marker.onstart();
+    mockFilterResponseData.mockReturnValueOnce(filter);
+    await rv.validateContent(details);
+    verified = true;
+    details.state.pendingOrigin.manifest.files["/path"] =
+      "Om6weQ85rIfJTzhWst0sXREOaBFgImGpqSPTuyOtyLc";
+    details.responseHeaders = [];
+    filter.onstart?.();
+    const markerBytes = new Uint8Array(marker.write.mock.calls[0][0]);
+    filter.ondata?.({ data: markerBytes.slice().buffer });
+    filter.ondata?.({ data: markerBytes.slice().buffer });
+    filter.ondata?.({ data: new TextEncoder().encode("data").buffer });
+    await filter.onstop?.();
+    expect(
+      filter.write.mock.calls.map((c) => new TextDecoder().decode(c[0])),
+    ).toStrictEqual(["data"]);
+    expect(ui.showErrorPage).not.toHaveBeenCalled();
+  });
+
+  it("recognises the marker split across chunks", async () => {
+    details.type = "sub_frame";
+    details.tabId = 123;
+    const marker = { onstart: () => {}, write: vi.fn() };
+    mockFilterResponseData.mockReturnValueOnce(marker);
+    rv.markContent(details);
+    marker.onstart();
+    mockFilterResponseData.mockReturnValueOnce(filter);
+    await rv.validateContent(details);
+    verified = true;
+    details.state.pendingOrigin.manifest.files["/path"] =
+      "Om6weQ85rIfJTzhWst0sXREOaBFgImGpqSPTuyOtyLc";
+    details.responseHeaders = [];
+    filter.onstart?.();
+    const markerBytes = new Uint8Array(marker.write.mock.calls[0][0]);
+    filter.ondata?.({ data: markerBytes.slice(0, 20).buffer });
+    filter.ondata?.({ data: markerBytes.slice(20).buffer });
+    filter.ondata?.({ data: new TextEncoder().encode("data").buffer });
+    await filter.onstop?.();
+    expect(
+      filter.write.mock.calls.map((c) => new TextDecoder().decode(c[0])),
+    ).toStrictEqual(["data"]);
+    expect(ui.showErrorPage).not.toHaveBeenCalled();
+  });
+
   it("shows the partial icon for a verified sub_frame", async () => {
     details.type = "sub_frame";
     details.tabId = 123;
