@@ -238,6 +238,72 @@ describe("resolveFirstParty: tab-bound requests without ancestors", () => {
   });
 });
 
+describe("resolveFirstParty: loads from inside a recorded worker", () => {
+  const load = request({
+    url: "https://enrolled.example/workers/import.js",
+    documentUrl: "https://enrolled.example/workers/worker.js",
+  });
+  const recorded = (firstParty: string, stale: boolean) => ({
+    lookup: async () => ({ firstParty, stale }),
+  });
+  // The tab has moved on to enrolled.example itself; ESR reports the load
+  // under frame 0, so the frames alone would attribute it there
+  const nextTab = async () => [
+    { frameId: 0, url: "https://enrolled.example/" },
+  ];
+
+  it("replays the recorded first party without looking at the frames", async () => {
+    await expect(
+      resolveFirstParty(
+        load,
+        noLookup,
+        recorded("https://embedder.example", false),
+      ),
+    ).resolves.toBe("https://embedder.example");
+  });
+
+  it("throws for a stale record when the tab left that first party", async () => {
+    await expect(
+      resolveFirstParty(
+        load,
+        nextTab,
+        recorded("https://embedder.example", true),
+      ),
+    ).rejects.toThrow("departed");
+  });
+
+  it("accepts a stale record when the tab is still on that first party", async () => {
+    await expect(
+      resolveFirstParty(
+        load,
+        nextTab,
+        recorded("https://enrolled.example", true),
+      ),
+    ).resolves.toBe("https://enrolled.example");
+  });
+
+  it("treats a stale record whose URL is a live document's as that document's subresource", async () => {
+    // The page fetched its own URL as a worker script under an embedder, then
+    // the tab navigated to that page; its subresources name it as documentUrl
+    await expect(
+      resolveFirstParty(
+        request({
+          url: "https://enrolled.example/app.js",
+          documentUrl: "https://enrolled.example/",
+        }),
+        nextTab,
+        recorded("https://embedder.example", true),
+      ),
+    ).resolves.toBe("https://enrolled.example");
+  });
+
+  it("falls back to the frames for a script the registry does not know", async () => {
+    await expect(
+      resolveFirstParty(load, tab, { lookup: async () => undefined }),
+    ).resolves.toBe("https://embedder.example");
+  });
+});
+
 describe("resolveFirstParty: tab-less requests", () => {
   it.each([
     [
