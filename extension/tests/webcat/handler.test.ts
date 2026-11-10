@@ -91,6 +91,9 @@ vi.stubGlobal("browser", {
   },
   tabs: {
     update: vi.fn().mockResolvedValue({}),
+    onRemoved: {
+      addListener: vi.fn(),
+    },
   },
 });
 
@@ -190,6 +193,47 @@ describe("WebcatRequestHandler", () => {
     });
   });
 
+  it("records a worker script's first party before its body is released", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    const wrh = new WebcatRequestHandler(db, ui, defaults);
+    // Missing responseHeaders: validation fails after the record is written
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "7",
+      tabId: 7,
+      url: "https://enrolled.example/workers/worker.js",
+      requestHeaders: [{ name: "Sec-Fetch-Dest", value: "worker" }],
+      state: {
+        fqdn: "enrolled.example",
+        isFrame: false,
+        pendingOrigin: {},
+        cachePartition: {
+          firstParty: "https://embedder.example",
+          cookieStoreId: "firefox-default",
+        },
+      },
+    });
+    const event = new RequestEvent("headersreceived", details as never);
+    wrh.dispatchEvent(event);
+
+    await expect(event.ready()).resolves.toMatchObject({ cancel: true });
+    const records = mockStorageSet.mock.calls.flatMap(([items]) =>
+      Object.entries(items).filter(([key]) => key.endsWith("workers:7")),
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0][1]).toEqual({
+      navigation: 0,
+      scripts: {
+        "https://enrolled.example/workers/worker.js": {
+          firstParty: "https://embedder.example",
+          navigation: 0,
+        },
+      },
+    });
+    errorLog.mockRestore();
+  });
+
   it("cancels a request it cannot attribute to a first party", async () => {
     mockGetAllFrames.mockRejectedValue(new Error("Invalid tab ID: 7"));
     const db = new WebcatDatabase(defaults);
@@ -237,7 +281,7 @@ describe("WebcatRequestHandler", () => {
     const ui = new WebcatUI(db, db.namespace("ui"), defaults);
     const wrh = new WebcatRequestHandler(db, ui, defaults);
     // A SharedWorker created by enrolled.example while embedded cross-site:
-    // no tab, flagged third-party, same-origin with its document
+    // tabId -1, flagged third-party, same-origin with its document
     const details = Object.assign(new RequestDetailsBase(), {
       requestId: "3",
       tabId: -1,

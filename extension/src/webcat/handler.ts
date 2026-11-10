@@ -9,7 +9,11 @@ import {
 import { ContentScript } from "../browser/scripting";
 import { Mutex } from "../browser/sync";
 import { CacheKey, isInPartition } from "./cache";
-import { isThirdPartyWorkerScript, resolveFirstParty } from "./firstparty";
+import {
+  getAllFrames,
+  isThirdPartyWorkerScript,
+  resolveFirstParty,
+} from "./firstparty";
 import { HookBuilder, HookBuilderConfig } from "./hookbuilder";
 import { Database } from "./interfaces/database";
 import { WebcatError } from "./interfaces/errors";
@@ -28,6 +32,7 @@ import {
   isExtensionRequest,
   isSameOriginURL,
 } from "./utils";
+import { WorkerRegistry } from "./workers";
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export interface WebcatRequestHandler extends RequestHandler {
@@ -49,6 +54,7 @@ export class WebcatRequestHandler extends RequestHandler {
   readonly #hooks: HookBuilder;
   readonly #contentScript: ContentScript;
   readonly #responseValidator: ResponseValidator;
+  readonly #workers: WorkerRegistry;
   readonly #mutex = new Mutex();
   readonly #requestLock = this.#mutex.createLock();
 
@@ -70,9 +76,16 @@ export class WebcatRequestHandler extends RequestHandler {
       this.#ui,
       this.#hooks,
     );
+    this.#workers = new WorkerRegistry(db.namespace("workers"));
     this.addEventListener("beforerequest", this.#onRequest);
     this.addEventListener("headersreceived", this.#onHeaders);
     browser.windows.onRemoved.addListener(this.#onWindowClosed.bind(this));
+    browser.webNavigation.onCommitted.addListener(({ tabId, frameId }) => {
+      if (frameId === 0) void this.#workers.navigated(tabId);
+    });
+    browser.tabs.onRemoved.addListener(
+      (tabId) => void this.#workers.forget(tabId),
+    );
 
     // Block requests until first bind
     this.#mutex.acquire(this.#bindLock);
@@ -137,7 +150,11 @@ export class WebcatRequestHandler extends RequestHandler {
       state: {
         fqdn: getFQDN(details.url),
         cachePartition: {
-          firstParty: await resolveFirstParty(details),
+          firstParty: await resolveFirstParty(
+            details,
+            getAllFrames,
+            this.#workers,
+          ),
           cookieStoreId: details.cookieStoreId ?? "firefox-default",
         },
         isFrame: FRAME_TYPES.includes(details.type),
@@ -270,6 +287,15 @@ export class WebcatRequestHandler extends RequestHandler {
       throw new Error("missing pendingOrigin in request state");
     }
 
+    if (details.tabId !== -1 && fetchDestination(details) === "worker") {
+      // Before the body reaches the worker, so its loads find the record
+      await this.#workers.record(
+        details.tabId,
+        details.url,
+        details.state.cachePartition.firstParty,
+      );
+    }
+
     const result = await this.#responseValidator.validateHeaders(details);
     if (result instanceof WebcatError) {
       logger.error(
@@ -389,4 +415,10 @@ export class WebcatRequestHandler extends RequestHandler {
       }
     }
   }
+}
+
+function fetchDestination(details: HeadersReceivedDetails) {
+  return details.requestHeaders?.find(
+    (header) => header.name.toLowerCase() === "sec-fetch-dest",
+  )?.value;
 }

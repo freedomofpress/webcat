@@ -62,18 +62,11 @@ def test_navigation_race(browser: Browser, server: Server, update_server: Update
 # A framed enrolled document's worker keeps issuing requests while the tab
 # navigates to the enrolled origin. Firefox ESR reports worker loads under
 # frame 0 (https://bugzilla.mozilla.org/show_bug.cgi?id=2048884), so a load
-# arriving after the frame is gone passes the frame check against the new
-# top-level document; see the race examples in
-# extension/src/webcat/firstparty.ts. Reproduces on ESR engines, Tor Browser
-# and the Firefox ESR job, with importScripts and nested workers.
-ESR_FRAME0 = pytest.mark.xfail(reason="Firefox ESR reports worker loads under frame 0 (bug 2048884)", strict=False)
-
+# arriving after the frame is gone would pass the frame check against the new
+# top-level document; the worker registry resolves it from the script's own
+# attribution. See the race examples in extension/src/webcat/firstparty.ts.
 @pytest.mark.parametrize("browser", ["firefox", "tbb"], indirect=True)
-@pytest.mark.parametrize("mode", [
-    "fetch",
-    pytest.param("import", marks=ESR_FRAME0),
-    pytest.param("nested", marks=ESR_FRAME0),
-])
+@pytest.mark.parametrize("mode", ["fetch", "import", "nested"])
 @pytest.mark.parametrize("root, headers, hooks", [
     pytest.param("cases/testapp", EXPECTED_CSP, {
         f"/{page}.html": Hook(b'<!DOCTYPE html><iframe src="https://site1.localhost:8443/race/' + page.encode() + b'.html"></iframe>', type="text/html", headers={"content-security-policy": ""})
