@@ -52,5 +52,77 @@
   },
   "WEBCAT_fix": {
     "message": "Correggi"
+  },
+  "WEBCAT_schemaDeprecatedTitle": {
+    "message": "Questo sito deve essere aggiornato"
+  },
+  "WEBCAT_schemaDeprecatedShortDesc": {
+    "message": "$1 è registrato in WEBCAT con una configurazione obsoleta che questa versione di WEBCAT non accetta più, quindi la pagina è stata bloccata."
+  },
+  "WEBCAT_schemaDeprecatedWhatYouCanDo": {
+    "message": "Non puoi fare nulla per risolvere il problema da parte tua. Il proprietario del sito deve aggiornare la registrazione e il manifest WEBCAT al formato attuale. Puoi avvisarlo oppure, se ritieni che si tratti di un bug, aprire una segnalazione nel $1."
+  },
+  "WEBCAT_schemaUnsupportedTitle": {
+    "message": "WEBCAT deve essere aggiornato"
+  },
+  "WEBCAT_schemaUnsupportedShortDesc": {
+    "message": "$1 usa una versione di WEBCAT più recente di quella installata nel tuo browser, quindi la pagina è stata bloccata."
+  },
+  "WEBCAT_schemaUnsupportedWhatYouCanDo": {
+    "message": "Aggiorna l'estensione WEBCAT all'ultima versione e ricarica la pagina. Se non viene offerto alcun aggiornamento, il tuo browser potrebbe essere troppo vecchio per l'ultimo WEBCAT: aggiorna prima il browser, poi WEBCAT. Se il problema persiste, apri una segnalazione nel $1."
+  },
+  "WEBCAT_internalErrorTitle": {
+    "message": "WEBCAT ha riscontrato un problema"
+  },
+  "WEBCAT_internalErrorShortDesc": {
+    "message": "WEBCAT ha incontrato un errore imprevisto durante la verifica di $1, quindi la pagina è stata bloccata per sicurezza."
+  },
+  "WEBCAT_internalErrorWhatYouCanDo": {
+    "message": "Molto probabilmente si tratta di un bug di WEBCAT, non di un problema del sito. Prova a ricaricare la pagina. Se continua a succedere, apri una segnalazione nel $1 includendo il codice di errore qui sotto."
+  },
+  "WEBCAT_bundleFetchErrorTitle": {
+    "message": "Impossibile verificare questo sito"
+  },
+  "WEBCAT_bundleFetchErrorShortDesc": {
+    "message": "WEBCAT non è riuscito a scaricare il manifest firmato di $1, quindi la pagina è stata bloccata."
+  },
+  "WEBCAT_bundleFetchErrorWhatYouCanDo": {
+    "message": "Può trattarsi di un problema della tua connessione o dell'hosting del sito. Ricarica la pagina o riprova più tardi. Se continua a succedere, il proprietario del sito potrebbe aver spostato o rimosso i file WEBCAT. Puoi avvisarlo oppure aprire una segnalazione nel $1."
+  },
+  "WEBCAT_manifestExpiredTitle": {
+    "message": "La firma di questo sito è scaduta"
+  },
+  "WEBCAT_manifestExpiredShortDesc": {
+    "message": "$1 è registrato in WEBCAT, ma il suo manifest firmato è più vecchio di quanto il sito consenta, quindi la pagina è stata bloccata."
+  },
+  "WEBCAT_manifestExpiredWhatYouCanDo": {
+    "message": "Non puoi fare nulla per risolvere il problema da parte tua. Il proprietario del sito deve pubblicare un manifest firmato di recente. Se l'orologio del tuo computer è sbagliato, WEBCAT può anche scambiare una firma valida per una scaduta, quindi controlla anche data e ora. Puoi avvisare il proprietario del sito oppure aprire una segnalazione nel $1."
+  },
+  "WEBCAT_clockSkewTitle": {
+    "message": "Controlla l'orologio del tuo computer"
+  },
+  "WEBCAT_clockSkewShortDesc": {
+    "message": "La firma di $1 ha una data nel futuro, quindi WEBCAT ha bloccato la pagina."
+  },
+  "WEBCAT_clockSkewWhatYouCanDo": {
+    "message": "Di solito significa che la data o l'ora del tuo computer sono sbagliate. Imposta data, ora e fuso orario corretti, poi ricarica la pagina. Se l'orologio è giusto e il problema persiste, apri una segnalazione nel $1."
+  },
+  "WEBCAT_frameIsolationTitle": {
+    "message": "Apri questo sito in una nuova scheda"
+  },
+  "WEBCAT_frameIsolationShortDesc": {
+    "message": "Il tuo browser non ha isolato $1 dagli altri siti come richiesto da WEBCAT, quindi la pagina è stata bloccata."
+  },
+  "WEBCAT_frameIsolationWhatYouCanDo": {
+    "message": "Firefox decide una sola volta, per ogni gruppo di schede collegate, se un sito va tenuto isolato, e mantiene quella decisione finché le schede non vengono chiuse. Chiudi questa scheda e riapri il sito digitando l'indirizzo in una nuova scheda. Se non basta, riavvia Firefox. Se il problema persiste, apri una segnalazione nel $1."
+  },
+  "WEBCAT_browserUnsupportedTitle": {
+    "message": "Il tuo browser deve essere aggiornato"
+  },
+  "WEBCAT_browserUnsupportedShortDesc": {
+    "message": "Il tuo browser non è in grado di isolare $1 dagli altri siti come richiesto da WEBCAT, quindi la pagina è stata bloccata."
+  },
+  "WEBCAT_browserUnsupportedWhatYouCanDo": {
+    "message": "WEBCAT ha bisogno di una funzione che questo browser non offre. Aggiorna Firefox all'ultima versione e ricarica la pagina. Se sei già aggiornato, l'isolamento dei siti potrebbe essere stato disattivato nelle impostazioni del browser. Se il problema persiste, apri una segnalazione nel $1."
   }
 }

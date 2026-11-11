@@ -22,7 +22,10 @@ export const oacHook = updatableHook(
         name: (await data).connectionName,
       });
       port.postMessage({
-        code: WebcatErrorCode.FrameIsolation.OAC_UNAVAILABLE,
+        code:
+          "originAgentCluster" in window
+            ? WebcatErrorCode.FrameIsolation.OAC_UNAVAILABLE
+            : WebcatErrorCode.FrameIsolation.OAC_UNSUPPORTED,
       });
     }
   },

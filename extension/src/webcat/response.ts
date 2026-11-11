@@ -338,11 +338,6 @@ export class ResponseValidator {
    * @param details The request details object to validate.
    */
   async validateContent(details: Stateful<BeforeRequestDetails>) {
-    function deny(filter: browser.webRequest.StreamFilter) {
-      // DENIED
-      filter.write(new Uint8Array([68, 69, 78, 73, 69, 68]));
-    }
-
     const pathname = new URL(details.url).pathname;
     const originState = details.state.pendingOrigin;
     if (!originState) {
@@ -351,6 +346,21 @@ export class ResponseValidator {
 
     let manifest!: Manifest;
     const filter = browser.webRequest.filterResponseData(details.requestId);
+    const DENIED = new Uint8Array([68, 69, 78, 73, 69, 68]);
+    // False when a navigation or reload already tore the request down
+    const finish = (data?: ArrayBuffer | Uint8Array) => {
+      try {
+        if (data) filter.write(data);
+        filter.close();
+        return true;
+      } catch {
+        logger.warn(
+          `Request ended during verification: ${details.url}`,
+          details,
+        );
+        return false;
+      }
+    };
     // Content chunks, hashed and written once complete
     const source: ArrayBuffer[] = [];
     // WEBCAT's hooks for a worker script, written ahead of the content
@@ -408,12 +418,15 @@ export class ResponseValidator {
       markerSeen = true;
     };
 
-    filter.onstop = async () => {
-      if (!markerSeen && !PASS_THROUGH_TYPES.has(details.type)) {
-        // The request terminated early, before headers were received,
-        // possibly because the user navigated away. Close without
-        // writing anything; don't display an error.
-        filter.close();
+    const onstop = async () => {
+      // No onstart (a response aborted during a reload), or no marker: the
+      // request terminated early, possibly because the user navigated away.
+      // Close without writing anything; don't display an error.
+      if (
+        manifest === undefined ||
+        (!markerSeen && !PASS_THROUGH_TYPES.has(details.type))
+      ) {
+        finish();
         return;
       }
       try {
@@ -427,7 +440,7 @@ export class ResponseValidator {
         }
       } catch {
         logger.warn(`Request canceled, url: ${details.url}`, details);
-        filter.close();
+        finish();
         return;
       }
       const blob = await new Blob(source).arrayBuffer();
@@ -455,8 +468,7 @@ export class ResponseValidator {
         details.type === "main_frame" ? (manifest.fallback_hashes ?? []) : [];
 
       if (!expected && fallback.length === 0) {
-        deny(filter);
-        filter.close();
+        if (!finish(DENIED)) return;
         this.#ui.showErrorPage(
           details,
           new WebcatError(WebcatErrorCode.File.MISSING, [pathname]),
@@ -469,8 +481,7 @@ export class ResponseValidator {
         expected === content_hash || fallback.includes(content_hash);
       // Sometimes answers gets cached and we get an empty result, we shouldn't mark those as a hash mismatch
       if (!matches && blob.byteLength !== 0) {
-        deny(filter);
-        filter.close();
+        if (!finish(DENIED)) return;
         // A deploy changes files unexpectedly: refetch the bundle
         // once per manifest version.
         // TODO: worker requests have no tab to reload and go straight to
@@ -499,10 +510,9 @@ export class ResponseValidator {
       // If everything is OK then we can just write the raw blob back
       logger.info(`${pathname} verified.`, details);
 
-      filter.write(blob);
       // close() ensures that nothing can be added afterwards; disconnect() just stops the filter and not the response
       // see https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/webRequest/StreamFilter
-      filter.close();
+      if (!finish(blob)) return;
       if (details.type === "main_frame") {
         this.#ui.showOKIcon(details.tabId, originState.delegation);
       } else if (details.type === "sub_frame") {
@@ -510,6 +520,20 @@ export class ResponseValidator {
       }
       // Redirect the main frame to an error page
     };
+    filter.onstop = () =>
+      onstop().catch((error) => {
+        logger.error(
+          `Unexpected error verifying ${details.url}`,
+          details,
+          error,
+        );
+        if (!finish(DENIED)) return;
+        this.#ui.showErrorPage(
+          details,
+          new WebcatError(WebcatErrorCode.Internal.UNEXPECTED, [String(error)]),
+          true,
+        );
+      });
   }
 
   /**

@@ -139,6 +139,27 @@ describe("verifySigstoreManifest claim matching", () => {
     expect(result).toBe(1787137043);
   });
 
+  it("returns NOT_YET_VALID when the signing certificate is from the future", async () => {
+    const enrollment = baseEnrollment({
+      "2.5.29.17": "https://github.com/example/repo",
+    });
+
+    const cert = createSanCert("https://github.com/example/repo");
+    cert.notBefore = new Date(Date.now() + 60 * 60 * 1000);
+    const signatures = [{ cert }] as unknown as SigstoreSignatures;
+
+    const result = await verifySigstoreManifest(
+      enrollment,
+      manifest,
+      signatures,
+    );
+
+    expect(result).toBeInstanceOf(WebcatError);
+    expect((result as WebcatError).code).toBe(
+      WebcatErrorCode.Manifest.NOT_YET_VALID,
+    );
+  });
+
   it("returns EXPIRED when the signing certificate is older than max_age", async () => {
     const enrollment = baseEnrollment({
       "2.5.29.17": "https://github.com/example/repo",
