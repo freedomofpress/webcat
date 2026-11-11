@@ -5,7 +5,7 @@ Tested on 1.11.94.
 2. Add the required `x-sigstore-headers` and `x-sigstore-signers` to the webserver configuration.
 3. Add the following CSP to the webserver configuration (or adapt it to a more recent version, keeping in mind the CSP limitations in WEBCAT):
 ```
-default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; img-src * blob: data:; connect-src * blob:; font-src 'self' data: ; media-src * blob: data:; child-src blob: data:; worker-src 'self'; frame-src blob: data:; form-action 'self'; manifest-src 'self'; frame-ancestors 'self'
+default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; img-src * blob: data:; connect-src * blob:; font-src 'self' data: ; media-src * blob: data:; child-src blob: data:; worker-src 'self'; frame-src blob: data:; form-action 'self'; manifest-src 'self'; frame-ancestors 'self'; sandbox allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads
 ```
 4. Check and edit the following configuration if needed, save it in `/usr/share/element-web/webcat.config.json`:
 ```
@@ -14,7 +14,7 @@ default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-un
     "app_version": "1.11.92",
     "comment": "https://github.com/element-hq/element-web/releases/tag/v1.11.92",
     "wasm": [],
-    "default_csp": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; img-src * blob: data:; connect-src * blob:; font-src 'self' data: ; media-src * blob: data:; child-src blob: data:; worker-src 'self'; frame-src blob: data:; form-action 'self'; manifest-src 'self';",
+    "default_csp": "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; img-src * blob: data:; connect-src * blob:; font-src 'self' data: ; media-src * blob: data:; child-src blob: data:; worker-src 'self'; frame-src blob: data:; form-action 'self'; manifest-src 'self'; sandbox allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads;",
     "extra_csp": {}
 }
 ```

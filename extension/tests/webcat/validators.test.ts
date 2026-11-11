@@ -81,6 +81,63 @@ describe("cspErrors", () => {
   });
 });
 
+describe("sandbox", () => {
+  const base = "default-src 'none'; script-src 'self'";
+  const required = {
+    directive: "sandbox",
+    message: "frames may load from another origin, and sandbox is not defined.",
+  };
+  it("is required when a frame may load from another origin", () => {
+    expect(cspErrors(`${base}; frame-src https://x.example`)).toEqual([
+      required,
+    ]);
+    // 'none' next to a host is ignored by browsers
+    expect(cspErrors(`${base}; frame-src 'none' blob:`)).toEqual([required]);
+    // frame-src falls back to child-src, then default-src, then unrestricted
+    expect(cspErrors(`${base}; child-src data:; worker-src 'self'`)).toEqual([
+      required,
+    ]);
+    expect(
+      cspErrors(
+        "script-src 'self'; style-src 'self'; object-src 'none'; worker-src 'self'",
+      ),
+    ).toEqual([required]);
+    expect(cspErrors(`${base}; frame-src https://x.example; sandbox`)).toEqual(
+      [],
+    );
+    expect(
+      cspErrors(
+        `${base}; frame-src *; sandbox allow-scripts ALLOW-SAME-ORIGIN allow-forms allow-popups allow-modals allow-downloads`,
+      ),
+    ).toEqual([]);
+  });
+  it("is not required for same-origin frames or no frames", () => {
+    expect(cspErrors(`${base}; frame-src 'self'`)).toEqual([]);
+    expect(cspErrors(`${base}; frame-src 'none' 'self'`)).toEqual([]);
+    expect(cspErrors(`${base}; frame-src`)).toEqual([]);
+    expect(cspErrors(`${base}; child-src 'self'; worker-src 'self'`)).toEqual(
+      [],
+    );
+    expect(cspErrors(base)).toEqual([]);
+  });
+  it("cannot lift top navigation or popup escape", () => {
+    for (const flag of [
+      "allow-top-navigation",
+      "allow-top-navigation-by-user-activation",
+      "allow-top-navigation-to-custom-protocols",
+      "allow-popups-to-escape-sandbox",
+    ]) {
+      expect(cspErrors(`${base}; sandbox allow-scripts ${flag}`)).toEqual([
+        {
+          directive: "sandbox",
+          source: flag,
+          message: `sandbox cannot contain ${flag} which is unsupported.`,
+        },
+      ]);
+    }
+  });
+});
+
 describe("RESTRICTED_DIRECTIVES", () => {
   it("lists exactly the directives where cspErrors rejects another origin", () => {
     const rejects = (dir: string) =>
@@ -100,6 +157,7 @@ describe("RESTRICTED_DIRECTIVES", () => {
       "style-src-attr",
       "object-src",
       "worker-src",
+      "sandbox",
       "child-src",
       "frame-src",
       "img-src",
@@ -225,6 +283,7 @@ describe("validateCSP", () => {
       "style-src 'self'",
       "object-src 'none'",
       "worker-src 'self'",
+      "sandbox allow-scripts allow-same-origin",
     ];
     for (const frames of [
       [],
@@ -382,7 +441,7 @@ describe("validateCSP", () => {
 
   it("should pass with child-src and an explicit worker-src", () => {
     const csp =
-      "default-src 'none'; script-src 'self'; child-src blob:; worker-src 'self'";
+      "default-src 'none'; script-src 'self'; child-src blob:; worker-src 'self'; sandbox";
     expect(validateCSP(csp)).toBeUndefined();
   });
 

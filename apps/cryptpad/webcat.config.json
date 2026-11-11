@@ -3,7 +3,7 @@
     "app_version": "2024.12.0",
     "comment": "https://github.com/cryptpad/cryptpad/releases/tag/2024.12.0",
     "wasm": [],
-    "default_csp": "default-src 'none'; style-src 'unsafe-inline' 'self'; font-src 'self' data:; object-src 'none'; child-src https://cryptpad.nym.re; frame-src 'self' https://sandbox.cryptpad.nym.re; connect-src 'self' blob: https://cryptpad.nym.re https://sandbox.cryptpad.nym.re wss://cryptpad.nym.re *; img-src 'self' data: blob: https://cryptpad.nym.re; media-src blob:; frame-ancestors 'self' https://cryptpad.nym.re; worker-src 'self'; script-src 'self'",
+    "default_csp": "default-src 'none'; style-src 'unsafe-inline' 'self'; font-src 'self' data:; object-src 'none'; child-src https://cryptpad.nym.re; frame-src 'self' https://sandbox.cryptpad.nym.re; connect-src 'self' blob: https://cryptpad.nym.re https://sandbox.cryptpad.nym.re wss://cryptpad.nym.re *; img-src 'self' data: blob: https://cryptpad.nym.re; media-src blob:; frame-ancestors 'self' https://cryptpad.nym.re; worker-src 'self'; script-src 'self'; sandbox allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads",
     "extra_csp": {},
     "files": {
         "/api/config": "7c7825bbb497e77b8dd4619d036a583320951c2d38275c38a334ed4bf44a7696",
