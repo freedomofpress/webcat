@@ -402,6 +402,12 @@ export async function verifySigsumManifest(
 
   const now = Math.floor(Date.now() / 1000);
 
+  if (timestamp > now + CLOCK_SKEW_SECONDS) {
+    return new WebcatError(WebcatErrorCode.Manifest.NOT_YET_VALID, [
+      String(timestamp),
+      String(now),
+    ]);
+  }
   // Freshness check
   if (now - timestamp > enrollment.max_age) {
     return new WebcatError(WebcatErrorCode.Manifest.EXPIRED, [
@@ -500,9 +506,11 @@ class ClaimPolicy implements VerificationPolicy {
   }
 }
 
+const CLOCK_SKEW_SECONDS = 5 * 60;
+
 class CertFreshnessPolicy implements VerificationPolicy {
   validUntil = 0;
-  expired?: WebcatError;
+  error?: WebcatError;
   constructor(private maxAgeSeconds: number) {}
 
   verify(cert: X509Certificate): void {
@@ -510,8 +518,17 @@ class CertFreshnessPolicy implements VerificationPolicy {
     const issued = Math.floor(cert.notBefore.getTime() / 1000);
     const validUntil = issued + this.maxAgeSeconds;
 
+    if (issued > now + CLOCK_SKEW_SECONDS) {
+      this.error = new WebcatError(WebcatErrorCode.Manifest.NOT_YET_VALID, [
+        String(issued),
+        String(now),
+      ]);
+      throw new PolicyError(
+        `Signing certificate is from the future: issued at ${issued}, now ${now}`,
+      );
+    }
     if (now > validUntil) {
-      this.expired = new WebcatError(WebcatErrorCode.Manifest.EXPIRED, [
+      this.error = new WebcatError(WebcatErrorCode.Manifest.EXPIRED, [
         String(this.maxAgeSeconds),
         String(issued),
       ]);
@@ -611,7 +628,7 @@ export async function verifySigstoreManifest(
 
   if (!verified) {
     return (
-      freshnessPolicy.expired ??
+      freshnessPolicy.error ??
       new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED, errors)
     );
   }

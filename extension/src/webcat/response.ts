@@ -408,7 +408,7 @@ export class ResponseValidator {
       markerSeen = true;
     };
 
-    filter.onstop = async () => {
+    const onstop = async () => {
       if (!markerSeen && !PASS_THROUGH_TYPES.has(details.type)) {
         // The request terminated early, before headers were received,
         // possibly because the user navigated away. Close without
@@ -510,6 +510,23 @@ export class ResponseValidator {
       }
       // Redirect the main frame to an error page
     };
+    filter.onstop = () =>
+      onstop().catch((error) => {
+        logger.error(
+          `Unexpected error verifying ${details.url}`,
+          details,
+          error,
+        );
+        try {
+          deny(filter);
+          filter.close();
+        } catch {}
+        this.#ui.showErrorPage(
+          details,
+          new WebcatError(WebcatErrorCode.Internal.UNEXPECTED, [String(error)]),
+          true,
+        );
+      });
   }
 
   /**

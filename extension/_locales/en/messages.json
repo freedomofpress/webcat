@@ -31,5 +31,77 @@
   },
   "WEBCAT_fix": {
     "message": "Fix"
+  },
+  "WEBCAT_schemaDeprecatedTitle": {
+    "message": "This site needs to be updated"
+  },
+  "WEBCAT_schemaDeprecatedShortDesc": {
+    "message": "$1 is enrolled in WEBCAT with an outdated configuration that this version of WEBCAT no longer accepts, so the page was blocked."
+  },
+  "WEBCAT_schemaDeprecatedWhatYouCanDo": {
+    "message": "There is nothing you can do to fix this on your end. The owner of the site needs to update their WEBCAT enrollment and manifest to the current format. You can let them know, or if you believe this is a bug open an issue in the $1."
+  },
+  "WEBCAT_schemaUnsupportedTitle": {
+    "message": "WEBCAT needs to be updated"
+  },
+  "WEBCAT_schemaUnsupportedShortDesc": {
+    "message": "$1 uses a newer version of WEBCAT than the one installed in your browser, so the page was blocked."
+  },
+  "WEBCAT_schemaUnsupportedWhatYouCanDo": {
+    "message": "Update the WEBCAT extension to the latest version and reload the page. If no update is offered, your browser may be too old for the latest WEBCAT: update your browser first, then WEBCAT. If the problem persists, open an issue in the $1."
+  },
+  "WEBCAT_internalErrorTitle": {
+    "message": "WEBCAT ran into a problem"
+  },
+  "WEBCAT_internalErrorShortDesc": {
+    "message": "WEBCAT hit an unexpected error while checking $1, so the page was blocked to be safe."
+  },
+  "WEBCAT_internalErrorWhatYouCanDo": {
+    "message": "This is most likely a bug in WEBCAT, not a problem with the site. Try reloading the page. If it keeps happening, open an issue in the $1 and include the error code below."
+  },
+  "WEBCAT_bundleFetchErrorTitle": {
+    "message": "Could not check this site"
+  },
+  "WEBCAT_bundleFetchErrorShortDesc": {
+    "message": "WEBCAT could not download the signed manifest for $1, so the page was blocked."
+  },
+  "WEBCAT_bundleFetchErrorWhatYouCanDo": {
+    "message": "This can be a problem with your connection or with the site's hosting. Reload the page or try again later. If it keeps happening, the site owner may have moved or removed their WEBCAT files. You can let them know, or open an issue in the $1."
+  },
+  "WEBCAT_manifestExpiredTitle": {
+    "message": "This site's signature has expired"
+  },
+  "WEBCAT_manifestExpiredShortDesc": {
+    "message": "$1 is enrolled in WEBCAT, but its signed manifest is older than the site allows, so the page was blocked."
+  },
+  "WEBCAT_manifestExpiredWhatYouCanDo": {
+    "message": "There is nothing you can do to fix this on your end. The owner of the site needs to publish a freshly signed manifest. If your computer's clock is wrong, WEBCAT can also mistake a valid signature for an expired one, so check the date and time as well. You can let the site owner know, or open an issue in the $1."
+  },
+  "WEBCAT_clockSkewTitle": {
+    "message": "Check your computer's clock"
+  },
+  "WEBCAT_clockSkewShortDesc": {
+    "message": "The signature for $1 is dated in the future, so WEBCAT blocked the page."
+  },
+  "WEBCAT_clockSkewWhatYouCanDo": {
+    "message": "This usually means the date or time on your computer is wrong. Set the correct date, time and time zone, then reload the page. If your clock is right and this keeps happening, open an issue in the $1."
+  },
+  "WEBCAT_frameIsolationTitle": {
+    "message": "Open this site in a new tab"
+  },
+  "WEBCAT_frameIsolationShortDesc": {
+    "message": "Your browser did not isolate $1 from other sites the way WEBCAT requires, so the page was blocked."
+  },
+  "WEBCAT_frameIsolationWhatYouCanDo": {
+    "message": "Firefox decides once per group of related tabs whether a site is kept isolated, and keeps that decision until those tabs are closed. Close this tab and open the site again by typing its address in a new tab. If that does not help, restart Firefox. If the problem persists, open an issue in the $1."
+  },
+  "WEBCAT_browserUnsupportedTitle": {
+    "message": "Your browser needs to be updated"
+  },
+  "WEBCAT_browserUnsupportedShortDesc": {
+    "message": "Your browser cannot isolate $1 from other sites the way WEBCAT requires, so the page was blocked."
+  },
+  "WEBCAT_browserUnsupportedWhatYouCanDo": {
+    "message": "WEBCAT needs a feature this browser does not offer. Update Firefox to the latest version and reload the page. If you are already up to date, site isolation may have been turned off in your browser settings. If the problem persists, open an issue in the $1."
   }
 }

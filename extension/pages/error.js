@@ -22,6 +22,35 @@ document.addEventListener("DOMContentLoaded", () => {
   const host = params.get("host") || "";
   const file = params.get("file") || "";
 
+  const variant = {
+    ERR_WEBCAT_ENROLLMENT_SCHEMA_DEPRECATED: "schemaDeprecated",
+    ERR_WEBCAT_MANIFEST_SCHEMA_DEPRECATED: "schemaDeprecated",
+    ERR_WEBCAT_ENROLLMENT_SCHEMA_UNSUPPORTED: "schemaUnsupported",
+    ERR_WEBCAT_MANIFEST_SCHEMA_UNSUPPORTED: "schemaUnsupported",
+    ERR_WEBCAT_INTERNAL_UNEXPECTED: "internalError",
+    ERR_WEBCAT_BUNDLE_FETCH_ERROR: "bundleFetchError",
+    ERR_WEBCAT_MANIFEST_EXPIRED: "manifestExpired",
+    ERR_WEBCAT_MANIFEST_NOT_YET_VALID: "clockSkew",
+    ERR_WEBCAT_FRAME_ISOLATION_OAC_UNAVAILABLE: "frameIsolation",
+    ERR_WEBCAT_FRAME_ISOLATION_OAC_UNSUPPORTED: "browserUnsupported",
+  }[code];
+  if (variant) {
+    const msg = (suffix, ...subs) =>
+      browser.i18n.getMessage("WEBCAT_" + variant + suffix, subs);
+    document.title = msg("Title");
+    document.querySelector("h1.title-text").textContent = msg("Title");
+    document.getElementById("errorShortDesc").innerHTML = msg(
+      "ShortDesc",
+      '<span id="error-host"></span>',
+    );
+    const what = document.getElementById("whatCanYouDo");
+    what.innerHTML = msg(
+      "WhatYouCanDo",
+      '<a href="https://github.com/freedomofpress/webcat" data-i18n="webcatRepository">WEBCAT repository</a>',
+    );
+    localize(what);
+  }
+
   // Tab title names WEBCAT and the blocked host; <title> was localized above.
   document.title = `WEBCAT: ${document.title}${host ? ` — ${host}` : ""}`;
   setText("error-host", host || browser.i18n.getMessage("WEBCAT_thisSite"));

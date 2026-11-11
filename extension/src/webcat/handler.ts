@@ -3,6 +3,7 @@ import permissions from "../browser/permissions";
 import {
   BeforeRequestDetails,
   HeadersReceivedDetails,
+  RequestDetails,
   RequestEvent,
   RequestHandler,
 } from "../browser/requests";
@@ -16,7 +17,7 @@ import {
 } from "./firstparty";
 import { HookBuilder, HookBuilderConfig } from "./hookbuilder";
 import { Database } from "./interfaces/database";
-import { WebcatError } from "./interfaces/errors";
+import { WebcatError, WebcatErrorCode } from "./interfaces/errors";
 import { CachePartition, OriginState } from "./interfaces/originstate";
 import { Stateful } from "./interfaces/requeststate";
 import { logger } from "./logger";
@@ -77,8 +78,8 @@ export class WebcatRequestHandler extends RequestHandler {
       this.#hooks,
     );
     this.#workers = new WorkerRegistry(db.namespace("workers"));
-    this.addEventListener("beforerequest", this.#onRequest);
-    this.addEventListener("headersreceived", this.#onHeaders);
+    this.addEventListener("beforerequest", this.#guarded(this.#onRequest));
+    this.addEventListener("headersreceived", this.#guarded(this.#onHeaders));
     browser.windows.onRemoved.addListener(this.#onWindowClosed.bind(this));
     browser.webNavigation.onCommitted.addListener(({ tabId, frameId }) => {
       if (frameId === 0) void this.#workers.navigated(tabId);
@@ -160,6 +161,32 @@ export class WebcatRequestHandler extends RequestHandler {
         isFrame: FRAME_TYPES.includes(details.type),
       },
     });
+  }
+
+  #guarded<T extends RequestDetails>(
+    listener: (event: RequestEvent<T>) => Promise<void>,
+  ) {
+    return async (event: RequestEvent<T>) => {
+      try {
+        await listener.call(this, event);
+      } catch (error) {
+        const details = event.details as Stateful<RequestDetails>;
+        const attributed = "state" in details ? details : undefined;
+        logger.error(
+          `Unexpected error handling ${details.url}`,
+          attributed,
+          error,
+        );
+        if (attributed?.state.isFrame) {
+          this.#ui.showErrorPage(
+            attributed,
+            new WebcatError(WebcatErrorCode.Internal.UNEXPECTED, [
+              String(error),
+            ]),
+          );
+        }
+      }
+    };
   }
 
   async #onRequest(event: RequestEvent<BeforeRequestDetails>) {
