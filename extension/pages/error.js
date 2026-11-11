@@ -34,9 +34,9 @@ document.addEventListener("DOMContentLoaded", () => {
     ERR_WEBCAT_FRAME_ISOLATION_OAC_UNAVAILABLE: "frameIsolation",
     ERR_WEBCAT_FRAME_ISOLATION_OAC_UNSUPPORTED: "browserUnsupported",
   }[code];
-  if (variant) {
-    const msg = (suffix, ...subs) =>
-      browser.i18n.getMessage("WEBCAT_" + variant + suffix, subs);
+  const msg = (suffix, ...subs) =>
+    browser.i18n.getMessage("WEBCAT_" + variant + suffix, subs);
+  if (variant && msg("Title")) {
     document.title = msg("Title");
     document.querySelector("h1.title-text").textContent = msg("Title");
     document.getElementById("errorShortDesc").innerHTML = msg(
