@@ -5,6 +5,7 @@ import pytest
 from time import sleep, monotonic
 from helpers import Browser, TorBrowser, Server, Hook, UpdateServer
 import json
+import re
 from pytest_check import check
 import urllib.parse
 from common import *
@@ -497,10 +498,14 @@ def test_default_fallback(browser: Browser, server: Server, update_server: Updat
         browser.navigate(f"{server.url(dnsnames[0])}/stale-dir/")
     assert "/stale-dir/ verified." in json.dumps(browser.extension_logs())
 
+OAC_PARENT = open("cases/testapp/oac/parent.html", "rb").read()
+OAC_CSP = json.load(open("cases/testapp/webcat.config.json"))["extra_csp"]["/oac/parent.html"]
 OAC_HOOKS = {
     # Enrolled page embedding a frame; needs frame-src, so its CSP is pinned per path in webcat.config.json
-    "/oac/parent.html": Hook(open("cases/testapp/oac/parent.html", "rb").read(), type="text/html", headers={
-        "content-security-policy": json.load(open("cases/testapp/webcat.config.json"))["extra_csp"]["/oac/parent.html"],
+    "/oac/parent.html": Hook(OAC_PARENT, type="text/html", headers={"content-security-policy": OAC_CSP}),
+    # Control parent without the sandbox the manifest rule demands, so stock Firefox can still merge origins
+    "/oac/control.html": Hook(OAC_PARENT, type="text/html", headers={
+        "content-security-policy": re.sub(r"sandbox[^;]*;", "", OAC_CSP),
     }),
     # Same-site, non-enrolled frame: tries to merge origins via document.domain and to hand over a compiled module
     "/oac/frame.html": Hook(b"""<!DOCTYPE html><script>
@@ -536,13 +541,15 @@ def test_same_site_frame_isolation(browser: Browser, server: Server, update_serv
     cluster, the frame should be blocked with an error.
     """
     frame_url = f"{server.url(f'frame.{parent}')}/oac/frame.html"
+    page = "/oac/parent.html" if isolated else "/oac/control.html"
+    url = f"{server.url(parent)}{page}?frame={urllib.parse.quote(frame_url, safe='')}"
     if historical_cluster:
-        with server.wait_for({"/oac/parent.html", "/oac/frame.html"}):
-            browser.navigate(f"{server.url(parent)}/oac/parent.html?frame={urllib.parse.quote(frame_url, safe='')}")
+        with server.wait_for({page, "/oac/frame.html"}):
+            browser.navigate(url)
     browser.install_extension(addon_path)
     update_server.wait_for_update()
-    with server.wait_for({"/oac/parent.html", "/oac/frame.html"} if not historical_cluster else {"/oac/parent.html"}):
-        browser.navigate(f"{server.url(parent)}/oac/parent.html?frame={urllib.parse.quote(frame_url, safe='')}")
+    with server.wait_for({page, "/oac/frame.html"} if not historical_cluster else {page}):
+        browser.navigate(url)
     if historical_cluster:
         res = browser.execute("document.body.textContent")
         assert "ERR_WEBCAT_FRAME_ISOLATION_OAC_UNAVAILABLE" in res
