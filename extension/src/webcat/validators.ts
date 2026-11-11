@@ -46,7 +46,7 @@ import {
   validate,
 } from "./schema";
 
-/** The CSP directives WEBCAT restricts, plus child-src, read to decide whether worker-src is required. */
+/** The CSP directives WEBCAT restricts, plus child-src and frame-src, read to decide whether worker-src and sandbox are required. */
 export enum CspDirective {
   DefaultSrc = "default-src",
   ScriptSrc = "script-src",
@@ -59,6 +59,7 @@ export enum CspDirective {
   ChildSrc = "child-src",
   FrameSrc = "frame-src",
   WorkerSrc = "worker-src",
+  Sandbox = "sandbox",
 }
 
 /**
@@ -74,6 +75,7 @@ export const RESTRICTED_DIRECTIVES: CspDirective[] = [
   CspDirective.StyleSrcAttr,
   CspDirective.ObjectSrc,
   CspDirective.WorkerSrc,
+  CspDirective.Sandbox,
 ];
 
 export interface CspError {
@@ -117,6 +119,21 @@ export function cspErrors(csp: string): CspError[] {
     source_keywords.UnsafeHashes,
   ];
 
+  // Every sandbox flag but the ones that let a frame leave its box:
+  // allow-top-navigation*, allow-popups-to-escape-sandbox.
+  const sandbox_flags = [
+    "allow-scripts",
+    "allow-same-origin",
+    "allow-forms",
+    "allow-popups",
+    "allow-modals",
+    "allow-downloads",
+    "allow-pointer-lock",
+    "allow-orientation-lock",
+    "allow-presentation",
+    "allow-storage-access-by-user-activation",
+  ];
+
   // See https://github.com/freedomofpress/webcat/issues/101
   if (csp.includes(",")) {
     return [{ message: `CSP contains a comma: ${csp}` }];
@@ -150,7 +167,7 @@ export function cspErrors(csp: string): CspError[] {
   // allowed keyword or, with `hashes`, a hash-source.
   function validateDirective(
     directive: CspDirective,
-    allowed_keywords: source_keywords[],
+    allowed_keywords: string[],
     hashes = false,
     optional = default_src_is_none,
   ) {
@@ -164,7 +181,7 @@ export function cspErrors(csp: string): CspError[] {
     for (const src of list ?? []) {
       const lower = src.toLowerCase();
       if (
-        !(allowed_keywords as string[]).includes(lower) &&
+        !allowed_keywords.includes(lower) &&
         !(hashes && hash_source.test(src))
       ) {
         errors.push({
@@ -210,6 +227,29 @@ export function cspErrors(csp: string): CspError[] {
     false,
     default_src_is_none && !parsedCSP.has(CspDirective.ChildSrc),
   );
+
+  // Step 6: a document that may frame another origin must carry a sandbox
+  // directive: its sandboxing flags are inherited by every frame and popup
+  // it creates, and a frame can only add restrictions. Flags that would let
+  // a frame navigate the top-level document or open an unsandboxed window
+  // cannot be lifted. Same-origin frames run under this manifest and need
+  // no floor. See https://github.com/freedomofpress/webcat/issues/269
+  const frame_src = parsedCSP.get(CspDirective.FrameSrc) ??
+    parsedCSP.get(CspDirective.ChildSrc) ??
+    parsedCSP.get(CspDirective.DefaultSrc) ?? ["*"];
+  const frames_other_origin = frame_src.some(
+    (src) =>
+      ![source_keywords.None, source_keywords.Self].includes(
+        src.toLowerCase() as source_keywords,
+      ),
+  );
+  if (frames_other_origin && !parsedCSP.has(CspDirective.Sandbox)) {
+    errors.push({
+      directive: CspDirective.Sandbox,
+      message: `frames may load from another origin, and ${CspDirective.Sandbox} is not defined.`,
+    });
+  }
+  validateDirective(CspDirective.Sandbox, sandbox_flags, false, true);
 
   return errors;
 }

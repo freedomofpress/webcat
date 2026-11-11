@@ -32,6 +32,6 @@ aa806b924a9cb090e7cd47e2cf7c6d93c85804073d289c201a44635b03c7a65e  -
 
 5. Set the following CSP:
 ```
-add_header content-security-policy "default-src 'none'; style-src 'unsafe-inline' 'self'; font-src 'self' data:; object-src 'none'; child-src https://cryptpad.nym.re; frame-src 'self' https://sandbox.cryptpad.nym.re; connect-src 'self' blob: https://cryptpad.nym.re https://sandbox.cryptpad.nym.re wss://cryptpad.nym.re *; img-src 'self' data: blob: https://cryptpad.nym.re; media-src blob:; frame-ancestors 'self' https://cryptpad.nym.re; worker-src 'self'; script-src 'self'";
+add_header content-security-policy "default-src 'none'; style-src 'unsafe-inline' 'self'; font-src 'self' data:; object-src 'none'; child-src https://cryptpad.nym.re; frame-src 'self' https://sandbox.cryptpad.nym.re; connect-src 'self' blob: https://cryptpad.nym.re https://sandbox.cryptpad.nym.re wss://cryptpad.nym.re *; img-src 'self' data: blob: https://cryptpad.nym.re; media-src blob:; frame-ancestors 'self' https://cryptpad.nym.re; worker-src 'self'; script-src 'self'; sandbox allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads";
 ```
 6. Reminder that both the main domain and the sandbox domain must be independently enrolled. They share the same manifest and policy, but nonetheless in order for the iframes to work, this is mandatory.

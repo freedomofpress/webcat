@@ -42,6 +42,7 @@ const FALLBACK: Record<string, string[]> = {
   "style-src-attr": ["style-src-attr", "style-src", "default-src"],
   "object-src": ["object-src", "default-src"],
   "worker-src": ["worker-src", "child-src", "script-src", "default-src"],
+  "frame-src": ["frame-src", "child-src", "default-src"],
 };
 
 // No directive in the chain: no restriction, '*'. Empty value: 'none'.
@@ -88,6 +89,18 @@ const DIRECT: Record<string, Set<string>> = {
   "script-src-attr": new Set(["'none'"]),
   "worker-src": new Set(["'none'", "'self'"]),
   "object-src": new Set(["'none'"]),
+  sandbox: new Set([
+    "allow-scripts",
+    "allow-same-origin",
+    "allow-forms",
+    "allow-popups",
+    "allow-modals",
+    "allow-downloads",
+    "allow-pointer-lock",
+    "allow-orientation-lock",
+    "allow-presentation",
+    "allow-storage-access-by-user-activation",
+  ]),
 };
 
 function check(csp: string): string[] {
@@ -105,6 +118,13 @@ function check(csp: string): string[] {
     if (bad.length)
       problems.push(`${directive} (explicit) -> ${bad.join(" ")}`);
   }
+  // A document that can frame another origin must be sandboxed; the flags
+  // are inherited by its frames (HTML "determine the creation sandboxing flags").
+  const frames = effective(parsed, "frame-src").filter(
+    (t) => t !== "'none'" && t !== "'self'",
+  );
+  if (frames.length && !parsed.has("sandbox"))
+    problems.push(`frame-src -> ${frames.join(" ")} without sandbox`);
   return problems;
 }
 
@@ -134,6 +154,8 @@ const TOKENS = [
   "'nonce-AAAA'",
   "blob:",
   "https://evil.example",
+  "allow-scripts",
+  "allow-top-navigation",
 ];
 const DEFAULT_SRC = ["", "'none'", "'self'", "'none' 'self'"];
 
@@ -187,6 +209,7 @@ const DIRECTIVES = [
   "script-src",
   "style-src",
   "child-src",
+  "sandbox",
 ];
 
 function flipCase(s: string, rand: () => number) {
@@ -257,6 +280,11 @@ const GROUPS: [string, string[], string][] = [
     ["object-src"],
     "script-src 'self'; style-src 'self'; worker-src 'self'",
   ],
+  [
+    "frame",
+    ["frame-src", "child-src", "sandbox"],
+    "script-src 'self'; style-src 'self'; object-src 'none'; worker-src 'self'",
+  ],
 ];
 
 describe("validateCSP against a CSP3 model", () => {
@@ -295,7 +323,15 @@ describe("validateCSP against a CSP3 model", () => {
     ).not.toEqual([]); // explicit worker-src
     expect(
       check(
-        "SCRIPT-SRC 'SELF'; object-src 'none'; style-src 'self'; worker-src 'self'",
+        "default-src 'none'; script-src 'self'; child-src blob:; worker-src 'self'",
+      ),
+    ).not.toEqual([]); // frames fall to child-src, no sandbox
+    expect(
+      check("default-src 'none'; frame-src *; sandbox allow-top-navigation"),
+    ).not.toEqual([]); // explicit sandbox flag
+    expect(
+      check(
+        "SCRIPT-SRC 'SELF'; object-src 'none'; style-src 'self'; worker-src 'self'; frame-src 'self'",
       ),
     ).toEqual([]);
     expect(
