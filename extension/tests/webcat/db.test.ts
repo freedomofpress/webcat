@@ -100,6 +100,17 @@ describe("WebcatDatabase", () => {
     expect(Array.from(newEnrollment)).toEqual([2]);
   });
 
+  it("updateList returns the hosts that were not enrolled before", async () => {
+    await expect(
+      db.updateList([fakeLeaf("old.com", [1])], { blockTime: 100 }),
+    ).resolves.toEqual(["old.com"]);
+    await expect(
+      db.updateList([fakeLeaf("old.com", [1]), fakeLeaf("new.com", [2])], {
+        blockTime: 200,
+      }),
+    ).resolves.toEqual(["new.com"]);
+  });
+
   it("stores and retrieves block meta", async () => {
     await db.updateList([fakeLeaf("example.com", [1])], { blockTime: 42 });
 

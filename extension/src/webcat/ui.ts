@@ -171,39 +171,12 @@ export class WebcatUI extends BrowserChromeController {
     error: WebcatError,
     replace = !details.state.isFrame,
   ) {
-    const tabIds = new Set<number>();
-    const frameLookups = [];
-    if (details.tabId < 0) {
-      const tabs = await browser.tabs.query({});
-      for (const tab of tabs) {
-        if (
-          tab.url &&
-          tab.id &&
-          /https?:\/\//i.test(tab.url) &&
-          details.state.fqdn === getFQDN(tab.url)
-        ) {
-          tabIds.add(tab.id);
-        } else if (tab.id) {
-          frameLookups.push(
-            browser.webNavigation
-              .getAllFrames({ tabId: tab.id })
-              .then((frames) =>
-                frames.forEach((frame) => {
-                  if (
-                    /https?:\/\//i.test(frame.url) &&
-                    details.state.fqdn === getFQDN(frame.url)
-                  ) {
-                    tabIds.add(frame.tabId);
-                  }
-                }),
-              ),
-          );
-        }
-      }
-      await Promise.all(frameLookups);
-    } else {
-      tabIds.add(details.tabId);
-    }
+    const tabIds =
+      details.tabId < 0
+        ? (await this.tabsShowing(new Set([details.state.fqdn]))).tabs.map(
+            (tab) => tab.id as number,
+          )
+        : [details.tabId];
 
     const code = error.code;
 
@@ -229,6 +202,69 @@ export class WebcatUI extends BrowserChromeController {
     await Promise.all(tabUpdates);
 
     await clearBrowserCaches([details.state.fqdn]);
+  }
+
+  /**
+   * Finds the tabs with a document of any of the given hosts in any frame.
+   *
+   * @param fqdns The hosts to look for.
+   * @returns The tabs found and the hosts they show.
+   */
+  async tabsShowing(fqdns: ReadonlySet<string>) {
+    const tabs: browser.tabs.Tab[] = [];
+    const hosts = new Set<string>();
+    await Promise.all(
+      (await browser.tabs.query({})).map(async (tab) => {
+        if (tab.id === undefined) {
+          return;
+        }
+        // A discarded tab reports null; it loads afresh when activated
+        const frames =
+          (await browser.webNavigation.getAllFrames({ tabId: tab.id })) ?? [];
+        const shown = frames
+          .map((frame) => /https?:\/\//i.test(frame.url) && getFQDN(frame.url))
+          .filter((fqdn) => fqdn && fqdns.has(fqdn));
+        if (shown.length > 0) {
+          tabs.push(tab);
+          shown.forEach((fqdn) => hosts.add(fqdn as string));
+        }
+      }),
+    );
+    return { tabs, hosts };
+  }
+
+  /**
+   * Replaces every tab with a document of any of the given hosts in any frame
+   * by a duplicate, so that a document loaded before its host was enrolled
+   * gets verified. A reload would stay in the tab's browsing context group,
+   * where Firefox keeps the origin site-keyed and the Origin-Agent-Cluster
+   * check fails; a duplicate starts a new group and keeps the tab's container
+   * and history, which `tabs.create` could not without the cookies
+   * permission. The hosts' caches and service workers are cleared first.
+   *
+   * @param fqdns The hosts whose documents to reload.
+   */
+  async reloadTabsShowing(fqdns: ReadonlySet<string>) {
+    const { tabs, hosts } = await this.tabsShowing(fqdns);
+    if (tabs.length === 0) {
+      return;
+    }
+    logger.info(`Replacing ${tabs.length} tab(s) of newly enrolled hosts`);
+    await clearBrowserCaches([...hosts]);
+    await Promise.all(
+      tabs.map(async (tab) => {
+        try {
+          await browser.tabs.duplicate(tab.id as number, {
+            active: tab.active,
+            index: tab.index + 1,
+          });
+          await browser.tabs.remove(tab.id as number);
+        } catch (error) {
+          // The tab may have been closed since the scan
+          logger.error(`Replacing tab ${tab.id} failed`, undefined, error);
+        }
+      }),
+    );
   }
 
   /**

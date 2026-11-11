@@ -33,11 +33,21 @@ export class UpdateEvent extends Event {
    * failed with an error, or there may not have been anything to update.
    */
   readonly success: boolean;
+  /**
+   * The fully-qualified domain names enrolled by this update that were not
+   * enrolled before it. Empty unless the update was successful.
+   */
+  readonly enrolled: readonly string[];
 
-  constructor(success: boolean, local = false) {
+  constructor(
+    success: boolean,
+    local = false,
+    enrolled: readonly string[] = [],
+  ) {
     super("updated");
     this.success = success;
     this.local = local;
+    this.enrolled = enrolled;
   }
 }
 
@@ -263,7 +273,7 @@ export class EnrollmentUpdater extends EventTarget {
         throw new Error("proof did not verify against app hash");
       }
 
-      await this.#db.updateList(verifiedLeaves, {
+      const enrolled = await this.#db.updateList(verifiedLeaves, {
         blockTime: Number(out.headerTime.seconds),
         rootHash: leaves.proof.canonical_root_hash,
       });
@@ -271,7 +281,7 @@ export class EnrollmentUpdater extends EventTarget {
         await this.#db.setLastUpdated();
       }
       logger.info(`List updated successfully`);
-      this.dispatchEvent(new UpdateEvent(true, local));
+      this.dispatchEvent(new UpdateEvent(true, local, enrolled));
 
       // Success - clear failure flag
       this.#lastUpdateFailed = false;

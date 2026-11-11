@@ -58,7 +58,11 @@ export default {
       try {
         const fqdns = await db.listAllFQDNs();
         await requestHandler.bind(fqdns);
+        // Nothing loaded before the first list was verified; after that only
+        // documents of hosts this update enrolled (#273)
+        const unverified = firstUpdate ? fqdns : event.enrolled;
         firstUpdate = false;
+        await ui.reloadTabsShowing(new Set(unverified));
       } catch (error) {
         logger.error("Bundled list import failed", undefined, error);
       }

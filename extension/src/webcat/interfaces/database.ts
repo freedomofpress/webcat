@@ -21,11 +21,14 @@ export interface Database {
   readonly nonOrigins: LRUSet<CacheKey<CachePartition>>;
   /**
    * Updates the list of enrolled fully-qualified domain names.
+   *
+   * @returns A Promise that resolves to the FQDNs that were not enrolled
+   *   before this update.
    */
   updateList(
     leaves: readonly (readonly [string, string])[],
     meta: BlockMeta,
-  ): Promise<void>;
+  ): Promise<string[]>;
   /**
    * Reads block metadata from the database.
    *

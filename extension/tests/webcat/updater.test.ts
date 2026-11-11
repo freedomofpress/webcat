@@ -7,7 +7,7 @@ vi.mock("../../src/browser/permissions", () => ({
   },
 }));
 
-import { EnrollmentUpdater } from "../../src/webcat/updater";
+import { EnrollmentUpdater, UpdateEvent } from "../../src/webcat/updater";
 
 // Mock the heavy crypto dependencies
 vi.mock("@freedomofpress/cometbft/dist/commit", () => ({
@@ -62,7 +62,7 @@ function createMockDb() {
     setLastUpdated: vi.fn(),
     getLastUpdated: vi.fn(),
     getBlockMeta: vi.fn(),
-    updateList: vi.fn(),
+    updateList: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -235,6 +235,18 @@ describe("update", () => {
       blockTime: 1000,
       rootHash: "aabbcc",
     });
+  });
+
+  it("reports the newly enrolled hosts on the updated event", async () => {
+    db.updateList.mockResolvedValueOnce(["example.com"]);
+    const events: UpdateEvent[] = [];
+    updater.addEventListener("updated", (event) => events.push(event));
+
+    await updater.update();
+
+    expect(events).toHaveLength(1);
+    expect(events[0].success).toBe(true);
+    expect(events[0].enrolled).toEqual(["example.com"]);
   });
 
   it("verifies the block against the configured chain ID", async () => {

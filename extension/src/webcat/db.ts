@@ -41,7 +41,7 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
   async updateList(
     leaves: readonly (readonly [string, string])[],
     meta: BlockMeta,
-  ): Promise<void> {
+  ): Promise<string[]> {
     // Build a batch of enrollment entries
     const batch: Record<string, unknown> = {};
     for (const [reverseKey, hexHash] of leaves) {
@@ -51,8 +51,8 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
     }
 
     // Remove enrollments that are not in the update batch
-    const old = await this.enrollments.getKeys();
-    const disenrolled = old.filter((enrollment) => !(enrollment in batch));
+    const old = new Set(await this.enrollments.getKeys());
+    const disenrolled = [...old].filter((enrollment) => !(enrollment in batch));
     for (const host of disenrolled) {
       await this.enrollments.remove(host);
     }
@@ -66,6 +66,7 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
     await this.nonOrigins.clear();
 
     logger.info(`Replaced list with ${leaves.length} entries`);
+    return Object.keys(batch).filter((host) => !old.has(host));
   }
 
   async getBlockMeta(): Promise<BlockMeta | null> {
