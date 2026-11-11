@@ -142,6 +142,10 @@ export enum WebcatErrorManifest {
    */
   EXPIRED = "ERR_WEBCAT_MANIFEST_EXPIRED",
   /**
+   * The manifest was signed in the future: the client clock is behind.
+   */
+  NOT_YET_VALID = "ERR_WEBCAT_MANIFEST_NOT_YET_VALID",
+  /**
    * No file list is present on the manifest, or the file list is empty.
    */
   FILES_MISSING = "ERR_WEBCAT_MANIFEST_FILES_MISSING",
@@ -259,6 +263,19 @@ export enum WebcatErrorFrameIsolation {
    * See https://developer.mozilla.org/en-US/docs/Web/API/Window/originAgentCluster
    */
   OAC_UNAVAILABLE = "ERR_WEBCAT_FRAME_ISOLATION_OAC_UNAVAILABLE",
+  /**
+   * The browser has no originAgentCluster getter at all: too old, or the
+   * feature is disabled.
+   */
+  OAC_UNSUPPORTED = "ERR_WEBCAT_FRAME_ISOLATION_OAC_UNSUPPORTED",
+}
+
+export enum WebcatErrorInternal {
+  /**
+   * WEBCAT threw while handling the request. A throw cancels the request
+   * either way; this code tells the user why.
+   */
+  UNEXPECTED = "ERR_WEBCAT_INTERNAL_UNEXPECTED",
 }
 
 /**
@@ -283,6 +300,8 @@ export const WebcatErrorCode = {
   File: { ...WebcatErrorFile },
   /** {@inheritDoc WebcatErrorFrameIsolation} */
   FrameIsolation: { ...WebcatErrorFrameIsolation },
+  /** {@inheritDoc WebcatErrorInternal} */
+  Internal: { ...WebcatErrorInternal },
 } as const;
 
 /**
@@ -297,7 +316,8 @@ export type WebcatErrorCodeAny =
   | WebcatErrorHeaders
   | WebcatErrorURL
   | WebcatErrorFile
-  | WebcatErrorFrameIsolation;
+  | WebcatErrorFrameIsolation
+  | WebcatErrorInternal;
 
 /**
  * Error class for user-facing errors.

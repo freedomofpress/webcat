@@ -253,6 +253,42 @@ describe("WebcatRequestHandler", () => {
     await expect(event.ready()).resolves.toMatchObject({ cancel: true });
   });
 
+  it("shows an internal error page when a listener throws", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    const wrh = new WebcatRequestHandler(db, ui, defaults);
+    const showErrorPage = vi
+      .spyOn(ui, "showErrorPage")
+      .mockResolvedValue(undefined);
+    const details = Object.assign(new RequestDetailsBase(), {
+      requestId: "8",
+      tabId: 7,
+      type: "main_frame",
+      url: "https://enrolled.example/",
+      state: {
+        fqdn: "enrolled.example",
+        isFrame: true,
+        cachePartition: {
+          firstParty: "https://enrolled.example",
+          cookieStoreId: "firefox-default",
+        },
+      },
+    });
+    const event = new RequestEvent("headersreceived", details as never);
+    wrh.dispatchEvent(event);
+
+    await expect(event.ready()).resolves.toMatchObject({ cancel: true });
+    expect(showErrorPage).toHaveBeenCalledWith(
+      details,
+      expect.objectContaining({
+        code: "ERR_WEBCAT_INTERNAL_UNEXPECTED",
+        details: ["Error: missing pendingOrigin in request state"],
+      }),
+    );
+    errorLog.mockRestore();
+  });
+
   it("lets a first-party worker script through to attribution", async () => {
     const db = new WebcatDatabase(defaults);
     const ui = new WebcatUI(db, db.namespace("ui"), defaults);
