@@ -8,6 +8,7 @@
       "strict_min_version": "140.0"
     }
   },
+  "default_locale": "en",
   "incognito": "spanning",
   "permissions": [
     "alarms",
