@@ -18,6 +18,8 @@
   "permissions": [
     "alarms",
     "browsingData",
+    "history",
+    "publicSuffix",
     "webNavigation",
     "webRequest",
     "webRequestBlocking",

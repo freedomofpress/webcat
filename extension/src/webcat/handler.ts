@@ -9,7 +9,7 @@ import {
 } from "../browser/requests";
 import { ContentScript } from "../browser/scripting";
 import { Mutex } from "../browser/sync";
-import { CacheKey, isInPartition } from "./cache";
+import { CacheKey, isInPartition, parseCacheKey } from "./cache";
 import {
   getAllFrames,
   isThirdPartyWorkerScript,
@@ -81,6 +81,7 @@ export class WebcatRequestHandler extends RequestHandler {
     this.addEventListener("beforerequest", this.#guarded(this.#onRequest));
     this.addEventListener("headersreceived", this.#guarded(this.#onHeaders));
     browser.windows.onRemoved.addListener(this.#onWindowClosed.bind(this));
+    browser.history.onVisitRemoved.addListener(this.#onVisitRemoved.bind(this));
     browser.webNavigation.onCommitted.addListener(({ tabId, frameId }) => {
       if (frameId === 0) void this.#workers.navigated(tabId);
     });
@@ -424,6 +425,53 @@ export class WebcatRequestHandler extends RequestHandler {
       }
     }
     await this.#db.origins.set(CacheKey(fqdn, cachePartition), newState);
+  }
+
+  // A forgotten page drops every cache entry that names its site as the
+  // enrolled FQDN or as the first party.
+  async #onVisitRemoved({
+    allHistory,
+    urls,
+  }: browser.history._OnVisitRemovedRemoved) {
+    if (allHistory) {
+      await this.#db.origins.clear();
+      await this.#db.nonOrigins.clear();
+      return;
+    }
+    try {
+      // Firefox forgets a site by its registrable domain. Firefox 153 added
+      // the publicSuffix API; without it the last two labels over-match
+      // rather than miss.
+      const site = (host: string) =>
+        browser.publicSuffix?.getDomain(host) ??
+        host.split(".").slice(-2).join(".");
+      // file: and about: pages have no host.
+      const removed = urls
+        .map((url) => new URL(url).hostname)
+        .filter(Boolean)
+        .map(site);
+      const forgotten = (key: CacheKey<CachePartition>) => {
+        // The first party of an opaque origin is a request id, not a URL.
+        const [fqdn, { firstParty }] = parseCacheKey(key);
+        return [fqdn, URL.parse(firstParty)?.hostname].some(
+          (host) => host && removed.includes(site(host)),
+        );
+      };
+      for (const key of await this.#db.origins.keys()) {
+        if (forgotten(key)) await this.#db.origins.delete(key);
+      }
+      for (const key of await this.#db.nonOrigins.values()) {
+        if (forgotten(key)) await this.#db.nonOrigins.delete(key);
+      }
+    } catch (error) {
+      // Forgetting too much beats keeping what the user deleted.
+      logger.warn(
+        "History purge failed, clearing everything",
+        undefined,
+        error,
+      );
+      await this.#onVisitRemoved({ allHistory: true, urls: [] });
+    }
   }
 
   async #onWindowClosed() {

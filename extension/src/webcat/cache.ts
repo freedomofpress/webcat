@@ -41,18 +41,27 @@ export function isInPartition<
   P extends { [index: string]: { toString(): string } },
   T extends P,
 >(key: CacheKey<T>, partition: P) {
-  const [_, q] = key.split("?");
-  if (q) {
-    const attrs = {} as Record<string, string>;
-    q.split(",").forEach((attr) => {
-      const [name, value] = attr.split("=");
-      attrs[decodeURIComponent(name)] = decodeURIComponent(value);
-    });
-    return Object.keys(partition).every(
-      (name) => partition[name].toString() === attrs[name],
-    );
-  }
-  return Object.keys(partition).length === 0;
+  const [, attrs] = parseCacheKey(key);
+  return Object.keys(partition).every(
+    (name) => partition[name].toString() === attrs[name],
+  );
+}
+
+/**
+ * Inverse of {@link CacheKey}.
+ *
+ * @returns The primary key and the partition attributes.
+ */
+export function parseCacheKey<T>(
+  key: CacheKey<T>,
+): [string, Record<string, string>] {
+  const [k, q] = key.split("?");
+  const attrs = {} as Record<string, string>;
+  q?.split(",").forEach((attr) => {
+    const [name, value] = attr.split("=");
+    attrs[decodeURIComponent(name)] = decodeURIComponent(value);
+  });
+  return [decodeURIComponent(k), attrs];
 }
 
 /**

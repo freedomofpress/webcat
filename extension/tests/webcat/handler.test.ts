@@ -9,6 +9,7 @@ vi.mock("../../src/browser/permissions", () => ({
 
 import { RequestDetailsBase, RequestEvent } from "../../src/browser/requests";
 import { defaults } from "../../src/config";
+import { CacheKey } from "../../src/webcat/cache";
 import { WebcatDatabase } from "../../src/webcat/db";
 import { WebcatRequestHandler } from "../../src/webcat/handler";
 import { WebcatUI } from "../../src/webcat/ui";
@@ -19,6 +20,7 @@ const mockAddOnCommitted = vi.fn();
 const mockGetURL = vi.fn();
 const mockAddOnConnect = vi.fn();
 const mockAddOnRemoved = vi.fn();
+const mockAddOnVisitRemoved = vi.fn();
 const mockAddOnBeforeRequest = vi.fn();
 const mockRemoveOnBeforeRequest = vi.fn();
 const mockAddOnBeforeSendHeaders = vi.fn();
@@ -40,6 +42,8 @@ vi.stubGlobal("browser", {
     session: {
       get: mockStorageGet,
       set: mockStorageSet,
+      remove: vi.fn(),
+      clear: vi.fn(),
     },
   },
   webNavigation: {
@@ -57,6 +61,11 @@ vi.stubGlobal("browser", {
   windows: {
     onRemoved: {
       addListener: mockAddOnRemoved,
+    },
+  },
+  history: {
+    onVisitRemoved: {
+      addListener: mockAddOnVisitRemoved,
     },
   },
   webRequest: {
@@ -191,6 +200,40 @@ describe("WebcatRequestHandler", () => {
       firstParty: "https://embedder.example",
       cookieStoreId: "firefox-container-2",
     });
+  });
+
+  it("forgets origin state when its pages leave history", async () => {
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    new WebcatRequestHandler(db, ui, defaults);
+    const onVisitRemoved = mockAddOnVisitRemoved.mock.calls[0][0];
+    const key = (fqdn: string, firstParty: string) =>
+      CacheKey(fqdn, { firstParty, cookieStoreId: "firefox-default" });
+    const enrolled = key("enrolled.example", "https://enrolled.example");
+    const embedded = key("widget.example", "https://enrolled.example");
+    const subdomain = key("cdn.enrolled.example", "https://other.example");
+    const other = key("other.example", "https://other.example");
+    const opaque = key("other.example", "42");
+    for (const k of [enrolled, embedded, subdomain, other, opaque]) {
+      await db.origins.set(k, {} as never);
+      await db.nonOrigins.add(k);
+    }
+
+    await onVisitRemoved({
+      allHistory: false,
+      urls: ["file:///tmp/notes.txt", "https://www.enrolled.example/page"],
+    });
+    expect(await db.origins.keys()).toEqual([other, opaque]);
+    expect(await db.nonOrigins.values()).toEqual([other, opaque]);
+
+    vi.spyOn(db.origins, "keys").mockRejectedValueOnce(new Error("storage"));
+    await onVisitRemoved({ allHistory: false, urls: ["https://x.example/"] });
+    expect(await db.origins.keys()).toEqual([]);
+    expect(await db.nonOrigins.values()).toEqual([]);
+
+    await onVisitRemoved({ allHistory: true, urls: [] });
+    expect(await db.origins.keys()).toEqual([]);
+    expect(await db.nonOrigins.values()).toEqual([]);
   });
 
   it("records a worker script's first party before its body is released", async () => {
