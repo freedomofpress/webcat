@@ -154,6 +154,7 @@ export class WebcatRequestHandler extends RequestHandler {
           firstParty: await resolveFirstParty(
             details,
             getAllFrames,
+            this.#db,
             this.#workers,
           ),
           cookieStoreId: details.cookieStoreId ?? "firefox-default",

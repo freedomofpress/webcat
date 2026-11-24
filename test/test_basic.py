@@ -265,6 +265,44 @@ def test_non_enrolled_subresource(browser: Browser, server: Server, update_serve
     res = browser.execute("document.body.textContent")
     assert expected in res
 
+@pytest.mark.parametrize("browser, incognito", [
+    pytest.param("firefox", False, id="firefox"),
+    pytest.param("tbb", True, id="tbb"),
+    pytest.param("tbb_safer", True, id="tbb_safer"),
+], indirect=["browser"])
+@pytest.mark.parametrize("in_frame, first_party", [
+    pytest.param(False, "https://frame.nonenrolled.localhost:8443", id="plain"),
+    pytest.param(True, "https://nonenrolled.localhost:8443", id="in_frame"),
+])
+@pytest.mark.parametrize("root, headers, hooks", [
+    pytest.param("cases/testapp", {
+        "access-control-allow-origin": "*",
+    }, FRAMEHOST_HOOK),
+], indirect=["root"])
+def test_non_enrolled_sharedworker(root, browser: Browser, server: Server, update_server: UpdateServer, addon_path, dnsnames, non_enrolled_dnsnames, incognito, in_frame, first_party):
+    """
+    Tests that requests to an enrolled origin from a non-enrolled SharedWorker
+    access the correct cache partition.
+    """
+    enrolled_url = f"{server.url(dnsnames[0])}/Readme.md"
+    non_enrolled_url = server.url(non_enrolled_dnsnames[2])
+    if in_frame:
+        non_enrolled_url = f"{server.url(non_enrolled_dnsnames[0])}/framehost.html?url={non_enrolled_url}"
+    server.hooks["/console_log.png"] = Hook(b'', status=302,
+        headers={"location": enrolled_url},
+    )
+    server.hooks["/Readme.md"] = Hook(open(f"{root}/Readme.md", "rb").read(), headers=EXPECTED_CSP)
+    browser.install_extension(addon_path)
+    update_server.wait_for_update()
+    browser.attach_extension_console()
+    with server.wait_for({"/Readme.md"}):
+        browser.navigate(non_enrolled_url)
+    browser.execute("var keys; state.origins.keys().then(k => keys = k);", in_extension=True)
+    cache_keys = json.loads(browser.execute("JSON.stringify(keys)", in_extension=True))
+    store = "firefox-private" if incognito else "firefox-default"
+    assert len(cache_keys) == 1
+    assert re.fullmatch(f"{dnsnames[0]}\\?cookieStoreId={store},firstParty=\\d+", cache_keys[0])
+
 # Firefox ESR, hence Tor Browser, reports worker-initiated requests under
 # frameId 0: https://bugzilla.mozilla.org/show_bug.cgi?id=2048884
 @pytest.mark.parametrize("browser, incognito", [

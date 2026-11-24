@@ -1,10 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+vi.mock("../../src/browser/permissions", () => ({
+  default: {
+    require: vi.fn().mockReturnValue(vi.fn()),
+    addEventListener: vi.fn(),
+  },
+}));
+
+import { KVStore } from "../../src/browser/kvstore";
 import { BeforeRequestDetails } from "../../src/browser/requests";
 import {
   isThirdPartyWorkerScript,
   resolveFirstParty,
 } from "../../src/webcat/firstparty";
+import { Database } from "../../src/webcat/interfaces/database";
 
 const request = (fields: Partial<BeforeRequestDetails>) =>
   ({
@@ -25,6 +34,17 @@ const tab = async () => [
 const noLookup = () =>
   Promise.reject(new Error("frames must not be looked up"));
 
+const db = {
+  enrollments: {
+    async get(key: string) {
+      if (key === "enrolled.example") {
+        return [1, 2, 3, 4];
+      }
+      return undefined;
+    },
+  } as unknown as KVStore,
+} as Database;
+
 describe("resolveFirstParty: requests with frame ancestors", () => {
   it("uses the topmost ancestor", async () => {
     await expect(
@@ -38,6 +58,7 @@ describe("resolveFirstParty: requests with frame ancestors", () => {
           ],
         }),
         noLookup,
+        db,
       ),
     ).resolves.toBe("https://embedder.example");
   });
@@ -54,6 +75,7 @@ describe("resolveFirstParty: requests with frame ancestors", () => {
           ],
         }),
         noLookup,
+        db,
       ),
     ).resolves.toBe("https://embedder.example");
   });
@@ -67,6 +89,7 @@ describe("resolveFirstParty: requests with frame ancestors", () => {
           frameAncestors: [{ url: "about:blank", frameId: 0 }],
         }),
         noLookup,
+        db,
       ),
     ).resolves.toBe("r");
   });
@@ -81,6 +104,7 @@ describe("resolveFirstParty: requests with frame ancestors", () => {
           frameAncestors: [],
         }),
         tab,
+        db,
       ),
     ).resolves.toBe("https://embedder.example");
   });
@@ -92,6 +116,7 @@ describe("resolveFirstParty: top-level navigations", () => {
       resolveFirstParty(
         request({ type: "main_frame", url: "https://enrolled.example/" }),
         noLookup,
+        db,
       ),
     ).resolves.toBe("https://enrolled.example");
   });
@@ -107,6 +132,7 @@ describe("resolveFirstParty: tab-bound requests without ancestors", () => {
           documentUrl: "https://enrolled.example/",
         }),
         async () => [{ frameId: 0, url: "https://enrolled.example/" }],
+        db,
       ),
     ).resolves.toBe("https://enrolled.example");
   });
@@ -119,6 +145,7 @@ describe("resolveFirstParty: tab-bound requests without ancestors", () => {
           documentUrl: "https://enrolled.example/workers/worker.js",
         }),
         tab,
+        db,
       ),
     ).resolves.toBe("https://embedder.example");
   });
@@ -132,6 +159,7 @@ describe("resolveFirstParty: tab-bound requests without ancestors", () => {
           documentUrl: "https://enrolled.example/workers/worker.js",
         }),
         tab,
+        db,
       ),
     ).resolves.toBe("https://embedder.example");
   });
@@ -145,6 +173,7 @@ describe("resolveFirstParty: tab-bound requests without ancestors", () => {
           documentUrl: "https://enrolled.example/workers/worker.js",
         }),
         tab,
+        db,
       ),
     ).resolves.toBe("https://embedder.example");
   });
@@ -158,6 +187,7 @@ describe("resolveFirstParty: tab-bound requests without ancestors", () => {
           documentUrl: "https://enrolled.example/workers/worker.js",
         }),
         tab,
+        db,
       ),
     ).resolves.toBe("https://embedder.example");
   });
@@ -171,6 +201,7 @@ describe("resolveFirstParty: tab-bound requests without ancestors", () => {
           documentUrl: "https://enrolled.example/workers/worker.js",
         }),
         async () => [{ frameId: 0, url: "https://enrolled.example/other" }],
+        db,
       ),
     ).resolves.toBe("https://enrolled.example");
   });
@@ -188,6 +219,7 @@ describe("resolveFirstParty: tab-bound requests without ancestors", () => {
           { frameId: 0, url: "https://other.example/" },
           { frameId: 9, url: "https://enrolled.example/" },
         ],
+        db,
       ),
     ).resolves.toBe("https://other.example");
   });
@@ -204,6 +236,7 @@ describe("resolveFirstParty: tab-bound requests without ancestors", () => {
           { frameId: 0, url: "about:blank" },
           { frameId: 5, url: "https://enrolled.example/" },
         ],
+        db,
       ),
     ).resolves.toBe("r");
   });
@@ -233,6 +266,7 @@ describe("resolveFirstParty: tab-bound requests without ancestors", () => {
           documentUrl: "https://enrolled.example/workers/worker.js",
         }),
         frames,
+        db,
       ),
     ).rejects.toThrow();
   });
@@ -257,6 +291,7 @@ describe("resolveFirstParty: loads from inside a recorded worker", () => {
       resolveFirstParty(
         load,
         noLookup,
+        db,
         recorded("https://embedder.example", false),
       ),
     ).resolves.toBe("https://embedder.example");
@@ -267,6 +302,7 @@ describe("resolveFirstParty: loads from inside a recorded worker", () => {
       resolveFirstParty(
         load,
         nextTab,
+        db,
         recorded("https://embedder.example", true),
       ),
     ).rejects.toThrow("departed");
@@ -277,6 +313,7 @@ describe("resolveFirstParty: loads from inside a recorded worker", () => {
       resolveFirstParty(
         load,
         nextTab,
+        db,
         recorded("https://enrolled.example", true),
       ),
     ).resolves.toBe("https://enrolled.example");
@@ -292,6 +329,7 @@ describe("resolveFirstParty: loads from inside a recorded worker", () => {
           documentUrl: "https://enrolled.example/",
         }),
         nextTab,
+        db,
         recorded("https://embedder.example", true),
       ),
     ).resolves.toBe("https://enrolled.example");
@@ -299,7 +337,7 @@ describe("resolveFirstParty: loads from inside a recorded worker", () => {
 
   it("falls back to the frames for a script the registry does not know", async () => {
     await expect(
-      resolveFirstParty(load, tab, { lookup: async () => undefined }),
+      resolveFirstParty(load, tab, db, { lookup: async () => undefined }),
     ).resolves.toBe("https://embedder.example");
   });
 });
@@ -331,6 +369,7 @@ describe("resolveFirstParty: tab-less requests", () => {
       resolveFirstParty(
         request({ tabId: -1, frameId: -1, url, documentUrl }),
         noLookup,
+        db,
       ),
     ).resolves.toBe("https://enrolled.example");
   });
@@ -346,6 +385,7 @@ describe("resolveFirstParty: tab-less requests", () => {
           documentUrl: "https://enrolled.example/",
         }),
         noLookup,
+        db,
       ),
     ).resolves.toBe("https://enrolled.example");
   });
@@ -360,6 +400,7 @@ describe("resolveFirstParty: tab-less requests", () => {
           url: "https://enrolled.example/workers/sw.js",
         }),
         noLookup,
+        db,
       ),
     ).resolves.toBe("https://enrolled.example");
   });
@@ -373,6 +414,7 @@ describe("resolveFirstParty: tab-less requests", () => {
           url: "https://enrolled.example/workers/sw.js",
         }),
         noLookup,
+        db,
       ),
     ).rejects.toThrow();
   });
@@ -387,6 +429,7 @@ describe("resolveFirstParty: tab-less requests", () => {
           url: "https://enrolled.example/workers/sw.js",
         }),
         noLookup,
+        db,
       ),
     ).rejects.toThrow();
   });
