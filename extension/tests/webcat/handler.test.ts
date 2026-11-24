@@ -291,6 +291,7 @@ describe("WebcatRequestHandler", () => {
 
   it("lets a first-party worker script through to attribution", async () => {
     const db = new WebcatDatabase(defaults);
+    db.enrollments.get = vi.fn().mockResolvedValue([1, 2, 3, 4]);
     const ui = new WebcatUI(db, db.namespace("ui"), defaults);
     const wrh = new WebcatRequestHandler(db, ui, defaults);
     const details = Object.assign(new RequestDetailsBase(), {

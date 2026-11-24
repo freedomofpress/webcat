@@ -1,4 +1,6 @@
 import { BeforeRequestDetails } from "../browser/requests";
+import { Database } from "./interfaces/database";
+import { getFQDN } from "./utils";
 import { WorkerRegistry } from "./workers";
 
 /** A frame of a tab, as reported by `webNavigation.getAllFrames`. */
@@ -61,6 +63,7 @@ export const getAllFrames = (tabId: number) =>
 export async function resolveFirstParty(
   details: BeforeRequestDetails,
   getFrames: (tabId: number) => Promise<Frame[] | null> = getAllFrames,
+  db: Database,
   workers?: Pick<WorkerRegistry, "lookup">,
 ): Promise<string> {
   const originOf = (url: string) => {
@@ -109,7 +112,13 @@ export async function resolveFirstParty(
     throw new Error(`no live frame for '${details.url}'`);
   }
   if (details.documentUrl) {
-    return new URL(details.documentUrl).origin;
+    const docFQDN = getFQDN(details.documentUrl);
+    if (await db.enrollments.get(docFQDN)) {
+      // Request from an enrolled document, guaranteed not to be framed
+      return new URL(details.documentUrl).origin;
+    }
+    // Request from a non-enrolled document; no guarantees
+    return details.requestId;
   }
   if (details.thirdParty === false) {
     return new URL(details.url).origin;

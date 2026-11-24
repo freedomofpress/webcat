@@ -1,3 +1,4 @@
+import { KVStore } from "../../browser/kvstore";
 import { CacheKey, LRUCache, LRUSet } from "../cache";
 import { CachePartition, OriginState } from "./originstate";
 
@@ -19,6 +20,10 @@ export interface Database {
    * WEBCAT.
    */
   readonly nonOrigins: LRUSet<CacheKey<CachePartition>>;
+  /**
+   * A store for enrollment hashes; allows direct access bypassing the cache.
+   */
+  readonly enrollments: KVStore;
   /**
    * Updates the list of enrolled fully-qualified domain names.
    */

@@ -24,7 +24,6 @@ export type WebcatDatabaseConfig = {
 export class WebcatDatabase extends NamespacedKVStore implements Database {
   readonly origins: PersistentLRUCache<CacheKey<CachePartition>, OriginState>;
   readonly nonOrigins: LRUSet<CacheKey<CachePartition>>;
-  /** A subnamespace for storing enrollment hashes. */
   readonly enrollments = this.namespace("enrollments");
 
   constructor(config: WebcatDatabaseConfig) {
