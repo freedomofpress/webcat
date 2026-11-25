@@ -119,6 +119,77 @@ const SIGNER1 = "c2lnbmVyMQ";
 const SIGNER2 = "c2lnbmVyMg";
 const SIGNER3 = "c2lnbmVyMw";
 
+describe("OriginState.isRequestSent", () => {
+  it("returns true when status is request_sent", () => {
+    const state = new OriginState(
+      {} as WebcatDatabase,
+      makeDummyFetcher(),
+      new Uint8Array(),
+      {
+        firstParty: "https://example.com",
+        cookieStoreId: "firefox-default",
+      },
+    );
+    expect(state.isRequestSent()).toBe(true);
+  });
+
+  it("returns false when status is not request_sent", () => {
+    const state = new OriginState(
+      {} as WebcatDatabase,
+      makeDummyFetcher(),
+      new Uint8Array(),
+      {
+        firstParty: "https://example.com",
+        cookieStoreId: "firefox-default",
+      },
+    );
+    state.status = "verified_enrollment";
+    expect(state.isRequestSent()).toBe(false);
+  });
+
+  it("returns false when enrollment is set", () => {
+    const state = new OriginState(
+      {} as WebcatDatabase,
+      makeDummyFetcher(),
+      new Uint8Array(),
+      {
+        firstParty: "https://example.com",
+        cookieStoreId: "firefox-default",
+      },
+    );
+    state.enrollment = {} as Enrollment;
+    expect(state.isRequestSent()).toBe(false);
+  });
+
+  it("returns false when manifest is set", () => {
+    const state = new OriginState(
+      {} as WebcatDatabase,
+      makeDummyFetcher(),
+      new Uint8Array(),
+      {
+        firstParty: "https://example.com",
+        cookieStoreId: "firefox-default",
+      },
+    );
+    state.manifest = {} as Manifest;
+    expect(state.isRequestSent()).toBe(false);
+  });
+
+  it("returns false when error is set", () => {
+    const state = new OriginState(
+      {} as WebcatDatabase,
+      makeDummyFetcher(),
+      new Uint8Array(),
+      {
+        firstParty: "https://example.com",
+        cookieStoreId: "firefox-default",
+      },
+    );
+    state.error = {} as WebcatError;
+    expect(state.isRequestSent()).toBe(false);
+  });
+});
+
 //
 // ─────────────────────────────────────────────
 //   OriginStateInitial.verifyEnrollment
@@ -132,7 +203,6 @@ describe("OriginState.verifyEnrollment", () => {
   const cachePartition = {
     firstParty: "https://example.com",
     cookieStoreId: "firefox-default",
-    incognito: false,
   };
 
   beforeEach(async () => {
@@ -329,7 +399,6 @@ describe("OriginState.verifyEnrollment (sigstore)", () => {
   const cachePartition = {
     firstParty: "https://example.com",
     cookieStoreId: "firefox-default",
-    incognito: false,
   };
 
   beforeEach(async () => {
@@ -419,7 +488,6 @@ describe("OriginState.verifyManifest", () => {
   const cachePartition = {
     firstParty: "https://example.com",
     cookieStoreId: "firefox-default",
-    incognito: false,
   };
 
   const defaultCSP =
@@ -598,7 +666,6 @@ describe("OriginState.verifyManifest (sigstore)", () => {
   const cachePartition = {
     firstParty: "https://example.com",
     cookieStoreId: "firefox-default",
-    incognito: false,
   };
 
   const defaultCSP =
@@ -681,7 +748,6 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
   const cachePartition = {
     firstParty: "https://example.com",
     cookieStoreId: "firefox-default",
-    incognito: false,
   };
   const defaultCSP =
     "default-src 'none'; script-src 'self'; style-src 'self'; object-src 'none'";
