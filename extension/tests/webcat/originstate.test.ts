@@ -17,6 +17,7 @@ import { TrustedRoot } from "@freedomofpress/sigstore-browser";
 import { defaults } from "../../src/config";
 import { WebcatDatabase } from "../../src/webcat/db";
 import {
+  Bundle,
   Enrollment,
   EnrollmentTypes,
   Manifest,
@@ -219,7 +220,9 @@ describe("OriginState.verifyEnrollment", () => {
     };
 
     enrollmentHash = await computeEnrollmentHash(enrollment);
-    db = {} as WebcatDatabase;
+    db = {
+      getFQDNEnrollment: vi.fn(),
+    } as unknown as WebcatDatabase;
     state = new OriginState(
       db,
       makeDummyFetcher(),
@@ -235,6 +238,14 @@ describe("OriginState.verifyEnrollment", () => {
     expect(state.enrollment).toEqual(enrollment);
   });
 
+  it("accepts a valid enrollment from the fetcher", async () => {
+    state.fetcher.current.value = { enrollment } as Bundle;
+    await state.verifyEnrollment();
+
+    expect(state.isEnrollmentVerified()).toBe(true);
+    expect(state.enrollment).toEqual(enrollment);
+  });
+
   it("fails when enrollment hash mismatches", async () => {
     const different: SigsumEnrollment = { ...enrollment, threshold: 3 };
 
@@ -242,6 +253,75 @@ describe("OriginState.verifyEnrollment", () => {
 
     expect(state.isFailed()).toBe(true);
     expect(state.error?.code).toBe(WebcatErrorCode.Enrollment.MISMATCH);
+  });
+
+  it("fails when enrollment is not canonicalizable", async () => {
+    const noncanonicalizable: SigsumEnrollment = {
+      ...enrollment,
+      threshold: NaN,
+    };
+
+    await state.verifyEnrollment(noncanonicalizable);
+
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(WebcatErrorCode.Enrollment.MISMATCH);
+  });
+
+  it("fails when fetcher reports an error", async () => {
+    state.fetcher.current.error = new WebcatError(
+      WebcatErrorCode.Bundle.ENROLLMENT_MISSING,
+    );
+
+    await state.verifyEnrollment();
+
+    expect(state.isFailed()).toBe(true);
+    expect(state.error).toBe(state.fetcher.current.error);
+  });
+
+  it("throws when no enrollment is available", async () => {
+    await expect(state.verifyEnrollment()).rejects.toThrow();
+  });
+
+  it("falls back to previous enrollment when the current one is a mismatch", async () => {
+    state.fetcher.current.value = {
+      enrollment: { ...enrollment, threshold: 3 },
+    } as Bundle;
+    state.fetcher.previous.value = { enrollment } as Bundle;
+
+    await state.verifyEnrollment();
+
+    expect(state.isEnrollmentVerified()).toBe(true);
+    expect(state.enrollment).toBe(enrollment);
+  });
+
+  it("fails when the fallback enrollment is a mismatch", async () => {
+    state.fetcher.current.value = {
+      enrollment: { ...enrollment, threshold: 3 },
+    } as Bundle;
+    state.fetcher.previous.value = {
+      enrollment: { ...enrollment, threshold: 3 },
+    } as Bundle;
+
+    await state.verifyEnrollment();
+
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(WebcatErrorCode.Enrollment.MISMATCH);
+  });
+
+  it("fails on unrecognized enrollment type", async () => {
+    enrollment = { ...enrollment, type: "custom" as EnrollmentTypes.Sigsum };
+    enrollmentHash = await computeEnrollmentHash(enrollment);
+    state = new OriginState(
+      db,
+      makeDummyFetcher(),
+      enrollmentHash,
+      cachePartition,
+    );
+
+    await state.verifyEnrollment(enrollment);
+
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(WebcatErrorCode.Enrollment.TYPE_INVALID);
   });
 
   // Enrollments hash under RFC 8785 with or without enrollment_schema.
@@ -382,6 +462,24 @@ describe("OriginState.verifyEnrollment", () => {
     expect(mutatedState.error?.code).toBe(
       WebcatErrorCode.Enrollment.THRESHOLD_IMPOSSIBLE,
     );
+  });
+
+  it("accepts a delegation that matches the enrollment hash", async () => {
+    vi.mocked(db.getFQDNEnrollment).mockResolvedValueOnce(enrollmentHash);
+    await state.verifyEnrollment(enrollment, "example.com");
+
+    expect(state.isEnrollmentVerified()).toBe(true);
+    expect(state.enrollment).toEqual(enrollment);
+    expect(state.delegation).toEqual("example.com");
+  });
+
+  it("rejects a delegation that doesn't match the enrollment hash", async () => {
+    vi.mocked(db.getFQDNEnrollment).mockResolvedValueOnce(new Uint8Array());
+    await state.verifyEnrollment(enrollment, "example.com");
+
+    expect(state.isEnrollmentVerified()).toBe(true);
+    expect(state.enrollment).toEqual(enrollment);
+    expect(state.delegation).toBeUndefined();
   });
 });
 
