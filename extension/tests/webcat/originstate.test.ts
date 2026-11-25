@@ -308,7 +308,7 @@ describe("OriginState.verifyEnrollment", () => {
     expect(state.error?.code).toBe(WebcatErrorCode.Enrollment.MISMATCH);
   });
 
-  it("fails on unrecognized enrollment type", async () => {
+  it("fails on invalid enrollment type", async () => {
     enrollment = { ...enrollment, type: "custom" as EnrollmentTypes.Sigsum };
     enrollmentHash = await computeEnrollmentHash(enrollment);
     state = new OriginState(
@@ -645,6 +645,36 @@ describe("OriginState.verifyManifest", () => {
     expect(state.manifest).toEqual(manifest);
   });
 
+  it("throws when called before verifyEnrollment", async () => {
+    state.status = "request_sent";
+    state.enrollment = undefined;
+
+    await expect(state.verifyManifest(manifest, signatures)).rejects.toThrow();
+  });
+
+  it("accepts a valid manifest from the bundle", async () => {
+    state.status = "request_sent";
+    state.enrollment = undefined;
+    state.fetcher.current.value = {
+      enrollment,
+      manifest,
+      signatures,
+    };
+
+    await state.verifyEnrollment();
+    await state.verifyManifest();
+
+    expect(state.isManifestVerified()).toBe(true);
+    expect(state.manifest).toEqual(manifest);
+  });
+
+  it("fails when no manifest is available", async () => {
+    await state.verifyManifest();
+
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(WebcatErrorCode.Bundle.MANIFEST_MISSING);
+  });
+
   it("fails when not enough signatures", async () => {
     const tooFew: SigsumSignatures = { [SIGNER1]: "signature1" };
 
@@ -739,12 +769,55 @@ describe("OriginState.verifyManifest", () => {
     const mock = validators.witnessTimestampsFromCosignedTreeHead as Mock;
 
     // Force timestamps extremely old
-    mock.mockResolvedValue([10, 20, 30]);
+    mock.mockResolvedValueOnce([10, 20, 30]);
 
     await state.verifyManifest(manifest, signatures);
 
     expect(state.isFailed()).toBe(true);
     expect(state.error?.code).toBe(WebcatErrorCode.Manifest.EXPIRED);
+  });
+
+  it("fails on invalid enrollment type", async () => {
+    enrollment.type = "custom" as EnrollmentTypes;
+    await state.verifyManifest(manifest, signatures);
+
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(WebcatErrorCode.Enrollment.TYPE_INVALID);
+  });
+
+  it("fails on invalid default CSP", async () => {
+    const validators = await import("../../src/webcat/validators");
+    const mock = validators.validateCSP as Mock;
+    mock.mockThrowOnce(new Error());
+
+    await state.verifyManifest(manifest, signatures);
+
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(
+      WebcatErrorCode.Manifest.DEFAULT_CSP_INVALID,
+    );
+  });
+
+  it("fails on invalid extra CSP", async () => {
+    const validators = await import("../../src/webcat/validators");
+    const mock = validators.validateCSP as Mock;
+    mock.mockReturnValueOnce(undefined).mockThrowOnce(new Error());
+
+    manifest.extra_csp["/path"] = "not a csp";
+    await state.verifyManifest(manifest, signatures);
+
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(WebcatErrorCode.Manifest.EXTRA_CSP_INVALID);
+  });
+
+  it("fails on malformed extra CSP object", async () => {
+    manifest.extra_csp = Object.create({ "/path": "not a csp" });
+    await state.verifyManifest(manifest, signatures);
+
+    expect(state.isFailed()).toBe(true);
+    expect(state.error?.code).toBe(
+      WebcatErrorCode.Manifest.EXTRA_CSP_MALFORMED,
+    );
   });
 });
 
