@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, Mock, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, Mock, vi } from "vitest";
 
 vi.mock("../../src/browser/permissions", () => ({
   default: {
@@ -99,8 +99,9 @@ vi.mock("../../src/webcat/validators", async () => {
   };
 });
 
+vi.stubGlobal("fetch", vi.fn());
+
 function makeDummyFetcher(): BundleFetcher {
-  // base URL is irrelevant, fetch will never be awaited in these tests
   return new BundleFetcher("https://example.com", defaults);
 }
 
@@ -746,5 +747,196 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
   it("returns false for incorrect CSP", () => {
     const badCsp = "default-src 'self'; script-src 'self';";
     expect(state.verifyCSP(badCsp, "/")).toBe(false);
+  });
+});
+
+describe("BundleFetcher", () => {
+  afterEach(() => {
+    vi.mocked(fetch).mockReset();
+  });
+
+  it("should report an error slot when fetch fails", async () => {
+    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
+      if (url.toString().endsWith(defaults.bundlePath)) {
+        throw new TypeError();
+      } else {
+        return new Response(
+          JSON.stringify({
+            enrollment: {},
+            manifest: {},
+            signatures: {},
+          }),
+        );
+      }
+    });
+    const fetcher = makeDummyFetcher();
+    await fetcher.awaitAll();
+    expect(fetcher.current.error?.code).toBe(WebcatErrorCode.Fetch.FETCH_ERROR);
+    expect(fetcher.current.value).toBeUndefined();
+    expect(fetcher.previous.error).toBeUndefined();
+    expect(fetcher.previous.value).toBeDefined();
+  });
+
+  it("should report an error when fetch returns non-200", async () => {
+    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
+      if (url.toString().endsWith(defaults.bundlePath)) {
+        return new Response(null, { status: 404 });
+      } else {
+        return new Response(
+          JSON.stringify({
+            enrollment: {},
+            manifest: {},
+            signatures: {},
+          }),
+        );
+      }
+    });
+    const fetcher = makeDummyFetcher();
+    await fetcher.awaitAll();
+    expect(fetcher.current.error?.code).toBe(WebcatErrorCode.Fetch.FETCH_ERROR);
+    expect(fetcher.current.value).toBeUndefined();
+    expect(fetcher.previous.error).toBeUndefined();
+    expect(fetcher.previous.value).toBeDefined();
+  });
+
+  it("should report an error when fetched JSON is invalid", async () => {
+    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
+      if (url.toString().endsWith(defaults.bundlePath)) {
+        return new Response("x");
+      } else {
+        return new Response(
+          JSON.stringify({
+            enrollment: {},
+            manifest: {},
+            signatures: {},
+          }),
+        );
+      }
+    });
+    const fetcher = makeDummyFetcher();
+    await fetcher.awaitAll();
+    expect(fetcher.current.error?.code).toBe(WebcatErrorCode.Bundle.MALFORMED);
+    expect(fetcher.current.value).toBeUndefined();
+    expect(fetcher.previous.error).toBeUndefined();
+    expect(fetcher.previous.value).toBeDefined();
+  });
+
+  it("should report an error when fetched JSON is missing enrollment", async () => {
+    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
+      if (url.toString().endsWith(defaults.bundlePath)) {
+        return new Response(
+          JSON.stringify({
+            manifest: {},
+            signatures: {},
+          }),
+        );
+      } else {
+        return new Response(
+          JSON.stringify({
+            enrollment: {},
+            manifest: {},
+            signatures: {},
+          }),
+        );
+      }
+    });
+    const fetcher = makeDummyFetcher();
+    await fetcher.awaitAll();
+    expect(fetcher.current.error?.code).toBe(
+      WebcatErrorCode.Bundle.ENROLLMENT_MISSING,
+    );
+    expect(fetcher.current.value).toBeUndefined();
+    expect(fetcher.previous.error).toBeUndefined();
+    expect(fetcher.previous.value).toBeDefined();
+  });
+
+  it("should report an error when fetched JSON is missing manifest", async () => {
+    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
+      if (url.toString().endsWith(defaults.bundlePath)) {
+        return new Response(
+          JSON.stringify({
+            enrollment: {},
+            signatures: {},
+          }),
+        );
+      } else {
+        return new Response(
+          JSON.stringify({
+            enrollment: {},
+            manifest: {},
+            signatures: {},
+          }),
+        );
+      }
+    });
+    const fetcher = makeDummyFetcher();
+    await fetcher.awaitAll();
+    expect(fetcher.current.error?.code).toBe(
+      WebcatErrorCode.Bundle.MANIFEST_MISSING,
+    );
+    expect(fetcher.current.value).toBeUndefined();
+    expect(fetcher.previous.error).toBeUndefined();
+    expect(fetcher.previous.value).toBeDefined();
+  });
+
+  it("should report an error when fetched JSON is missing signatures", async () => {
+    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
+      if (url.toString().endsWith(defaults.bundlePath)) {
+        return new Response(
+          JSON.stringify({
+            enrollment: {},
+            manifest: {},
+          }),
+        );
+      } else {
+        return new Response(
+          JSON.stringify({
+            enrollment: {},
+            manifest: {},
+            signatures: {},
+          }),
+        );
+      }
+    });
+    const fetcher = makeDummyFetcher();
+    await fetcher.awaitAll();
+    expect(fetcher.current.error?.code).toBe(
+      WebcatErrorCode.Bundle.SIGNATURES_MISSING,
+    );
+    expect(fetcher.current.value).toBeUndefined();
+    expect(fetcher.previous.error).toBeUndefined();
+    expect(fetcher.previous.value).toBeDefined();
+  });
+
+  it("should fetch and parse bundles only once", async () => {
+    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
+      if (url.toString().endsWith(defaults.bundlePath)) {
+        throw new TypeError();
+      } else {
+        return new Response(
+          JSON.stringify({
+            enrollment: {},
+            manifest: {},
+            signatures: {},
+          }),
+        );
+      }
+    });
+    const fetcher = makeDummyFetcher();
+    await fetcher.awaitAll();
+    const error = fetcher.current.error;
+    expect(error?.code).toBe(WebcatErrorCode.Fetch.FETCH_ERROR);
+    expect(fetcher.current.value).toBeUndefined();
+    const bundle = fetcher.previous.value;
+    expect(fetcher.previous.error).toBeUndefined();
+    expect(bundle).toBeDefined();
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    await fetcher.awaitAll();
+    expect(fetcher.current.error).toBe(error);
+    expect(fetcher.current.value).toBeUndefined();
+    expect(fetcher.previous.error).toBeUndefined();
+    expect(fetcher.previous.value).toBe(bundle);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
