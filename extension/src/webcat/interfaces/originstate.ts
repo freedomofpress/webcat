@@ -37,17 +37,27 @@ export interface OriginState {
   ): Promise<void | number>;
   verifyCSP(csp: string, pathname: string): boolean;
 
-  isRequestSent(): boolean;
+  isRequestSent(): this is OriginStateRequestSent;
   isEnrollmentVerified(): this is OriginStateVerifiedEnrollment;
   isManifestVerified(): this is OriginStateVerifiedManifest;
   isFailed(): this is OriginStateFailed;
 }
 
+export type OriginStateRequestSent = OriginState & {
+  enrollment: undefined;
+  manifest: undefined;
+  error: undefined;
+};
+
 export type OriginStateVerifiedEnrollment = OriginState & {
   enrollment: Enrollment;
+  manifest: undefined;
+  error: undefined;
 };
 export type OriginStateVerifiedManifest = OriginState & {
+  enrollment: Enrollment;
   manifest: Manifest;
+  error: undefined;
   validUntil: number;
   toPOJO(): OriginStateObject;
 };

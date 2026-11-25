@@ -23,6 +23,7 @@ import {
   OriginState as IOriginState,
   OriginStateFailed,
   OriginStateObject,
+  OriginStateRequestSent,
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
@@ -155,7 +156,7 @@ export class OriginState implements IOriginState {
     this.status = "request_sent";
   }
 
-  isRequestSent(): boolean {
+  isRequestSent(): this is OriginStateRequestSent {
     return (
       this.status === "request_sent" &&
       this.enrollment === undefined &&
@@ -181,7 +182,10 @@ export class OriginState implements IOriginState {
 
   isEnrollmentVerified(): this is OriginStateVerifiedEnrollment {
     return (
-      this.status === "verified_enrollment" && this.enrollment !== undefined
+      this.status === "verified_enrollment" &&
+      this.enrollment !== undefined &&
+      this.manifest === undefined &&
+      this.error === undefined
     );
   }
 
@@ -194,6 +198,7 @@ export class OriginState implements IOriginState {
   isManifestVerified(): this is OriginStateVerifiedManifest {
     return (
       this.status === "verified_manifest" &&
+      this.enrollment !== undefined &&
       this.manifest !== undefined &&
       this.validUntil !== undefined
     );
