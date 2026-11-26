@@ -23,7 +23,6 @@ import {
   OriginState as IOriginState,
   OriginStateFailed,
   OriginStateObject,
-  OriginStateRequestSent,
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
@@ -156,7 +155,7 @@ export class OriginState implements IOriginState {
     this.status = "request_sent";
   }
 
-  isRequestSent(): this is OriginStateRequestSent {
+  isRequestSent(): boolean {
     return (
       this.status === "request_sent" &&
       this.enrollment === undefined &&
