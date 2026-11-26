@@ -230,6 +230,11 @@ export const manifestSchema: Schema<Manifest> = {
       test: (v) => Boolean(v),
       error: ManifestError.DEFAULT_CSP_MISSING,
     },
+    {
+      field: "version",
+      test: (v) => typeof v === "string" && v !== "",
+      error: ManifestError.VERSION_MISSING,
+    },
     // Auditors fetch each fallback at /.well-known/webcat/hashes/<hash>.
     {
       field: "fallback_hashes",

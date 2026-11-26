@@ -31,6 +31,8 @@ document.addEventListener("DOMContentLoaded", () => {
     ERR_WEBCAT_BUNDLE_FETCH_ERROR: "bundleFetchError",
     ERR_WEBCAT_MANIFEST_EXPIRED: "manifestExpired",
     ERR_WEBCAT_MANIFEST_NOT_YET_VALID: "clockSkew",
+    ERR_WEBCAT_BASELINE_DOWNGRADE: "baselineDowngrade",
+    ERR_WEBCAT_BASELINE_FORK: "baselineFork",
     ERR_WEBCAT_FRAME_ISOLATION_OAC_UNAVAILABLE: "frameIsolation",
     ERR_WEBCAT_FRAME_ISOLATION_OAC_UNSUPPORTED: "browserUnsupported",
   }[code];

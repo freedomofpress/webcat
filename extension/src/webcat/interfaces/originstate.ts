@@ -35,6 +35,7 @@ export interface OriginState {
     manifest?: Manifest,
     signatures?: SigsumSignatures | SigstoreSignatures,
   ): Promise<void | number>;
+  verifyBaseline(fqdn: string): Promise<void>;
   verifyCSP(csp: string, pathname: string): boolean;
 
   isRequestSent(): boolean;

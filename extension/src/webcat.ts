@@ -71,6 +71,7 @@ export default {
           config: cfg,
           origins: db.origins,
           nonOrigins: db.nonOrigins,
+          baselines: db.baselines,
         },
       });
     }

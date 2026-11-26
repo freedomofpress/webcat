@@ -15,6 +15,7 @@ import { stringToUint8Array } from "@freedomofpress/crypto-browser";
 import { TrustedRoot } from "@freedomofpress/sigstore-browser";
 
 import { defaults } from "../../src/config";
+import { CacheKey } from "../../src/webcat/cache";
 import { WebcatDatabase } from "../../src/webcat/db";
 import {
   Enrollment,
@@ -534,7 +535,6 @@ describe("OriginState.verifyManifest", () => {
   it("rewrites legacy default_index and default_fallback", async () => {
     const legacy = {
       ...manifest,
-      fallback_hashes: undefined,
       default_index: "index.html",
       default_fallback: "/404.html",
       files: {
@@ -556,6 +556,16 @@ describe("OriginState.verifyManifest", () => {
     ]);
   });
 
+  it("fails when version missing", async () => {
+    const badManifest = { ...manifest };
+    // @ts-expect-error simulate missing version
+    delete badManifest.version;
+
+    await state.verifyManifest(badManifest, signatures);
+
+    expect(state.error?.code).toBe(WebcatErrorCode.Manifest.VERSION_MISSING);
+  });
+
   it("fails when wasm missing", async () => {
     const badManifest = { ...manifest };
     // @ts-expect-error simulate missing wasm
@@ -571,13 +581,100 @@ describe("OriginState.verifyManifest", () => {
     const validators = await import("../../src/webcat/validators");
     const mock = validators.witnessTimestampsFromCosignedTreeHead as Mock;
 
-    // Force timestamps extremely old
-    mock.mockResolvedValue([10, 20, 30]);
+    // Force timestamps extremely old, for this call only
+    mock.mockResolvedValueOnce([10, 20, 30]);
 
     await state.verifyManifest(manifest, signatures);
 
     expect(state.isFailed()).toBe(true);
     expect(state.error?.code).toBe(WebcatErrorCode.Manifest.EXPIRED);
+  });
+
+  describe("verifyBaseline", () => {
+    type Seen = { version: string; hash: string };
+    const areas: Record<string, Record<string, Seen>> = {};
+    const baselines = {
+      get: async (k: string, a = "local") => areas[a]?.[k],
+      set: async (items: Record<string, Seen>, a = "local") =>
+        Object.assign((areas[a] ??= {}), items),
+    };
+    const key = (
+      cookieStoreId = "firefox-default",
+      firstParty = cachePartition.firstParty,
+    ) =>
+      CacheKey("example.com", { ...cachePartition, firstParty, cookieStoreId });
+    const verified = async (
+      cookieStoreId = "firefox-default",
+      firstParty = cachePartition.firstParty,
+    ) => {
+      const s = new OriginState(db, makeDummyFetcher(), enrollmentHash, {
+        ...cachePartition,
+        cookieStoreId,
+        firstParty,
+      });
+      await s.verifyEnrollment(enrollment);
+      await s.verifyManifest(structuredClone(manifest), signatures);
+      await s.verifyBaseline("example.com");
+      return s;
+    };
+
+    beforeEach(() => {
+      Object.assign(db, { baselines });
+      for (const a in areas) delete areas[a];
+    });
+
+    it("records the first manifest and accepts it again", async () => {
+      const first = await verified();
+      expect(areas.local[key()]).toEqual({
+        version: "1.0.0",
+        hash: first.manifestHash,
+      });
+      expect((await verified()).isManifestVerified()).toBe(true);
+    });
+
+    it("rejects a lower version", async () => {
+      areas.local = { [key()]: { version: "1.0.1", hash: "x" } };
+      const s = await verified();
+      expect(s.error?.code).toBe(WebcatErrorCode.Baseline.DOWNGRADE);
+    });
+
+    it("rejects another manifest under a seen version", async () => {
+      areas.local = { [key()]: { version: "v1.0.0", hash: "x" } };
+      const s = await verified();
+      expect(s.error?.code).toBe(WebcatErrorCode.Baseline.FORK);
+    });
+
+    it("replaces the baseline with a newer version", async () => {
+      areas.local = { [key()]: { version: "0.9.0", hash: "x" } };
+      const s = await verified();
+      expect(areas.local[key()]).toEqual({
+        version: "1.0.0",
+        hash: s.manifestHash,
+      });
+    });
+
+    it("shares nothing across first parties or containers", async () => {
+      areas.local = { [key()]: { version: "1.0.1", hash: "x" } };
+      const other = "https://other.example";
+      expect((await verified(undefined, other)).isManifestVerified()).toBe(
+        true,
+      );
+      expect((await verified("firefox-container-2")).isManifestVerified()).toBe(
+        true,
+      );
+      expect(Object.keys(areas.local).sort()).toEqual(
+        [key(), key(undefined, other), key("firefox-container-2")].sort(),
+      );
+    });
+
+    it("reads but never writes the local area in private windows", async () => {
+      areas.local = { [key()]: { version: "1.0.1", hash: "x" } };
+      expect((await verified("firefox-private")).isFailed()).toBe(true);
+      delete areas.local;
+      const s = await verified("firefox-private");
+      expect(areas.local).toBeUndefined();
+      expect(areas.session[key("firefox-private")].hash).toBe(s.manifestHash);
+    });
   });
 });
 

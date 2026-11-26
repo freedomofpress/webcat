@@ -7,6 +7,7 @@ import {
   Uint8ArrayToBase64,
 } from "@freedomofpress/crypto-browser";
 
+import { CacheKey } from "./cache";
 import { hasSchema } from "./canonicalize";
 import {
   Bundle,
@@ -26,7 +27,12 @@ import {
   OriginStateVerifiedEnrollment,
   OriginStateVerifiedManifest,
 } from "./interfaces/originstate";
-import { validateCSP, validateSigstoreEnrollment } from "./validators";
+import { isNewerSemver } from "./semver";
+import {
+  signedBytes,
+  validateCSP,
+  validateSigstoreEnrollment,
+} from "./validators";
 import {
   validateManifest,
   validateSigsumEnrollment,
@@ -132,6 +138,8 @@ export class OriginState implements IOriginState {
   fetcher: BundleFetcher;
   enrollment?: Enrollment;
   manifest?: Manifest;
+  /** Base64 SHA-256 of the signed manifest bytes. */
+  manifestHash?: string;
   delegation?: string;
   error?: WebcatError;
   validUntil?: number;
@@ -348,6 +356,14 @@ export class OriginState implements IOriginState {
     if (verify_result instanceof WebcatError) {
       return this.#fail(verify_result);
     }
+    // The signed bytes, taken before the legacy rewrites below change them.
+    const bytes = signedBytes(manifest);
+    if (!bytes) {
+      return this.#fail(
+        new WebcatError(WebcatErrorCode.Manifest.VERIFY_FAILED),
+      );
+    }
+    this.manifestHash = Uint8ArrayToBase64(await sha256(bytes));
 
     const format_error = validateManifest(
       manifest,
@@ -408,6 +424,49 @@ export class OriginState implements IOriginState {
       }
     }
     return this.#setVerifiedManifest(manifest, verify_result);
+  }
+
+  /**
+   * Versions only go up and a version binds one manifest (spec manifest.md),
+   * checked against what this profile verified before for fqdn in the same
+   * cache partition, so that the baseline is no cross-site state.
+   */
+  async verifyBaseline(fqdn: string): Promise<void> {
+    if (!this.isManifestVerified()) return;
+    const { version } = this.manifest;
+    const seen = { version, hash: this.manifestHash };
+    type Seen = typeof seen;
+    const partition = this.#cachePartition;
+    const isPrivate = partition.cookieStoreId === "firefox-private";
+    const key = CacheKey(fqdn, partition);
+    const area = isPrivate ? "session" : "local";
+    const own: Seen | undefined = await this.#db.baselines.get(key, area);
+    // Private windows also read what normal windows persisted for the site.
+    const persisted: Seen | undefined = isPrivate
+      ? await this.#db.baselines.get(
+          CacheKey(fqdn, { ...partition, cookieStoreId: "firefox-default" }),
+        )
+      : undefined;
+    for (const known of [persisted, own]) {
+      if (!known) continue;
+      if (isNewerSemver(known.version, version)) {
+        return this.#fail(
+          new WebcatError(WebcatErrorCode.Baseline.DOWNGRADE, [
+            known.version,
+            version,
+          ]),
+        );
+      }
+      if (!isNewerSemver(version, known.version) && known.hash !== seen.hash) {
+        return this.#fail(
+          new WebcatError(WebcatErrorCode.Baseline.FORK, [version]),
+        );
+      }
+    }
+    // TODO: behind a setting, prompt the user when version is newer than own.
+    if (!own || isNewerSemver(version, own.version)) {
+      await this.#db.baselines.set({ [key]: seen }, area);
+    }
   }
 
   verifyCSP(csp: string, pathname: string): boolean {

@@ -9,6 +9,7 @@ vi.mock("../../src/browser/permissions", () => ({
 
 import { RequestDetailsBase, RequestEvent } from "../../src/browser/requests";
 import { defaults } from "../../src/config";
+import { CacheKey } from "../../src/webcat/cache";
 import { WebcatDatabase } from "../../src/webcat/db";
 import { WebcatRequestHandler } from "../../src/webcat/handler";
 import { WebcatUI } from "../../src/webcat/ui";
@@ -19,6 +20,12 @@ const mockAddOnCommitted = vi.fn();
 const mockGetURL = vi.fn();
 const mockAddOnConnect = vi.fn();
 const mockAddOnRemoved = vi.fn();
+const mockAddOnVisitRemoved = vi.fn();
+// Remaining history: items whose URL contains the searched text
+const mockHistorySearch = vi.fn(async ({ text }: { text: string }) =>
+  history.filter((url) => url.includes(text)).map((url) => ({ url })),
+);
+let history: string[] = [];
 const mockAddOnBeforeRequest = vi.fn();
 const mockRemoveOnBeforeRequest = vi.fn();
 const mockAddOnBeforeSendHeaders = vi.fn();
@@ -37,9 +44,16 @@ const mockGetAllFrames = vi.fn();
 
 vi.stubGlobal("browser", {
   storage: {
+    local: {
+      get: mockStorageGet,
+      set: mockStorageSet,
+      remove: vi.fn(),
+    },
     session: {
       get: mockStorageGet,
       set: mockStorageSet,
+      remove: vi.fn(),
+      clear: vi.fn(),
     },
   },
   webNavigation: {
@@ -58,6 +72,15 @@ vi.stubGlobal("browser", {
     onRemoved: {
       addListener: mockAddOnRemoved,
     },
+  },
+  history: {
+    onVisitRemoved: {
+      addListener: mockAddOnVisitRemoved,
+    },
+    search: mockHistorySearch,
+  },
+  publicSuffix: {
+    getDomain: (host: string) => host.split(".").slice(-2).join("."),
   },
   webRequest: {
     onBeforeRequest: {
@@ -191,6 +214,72 @@ describe("WebcatRequestHandler", () => {
       firstParty: "https://embedder.example",
       cookieStoreId: "firefox-container-2",
     });
+  });
+
+  it("forgets origin state when its pages leave history", async () => {
+    const db = new WebcatDatabase(defaults);
+    const ui = new WebcatUI(db, db.namespace("ui"), defaults);
+    new WebcatRequestHandler(db, ui, defaults);
+    const onVisitRemoved = mockAddOnVisitRemoved.mock.calls[0][0];
+    const key = (fqdn: string, firstParty: string) =>
+      CacheKey(fqdn, { firstParty, cookieStoreId: "firefox-default" });
+    const enrolled = key("enrolled.example", "https://enrolled.example");
+    const embedded = key("widget.example", "https://enrolled.example");
+    const subdomain = key("cdn.enrolled.example", "https://other.example");
+    const other = key("other.example", "https://other.example");
+    const opaque = key("other.example", "42");
+    for (const k of [enrolled, embedded, subdomain, other, opaque]) {
+      await db.origins.set(k, {} as never);
+      await db.nonOrigins.add(k);
+    }
+    vi.spyOn(db.baselines, "getKeys").mockResolvedValue([subdomain, other]);
+    const removeBaseline = vi
+      .spyOn(db.baselines, "remove")
+      .mockResolvedValue(undefined);
+    const clearBaselines = vi
+      .spyOn(db.baselines, "clear")
+      .mockResolvedValue(undefined);
+
+    // Deleting one page of enrolled.example while another remains: nothing goes
+    history = ["https://enrolled.example/other", "https://other.example/page"];
+    await onVisitRemoved({
+      allHistory: false,
+      urls: ["https://enrolled.example/page"],
+    });
+    expect(await db.origins.keys()).toEqual([
+      enrolled,
+      embedded,
+      subdomain,
+      other,
+      opaque,
+    ]);
+
+    // Forgetting enrolled.example: the site itself, what it embedded, and
+    // its subdomain under another site all go
+    history = ["https://other.example/page", "https://notenrolled.example/"];
+    await onVisitRemoved({
+      allHistory: false,
+      urls: ["file:///tmp/notes.txt", "https://www.enrolled.example/page"],
+    });
+    expect(await db.origins.keys()).toEqual([other, opaque]);
+    expect(await db.nonOrigins.values()).toEqual([other, opaque]);
+    expect(removeBaseline.mock.calls).toEqual([[subdomain]]);
+
+    // A removal the extension never saw: other.example is gone from history
+    history = ["https://notother.example/"];
+    await onVisitRemoved({ allHistory: false, urls: ["https://x.example/"] });
+    expect(await db.origins.keys()).toEqual([opaque]);
+    expect(await db.nonOrigins.values()).toEqual([opaque]);
+
+    vi.spyOn(db.origins, "keys").mockRejectedValueOnce(new Error("storage"));
+    await onVisitRemoved({ allHistory: false, urls: ["https://x.example/"] });
+    expect(await db.origins.keys()).toEqual([]);
+    expect(await db.nonOrigins.values()).toEqual([]);
+
+    await onVisitRemoved({ allHistory: true, urls: [] });
+    expect(await db.origins.keys()).toEqual([]);
+    expect(await db.nonOrigins.values()).toEqual([]);
+    expect(clearBaselines).toHaveBeenCalled();
   });
 
   it("records a worker script's first party before its body is released", async () => {

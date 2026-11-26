@@ -77,6 +77,24 @@
   "WEBCAT_manifestExpiredWhatYouCanDo": {
     "message": "There is nothing you can do to fix this on your end. The owner of the site needs to publish a freshly signed manifest. If your computer's clock is wrong, WEBCAT can also mistake a valid signature for an expired one, so check the date and time as well. You can let the site owner know, or open an issue in the $1."
   },
+  "WEBCAT_baselineDowngradeTitle": {
+    "message": "This site served an older version"
+  },
+  "WEBCAT_baselineDowngradeShortDesc": {
+    "message": "$1 is enrolled in WEBCAT, but it served an older version than the one WEBCAT verified before, so the page was blocked."
+  },
+  "WEBCAT_baselineDowngradeWhatYouCanDo": {
+    "message": "There is nothing you can do to fix this on your end. The owner of the site needs to publish a version higher than the one you saw before. You can let the site owner know, or open an issue in the $1."
+  },
+  "WEBCAT_baselineForkTitle": {
+    "message": "This site changed a version it already published"
+  },
+  "WEBCAT_baselineForkShortDesc": {
+    "message": "$1 is enrolled in WEBCAT, but it served a different manifest under a version WEBCAT already verified, so the page was blocked."
+  },
+  "WEBCAT_baselineForkWhatYouCanDo": {
+    "message": "There is nothing you can do to fix this on your end. A version must have exactly one manifest, so the owner of the site needs to serve the same manifest everywhere or publish a new version. You can let the site owner know, or open an issue in the $1."
+  },
   "WEBCAT_clockSkewTitle": {
     "message": "Check your computer's clock"
   },

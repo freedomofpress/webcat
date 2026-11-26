@@ -53,6 +53,7 @@ describe("ResponseValidator.validateHeaders", () => {
           isFailed: vi.fn().mockReturnValue(false),
           verifyEnrollment: vi.fn(),
           verifyManifest: vi.fn(),
+          verifyBaseline: vi.fn(),
           verifyCSP: vi.fn().mockReturnValue(true),
         },
       },

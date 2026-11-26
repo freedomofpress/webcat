@@ -120,6 +120,8 @@ export enum WebcatErrorEnrollment {
  * Error codes related to manifest validation.
  */
 export enum WebcatErrorManifest {
+  /** The manifest has no version. */
+  VERSION_MISSING = "ERR_WEBCAT_MANIFEST_VERSION_MISSING",
   /**
    * The manifest could not be verified against the signatures.
    */
@@ -257,6 +259,17 @@ export enum WebcatErrorFile {
   MISMATCH = "ERR_WEBCAT_FILE_MISMATCH",
 }
 
+/**
+ * Error codes from checking a manifest against the versions this profile
+ * already verified for the same FQDN.
+ */
+export enum WebcatErrorBaseline {
+  /** The manifest version is lower than one already verified. */
+  DOWNGRADE = "ERR_WEBCAT_BASELINE_DOWNGRADE",
+  /** A different manifest was already verified under the same version. */
+  FORK = "ERR_WEBCAT_BASELINE_FORK",
+}
+
 export enum WebcatErrorFrameIsolation {
   /**
    * The frame is not a member of an origin-keyed agent cluster.
@@ -298,6 +311,8 @@ export const WebcatErrorCode = {
   URL: { ...WebcatErrorURL },
   /** {@inheritDoc WebcatErrorFile} */
   File: { ...WebcatErrorFile },
+  /** {@inheritDoc WebcatErrorBaseline} */
+  Baseline: { ...WebcatErrorBaseline },
   /** {@inheritDoc WebcatErrorFrameIsolation} */
   FrameIsolation: { ...WebcatErrorFrameIsolation },
   /** {@inheritDoc WebcatErrorInternal} */
@@ -316,6 +331,7 @@ export type WebcatErrorCodeAny =
   | WebcatErrorHeaders
   | WebcatErrorURL
   | WebcatErrorFile
+  | WebcatErrorBaseline
   | WebcatErrorFrameIsolation
   | WebcatErrorInternal;
 

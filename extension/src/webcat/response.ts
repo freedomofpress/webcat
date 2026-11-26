@@ -145,6 +145,7 @@ export class ResponseValidator {
 
       // Step 3: Populate and validate the manifest
       await details.state.pendingOrigin.verifyManifest();
+      await details.state.pendingOrigin.verifyBaseline(details.state.fqdn);
       if (details.state.pendingOrigin.isFailed()) {
         return details.state.pendingOrigin.error;
       }
