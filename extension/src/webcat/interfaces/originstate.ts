@@ -55,7 +55,6 @@ export type OriginStateVerifiedEnrollment = OriginState & {
   error: undefined;
 };
 export type OriginStateVerifiedManifest = OriginState & {
-  enrollment: Enrollment;
   manifest: Manifest;
   error: undefined;
   validUntil: number;
