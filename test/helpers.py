@@ -430,10 +430,10 @@ class Server:
     _served = threading.Condition()
     _counts: dict[str,int] = {}
 
-    def __init__(self, root=".", headers=None, hooks=None, ssl_cert=None, ssl_key=None):
+    def __init__(self, root=".", headers={}, hooks={}, ssl_cert=None, ssl_key=None):
         self.root = os.path.abspath(root)
-        self.headers = headers.copy() or {}
-        self.hooks = hooks.copy() or {}
+        self.headers = headers.copy()
+        self.hooks = hooks.copy()
         self.ssl_cert = ssl_cert
         self.ssl_key = ssl_key
         if self.ssl_cert and self.ssl_key:
