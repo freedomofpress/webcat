@@ -20,7 +20,7 @@ export const getAllFrames = (tabId: number) =>
  * | top-level navigation | `type` | origin of the request URL |
  * | load from inside a recorded worker | `documentUrl`, the registry | the first party recorded for the worker script; stale after a top-level navigation, then only if frame 0 still has that origin or a live frame has that URL, else throws |
  * | other tab-bound request | `tabId`, `frameId`, `documentUrl`, the tab's frames | origin of frame 0, if the request's frame and a frame of the owner's origin are in the tab; else throws |
- * | tabId -1, has a document | `documentUrl` | its origin |
+ * | tabId -1, has a document | `documentUrl`, the enrollment list | origin of the document if enrolled, else `requestId` |
  * | tabId -1, document-less | `thirdParty` | the request's own origin if `false`; else throws |
  *
  * A worker load names the worker script as `documentUrl`. Firefox ESR reports
