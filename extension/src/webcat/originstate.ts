@@ -198,7 +198,6 @@ export class OriginState implements IOriginState {
   isManifestVerified(): this is OriginStateVerifiedManifest {
     return (
       this.status === "verified_manifest" &&
-      this.enrollment !== undefined &&
       this.manifest !== undefined &&
       this.validUntil !== undefined
     );

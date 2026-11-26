@@ -963,9 +963,10 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
       wasm: [],
     };
 
-    state.status = "verified_manifest";
-    state.manifest = manifest;
-    state.validUntil = 0;
+    await state.verifyManifest(manifest, {
+      [SIGNER1]: "signature1",
+      [SIGNER2]: "signature2",
+    });
   });
 
   it("matches default CSP for /", () => {
@@ -977,6 +978,11 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
     expect(state.verifyCSP(csp, "/admin")).toBe(true);
   });
 
+  it("matches extra CSP for prefix match", () => {
+    const csp = "default-src 'none'; script-src 'self' 'unsafe-inline';";
+    expect(state.verifyCSP(csp, "/admin/index.html")).toBe(true);
+  });
+
   it("falls back to default CSP", () => {
     expect(state.verifyCSP(defaultCSP, "/other")).toBe(true);
   });
@@ -984,6 +990,95 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
   it("returns false for incorrect CSP", () => {
     const badCsp = "default-src 'self'; script-src 'self';";
     expect(state.verifyCSP(badCsp, "/")).toBe(false);
+  });
+
+  it("throws when called before verifyManifest", () => {
+    state.status = "verified_enrollment";
+    state.manifest = undefined;
+    state.validUntil = undefined;
+    expect(() => state.verifyCSP(defaultCSP, "/")).toThrow();
+  });
+});
+
+describe("OriginState.toPOJO", () => {
+  let enrollment: Enrollment;
+  let enrollmentHash: Uint8Array;
+  let state: OriginState;
+  let db: WebcatDatabase;
+
+  const cachePartition = {
+    firstParty: "https://example.com",
+    cookieStoreId: "firefox-default",
+  };
+  const defaultCSP =
+    "default-src 'none'; script-src 'self'; style-src 'self'; object-src 'none'";
+
+  beforeEach(async () => {
+    enrollment = {
+      type: EnrollmentTypes.Sigsum,
+      policy: TEST_POLICY_B64URL,
+      signers: [SIGNER1, SIGNER2],
+      threshold: 1,
+      max_age: 360000,
+      cas_url: "https://cas.example.com",
+      logs: {
+        log1: "https://log.example.com",
+      },
+    };
+
+    enrollmentHash = await computeEnrollmentHash(enrollment);
+    db = {} as WebcatDatabase;
+    state = new OriginState(
+      db,
+      makeDummyFetcher(),
+      enrollmentHash,
+      cachePartition,
+    );
+
+    await state.verifyEnrollment(enrollment);
+
+    const manifest: Manifest = {
+      manifest_schema: 1,
+      version: "1.0.0",
+      default_csp: defaultCSP,
+      extra_csp: {
+        "/admin": "default-src 'none'; script-src 'self' 'unsafe-inline';",
+      },
+      fallback_hashes: ["hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
+      timestamp: new Date().toISOString(),
+      files: {
+        "/index.html": "hash1_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "/admin/index.html": "hash2_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      },
+      wasm: [],
+    };
+
+    await state.verifyManifest(manifest, {
+      [SIGNER1]: "signature1",
+      [SIGNER2]: "signature2",
+    });
+  });
+
+  it("round-trips", () => {
+    const pojo = state.toPOJO();
+    const json = JSON.stringify(pojo);
+    const other = OriginState.fromPOJO(JSON.parse(json));
+    expect(other).not.toBe(state);
+    expect(other.isManifestVerified()).toBe(true);
+    expect(other.manifest).toStrictEqual(state.manifest);
+  });
+
+  it("throws when called before verifyManifest", () => {
+    state.status = "verified_enrollment";
+    state.manifest = undefined;
+    state.validUntil = undefined;
+    expect(() => state.toPOJO()).toThrow();
+  });
+
+  it("throws when restoring from invalid status", () => {
+    const pojo = state.toPOJO();
+    pojo.status = "verified_enrollment" as typeof pojo.status;
+    expect(() => OriginState.fromPOJO(pojo)).toThrow();
   });
 });
 
