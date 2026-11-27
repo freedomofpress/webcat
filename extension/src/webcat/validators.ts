@@ -344,8 +344,8 @@ export function validateManifest(
   return validate(manifest, manifestSchema, minSchema);
 }
 
-// null when the dialect cannot encode the manifest.
-function signedBytes(manifest: Manifest): Uint8Array | null {
+/** The bytes the signatures cover; null when the dialect cannot encode the manifest. */
+export function signedBytes(manifest: Manifest): Uint8Array | null {
   try {
     return stringToUint8Array(canonicalForm(manifest));
   } catch {

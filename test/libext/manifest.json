@@ -5,7 +5,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "webcat-lib-test@freedom.press",
-      "strict_min_version": "140.0"
+      "strict_min_version": "153.0"
     }
   },
   "default_locale": "en",
@@ -13,6 +13,8 @@
   "permissions": [
     "alarms",
     "browsingData",
+    "history",
+    "publicSuffix",
     "webNavigation",
     "webRequest",
     "webRequestBlocking",

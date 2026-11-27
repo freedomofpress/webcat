@@ -27,7 +27,7 @@ vi.stubGlobal("browser", {
     filterResponseData: mockFilterResponseData,
   },
   browsingData: { remove: vi.fn() },
-  tabs: { reload: vi.fn() },
+  tabs: { reload: vi.fn(), update: vi.fn() },
 });
 
 describe("ResponseValidator.validateHeaders", () => {
@@ -53,10 +53,36 @@ describe("ResponseValidator.validateHeaders", () => {
           isFailed: vi.fn().mockReturnValue(false),
           verifyEnrollment: vi.fn(),
           verifyManifest: vi.fn(),
+          verifyBaseline: vi.fn(),
           verifyCSP: vi.fn().mockReturnValue(true),
         },
       },
     };
+  });
+
+  it("loads an announced new version in the tab instead of reloading it", async () => {
+    rv = new ResponseValidator(
+      { origins: { delete: vi.fn() } } as unknown as WebcatDatabase,
+      ui,
+      {} as HookBuilder,
+    );
+    rv.extractAndValidateHeaders = vi.fn().mockReturnValue(
+      new Map([
+        ["x-webcat-version", "2.0.0"],
+        ["content-security-policy", "default-src 'self'"],
+      ]),
+    );
+    details.state.pendingOrigin.manifest = { version: "1.0.0" };
+    details.state.fqdn = "example.com";
+    details.state.cachePartition = {
+      firstParty: "https://example.com",
+      cookieStoreId: "firefox-default",
+    };
+    await rv.validateHeaders(details);
+    expect(browser.tabs.update).toHaveBeenCalledExactlyOnceWith(123, {
+      url: "https://example.com/",
+    });
+    expect(browser.tabs.reload).not.toHaveBeenCalled();
   });
 
   it("rejects when pendingOrigin is unavailable", async () => {

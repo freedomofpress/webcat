@@ -145,6 +145,7 @@ export class ResponseValidator {
 
       // Step 3: Populate and validate the manifest
       await details.state.pendingOrigin.verifyManifest();
+      await details.state.pendingOrigin.verifyBaseline(details.state.fqdn);
       if (details.state.pendingOrigin.isFailed()) {
         return details.state.pendingOrigin.error;
       }
@@ -180,7 +181,11 @@ export class ResponseValidator {
         `Detected new version ${version}, current_version ${details.state.pendingOrigin.manifest.version}`,
         details,
       );
-      await this.#refresh(details, details.state.pendingOrigin);
+      await this.#refresh(
+        details,
+        details.state.pendingOrigin,
+        details.type === "main_frame",
+      );
     }
 
     const pathname = new URL(details.url).pathname;
@@ -315,12 +320,13 @@ export class ResponseValidator {
   }
 
   /**
-   * Drops the cached origin state and browser caches and reloads the tab, so
-   * the next load fetches the bundle again.
+   * Drops the cached origin state and browser caches and loads the tab again,
+   * so the next load fetches the bundle again.
    */
   async #refresh(
     details: Stateful<HeadersReceivedDetails | BeforeRequestDetails>,
     origin: OriginState,
+    uncommitted = false,
   ) {
     await this.#db.origins.delete(
       CacheKey(details.state.fqdn, details.state.cachePartition),
@@ -329,7 +335,14 @@ export class ResponseValidator {
     // re-insert it via commitVerifiedOrigin later
     origin.stale = true;
     await clearBrowserCaches([details.state.fqdn]);
-    browser.tabs.reload(details.tabId);
+    // Before a main frame commits, reloading would reload the page the tab
+    // is leaving and drop this navigation; once its body streams, the page
+    // is the new one and a reload is right.
+    if (uncommitted) {
+      browser.tabs.update(details.tabId, { url: details.url });
+    } else {
+      browser.tabs.reload(details.tabId);
+    }
   }
 
   /**

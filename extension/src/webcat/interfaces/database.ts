@@ -1,4 +1,4 @@
-import { KVStore } from "../../browser/kvstore";
+import { KVStore, NamespacedKVStore } from "../../browser/kvstore";
 import { CacheKey, LRUCache, LRUSet } from "../cache";
 import { CachePartition, OriginState } from "./originstate";
 
@@ -24,6 +24,12 @@ export interface Database {
    * A store for enrollment hashes; allows direct access bypassing the cache.
    */
   readonly enrollments: KVStore;
+  /**
+   * The highest verified manifest version and its hash per partitioned
+   * {@link CacheKey}. The "local" area persists normal windows; the "session"
+   * area holds private ones.
+   */
+  readonly baselines: NamespacedKVStore;
   /**
    * Updates the list of enrolled fully-qualified domain names.
    */

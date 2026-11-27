@@ -9,7 +9,7 @@ import {
 } from "../browser/requests";
 import { ContentScript } from "../browser/scripting";
 import { Mutex } from "../browser/sync";
-import { CacheKey, isInPartition } from "./cache";
+import { CacheKey, isInPartition, parseCacheKey } from "./cache";
 import {
   getAllFrames,
   isThirdPartyWorkerScript,
@@ -46,6 +46,8 @@ export interface WebcatRequestHandler extends RequestHandler {
 
 @permissions.require("scripting")
 @permissions.require("webNavigation")
+@permissions.require("history")
+@permissions.require("publicSuffix")
 @permissions.require("<all_urls>")
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class WebcatRequestHandler extends RequestHandler {
@@ -81,6 +83,9 @@ export class WebcatRequestHandler extends RequestHandler {
     this.addEventListener("beforerequest", this.#guarded(this.#onRequest));
     this.addEventListener("headersreceived", this.#guarded(this.#onHeaders));
     browser.windows.onRemoved.addListener(this.#onWindowClosed.bind(this));
+    browser.history.onVisitRemoved.addListener(this.#onVisitRemoved.bind(this));
+    // History may have been cleared while the extension was not running.
+    void this.#onVisitRemoved({ allHistory: false, urls: [] });
     browser.webNavigation.onCommitted.addListener(({ tabId, frameId }) => {
       if (frameId === 0) void this.#workers.navigated(tabId);
     });
@@ -427,6 +432,80 @@ export class WebcatRequestHandler extends RequestHandler {
     await this.#db.origins.set(CacheKey(fqdn, cachePartition), newState);
   }
 
+  // Forgets cached state and baselines the user's history no longer covers.
+  async #onVisitRemoved({
+    allHistory,
+    urls,
+  }: browser.history._OnVisitRemovedRemoved) {
+    if (allHistory) {
+      await this.#db.origins.clear();
+      await this.#db.nonOrigins.clear();
+      await this.#db.baselines.clear();
+      return;
+    }
+    try {
+      // Firefox forgets a site by its registrable domain, with IPs and
+      // unknown suffixes taken as they come.
+      const site = (host: string) =>
+        browser.publicSuffix.getDomain(host, {
+          allowIPAddress: true,
+          allowUnknownSuffix: true,
+          allowPlainSuffix: true,
+        }) ?? host;
+      // file: and about: pages have no host, which getDomain rejects.
+      const removed = urls
+        .map((url) => new URL(url).hostname)
+        .filter(Boolean)
+        .map(site);
+      // Places matches text against URLs and titles, so filter by site.
+      const inHistory = new Map<string, Promise<boolean>>();
+      const stillVisited = (s: string) => {
+        let known = inHistory.get(s);
+        if (!known) {
+          known = browser.history
+            .search({ text: s, startTime: 0, maxResults: 1000 })
+            .then((items) =>
+              items.some((i) => i.url && site(new URL(i.url).hostname) === s),
+            );
+          inHistory.set(s, known);
+        }
+        return known;
+      };
+      // We delete an entry when the site the user was on has no page left in
+      // history, or when the enrolled site itself was in the event and has no
+      // page left either. Embedded origins have no pages of their own, so
+      // only the first rule ever reaches them.
+      const forgotten = async (key: CacheKey<CachePartition>) => {
+        // The first party of an opaque origin is a request id, not a URL.
+        const [fqdn, { firstParty }] = parseCacheKey(key);
+        const top = URL.parse(firstParty)?.hostname;
+        return (
+          (removed.includes(site(fqdn)) && !(await stillVisited(site(fqdn)))) ||
+          (top !== undefined && !(await stillVisited(site(top))))
+        );
+      };
+      for (const key of await this.#db.origins.keys()) {
+        if (await forgotten(key)) await this.#db.origins.delete(key);
+      }
+      for (const key of await this.#db.nonOrigins.values()) {
+        if (await forgotten(key)) await this.#db.nonOrigins.delete(key);
+      }
+      for (const key of await this.#db.baselines.getKeys()) {
+        if (await forgotten(key as CacheKey<CachePartition>)) {
+          await this.#db.baselines.remove(key);
+        }
+      }
+    } catch (error) {
+      // Forgetting too much beats keeping what the user deleted.
+      logger.warn(
+        "History purge failed, clearing everything",
+        undefined,
+        error,
+      );
+      await this.#onVisitRemoved({ allHistory: true, urls: [] });
+    }
+  }
+
   async #onWindowClosed() {
     // Handle incognito sessions ending
     const windows = await browser.windows.getAll();
@@ -441,6 +520,7 @@ export class WebcatRequestHandler extends RequestHandler {
           this.#db.nonOrigins.delete(value);
         }
       }
+      await this.#db.baselines.clear("", "session");
     }
   }
 }

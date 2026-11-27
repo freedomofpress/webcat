@@ -25,6 +25,7 @@ export class WebcatDatabase extends NamespacedKVStore implements Database {
   readonly origins: PersistentLRUCache<CacheKey<CachePartition>, OriginState>;
   readonly nonOrigins: LRUSet<CacheKey<CachePartition>>;
   readonly enrollments = this.namespace("enrollments");
+  readonly baselines = this.namespace("baselines");
 
   constructor(config: WebcatDatabaseConfig) {
     super(config.namespace);
