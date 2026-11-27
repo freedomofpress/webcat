@@ -279,7 +279,9 @@ describe("OriginState.verifyEnrollment", () => {
   });
 
   it("throws when no enrollment is available", async () => {
-    await expect(state.verifyEnrollment()).rejects.toThrow();
+    await expect(state.verifyEnrollment()).rejects.toThrow(
+      "verifyEnrollment called before fetcher is ready",
+    );
   });
 
   it("falls back to previous enrollment when the current one is a mismatch", async () => {
@@ -649,7 +651,9 @@ describe("OriginState.verifyManifest", () => {
     state.status = "request_sent";
     state.enrollment = undefined;
 
-    await expect(state.verifyManifest(manifest, signatures)).rejects.toThrow();
+    await expect(state.verifyManifest(manifest, signatures)).rejects.toThrow(
+      "verifyManifest called before verifyEnrollment",
+    );
   });
 
   it("accepts a valid manifest from the bundle", async () => {
@@ -996,7 +1000,9 @@ describe("OriginStateVerifiedManifest.verifyCSP", () => {
     state.status = "verified_enrollment";
     state.manifest = undefined;
     state.validUntil = undefined;
-    expect(() => state.verifyCSP(defaultCSP, "/")).toThrow();
+    expect(() => state.verifyCSP(defaultCSP, "/")).toThrow(
+      "verifyCSP called before verifyManifest",
+    );
   });
 });
 
@@ -1072,13 +1078,17 @@ describe("OriginState.toPOJO", () => {
     state.status = "verified_enrollment";
     state.manifest = undefined;
     state.validUntil = undefined;
-    expect(() => state.toPOJO()).toThrow();
+    expect(() => state.toPOJO()).toThrow(
+      "cannot serialize OriginState before verifying the manifest",
+    );
   });
 
-  it("throws when restoring from invalid status", () => {
+  it("throws when restoring from invalid state", () => {
     const pojo = state.toPOJO();
     pojo.status = "verified_enrollment" as typeof pojo.status;
-    expect(() => OriginState.fromPOJO(pojo)).toThrow();
+    expect(() => OriginState.fromPOJO(pojo)).toThrow(
+      "cannot deserialize an unverified OriginState",
+    );
   });
 });
 
