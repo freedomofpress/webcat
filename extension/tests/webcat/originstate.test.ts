@@ -1083,14 +1083,13 @@ describe("OriginState.toPOJO", () => {
 });
 
 describe("BundleFetcher", () => {
-  afterEach(() => {
-    vi.mocked(fetch).mockReset();
-  });
-
-  it("should report an error slot when fetch fails", async () => {
+  function mockFetch(bundle: null | string | Error, status = 200) {
     vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
       if (url.toString().endsWith(defaults.bundlePath)) {
-        throw new TypeError();
+        if (bundle instanceof Error) {
+          throw bundle;
+        }
+        return new Response(bundle, { status });
       } else {
         return new Response(
           JSON.stringify({
@@ -1101,6 +1100,14 @@ describe("BundleFetcher", () => {
         );
       }
     });
+  }
+
+  afterEach(() => {
+    vi.mocked(fetch).mockReset();
+  });
+
+  it("should report an error when fetch fails", async () => {
+    mockFetch(new TypeError());
     const fetcher = makeDummyFetcher();
     await fetcher.awaitAll();
     expect(fetcher.current.error?.code).toBe(WebcatErrorCode.Fetch.FETCH_ERROR);
@@ -1110,19 +1117,7 @@ describe("BundleFetcher", () => {
   });
 
   it("should report an error when fetch returns non-200", async () => {
-    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
-      if (url.toString().endsWith(defaults.bundlePath)) {
-        return new Response(null, { status: 404 });
-      } else {
-        return new Response(
-          JSON.stringify({
-            enrollment: {},
-            manifest: {},
-            signatures: {},
-          }),
-        );
-      }
-    });
+    mockFetch(null, 404);
     const fetcher = makeDummyFetcher();
     await fetcher.awaitAll();
     expect(fetcher.current.error?.code).toBe(WebcatErrorCode.Fetch.FETCH_ERROR);
@@ -1132,19 +1127,7 @@ describe("BundleFetcher", () => {
   });
 
   it("should report an error when fetched JSON is invalid", async () => {
-    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
-      if (url.toString().endsWith(defaults.bundlePath)) {
-        return new Response("x");
-      } else {
-        return new Response(
-          JSON.stringify({
-            enrollment: {},
-            manifest: {},
-            signatures: {},
-          }),
-        );
-      }
-    });
+    mockFetch("x");
     const fetcher = makeDummyFetcher();
     await fetcher.awaitAll();
     expect(fetcher.current.error?.code).toBe(WebcatErrorCode.Bundle.MALFORMED);
@@ -1154,24 +1137,12 @@ describe("BundleFetcher", () => {
   });
 
   it("should report an error when fetched JSON is missing enrollment", async () => {
-    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
-      if (url.toString().endsWith(defaults.bundlePath)) {
-        return new Response(
-          JSON.stringify({
-            manifest: {},
-            signatures: {},
-          }),
-        );
-      } else {
-        return new Response(
-          JSON.stringify({
-            enrollment: {},
-            manifest: {},
-            signatures: {},
-          }),
-        );
-      }
-    });
+    mockFetch(
+      JSON.stringify({
+        manifest: {},
+        signatures: {},
+      }),
+    );
     const fetcher = makeDummyFetcher();
     await fetcher.awaitAll();
     expect(fetcher.current.error?.code).toBe(
@@ -1183,24 +1154,12 @@ describe("BundleFetcher", () => {
   });
 
   it("should report an error when fetched JSON is missing manifest", async () => {
-    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
-      if (url.toString().endsWith(defaults.bundlePath)) {
-        return new Response(
-          JSON.stringify({
-            enrollment: {},
-            signatures: {},
-          }),
-        );
-      } else {
-        return new Response(
-          JSON.stringify({
-            enrollment: {},
-            manifest: {},
-            signatures: {},
-          }),
-        );
-      }
-    });
+    mockFetch(
+      JSON.stringify({
+        enrollment: {},
+        signatures: {},
+      }),
+    );
     const fetcher = makeDummyFetcher();
     await fetcher.awaitAll();
     expect(fetcher.current.error?.code).toBe(
@@ -1212,24 +1171,12 @@ describe("BundleFetcher", () => {
   });
 
   it("should report an error when fetched JSON is missing signatures", async () => {
-    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
-      if (url.toString().endsWith(defaults.bundlePath)) {
-        return new Response(
-          JSON.stringify({
-            enrollment: {},
-            manifest: {},
-          }),
-        );
-      } else {
-        return new Response(
-          JSON.stringify({
-            enrollment: {},
-            manifest: {},
-            signatures: {},
-          }),
-        );
-      }
-    });
+    mockFetch(
+      JSON.stringify({
+        enrollment: {},
+        manifest: {},
+      }),
+    );
     const fetcher = makeDummyFetcher();
     await fetcher.awaitAll();
     expect(fetcher.current.error?.code).toBe(
@@ -1241,19 +1188,7 @@ describe("BundleFetcher", () => {
   });
 
   it("should fetch and parse bundles only once", async () => {
-    vi.mocked(fetch).mockImplementation(async (url: string | URL | Request) => {
-      if (url.toString().endsWith(defaults.bundlePath)) {
-        throw new TypeError();
-      } else {
-        return new Response(
-          JSON.stringify({
-            enrollment: {},
-            manifest: {},
-            signatures: {},
-          }),
-        );
-      }
-    });
+    mockFetch(new TypeError());
     const fetcher = makeDummyFetcher();
     await fetcher.awaitAll();
     const error = fetcher.current.error;
